@@ -1,0 +1,123 @@
+/* ================================
+   CLICK FIX (CRITICAL)
+   ================================ */
+
+/* Ensure overlay is below content */
+.booking-overlay-v4,
+.profile-overlay-v4 {
+  z-index: 1000;
+}
+
+/* Sheet container */
+.booking-modal-v4,
+.barber-profile-sheet-v4,
+.notification-sheet-v4,
+.chat-sheet-wrap-v4 {
+  z-index: 1001;
+  pointer-events: none;
+}
+
+/* When open → allow interaction */
+.booking-modal-v4.open,
+.barber-profile-sheet-v4.open,
+.notification-sheet-v4.open,
+.chat-sheet-wrap-v4.open {
+  pointer-events: auto;
+}
+
+/* THIS IS THE MISSING PIECE 👇 */
+.booking-modal-card-v4,
+.barber-profile-card-v4,
+.notification-card-v4,
+.chat-card-v4 {
+  position: relative;
+  z-index: 1002;
+  pointer-events: auto;
+}
+
+/* Ensure all children are clickable */
+.notification-list-v4,
+.notification-item-v4,
+.notification-copy-v4,
+.chat-thread-v4,
+.chat-compose-v4 {
+  pointer-events: auto;
+}
+
+/* Fix buttons specifically */
+button,
+.header-icon-btn,
+.fav-btn-v4,
+.nav-v4,
+.primary-btn-v4,
+.secondary-btn-v4,
+.mini-action-btn-v4 {
+  pointer-events: auto;
+  cursor: pointer;
+}
+/* ===== NOTIFICATION CLICK FIX ===== */
+
+.booking-overlay-v4 {
+  z-index: 1000 !important;
+  pointer-events: auto !important;
+}
+
+.booking-modal-v4.notification-sheet-v4,
+.notification-sheet-v4 {
+  z-index: 1001 !important;
+  pointer-events: auto !important;
+}
+
+.notification-card-v4 {
+  position: relative !important;
+  z-index: 1002 !important;
+  pointer-events: auto !important;
+}
+
+.notification-list-v4 {
+  position: relative !important;
+  z-index: 1003 !important;
+  pointer-events: auto !important;
+}
+
+.notification-item-v4,
+.notification-item-v4.as-card,
+.notification-copy-v4 {
+  position: relative !important;
+  z-index: 1004 !important;
+  pointer-events: auto !important;
+}
+
+.notification-item-v4.as-card {
+  cursor: pointer !important;
+}
+
+.notification-item-v4.as-card * {
+  pointer-events: none;
+}
+
+.notification-item-v4.as-card {
+  pointer-events: auto !important;
+}
+
+
+.avatar-upload-v4 {
+  position: relative;
+}
+
+.avatar-upload-badge-v4 {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(82, 43, 91, 0.92);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+

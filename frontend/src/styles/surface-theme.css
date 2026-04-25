@@ -1,0 +1,772 @@
+/* =========================================
+   PREMIUM REDESIGN SYSTEM
+   Built to stay compatible with current App.jsx
+   ========================================= */
+
+:root {
+  --primary: #6c3cf0;
+  --primary-soft: #8a63f5;
+  --primary-deep: #4f22c6;
+  --accent-pink: #f4a5ae;
+  --accent-gold: #f7c66b;
+
+  --bg-dark: linear-gradient(180deg, #0d0615 0%, #160a23 48%, #241038 100%);
+  --bg-light: linear-gradient(180deg, #fff9f6 0%, #f9f0ff 100%);
+
+  --screen-dark: radial-gradient(circle at top, rgba(138, 99, 245, 0.12), transparent 28%), #100718;
+  --screen-light: radial-gradient(circle at top, rgba(138, 99, 245, 0.08), transparent 30%), #fff8f5;
+
+  --card-dark: rgba(255, 255, 255, 0.07);
+  --card-dark-strong: rgba(255, 255, 255, 0.11);
+  --card-light: rgba(255, 255, 255, 0.92);
+  --card-light-soft: rgba(108, 60, 240, 0.06);
+
+  --stroke-dark: rgba(255, 255, 255, 0.08);
+  --stroke-light: rgba(108, 60, 240, 0.10);
+
+  --text-dark: #fff7ff;
+  --text-light: #271833;
+  --muted-dark: rgba(255, 247, 255, 0.72);
+  --muted-light: rgba(39, 24, 51, 0.68);
+
+  --success: #33b36b;
+  --warning: #d9a12d;
+  --danger: #df456d;
+  --info: #4c8df6;
+
+  --shadow-dark-soft: 0 12px 32px rgba(0, 0, 0, 0.26);
+  --shadow-dark-deep: 0 24px 56px rgba(0, 0, 0, 0.34);
+  --shadow-light-soft: 0 12px 32px rgba(61, 27, 92, 0.10);
+  --shadow-light-deep: 0 24px 56px rgba(61, 27, 92, 0.16);
+
+  --radius-xl: 30px;
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 14px;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: #100718;
+  color: inherit;
+}
+
+body[data-lineup-theme="dark"] {
+  background: var(--bg-dark);
+}
+
+body[data-lineup-theme="light"] {
+  background: var(--bg-light);
+}
+
+.app-wrap-v4 {
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.app-wrap-v4.dark {
+  background: var(--bg-dark);
+}
+
+.app-wrap-v4.light {
+  background: var(--bg-light);
+}
+
+.phone-frame-v4 {
+  border-radius: 36px;
+  overflow: hidden;
+  background: transparent;
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.30),
+    0 8px 18px rgba(108, 60, 240, 0.10);
+}
+
+.screen-v4 {
+  min-height: 100%;
+  backdrop-filter: blur(18px);
+}
+
+.dark .screen-v4 {
+  background: var(--screen-dark);
+  color: var(--text-dark);
+}
+
+.light .screen-v4 {
+  background: var(--screen-light);
+  color: var(--text-light);
+}
+
+.content-v4 {
+  padding: 0 18px 96px;
+  scroll-behavior: smooth;
+}
+
+.auth-card-v4,
+.search-panel-v4,
+.simple-card-v4,
+.top-barber-card-v4,
+.barber-card-v4,
+.booking-modal-card-v4,
+.barber-profile-card-v4,
+.notification-item-v4.as-card,
+.verify-card-v4,
+.profile-review-card-v4,
+.profile-confirm-card-v4,
+.notification-card-v4,
+.chat-card-v4 {
+  position: relative;
+  overflow: hidden;
+}
+
+.dark .auth-card-v4,
+.dark .search-panel-v4,
+.dark .simple-card-v4,
+.dark .top-barber-card-v4,
+.dark .barber-card-v4,
+.dark .booking-modal-card-v4,
+.dark .barber-profile-card-v4,
+.dark .verify-card-v4,
+.dark .profile-review-card-v4,
+.dark .profile-confirm-card-v4,
+.dark .notification-card-v4,
+.dark .chat-card-v4,
+.dark .notification-item-v4.as-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.05)),
+    linear-gradient(135deg, rgba(138,99,245,0.08), rgba(244,165,174,0.04));
+  border: 1px solid var(--stroke-dark);
+  box-shadow: var(--shadow-dark-soft);
+  backdrop-filter: blur(18px);
+}
+
+.light .auth-card-v4,
+.light .search-panel-v4,
+.light .simple-card-v4,
+.light .top-barber-card-v4,
+.light .barber-card-v4,
+.light .booking-modal-card-v4,
+.light .barber-profile-card-v4,
+.light .verify-card-v4,
+.light .profile-review-card-v4,
+.light .profile-confirm-card-v4,
+.light .notification-card-v4,
+.light .chat-card-v4,
+.light .notification-item-v4.as-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.88)),
+    linear-gradient(135deg, rgba(138,99,245,0.04), rgba(244,165,174,0.03));
+  border: 1px solid var(--stroke-light);
+  box-shadow: var(--shadow-light-soft);
+  backdrop-filter: blur(18px);
+}
+
+.auth-card-v4::before,
+.search-panel-v4::before,
+.simple-card-v4::before,
+.top-barber-card-v4::before,
+.barber-card-v4::before,
+.booking-modal-card-v4::before,
+.barber-profile-card-v4::before,
+.notification-card-v4::before,
+.chat-card-v4::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top right, rgba(138, 99, 245, 0.10), transparent 35%);
+  pointer-events: none;
+}
+
+.auth-title-v4 {
+  font-size: 34px;
+  letter-spacing: -0.03em;
+}
+
+.auth-sub-v4 {
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.76;
+}
+
+.field-input-v4,
+.search-input-v4,
+.profile-input-v4,
+.country-code-select-v4,
+.textarea-v4 {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.16s ease, background 0.2s ease;
+}
+
+.dark .field-input-v4,
+.dark .search-input-v4,
+.dark .textarea-v4,
+.dark .profile-input-v4,
+.dark .country-code-select-v4 {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.light .field-input-v4,
+.light .search-input-v4,
+.light .textarea-v4,
+.light .profile-input-v4,
+.light .country-code-select-v4 {
+  background: rgba(255,255,255,0.94);
+  border: 1px solid rgba(108,60,240,0.10);
+}
+
+.field-input-v4:focus,
+.search-input-v4:focus,
+.profile-input-v4:focus,
+.country-code-select-v4:focus,
+.textarea-v4:focus {
+  border-color: rgba(108, 60, 240, 0.45);
+  box-shadow: 0 0 0 4px rgba(108, 60, 240, 0.10);
+  transform: translateY(-1px);
+}
+
+.primary-btn-v4,
+.confirm-btn-v4 {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-soft) 55%, var(--accent-pink) 130%);
+  color: #fff;
+  box-shadow:
+    0 14px 28px rgba(108, 60, 240, 0.28),
+    0 4px 10px rgba(108, 60, 240, 0.18);
+}
+
+.primary-btn-v4:hover,
+.confirm-btn-v4:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 34px rgba(108, 60, 240, 0.34),
+    0 6px 14px rgba(108, 60, 240, 0.20);
+}
+
+.primary-btn-v4:active,
+.confirm-btn-v4:active,
+.secondary-btn-v4:active,
+.mini-action-btn-v4:active,
+.header-icon-btn:active,
+.profile-back-btn-v4:active,
+.fav-btn-v4:active,
+.switch-btn:active,
+.filter-btn:active,
+.slot-btn:active,
+.date-card-v4:active,
+.service-card-v4:active,
+.nav-v4:active {
+  transform: scale(0.97);
+}
+
+.switch-btn,
+.filter-btn,
+.slot-btn,
+.date-card-v4,
+.service-card-v4,
+.secondary-btn-v4,
+.mini-action-btn-v4,
+.country-code-select-v4,
+.profile-back-btn-v4,
+.header-icon-btn,
+.fav-btn-v4,
+.star-hit-v4 {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.switch-btn:hover,
+.filter-btn:hover,
+.slot-btn:hover,
+.date-card-v4:hover,
+.service-card-v4:hover,
+.secondary-btn-v4:hover,
+.mini-action-btn-v4:hover,
+.profile-back-btn-v4:hover,
+.header-icon-btn:hover,
+.fav-btn-v4:hover,
+.star-hit-v4:hover {
+  transform: translateY(-1px);
+}
+
+.dark .switch-btn,
+.dark .filter-btn,
+.dark .slot-btn,
+.dark .date-card-v4,
+.dark .service-card-v4,
+.dark .secondary-btn-v4,
+.dark .mini-action-btn-v4,
+.dark .country-code-select-v4,
+.dark .profile-back-btn-v4,
+.dark .header-icon-btn,
+.dark .fav-btn-v4,
+.dark .star-hit-v4,
+.dark .nav-v4 {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.light .switch-btn,
+.light .filter-btn,
+.light .slot-btn,
+.light .date-card-v4,
+.light .service-card-v4,
+.light .secondary-btn-v4,
+.light .mini-action-btn-v4,
+.light .country-code-select-v4,
+.light .profile-back-btn-v4,
+.light .header-icon-btn,
+.light .fav-btn-v4,
+.light .star-hit-v4,
+.light .nav-v4 {
+  background: rgba(108,60,240,0.07);
+  border: 1px solid rgba(108,60,240,0.07);
+}
+
+.switch-btn.active,
+.filter-btn.active,
+.slot-btn.active,
+.date-card-v4.active,
+.service-card-v4.active {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-soft) 65%, var(--accent-pink) 130%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 12px 22px rgba(108, 60, 240, 0.24);
+}
+
+.header-v4 {
+  padding: 14px 18px 10px;
+}
+
+.header-icon-btn,
+.profile-back-btn-v4,
+.fav-btn-v4 {
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.10);
+}
+
+.only-logo-v4 {
+  filter: drop-shadow(0 8px 18px rgba(108, 60, 240, 0.16));
+}
+
+.search-panel-v4 {
+  margin-top: 4px;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.search-panel-v4 .search-input-v4 {
+  min-height: 54px;
+  border-radius: 20px;
+}
+
+.filters-v4 {
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.map-panel-v4 {
+  border-radius: 0 0 34px 34px;
+  overflow: hidden;
+  box-shadow: var(--shadow-dark-soft);
+}
+
+.nearby-button-v4 {
+  border-radius: 18px;
+  min-height: 48px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-soft) 75%);
+  color: #fff;
+}
+
+.top-barber-card-v4,
+.barber-card-v4 {
+  border-radius: 24px;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.top-barber-card-v4:hover,
+.barber-card-v4:hover {
+  transform: translateY(-3px);
+}
+
+.dark .top-barber-card-v4:hover,
+.dark .barber-card-v4:hover {
+  box-shadow: var(--shadow-dark-deep);
+}
+
+.light .top-barber-card-v4:hover,
+.light .barber-card-v4:hover {
+  box-shadow: var(--shadow-light-deep);
+}
+
+.barber-image-v4,
+.barber-list-image-v4,
+.barber-image-compact-v4 {
+  border-radius: 22px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
+}
+
+.barber-name-v4,
+.barber-name-compact-v4,
+.top-name-v4 {
+  font-size: 19px;
+  letter-spacing: -0.03em;
+}
+
+.price-chip-v4 {
+  background: linear-gradient(135deg, rgba(108,60,240,0.16), rgba(244,165,174,0.16)) !important;
+  color: inherit;
+  border: 1px solid rgba(108,60,240,0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.stars-inline-v4 {
+  gap: 2px;
+  color: var(--accent-gold);
+}
+
+.top-badge-v4 {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 11px;
+}
+
+.dark .top-badge-v4 {
+  background: rgba(255,255,255,0.08);
+}
+
+.light .top-badge-v4 {
+  background: rgba(108,60,240,0.07);
+}
+
+.simple-card-v4 {
+  padding: 16px;
+}
+
+.panel-title-v4,
+.booking-name-v4,
+.profile-title-v4,
+.modal-title-v4 {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.profile-title-v4 {
+  font-size: 22px;
+}
+
+.stat-card-v4 {
+  border-radius: 22px;
+}
+
+.stat-value-v4 {
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.booking-badge-v4 {
+  min-width: 112px;
+}
+
+.status-confirmed,
+.status-completed,
+.status-pending {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.20);
+}
+
+.chat-card-v4,
+.notification-card-v4,
+.booking-modal-card-v4,
+.barber-profile-card-v4 {
+  border-radius: 28px 28px 0 0;
+}
+
+.booking-modal-v4.open,
+.barber-profile-sheet-v4.open,
+.notification-sheet-v4.open,
+.chat-sheet-wrap-v4.open {
+  animation: lineupSlideUp 0.28s ease;
+}
+
+@keyframes lineupSlideUp {
+  from {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.chat-card-v4 {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-thread-v4 {
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 330px;
+  min-height: 180px;
+  overflow-y: auto;
+  padding: 4px 4px 6px 2px;
+  scroll-behavior: smooth;
+}
+
+.chat-bubble-v4 {
+  width: fit-content;
+  max-width: 84%;
+  padding: 12px 15px;
+  border-radius: 20px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  animation: bubblePop 0.22s ease;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.08);
+}
+
+.chat-bubble-v4:not(.mine) {
+  align-self: flex-start;
+}
+
+.chat-bubble-v4.mine {
+  align-self: flex-end;
+  background: linear-gradient(135deg, var(--primary), var(--primary-soft));
+  color: #fff;
+}
+
+.dark .chat-bubble-v4:not(.mine) {
+  background: rgba(255,255,255,0.09);
+  color: var(--text-dark);
+}
+
+.light .chat-bubble-v4:not(.mine) {
+  background: rgba(108,60,240,0.08);
+  color: var(--text-light);
+}
+
+.chat-bubble-v4.mine .tiny-meta-v4 {
+  text-align: right;
+  color: rgba(255,255,255,0.82);
+}
+
+.chat-bubble-text-v4 {
+  opacity: 1 !important;
+}
+
+@keyframes bubblePop {
+  from {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.chat-status-v4 {
+  font-weight: 800;
+  opacity: 0.74;
+}
+
+.notification-card-v4 {
+  width: 100%;
+  max-width: 520px;
+}
+
+.notification-item-v4.as-card {
+  border-radius: 20px;
+  text-align: left;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.notification-item-v4.as-card:hover {
+  transform: translateY(-1px);
+}
+
+.notification-item-v4.as-card.unread {
+  box-shadow:
+    inset 0 0 0 1px rgba(223, 69, 109, 0.28),
+    0 12px 24px rgba(223, 69, 109, 0.08);
+}
+
+.notification-title-v4 {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.mini-badge-v4 {
+  top: -7px !important;
+  right: -7px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  font-size: 11px !important;
+  padding: 0 6px !important;
+  border: 2px solid rgba(255,255,255,0.96);
+  background: linear-gradient(135deg, var(--danger), #ff6b8b);
+  box-shadow:
+    0 6px 14px rgba(223,69,109,0.34),
+    0 0 0 0 rgba(223,69,109,0.26);
+  animation: badgePulse 1.8s infinite ease-out;
+}
+
+.dark .mini-badge-v4 {
+  border-color: #1b0f28;
+}
+
+.light .mini-badge-v4 {
+  border-color: #fff8f5;
+}
+
+@keyframes badgePulse {
+  0% {
+    transform: scale(1);
+    box-shadow:
+      0 6px 14px rgba(223,69,109,0.34),
+      0 0 0 0 rgba(223,69,109,0.20);
+  }
+  40% {
+    transform: scale(1.08);
+    box-shadow:
+      0 8px 18px rgba(223,69,109,0.38),
+      0 0 0 8px rgba(223,69,109,0.10);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 6px 14px rgba(223,69,109,0.34),
+      0 0 0 0 rgba(223,69,109,0.00);
+  }
+}
+
+.empty-box-v4 {
+  border-radius: 18px;
+}
+
+.dark .empty-box-v4 {
+  background: rgba(255,255,255,0.06);
+}
+
+.light .empty-box-v4 {
+  background: rgba(108,60,240,0.06);
+}
+
+.notification-list-v4,
+.booking-list-v4,
+.profile-review-list-v4,
+.service-grid-v4,
+.field-stack-v4 {
+  gap: 14px;
+}
+
+.booking-modal-card-v4,
+.barber-profile-card-v4,
+.notification-card-v4,
+.chat-card-v4 {
+  overscroll-behavior: contain;
+}
+
+.global-error-v4,
+.auth-error,
+.chat-error-v4 {
+  border: 1px solid rgba(223, 69, 109, 0.22);
+}
+
+.auth-success {
+  border: 1px solid rgba(51, 179, 107, 0.24);
+}
+
+.tiny-meta-v4 {
+  font-size: 11px;
+  opacity: 0.72;
+}
+
+.nav-v4 {
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-v4.active::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, var(--primary), var(--accent-pink));
+}
+
+.bottom-nav-v4 {
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.dark .bottom-nav-v4 {
+  background: rgba(12, 6, 20, 0.94);
+}
+
+.light .bottom-nav-v4 {
+  background: rgba(255,255,255,0.92);
+}
+
+.auth-logo-v4 {
+  width: 226px;
+  height: 118px;
+}
+
+.profile-hero-v4,
+.barber-profile-topbar-v4,
+.booking-row-v4,
+.notification-item-v4,
+.profile-review-head-v4 {
+  gap: 12px;
+}
+
+.profile-avatar-v4,
+.avatar-v4 {
+  border-radius: 24px;
+  box-shadow: 0 12px 24px rgba(0,0,0,0.14);
+}
+
+.barber-profile-hero-v4 {
+  border-radius: 22px;
+  box-shadow: var(--shadow-dark-soft);
+}
+
+@media (max-width: 480px) {
+  .app-wrap-v4 {
+    padding: 0;
+  }
+
+  .phone-frame-v4 {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .chat-thread-v4 {
+    max-height: 300px;
+  }
+
+  .chat-bubble-v4 {
+    max-width: 88%;
+  }
+
+  .header-actions-v4 {
+    gap: 10px;
+  }
+}
+
+

@@ -1,0 +1,982 @@
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Port 4000 is already in use. Stop the existing backend process or set PORT to another value.
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Unexpected PostgreSQL client error: Error: write ECONNABORTED
+    at WriteWrap.onWriteComplete [as oncomplete] (node:internal/stream_base_commons:95:16)
+    at handleWriteReq (node:internal/stream_base_commons:52:26)
+    at writeGeneric (node:internal/stream_base_commons:150:15)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Connection.end (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\pg\lib\connection.js:195:24)
+    at Client.end (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\pg\lib\client.js:723:23) {
+  errno: -4079,
+  code: 'ECONNABORTED',
+  syscall: 'write',
+  client: Client {
+    _events: [Object: null prototype] { error: [Function (anonymous)] },
+    _eventsCount: 1,
+    _maxListeners: undefined,
+    connectionParameters: ConnectionParameters {
+      user: 'postgres.psmwzkexuhuksjibflpy',
+      database: 'postgres',
+      port: 6543,
+      host: 'aws-1-eu-west-3.pooler.supabase.com',
+      binary: false,
+      options: undefined,
+      ssl: [Object],
+      client_encoding: '',
+      replication: undefined,
+      isDomainSocket: false,
+      application_name: undefined,
+      fallback_application_name: undefined,
+      statement_timeout: false,
+      lock_timeout: false,
+      idle_in_transaction_session_timeout: false,
+      query_timeout: false,
+      connect_timeout: 0
+    },
+    user: 'postgres.psmwzkexuhuksjibflpy',
+    database: 'postgres',
+    port: 6543,
+    host: 'aws-1-eu-west-3.pooler.supabase.com',
+    replication: undefined,
+    _Promise: [Function: Promise],
+    _types: TypeOverrides { _types: [Object], text: {}, binary: {} },
+    _ending: true,
+    _ended: false,
+    _connecting: false,
+    _connected: true,
+    _connectionError: false,
+    _queryable: false,
+    _activeQuery: null,
+    enableChannelBinding: false,
+    connection: Connection {
+      _events: [Object: null prototype],
+      _eventsCount: 23,
+      _maxListeners: undefined,
+      stream: [TLSSocket],
+      _keepAlive: false,
+      _keepAliveInitialDelayMillis: 0,
+      parsedStatements: {},
+      ssl: [Object],
+      _ending: true,
+      _emitMessage: false,
+      _connecting: true,
+      [Symbol(shapeMode)]: false,
+      [Symbol(kCapture)]: false
+    },
+    _queryQueue: [],
+    binary: false,
+    processID: 22647705,
+    secretKey: 1279143126,
+    ssl: { rejectUnauthorized: false },
+    _connectionTimeoutMillis: 0,
+    _connectionCallback: null,
+    saslSession: null,
+    release: [Function (anonymous)],
+    readyForQuery: true,
+    hasExecuted: true,
+    _poolUseCount: 151,
+    [Symbol(shapeMode)]: false,
+    [Symbol(kCapture)]: false
+  }
+}
+Error: getaddrinfo ENOTFOUND aws-1-eu-west-3.pooler.supabase.com
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'aws-1-eu-west-3.pooler.supabase.com'
+}
+Error: getaddrinfo ENOTFOUND aws-1-eu-west-3.pooler.supabase.com
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'aws-1-eu-west-3.pooler.supabase.com'
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Error: Route not found: /api/favorites/timothy
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Port 4000 is already in use. Stop the existing backend process or set PORT to another value.
+Database initialization failed: error: duplicate key value violates unique constraint "schema_migrations_pkey"
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async migratePostgres (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/db/migratePostgres.js:37:7)
+    at async initDb (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/db/initDb.js:198:7)
+    at async file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/server.js:17:3 {
+  length: 247,
+  severity: 'ERROR',
+  code: '23505',
+  detail: 'Key (id)=(007_wallet_topup_idempotency.sql) already exists.',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'schema_migrations',
+  column: undefined,
+  dataType: undefined,
+  constraint: 'schema_migrations_pkey',
+  file: 'nbtinsert.c',
+  line: '666',
+  routine: '_bt_check_unique'
+}
+Failed to initialize database before server startup: error: duplicate key value violates unique constraint "schema_migrations_pkey"
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async migratePostgres (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/db/migratePostgres.js:37:7)
+    at async initDb (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/db/initDb.js:198:7)
+    at async file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/server.js:17:3 {
+  length: 247,
+  severity: 'ERROR',
+  code: '23505',
+  detail: 'Key (id)=(007_wallet_topup_idempotency.sql) already exists.',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'schema_migrations',
+  column: undefined,
+  dataType: undefined,
+  constraint: 'schema_migrations_pkey',
+  file: 'nbtinsert.c',
+  line: '666',
+  routine: '_bt_check_unique'
+}
+Error: Route not found: /api/favorites/admin
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/app.js:46:3
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+Error: Route not found: /api/profiles/admin
+    at notFoundHandler (file:///C:/Users/User/Documents/Codex/2026-04-19-files-mentioned-by-the-user-barber/barber-booking-app/backend/src/middleware/errorMiddleware.js:4:17)
+    at Layer.handle [as handle_request] (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:328:13)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:286:9
+    at Function.process_params (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:280:10)
+    at C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:646:15
+    at next (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:265:14)
+    at Function.handle (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (C:\Users\User\Documents\Codex\2026-04-19-files-mentioned-by-the-user-barber\barber-booking-app\backend\node_modules\express\lib\router\index.js:47:12) {
+  statusCode: 404
+}
+Port 4000 is already in use. Stop the existing backend process or set PORT to another value.

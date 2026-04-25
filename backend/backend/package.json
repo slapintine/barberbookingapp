@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "barber-booking-backend": "file:.."
+  }
+}

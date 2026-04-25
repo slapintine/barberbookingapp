@@ -1,0 +1,23 @@
+import express from "express";
+import { protect } from "../middleware/authMiddleware.js";
+import {
+  getAllBarbers,
+  getMyBarberProfile,
+  registerBarber,
+  getMyBarberSchedule,
+  updateMyBarberSchedule,
+  updateMyBarberProfile,
+  deleteMyBarberProfile
+} from "../controllers/barberController.js";
+
+const router = express.Router();
+
+router.get("/", getAllBarbers);
+router.get("/me", protect, getMyBarberProfile);
+router.post("/register", protect, registerBarber);
+router.patch("/me", protect, updateMyBarberProfile);
+router.delete("/me", protect, deleteMyBarberProfile);
+router.get("/me/schedule", protect, getMyBarberSchedule);
+router.put("/me/schedule", protect, updateMyBarberSchedule);
+
+export default router;

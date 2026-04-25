@@ -1,0 +1,934 @@
+/* =========================================
+   MOTION + UX DELIGHT LAYER
+   Compatible with current App.jsx
+   ========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.screen-v4 {
+  animation: appFadeIn 0.34s ease;
+}
+
+@keyframes appFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-card-v4,
+.search-panel-v4,
+.simple-card-v4,
+.top-barber-card-v4,
+.barber-card-v4,
+.booking-modal-card-v4,
+.barber-profile-card-v4,
+.notification-card-v4,
+.chat-card-v4,
+.profile-confirm-card-v4,
+.profile-review-card-v4,
+.verify-card-v4 {
+  animation: surfaceRise 0.34s ease;
+}
+
+@keyframes surfaceRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.top-barber-card-v4,
+.barber-card-v4 {
+  will-change: transform, box-shadow;
+}
+
+.top-barber-card-v4:hover,
+.barber-card-v4:hover,
+.profile-review-card-v4:hover,
+.notification-item-v4.as-card:hover,
+.simple-card-v4:hover {
+  transform: translateY(-3px);
+}
+
+.top-barber-card-v4:active,
+.barber-card-v4:active,
+.profile-review-card-v4:active,
+.notification-item-v4.as-card:active,
+.simple-card-v4:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+.header-icon-btn,
+.profile-back-btn-v4,
+.fav-btn-v4,
+.switch-btn,
+.filter-btn,
+.slot-btn,
+.date-card-v4,
+.service-card-v4,
+.secondary-btn-v4,
+.mini-action-btn-v4,
+.primary-btn-v4,
+.confirm-btn-v4,
+.nav-v4,
+.star-hit-v4,
+.nearby-button-v4 {
+  will-change: transform, box-shadow, background, opacity;
+}
+
+.header-icon-btn:hover,
+.profile-back-btn-v4:hover,
+.fav-btn-v4:hover,
+.switch-btn:hover,
+.filter-btn:hover,
+.slot-btn:hover,
+.date-card-v4:hover,
+.service-card-v4:hover,
+.secondary-btn-v4:hover,
+.mini-action-btn-v4:hover,
+.primary-btn-v4:hover,
+.confirm-btn-v4:hover,
+.nav-v4:hover,
+.star-hit-v4:hover,
+.nearby-button-v4:hover {
+  transform: translateY(-1px);
+}
+
+.header-icon-btn:active,
+.profile-back-btn-v4:active,
+.fav-btn-v4:active,
+.switch-btn:active,
+.filter-btn:active,
+.slot-btn:active,
+.date-card-v4:active,
+.service-card-v4:active,
+.secondary-btn-v4:active,
+.mini-action-btn-v4:active,
+.primary-btn-v4:active,
+.confirm-btn-v4:active,
+.nav-v4:active,
+.star-hit-v4:active,
+.nearby-button-v4:active {
+  transform: scale(0.97);
+}
+
+.primary-btn-v4,
+.confirm-btn-v4 {
+  position: relative;
+  overflow: hidden;
+}
+
+.primary-btn-v4::after,
+.confirm-btn-v4::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 25%, rgba(255,255,255,0.20) 45%, transparent 65%);
+  transform: translateX(-130%);
+  transition: transform 0.7s ease;
+  pointer-events: none;
+}
+
+.primary-btn-v4:hover::after,
+.confirm-btn-v4:hover::after {
+  transform: translateX(130%);
+}
+
+.auth-switch-v4 .switch-btn.active,
+.filters-v4 .filter-btn.active,
+.service-grid-v4 .service-card-v4.active,
+.time-grid-v4 .slot-btn.active,
+.date-calendar-row-v4 .date-card-v4.active {
+  animation: selectedPulse 0.28s ease;
+}
+
+@keyframes selectedPulse {
+  0% {
+    transform: scale(0.97);
+  }
+  65% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.barber-image-v4 img,
+.barber-list-image-v4 img,
+.barber-profile-hero-v4 img,
+.avatar-v4 img {
+  transition: transform 0.45s ease;
+}
+
+.top-barber-card-v4:hover .barber-image-v4 img,
+.barber-card-v4:hover .barber-list-image-v4 img,
+.barber-profile-hero-v4:hover img {
+  transform: scale(1.05);
+}
+
+.price-chip-v4,
+.booking-badge-v4,
+.verify-pill-v4,
+.chip-v4,
+.barber-profile-pill-v4 {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.price-chip-v4:hover,
+.booking-badge-v4:hover,
+.verify-pill-v4:hover,
+.chip-v4:hover,
+.barber-profile-pill-v4:hover {
+  transform: translateY(-1px);
+}
+
+.booking-modal-v4.open,
+.barber-profile-sheet-v4.open,
+.notification-sheet-v4.open,
+.chat-sheet-wrap-v4.open {
+  animation: modalUpIn 0.30s cubic-bezier(.2,.8,.2,1);
+}
+
+@keyframes modalUpIn {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-overlay-v4,
+.booking-overlay-v4 {
+  transition: opacity 0.28s ease;
+}
+
+.notification-item-v4.as-card {
+  animation: notificationIn 0.28s ease;
+}
+
+@keyframes notificationIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.notification-item-v4.as-card.unread {
+  position: relative;
+}
+
+.notification-item-v4.as-card.unread::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--danger);
+  box-shadow: 0 0 0 6px rgba(223,69,109,0.08);
+  animation: unreadPing 1.8s infinite ease-out;
+}
+
+@keyframes unreadPing {
+  0% {
+    box-shadow: 0 0 0 0 rgba(223,69,109,0.18);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(223,69,109,0.00);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(223,69,109,0.00);
+  }
+}
+
+.notification-copy-v4 {
+  padding-left: 12px;
+}
+
+.chat-thread-v4 {
+  scroll-behavior: smooth;
+}
+
+.chat-bubble-v4 {
+  animation: chatBubbleIn 0.20s ease;
+  transform-origin: bottom left;
+}
+
+.chat-bubble-v4.mine {
+  transform-origin: bottom right;
+}
+
+@keyframes chatBubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-status-v4 {
+  animation: fadeStatusIn 0.18s ease;
+}
+
+@keyframes fadeStatusIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 0.82;
+    transform: translateY(0);
+  }
+}
+
+.chat-compose-v4 .search-input-v4 {
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+.chat-compose-v4 .search-input-v4:focus {
+  transform: translateY(-1px);
+}
+
+.bottom-nav-v4 {
+  animation: navLiftIn 0.32s ease;
+}
+
+@keyframes navLiftIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav-v4.active svg,
+.nav-v4.active span {
+  animation: navActivePop 0.22s ease;
+}
+
+@keyframes navActivePop {
+  0% {
+    transform: scale(0.92);
+  }
+  70% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.mini-badge-v4 {
+  animation: badgePulse 1.6s infinite ease-out;
+}
+
+.empty-box-v4 {
+  animation: fadeSoftIn 0.26s ease;
+}
+
+.global-error-v4,
+.auth-error,
+.auth-success,
+.chat-error-v4 {
+  animation: bannerDrop 0.24s ease;
+}
+
+@keyframes bannerDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeSoftIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.profile-hero-v4 .avatar-v4,
+.profile-hero-v4 .profile-main-copy-v4 {
+  animation: fadeSoftIn 0.3s ease;
+}
+
+.booking-list-v4 .simple-card-v4,
+.profile-review-list-v4 .profile-review-card-v4,
+.notification-list-v4 .notification-item-v4.as-card {
+  animation: staggerRise 0.28s ease both;
+}
+
+.booking-list-v4 .simple-card-v4:nth-child(1),
+.profile-review-list-v4 .profile-review-card-v4:nth-child(1),
+.notification-list-v4 .notification-item-v4.as-card:nth-child(1) { animation-delay: 0.02s; }
+
+.booking-list-v4 .simple-card-v4:nth-child(2),
+.profile-review-list-v4 .profile-review-card-v4:nth-child(2),
+.notification-list-v4 .notification-item-v4.as-card:nth-child(2) { animation-delay: 0.05s; }
+
+.booking-list-v4 .simple-card-v4:nth-child(3),
+.profile-review-list-v4 .profile-review-card-v4:nth-child(3),
+.notification-list-v4 .notification-item-v4.as-card:nth-child(3) { animation-delay: 0.08s; }
+
+.booking-list-v4 .simple-card-v4:nth-child(4),
+.profile-review-list-v4 .profile-review-card-v4:nth-child(4),
+.notification-list-v4 .notification-item-v4.as-card:nth-child(4) { animation-delay: 0.11s; }
+
+@keyframes staggerRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.header-icon-btn:focus-visible,
+.profile-back-btn-v4:focus-visible,
+.fav-btn-v4:focus-visible,
+.primary-btn-v4:focus-visible,
+.confirm-btn-v4:focus-visible,
+.secondary-btn-v4:focus-visible,
+.switch-btn:focus-visible,
+.filter-btn:focus-visible,
+.slot-btn:focus-visible,
+.date-card-v4:focus-visible,
+.service-card-v4:focus-visible,
+.nav-v4:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(108, 60, 240, 0.14);
+}
+
+.loading-shimmer-v4 {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-shimmer-v4::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.20) 45%, transparent 70%);
+  transform: translateX(-120%);
+  animation: shimmerMove 1.2s infinite ease;
+}
+
+@keyframes shimmerMove {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+
+/* =========================================
+   CORRECTED LAYOUT + BRAND RESTORE FIXES
+   ========================================= */
+
+:root {
+  --primary: #522b5b;
+  --primary-soft: #854f6c;
+  --primary-deep: #2b124c;
+  --accent-pink: #dfb6b2;
+  --accent-gold: #fbe4d8;
+
+  --bg-dark: linear-gradient(180deg, #190019 0%, #2b124c 58%, #522b5b 100%);
+  --bg-light: linear-gradient(180deg, #fff8f4 0%, #fbeee8 100%);
+
+  --screen-dark: #14071b;
+  --screen-light: #fff7f2;
+
+  --card-dark: rgba(255, 255, 255, 0.06);
+  --card-dark-strong: rgba(255, 255, 255, 0.10);
+  --card-light: rgba(255, 255, 255, 0.94);
+  --card-light-soft: rgba(82, 43, 91, 0.05);
+
+  --stroke-dark: rgba(255, 255, 255, 0.08);
+  --stroke-light: rgba(82, 43, 91, 0.10);
+
+  --text-dark: #f8f0eb;
+  --text-light: #2c163a;
+  --muted-dark: rgba(248, 240, 235, 0.74);
+  --muted-light: rgba(44, 22, 58, 0.70);
+
+  --success: #35a86b;
+  --warning: #c89534;
+  --danger: #d74d6f;
+  --info: #4c8df6;
+}
+
+body[data-lineup-theme="dark"] {
+  background: var(--bg-dark);
+}
+
+body[data-lineup-theme="light"] {
+  background: var(--bg-light);
+}
+
+.app-wrap-v4.dark {
+  background: var(--bg-dark);
+}
+
+.app-wrap-v4.light {
+  background: var(--bg-light);
+}
+
+.dark .screen-v4 {
+  background: var(--screen-dark);
+  color: var(--text-dark);
+}
+
+.light .screen-v4 {
+  background: var(--screen-light);
+  color: var(--text-light);
+}
+
+.dark .auth-card-v4,
+.dark .search-panel-v4,
+.dark .simple-card-v4,
+.dark .top-barber-card-v4,
+.dark .barber-card-v4,
+.dark .booking-modal-card-v4,
+.dark .barber-profile-card-v4,
+.dark .verify-card-v4,
+.dark .profile-review-card-v4,
+.dark .profile-confirm-card-v4,
+.dark .notification-card-v4,
+.dark .chat-card-v4,
+.dark .notification-item-v4.as-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.05)),
+    linear-gradient(135deg, rgba(82,43,91,0.12), rgba(223,182,178,0.04));
+  border: 1px solid var(--stroke-dark);
+}
+
+.light .auth-card-v4,
+.light .search-panel-v4,
+.light .simple-card-v4,
+.light .top-barber-card-v4,
+.light .barber-card-v4,
+.light .booking-modal-card-v4,
+.light .barber-profile-card-v4,
+.light .verify-card-v4,
+.light .profile-review-card-v4,
+.light .profile-confirm-card-v4,
+.light .notification-card-v4,
+.light .chat-card-v4,
+.light .notification-item-v4.as-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.97), rgba(255,255,255,0.92)),
+    linear-gradient(135deg, rgba(82,43,91,0.03), rgba(223,182,178,0.04));
+  border: 1px solid var(--stroke-light);
+}
+
+.primary-btn-v4,
+.confirm-btn-v4,
+.switch-btn.active,
+.filter-btn.active,
+.slot-btn.active,
+.date-card-v4.active,
+.service-card-v4.active,
+.nearby-button-v4 {
+  background: linear-gradient(135deg, #854f6c 0%, #522b5b 58%, #2b124c 100%);
+  color: #fbe4d8;
+}
+
+.primary-btn-v4,
+.confirm-btn-v4 {
+  box-shadow:
+    0 14px 28px rgba(82, 43, 91, 0.26),
+    0 4px 10px rgba(43, 18, 76, 0.18);
+}
+
+.primary-btn-v4:hover,
+.confirm-btn-v4:hover {
+  box-shadow:
+    0 16px 34px rgba(82, 43, 91, 0.30),
+    0 6px 14px rgba(43, 18, 76, 0.22);
+}
+
+.chat-bubble-v4.mine {
+  background: linear-gradient(135deg, #854f6c 0%, #522b5b 72%);
+  color: #fbe4d8;
+}
+
+.price-chip-v4 {
+  background: rgba(223, 182, 178, 0.18) !important;
+  color: #522b5b !important;
+  border: 1px solid rgba(82, 43, 91, 0.10);
+  box-shadow: none;
+}
+
+.dark .price-chip-v4 {
+  color: #fbe4d8 !important;
+  background: rgba(223, 182, 178, 0.14) !important;
+  border-color: rgba(223, 182, 178, 0.10);
+}
+
+.mini-badge-v4 {
+  background: linear-gradient(135deg, #d74d6f, #854f6c);
+}
+
+.map-panel-v4 {
+  border-radius: 0 0 30px 30px;
+}
+
+.top-barber-card-v4,
+.barber-card-v4 {
+  border-radius: 24px;
+  padding: 14px;
+}
+
+.top-barber-button-v4,
+.barber-card-main-layout-v4 {
+  display: grid !important;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  width: 100%;
+}
+
+.barber-card-main-btn-v4,
+.top-barber-button-v4,
+.unstyled-card-btn-v4.barber-card-main-layout-v4 {
+  width: 100%;
+}
+
+.barber-card-content-v4 {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.barber-card-name-wrap-v4 {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.barber-card-title-row-v4 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.barber-name-v4,
+.barber-name-compact-v4,
+.top-name-v4 {
+  font-size: 18px;
+  line-height: 1.12;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  margin: 0;
+  max-width: 100%;
+}
+
+.barber-location-v4,
+.top-meta-v4,
+.list-meta-v4 {
+  min-width: 0;
+}
+
+.barber-location-v4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.3;
+  flex-wrap: wrap;
+}
+
+.top-meta-v4.list-meta-v4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.price-chip-v4 {
+  min-width: 118px;
+  width: fit-content;
+  white-space: nowrap;
+  align-self: start;
+  justify-self: end;
+}
+
+.barber-image-v4,
+.barber-list-image-v4,
+.barber-image-compact-v4 {
+  width: 76px;
+  height: 76px;
+  min-width: 76px;
+  flex-shrink: 0;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.barber-image-v4 img,
+.barber-list-image-v4 img,
+.barber-image-compact-v4 img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.barber-card-fav-wrap-v4,
+.barber-card-fav-middle-v4 {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+}
+
+.fav-btn-v4.small {
+  width: 36px;
+  height: 36px;
+}
+
+.top-barber-card-clean-v4,
+.barber-card-clean-v4 {
+  position: relative;
+}
+
+.booking-modal-v4,
+.barber-profile-sheet-v4,
+.notification-sheet-v4,
+.chat-sheet-wrap-v4 {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1001;
+  pointer-events: none;
+}
+
+.booking-modal-v4.open,
+.barber-profile-sheet-v4.open,
+.notification-sheet-v4.open,
+.chat-sheet-wrap-v4.open {
+  pointer-events: auto;
+}
+
+.booking-modal-card-v4,
+.barber-profile-card-v4,
+.notification-card-v4,
+.chat-card-v4 {
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 26px 26px 0 0;
+  padding: 18px 18px 20px;
+  overscroll-behavior: contain;
+}
+
+.chat-card-v4 {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-thread-v4 {
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 4px 6px 2px;
+  scroll-behavior: smooth;
+}
+
+.content-v4 {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+.booking-modal-card-v4::-webkit-scrollbar,
+.barber-profile-card-v4::-webkit-scrollbar,
+.notification-card-v4::-webkit-scrollbar,
+.chat-card-v4::-webkit-scrollbar,
+.chat-thread-v4::-webkit-scrollbar,
+.content-v4::-webkit-scrollbar {
+  width: 6px;
+}
+
+.booking-modal-card-v4::-webkit-scrollbar-thumb,
+.barber-profile-card-v4::-webkit-scrollbar-thumb,
+.notification-card-v4::-webkit-scrollbar-thumb,
+.chat-card-v4::-webkit-scrollbar-thumb,
+.chat-thread-v4::-webkit-scrollbar-thumb,
+.content-v4::-webkit-scrollbar-thumb {
+  background: rgba(133, 79, 108, 0.28);
+  border-radius: 999px;
+}
+
+.booking-modal-card-v4::-webkit-scrollbar-track,
+.barber-profile-card-v4::-webkit-scrollbar-track,
+.notification-card-v4::-webkit-scrollbar-track,
+.chat-card-v4::-webkit-scrollbar-track,
+.chat-thread-v4::-webkit-scrollbar-track,
+.content-v4::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.profile-top-title-v4 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.service-card-v4,
+.date-card-v4,
+.slot-btn {
+  min-height: 54px;
+}
+
+.service-grid-v4,
+.date-calendar-row-v4,
+.time-grid-v4 {
+  align-items: stretch;
+}
+
+.booking-overlay-v4,
+.profile-overlay-v4 {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.notification-list-v4 {
+  display: grid;
+  gap: 12px;
+}
+
+.notification-item-v4.as-card {
+  width: 100%;
+}
+
+.dark .header-icon-btn,
+.dark .profile-back-btn-v4,
+.dark .fav-btn-v4,
+.dark .switch-btn,
+.dark .filter-btn,
+.dark .slot-btn,
+.dark .date-card-v4,
+.dark .service-card-v4,
+.dark .secondary-btn-v4,
+.dark .mini-action-btn-v4,
+.dark .country-code-select-v4,
+.dark .nav-v4 {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-dark);
+}
+
+.light .header-icon-btn,
+.light .profile-back-btn-v4,
+.light .fav-btn-v4,
+.light .switch-btn,
+.light .filter-btn,
+.light .slot-btn,
+.light .date-card-v4,
+.light .service-card-v4,
+.light .secondary-btn-v4,
+.light .mini-action-btn-v4,
+.light .country-code-select-v4,
+.light .nav-v4 {
+  background: rgba(82,43,91,0.07);
+  color: var(--text-light);
+}
+
+@media (max-width: 480px) {
+  .booking-modal-v4,
+  .barber-profile-sheet-v4,
+  .notification-sheet-v4,
+  .chat-sheet-wrap-v4 {
+    padding: 10px;
+  }
+
+  .booking-modal-card-v4,
+  .barber-profile-card-v4,
+  .notification-card-v4,
+  .chat-card-v4 {
+    max-height: 90vh;
+    padding: 16px 16px 18px;
+  }
+
+  .top-barber-button-v4,
+  .barber-card-main-layout-v4 {
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .barber-image-v4,
+  .barber-list-image-v4,
+  .barber-image-compact-v4 {
+    width: 68px;
+    height: 68px;
+    min-width: 68px;
+  }
+
+  .barber-card-title-row-v4 {
+    grid-template-columns: 1fr;
+  }
+
+  .price-chip-v4 {
+    min-width: 0;
+    width: fit-content;
+    justify-self: start;
+  }
+
+  .barber-card-fav-wrap-v4,
+  .barber-card-fav-middle-v4 {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .chat-thread-v4 {
+    max-height: 300px;
+  }
+}

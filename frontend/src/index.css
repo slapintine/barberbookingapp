@@ -1,0 +1,46 @@
+:root {
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+html {
+  background: #190019;
+}
+
+body {
+  background:
+    radial-gradient(circle at 14% 10%, rgba(133, 79, 108, 0.18), transparent 28%),
+    radial-gradient(circle at 86% 90%, rgba(82, 43, 91, 0.22), transparent 36%),
+    linear-gradient(180deg, #190019 0%, #2b124c 100%);
+  color: #fbe4d8;
+  overflow-x: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
