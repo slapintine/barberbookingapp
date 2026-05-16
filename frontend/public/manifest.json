@@ -1,0 +1,23 @@
+{
+  "name": "Queless",
+  "short_name": "Queless",
+  "description": "Book trusted local services with Queless.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#100019",
+  "theme_color": "#28124C",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

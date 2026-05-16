@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FiCalendar, FiMapPin, FiScissors } from "react-icons/fi";
 import { FaStar } from "react-icons/fa";
+import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
 
 function EmptyState({ title, text }) {
   return (
@@ -27,6 +28,7 @@ export default function BookingsPage({
   reviewedBookings = {},
   barberMatchesBooking,
   formatTimeLabel,
+  focusBookingId = "",
 }) {
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [ratings, setRatings] = useState({});
@@ -63,28 +65,32 @@ export default function BookingsPage({
         {visibleBookings.length === 0 ? (
           <EmptyState
             title={isBarberView ? "No incoming bookings yet" : "No bookings yet"}
-            text={isBarberView ? "New customer appointments will land here for approval." : "Book a barber and your appointment details will appear here."}
+            text={isBarberView ? "New customer bookings will land here for approval." : "Book a provider and your booking details will appear here."}
           />
         ) : (
           visibleBookings.map((booking) => (
-            <div key={booking.id} className="simple-card-v4">
+            <div
+              key={booking.id}
+              id={`booking-${booking.id}`}
+              className={String(focusBookingId || "") === String(booking.id) ? "simple-card-v4 booking-focused-v5" : "simple-card-v4"}
+            >
               <div className="booking-name-v4">{isBarberView ? (booking.customerName || booking.customerUsername) : booking.barberName}</div>
               {booking.teamMemberName ? (
                 <div className="booking-meta-v4">
-                  <FiScissors /> Barber: {booking.teamMemberName}
+                  <FiScissors /> Provider: {booking.teamMemberName}
                 </div>
               ) : null}
               <div className="booking-meta-v4">
                 <FiCalendar /> {booking.date} · {booking.timeLabel || formatTimeLabel(booking.time)}
               </div>
               <div className="booking-meta-v4">
-                <FiScissors /> {booking.service || "Haircut"}
+                <FiScissors /> {booking.service || "Selected service"}
               </div>
               <div className="booking-meta-v4">
                 <FiMapPin /> {booking.location || "Location unavailable"}
               </div>
               <div className="booking-meta-v4">
-                Payment: {(booking.paymentMethod || "cash") === "wallet" ? "Wallet" : "Cash"} · {booking.paymentStatus || "unpaid"}
+                Payment: {getPaymentMethodLabel(booking.paymentMethod)} · {booking.paymentStatus || "unpaid"}
               </div>
               <div className="inline-actions-v4">
                 <span className={`booking-badge-v4 status-${booking.status || "pending"}`}>{booking.status}</span>
@@ -110,7 +116,7 @@ export default function BookingsPage({
                   {reviewedBookings?.[String(booking.id)] ? (
                     <>
                       <div className="panel-title-v4 small-title-v4">Review submitted</div>
-                      <div className="profile-sub-v4">Thanks for rating this appointment. Each appointment can only be reviewed once.</div>
+                      <div className="profile-sub-v4">Thanks for rating this booking. Each booking can only be reviewed once.</div>
                       <div className="star-input-v4 readonly" aria-label={`Your rating was ${reviewedBookings[String(booking.id)]?.rating || 0} stars`}>
                         {[1, 2, 3, 4, 5].map((n) => (
                           <span

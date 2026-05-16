@@ -1,6 +1,6 @@
-# Barber Booking App
+# Queless
 
-A mobile-first barber booking app with customer accounts, barber profiles, bookings, reviews, messaging, notifications, schedules, maps, and push notification support.
+A mobile-first service marketplace app with customer accounts, provider profiles, bookings, reviews, messaging, notifications, schedules, maps, and push notification support.
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ A mobile-first barber booking app with customer accounts, barber profiles, booki
 ## Project Structure
 
 ```text
-barber-booking-app/
+queless/
   backend/      Express API, database setup, Socket.IO server
   frontend/     Vite React app
 ```

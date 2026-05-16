@@ -1,6 +1,6 @@
 import { transaction } from "../db/query.js";
 import { env } from "../config/env.js";
-import { createReference, normalizePhoneNumber } from "../services/paymentService.js";
+import { createReference, normalizeUgandaPhoneNumber } from "../services/paymentService.js";
 import { getMobileMoneyService } from "../services/mobileMoneyService.js";
 import {
   createPaymentRecord,
@@ -11,7 +11,8 @@ import {
 } from "../services/paymentDataService.js";
 import { createWalletTransaction, ensureBarberWallet } from "../services/ledgerService.js";
 import { getMyWallet, requestWithdrawal } from "./walletController.js";
-import { handleBookingPaymentWebhook, verifyBookingPayment } from "./bookingController.js";
+import { finalizeBookingPayment, handleBookingPaymentWebhook, verifyBookingPayment } from "./bookingController.js";
+import { mtnService } from "../services/mtn.service.js";
 
 function httpError(statusCode, message) {
   const error = new Error(message);
@@ -35,7 +36,7 @@ async function getBarberById(barberId, client = { get }) {
 
 async function getCustomerPhone(userId, client = { get }) {
   const profile = await client.get(`SELECT phone FROM profiles WHERE user_id = ?`, [userId]);
-  return normalizePhoneNumber(profile?.phone || "");
+  return normalizeUgandaPhoneNumber(profile?.phone || "");
 }
 
 function readWebhookToken(req) {
@@ -62,6 +63,14 @@ function normalizeMomoStatus(value) {
 
 function toAmount(value) {
   return Number(Number(value || 0).toFixed(2));
+}
+
+function validatePositiveAmount(value) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw httpError(400, "Payment amount must be greater than 0.");
+  }
+  return toAmount(amount);
 }
 
 async function processPayoutWebhook({ client, providerReference, reference, status, payload }) {
@@ -238,6 +247,7 @@ export async function checkout(req, res, next) {
   try {
     const bookingId = Number(req.body.bookingId || req.body.booking_id);
     const provider = String(req.body.provider || "").trim().toLowerCase();
+    const requestedAmount = req.body.amount === undefined ? null : validatePositiveAmount(req.body.amount);
     const idempotencyKey = String(req.body.idempotencyKey || req.get("Idempotency-Key") || "").trim().slice(0, 120);
 
     if (!Number.isInteger(bookingId) || bookingId <= 0) {
@@ -252,6 +262,10 @@ export async function checkout(req, res, next) {
 
       if (Number(booking.customer_user_id) !== Number(req.user.id)) {
         throw httpError(403, "Only the customer can start checkout for this booking.");
+      }
+
+      if (requestedAmount !== null && requestedAmount !== toAmount(booking.price)) {
+        throw httpError(400, "Payment amount does not match the booking total.");
       }
 
       const paymentProvider = provider || String(booking.payment_method || "").trim().toLowerCase();
@@ -273,22 +287,18 @@ export async function checkout(req, res, next) {
       }
 
       const barber = await getBarberById(booking.barber_id, client);
-      const payerPhone = normalizePhoneNumber(req.body.phoneNumber || req.body.phone_number || booking.payment_customer_phone || (await getCustomerPhone(req.user.id, client)));
+      const payerPhone = normalizeUgandaPhoneNumber(req.body.phoneNumber || req.body.phone_number || booking.payment_customer_phone || (await getCustomerPhone(req.user.id, client)));
       if (!payerPhone) {
-        throw httpError(400, "A valid customer phone number is required for mobile money checkout.");
+        throw httpError(400, "Enter a valid Uganda phone number before paying with MTN Mobile Money.");
       }
 
       const reference = booking.payment_reference || createReference("booking", booking.id);
-      const callbackUrl = env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/webhooks/mtn`;
-      const providerResult = await getMobileMoneyService(paymentProvider).initiateCollection({
-        provider: paymentProvider,
-        amount: Number(booking.price || 0),
-        phoneNumber: payerPhone,
-        reference,
-        description: `Booking payment for ${barber?.business_name || "barber booking"}`,
-        callbackUrl,
-      });
-      const paymentStatus = normalizeLifecycleStatus(providerResult.status, "initiated");
+      const callbackUrl = env.mtnCallbackUrl || env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/mtn/callback`;
+      const pendingMetadata = {
+        source: "mtn_initiate",
+        bookingId: booking.id,
+        status: "pending_before_provider_request",
+      };
 
       await client.run(
         `UPDATE bookings
@@ -308,26 +318,19 @@ export async function checkout(req, res, next) {
         await updatePaymentRecord({
           client,
           internalReference: existingPayment.internal_reference,
-          providerReference: providerResult.providerReference || existingPayment.provider_reference || "",
-          status: paymentStatus,
-          metadata: providerResult.rawResponse || {},
+          providerReference: existingPayment.provider_reference || "",
+          status: "pending",
+          metadata: pendingMetadata,
         });
 
         await client.run(
           `UPDATE payment_transactions
-           SET provider_reference = ?,
-               payer_phone = ?,
-               status = ?,
+           SET payer_phone = ?,
+               status = 'pending',
                metadata = ?,
                updated_at = CURRENT_TIMESTAMP
            WHERE internal_reference = ?`,
-          [
-            providerResult.providerReference || existingPayment.provider_reference || "",
-            payerPhone,
-            paymentStatus,
-            JSON.stringify(providerResult.rawResponse || {}),
-            existingPayment.internal_reference,
-          ]
+          [payerPhone, JSON.stringify(pendingMetadata), existingPayment.internal_reference]
         );
       } else {
         await createPaymentRecord({
@@ -338,7 +341,7 @@ export async function checkout(req, res, next) {
           flowType: "booking",
           provider: paymentProvider,
           internalReference: reference,
-          providerReference: providerResult.providerReference || "",
+          providerReference: "",
           callbackUrl,
           idempotencyKey,
           payerPhone,
@@ -346,32 +349,119 @@ export async function checkout(req, res, next) {
           grossAmount: Number(booking.price || 0),
           commissionAmount: Number(booking.commission_amount || 0),
           barberAmount: Number(booking.barber_amount || 0),
-          status: paymentStatus,
-          metadata: providerResult.rawResponse || {},
+          status: "pending",
+          metadata: pendingMetadata,
         });
 
         await client.run(
           `INSERT INTO payment_transactions
            (booking_id, barber_id, user_id, transaction_type, provider, internal_reference, provider_reference, idempotency_key, payer_phone, payee_phone, gross_amount, commission_amount, net_amount, currency, status, metadata)
-           VALUES (?, ?, ?, 'booking_payment', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UGX', ?, ?)`,
+           VALUES (?, ?, ?, 'booking_payment', ?, ?, '', ?, ?, ?, ?, ?, ?, 'UGX', 'pending', ?)`,
           [
             booking.id,
             booking.barber_id,
             booking.customer_user_id,
             paymentProvider,
             reference,
-            providerResult.providerReference || "",
             idempotencyKey,
             payerPhone,
             barber?.phone || "",
             Number(booking.price || 0),
             Number(booking.commission_amount || 0),
             Number(booking.barber_amount || 0),
-            paymentStatus,
-            JSON.stringify(providerResult.rawResponse || {}),
+            JSON.stringify(pendingMetadata),
           ]
         );
       }
+
+      const providerResult = await getMobileMoneyService(paymentProvider)
+        .initiateCollection({
+          provider: paymentProvider,
+          amount: Number(booking.price || 0),
+          phoneNumber: payerPhone,
+          reference,
+          description: `Booking payment for ${barber?.business_name || "barber booking"}`,
+          callbackUrl,
+        })
+        .catch(async (error) => {
+          const failedMetadata = {
+            ...pendingMetadata,
+            providerStatusCode: error.statusCode || 502,
+            providerMessage: [401, 403].includes(Number(error.statusCode || 0))
+              ? "MTN Mobile Money Collections may not be enabled for this app yet."
+              : error.message || "MTN rejected the payment request.",
+          };
+
+          await updatePaymentRecord({
+            client,
+            internalReference: reference,
+            providerReference: "",
+            status: "failed",
+            metadata: failedMetadata,
+          });
+
+          await client.run(
+            `UPDATE payment_transactions
+             SET status = 'failed',
+                 metadata = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE internal_reference = ?`,
+            [JSON.stringify(failedMetadata), reference]
+          );
+
+          await client.run(
+            `UPDATE bookings
+             SET payment_status = 'failed',
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND payment_status <> 'paid'`,
+            [booking.id]
+          );
+
+          return {
+            rejected: true,
+            statusCode: error.statusCode || 502,
+            message:
+              [401, 403].includes(Number(error.statusCode || 0))
+                ? "MTN Mobile Money is not fully enabled yet. Please choose Cash or try again later."
+                : "MTN could not send the payment request. Please check the phone number or try again later.",
+          };
+        });
+
+      if (providerResult.rejected) {
+        return {
+          booking: await getBookingById(booking.id, client),
+          payment: await getPaymentRecordByReference({ reference }, client),
+          providerRejected: true,
+          statusCode: providerResult.statusCode,
+          message: providerResult.message,
+        };
+      }
+      const paymentStatus = normalizeLifecycleStatus(providerResult.status, "initiated");
+
+      await updatePaymentRecord({
+        client,
+        internalReference: reference,
+        providerReference: providerResult.providerReference || "",
+        status: paymentStatus,
+        metadata: providerResult.rawResponse || {},
+      });
+
+      await client.run(
+        `UPDATE payment_transactions
+         SET provider_reference = ?,
+             payer_phone = ?,
+             status = ?,
+             metadata = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE internal_reference = ?`,
+        [
+          providerResult.providerReference || "",
+          payerPhone,
+          paymentStatus,
+          JSON.stringify(providerResult.rawResponse || {}),
+          reference,
+        ]
+      );
 
       return {
         booking: await getBookingById(booking.id, client),
@@ -379,16 +469,41 @@ export async function checkout(req, res, next) {
       };
     });
 
+    if (result.providerRejected) {
+      return res.status(result.statusCode || 502).json({
+        success: false,
+        message: result.message || "MTN could not send the payment request. Please try again later.",
+        booking: result.booking,
+        payment: result.payment,
+      });
+    }
+
     res.status(200).json({
       success: true,
       already_paid: Boolean(result.alreadyPaid),
       already_started: Boolean(result.alreadyStarted),
+      message: result.alreadyPaid
+        ? "Payment was already confirmed."
+        : result.alreadyStarted
+        ? "Payment request is already pending. Please approve the prompt on your phone."
+        : "Payment request sent. Please approve the prompt on your phone.",
       booking: result.booking,
       payment: result.payment,
     });
   } catch (error) {
     next(error);
   }
+}
+
+export async function initiateMtnPayment(req, res, next) {
+  req.body = {
+    ...req.body,
+    bookingId: req.body.bookingId || req.body.booking_id,
+    amount: req.body.amount,
+    provider: "mtn_mobile_money",
+    phoneNumber: req.body.customerPhone || req.body.customer_phone || req.body.phoneNumber || req.body.phone_number,
+  };
+  return checkout(req, res, next);
 }
 
 export async function verify(req, res, next) {
@@ -422,7 +537,8 @@ export async function verify(req, res, next) {
 export async function handleMtnWebhook(req, res, next) {
   try {
     const providedToken = readWebhookToken(req);
-    if (env.mobileMoneyWebhookToken && providedToken !== env.mobileMoneyWebhookToken) {
+    const isExactMtnCallbackRoute = String(req.path || req.originalUrl || "").split("?")[0] === "/mtn/callback";
+    if (env.mobileMoneyWebhookToken && !isExactMtnCallbackRoute && providedToken !== env.mobileMoneyWebhookToken) {
       return res.status(401).json({
         success: false,
         message: "Invalid webhook token.",
@@ -484,6 +600,209 @@ export async function handleAirtelWebhook(req, res, next) {
     success: false,
     message: "Airtel Money webhooks are disabled.",
   });
+}
+
+export async function checkMtnAuth(req, res, next) {
+  try {
+    const result = await mtnService.checkAuthentication();
+    return res.status(result.success ? 200 : 502).json({
+      success: result.success,
+      provider: "mtn_mobile_money",
+      message: result.success
+        ? "MTN authentication succeeded."
+        : result.message || "MTN authentication failed.",
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getMtnHealth(req, res, next) {
+  try {
+    const health = await mtnService.getHealth();
+    return res.status(200).json({
+      credentialsLoaded: Boolean(health.credentialsLoaded),
+      callbackConfigured: Boolean(health.callbackConfigured),
+      authStatus: health.authStatus || "not_tested",
+      statusCode: health.statusCode,
+      sanitizedError: health.sanitizedError,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function testMtnPaymentInitiation(req, res, next) {
+  try {
+    const phoneNumber = String(req.body.phoneNumber || req.body.phone_number || "").trim();
+    const amount = Number(req.body.amount || 500);
+    const reference = `mtn-check-${Date.now()}`;
+
+    const result = await mtnService.initiateCollection({
+      amount,
+      phoneNumber,
+      reference,
+      description: "Queless MTN payment check",
+      callbackUrl: env.mtnCallbackUrl || env.mobileMoneyCallbackUrl,
+    });
+
+    return res.status(200).json({
+      success: true,
+      provider: "mtn_mobile_money",
+      status: result.status,
+      providerReference: result.providerReference,
+      message: "MTN payment request was accepted. Please approve the prompt on the test phone.",
+    });
+  } catch (error) {
+    if ([401, 403].includes(Number(error.statusCode || 0))) {
+      error.message = "MTN may need to enable Mobile Money Collections for this app.";
+    }
+    next(error);
+  }
+}
+
+export async function getMtnPaymentStatus(req, res, next) {
+  try {
+    const reference = String(req.params.reference || req.query.reference || "").trim();
+    if (!reference) {
+      throw httpError(400, "Payment reference is required.");
+    }
+
+    const result = await transaction(async (client) => {
+      const payment = await getPaymentRecordByReference({ reference, providerReference: reference }, client);
+      if (!payment) {
+        throw httpError(404, "Payment not found.");
+      }
+
+      const booking = payment.booking_id ? await getBookingById(payment.booking_id, client) : null;
+      if (booking && req.user?.role === "customer" && Number(booking.customer_user_id) !== Number(req.user.id)) {
+        throw httpError(403, "You can only check your own payment.");
+      }
+
+      const status = String(payment.status || "").toLowerCase();
+      if (status === "successful" && booking?.payment_status === "paid") {
+        return { payment, booking, alreadyFinal: true };
+      }
+
+      const verification = await getMobileMoneyService("mtn_mobile_money").verifyTransaction({
+        provider: "mtn_mobile_money",
+        providerReference: payment.provider_reference,
+        reference: payment.internal_reference,
+        amount: payment.gross_amount,
+      });
+
+      if (verification.success) {
+        await client.run(
+          `UPDATE payment_transactions
+           SET status = 'successful',
+               provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+               metadata = ?,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE internal_reference = ?`,
+          [
+            verification.providerReference || payment.provider_reference || "",
+            JSON.stringify(verification.rawResponse || {}),
+            payment.internal_reference,
+          ]
+        );
+
+        await updatePaymentRecord({
+          client,
+          internalReference: payment.internal_reference,
+          providerReference: verification.providerReference || payment.provider_reference || "",
+          status: "successful",
+          metadata: verification.rawResponse || {},
+        });
+
+        const finalized = await finalizeBookingPayment({
+          bookingId: payment.booking_id,
+          actorUserId: null,
+          forceVerify: false,
+          client,
+        });
+
+        return { payment: await getPaymentRecordByReference({ reference: payment.internal_reference }, client), booking: finalized.booking };
+      }
+
+      const finalStatus = normalizeMomoStatus(verification.status);
+      if (finalStatus === "failed") {
+        await client.run(
+          `UPDATE payment_transactions
+           SET status = 'failed',
+               provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+               metadata = ?,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE internal_reference = ?`,
+          [
+            verification.providerReference || payment.provider_reference || "",
+            JSON.stringify(verification.rawResponse || {}),
+            payment.internal_reference,
+          ]
+        );
+        await updatePaymentRecord({
+          client,
+          internalReference: payment.internal_reference,
+          providerReference: verification.providerReference || payment.provider_reference || "",
+          status: "failed",
+          metadata: verification.rawResponse || {},
+        });
+        if (payment.booking_id) {
+          await client.run(
+            `UPDATE bookings
+             SET payment_status = 'failed',
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND payment_status <> 'paid'`,
+            [payment.booking_id]
+          );
+        }
+      } else {
+        await client.run(
+          `UPDATE payment_transactions
+           SET status = 'pending',
+               provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+               metadata = ?,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE internal_reference = ?`,
+          [
+            verification.providerReference || payment.provider_reference || "",
+            JSON.stringify(verification.rawResponse || {}),
+            payment.internal_reference,
+          ]
+        );
+        await updatePaymentRecord({
+          client,
+          internalReference: payment.internal_reference,
+          providerReference: verification.providerReference || payment.provider_reference || "",
+          status: "pending",
+          metadata: verification.rawResponse || {},
+        });
+      }
+
+      return {
+        payment: await getPaymentRecordByReference({ reference: payment.internal_reference }, client),
+        booking: payment.booking_id ? await getBookingById(payment.booking_id, client) : null,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      payment: {
+        status: result.payment?.status || "unknown",
+        bookingId: result.payment?.booking_id || null,
+        provider: result.payment?.provider || "mtn_mobile_money",
+      },
+      booking: result.booking
+        ? {
+            id: result.booking.id,
+            status: result.booking.status,
+            paymentStatus: result.booking.payment_status,
+            paid: result.booking.payment_status === "paid",
+          }
+        : null,
+    });
+  } catch (error) {
+    next(error);
+  }
 }
 
 export async function getWalletSummary(req, res, next) {

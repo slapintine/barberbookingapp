@@ -8,12 +8,40 @@ import { otpEmail, passwordResetEmail, sendEmail } from "../services/emailServic
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 64;
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+}
+
 function validatePasswordLength(password) {
   const value = String(password || "");
   if (value.length < MIN_PASSWORD_LENGTH || value.length > MAX_PASSWORD_LENGTH) {
     return `Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters.`;
   }
   return "";
+}
+
+function findUserByUsernameOrEmail(identifier) {
+  const value = String(identifier || "").trim();
+  const email = normalizeEmail(value);
+
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT u.id, u.username, u.password_hash, u.role, u.created_at
+       FROM users u
+       LEFT JOIN profiles p ON p.user_id = u.id
+       WHERE u.username = ? OR LOWER(p.email) = ?
+       LIMIT 1`,
+      [value, email],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row || null);
+      }
+    );
+  });
 }
 
 function findUserByUsername(username) {
@@ -29,6 +57,17 @@ function findUserByUsername(username) {
       }
     );
   });
+}
+
+function findUserByEmail(email) {
+  return get(
+    `SELECT u.id, u.username, u.password_hash, u.role, u.created_at, p.email
+     FROM users u
+     INNER JOIN profiles p ON p.user_id = u.id
+     WHERE LOWER(p.email) = ?
+     LIMIT 1`,
+    [normalizeEmail(email)]
+  );
 }
 
 function createUser(username, passwordHash) {
@@ -58,12 +97,12 @@ function createUser(username, passwordHash) {
   });
 }
 
-function createEmptyProfile(userId) {
+function createEmptyProfile(userId, email = "") {
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT INTO profiles (user_id, full_name, phone, email, address, profile_photo)
-       VALUES (?, '', '', '', '', '')`,
-      [userId],
+       VALUES (?, '', '', ?, '', '')`,
+      [userId, normalizeEmail(email)],
       (err) => {
         if (err) reject(err);
         else resolve();
@@ -156,11 +195,26 @@ async function verifyOtpCode(row, code) {
 export async function registerUser(req, res, next) {
   try {
     const { username, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required."
+      });
+    }
 
     if (!username || !password) {
       return res.status(400).json({
         success: false,
         message: "Username and password are required."
+      });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter a valid email address."
       });
     }
 
@@ -188,9 +242,17 @@ export async function registerUser(req, res, next) {
       });
     }
 
+    const existingEmailUser = await findUserByEmail(email);
+    if (existingEmailUser) {
+      return res.status(409).json({
+        success: false,
+        message: "An account with this email already exists."
+      });
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await createUser(String(username).trim(), passwordHash);
-    await createEmptyProfile(user.id);
+    await createEmptyProfile(user.id, email);
 
     const token = generateToken({
       userId: user.id,
@@ -220,7 +282,7 @@ export async function loginUser(req, res, next) {
       });
     }
 
-    const user = await findUserByUsername(String(username).trim());
+    const user = await findUserByUsernameOrEmail(String(username).trim());
 
     if (!user) {
       return res.status(404).json({
@@ -448,41 +510,40 @@ export function getMe(req, res) {
 
 export async function requestPasswordReset(req, res, next) {
   try {
-    const identifier = String(req.body.email || req.body.username || "").trim();
-    if (!identifier) {
-      return res.status(400).json({ success: false, message: "Email or username is required." });
+    const email = normalizeEmail(req.body.email);
+    const safeMessage = "If an account exists with this email, a reset code has been sent.";
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
     }
 
-    const row = await get(
-      `SELECT u.id, u.username, p.email
-       FROM users u
-       LEFT JOIN profiles p ON p.user_id = u.id
-       WHERE u.username = ? OR p.email = ?
-       LIMIT 1`,
-      [identifier, identifier]
-    );
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address." });
+    }
+
+    const row = await findUserByEmail(email);
 
     if (!row?.email) {
       return res.status(200).json({
         success: true,
-        message: "If that account has an email, a password reset code was sent.",
+        message: safeMessage,
       });
     }
 
     const code = await createOtp({
       userId: row.id,
       channel: "email",
-      destination: row.email,
+      destination: normalizeEmail(row.email),
       purpose: "password_reset",
     });
     const sendResult = await sendEmail({
-      to: row.email,
+      to: normalizeEmail(row.email),
       ...passwordResetEmail({ code }),
     });
 
     return res.status(200).json({
       success: true,
-      message: "Password reset code sent.",
+      message: safeMessage,
       devCode: sendResult.skipped || env.nodeEnv !== "production" ? code : undefined,
     });
   } catch (error) {
@@ -492,34 +553,30 @@ export async function requestPasswordReset(req, res, next) {
 
 export async function confirmPasswordReset(req, res, next) {
   try {
-    const identifier = String(req.body.email || req.body.username || "").trim();
+    const email = normalizeEmail(req.body.email);
     const code = String(req.body.code || "").trim();
     const nextPassword = String(req.body.newPassword || req.body.password || "");
 
-    if (!identifier || !code || !nextPassword) {
-      return res.status(400).json({ success: false, message: "Email/username, code, and new password are required." });
+    if (!email || !code || !nextPassword) {
+      return res.status(400).json({ success: false, message: "Email, code, and new password are required." });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address." });
     }
     const resetPasswordLengthMessage = validatePasswordLength(nextPassword);
     if (resetPasswordLengthMessage) {
       return res.status(400).json({ success: false, message: resetPasswordLengthMessage });
     }
 
-    const row = await get(
-      `SELECT u.id, u.username, u.role, u.created_at, p.email
-       FROM users u
-       LEFT JOIN profiles p ON p.user_id = u.id
-       WHERE u.username = ? OR p.email = ?
-       LIMIT 1`,
-      [identifier, identifier]
-    );
+    const row = await findUserByEmail(email);
 
     if (!row?.email) {
-      return res.status(404).json({ success: false, message: "Account email not found." });
+      return res.status(404).json({ success: false, message: "Reset request not found." });
     }
 
     const otpRow = await getLatestOtp({
       channel: "email",
-      destination: row.email,
+      destination: normalizeEmail(row.email),
       purpose: "password_reset",
     });
     await verifyOtpCode(otpRow, code);

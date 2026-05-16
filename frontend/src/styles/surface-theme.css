@@ -65,8 +65,9 @@ body[data-lineup-theme="light"] {
 }
 
 .app-wrap-v4 {
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 20px;
+  overflow-x: hidden;
 }
 
 .app-wrap-v4.dark {
@@ -88,6 +89,7 @@ body[data-lineup-theme="light"] {
 
 .screen-v4 {
   min-height: 100%;
+  overflow-x: hidden;
   backdrop-filter: blur(18px);
 }
 
@@ -102,7 +104,7 @@ body[data-lineup-theme="light"] {
 }
 
 .content-v4 {
-  padding: 0 18px 96px;
+  padding: 0 18px 112px;
   scroll-behavior: smooth;
 }
 
@@ -752,7 +754,8 @@ body[data-lineup-theme="light"] {
 
   .phone-frame-v4 {
     width: 100vw;
-    height: 100vh;
+    min-height: 100dvh;
+    height: auto;
     border-radius: 0;
   }
 

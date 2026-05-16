@@ -1,6 +1,6 @@
-# React + Vite
+# Queless Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Vite React frontend for the Queless mobile-first service marketplace.
 
 Currently, two official plugins are available:
 
