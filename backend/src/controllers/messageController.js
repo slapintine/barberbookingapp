@@ -214,7 +214,7 @@ export async function sendMessage(req, res, next) {
           await addNotification(recipientUserId, {
             title: "New message",
             type: "message",
-            message: `${isCustomer ? customer.username : barber.business_name}: ${text.trim()}`,
+            message: `${barber.business_name}: ${text.trim()}`,
             barberId: barber.id,
             customerUserId: customer.id,
             customerUsername: customer.username,

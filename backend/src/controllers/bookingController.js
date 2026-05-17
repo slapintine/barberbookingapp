@@ -4,17 +4,11 @@ import { requireClockTime, requireIsoDate, toPositiveInteger } from "../utils/va
 import { bookingConfirmationEmail, sendEmail } from "../services/emailService.js";
 import { env } from "../config/env.js";
 import {
+  calculateCommissionBreakdown,
   createReference,
   getMobileMoneyProviderLabel,
-  normalizeUgandaPhoneNumber,
+  normalizePhoneNumber,
 } from "../services/paymentService.js";
-import {
-  BOOKING_PAYMENT_METHODS,
-  getBookingPaymentBreakdown,
-  isBookingPaymentMethodEnabled,
-  isMobileMoneyPayment,
-} from "../services/bookingPaymentRules.js";
-import { publicBusinessParams, publicBusinessWhere } from "../services/businessVisibility.js";
 import { getMobileMoneyService } from "../services/mobileMoneyService.js";
 import {
   creditPendingBarberShare,
@@ -33,7 +27,6 @@ import {
 /* ================= HELPERS ================= */
 
 function getBarberById(barberId, client = { get }) {
-  const now = new Date();
   return client.get(
     `SELECT
        id,
@@ -48,15 +41,10 @@ function getBarberById(barberId, client = { get }) {
        stand_type,
        subscription_tier,
        subscription_status,
-       subscription_expires_at,
-       business_status,
-       is_published,
-       trial_status,
-       trial_ends_at
-     FROM barbers b
-     WHERE b.id = ?
-       AND ${publicBusinessWhere("b")}`,
-    [barberId, ...publicBusinessParams(now)]
+       subscription_expires_at
+     FROM barbers
+     WHERE id = ?`,
+    [barberId]
   );
 }
 
@@ -89,9 +77,9 @@ function getProfileByUserId(userId, client = { get }) {
 
 function getBarberServiceById(serviceId, barberId, client = { get }) {
   return client.get(
-    `SELECT id, barber_id, service_name, price_extra, pricing_type, min_price, max_price, starting_price, duration_minutes, is_available
+    `SELECT id, barber_id, service_name, price_extra, duration_minutes
      FROM barber_services
-     WHERE id = ? AND barber_id = ? AND COALESCE(is_available, 1) = 1`,
+     WHERE id = ? AND barber_id = ?`,
     [serviceId, barberId]
   );
 }
@@ -330,25 +318,20 @@ function httpError(statusCode, message) {
 }
 
 function normalizePaymentMethod(value, barber) {
-  const requested = String(value || "").trim().toLowerCase() || "cash";
+  const requested = String(value || "").trim().toLowerCase() || "mtn_mobile_money";
   const acceptsWallet = Number(barber?.accepts_wallet || 0) === 1;
-  const acceptsCash = true;
+  const acceptsCash = Number(barber?.accepts_cash ?? 1) === 1;
 
-  if (!BOOKING_PAYMENT_METHODS.includes(requested)) {
+  if (!["cash", "wallet", "mtn_mobile_money", "airtel_money"].includes(requested)) {
     throw httpError(400, "Invalid payment method.");
-  }
-
-  if (
-    !isBookingPaymentMethodEnabled(requested, {
-      onlinePaymentsEnabled: env.bookingOnlinePaymentsEnabled,
-      walletPaymentsEnabled: env.bookingWalletPaymentsEnabled,
-    })
-  ) {
-    throw httpError(503, "This booking payment method is not available yet. Choose cash for now.");
   }
 
   if (requested === "wallet" && !acceptsWallet) {
     throw httpError(400, "This barber does not accept wallet payments.");
+  }
+
+  if (requested === "cash" && !acceptsCash) {
+    throw httpError(400, "This barber does not accept cash payments.");
   }
 
   if (requested === "airtel_money" && !env.airtelEnabled) {
@@ -359,16 +342,13 @@ function normalizePaymentMethod(value, barber) {
     throw httpError(400, "This barber cannot receive mobile money payouts yet.");
   }
 
-  return requested;
-}
+  if (!acceptsWallet && !acceptsCash) {
+    if (!barber?.owner_user_id) {
+      throw httpError(400, "This barber has no active payment method.");
+    }
+  }
 
-function resolveServiceBookingPrice(barber, service) {
-  const basePrice = Number(barber.price_from || 0);
-  const pricingType = String(service?.pricing_type || "fixed").toLowerCase();
-  if (pricingType === "quote") return basePrice;
-  if (pricingType === "range") return basePrice + Number(service?.min_price || service?.price_extra || 0);
-  if (pricingType === "starting_from") return basePrice + Number(service?.starting_price || service?.price_extra || 0);
-  return basePrice + Number(service?.price_extra || 0);
+  return requested;
 }
 
 async function ensureWallet(userId, client) {
@@ -575,7 +555,7 @@ async function sendBookingConfirmationEmails(booking) {
   ]);
 }
 
-export async function finalizeBookingPayment({ bookingId, actorUserId = null, forceVerify = false, client }) {
+async function finalizeBookingPayment({ bookingId, actorUserId = null, forceVerify = false, client }) {
   const booking = await getBookingById(bookingId, client);
   if (!booking) {
     throw httpError(404, "Booking not found.");
@@ -705,7 +685,7 @@ export async function finalizeBookingPayment({ bookingId, actorUserId = null, fo
      VALUES (?, ?, 'payment_confirmed', ?)`,
     [
       bookingId,
-      actorUserId || refreshedBooking.customer_user_id,
+      actorUserId,
       `Payment verified. ${getMobileMoneyProviderLabel(refreshedPayment.provider)} collection succeeded.`,
     ]
   );
@@ -835,14 +815,16 @@ export async function createBooking(req, res, next) {
         throw httpError(409, "Time slot already booked.");
       }
 
-      const totalPrice = resolveServiceBookingPrice(barber, service);
+      const totalPrice =
+        Number(barber.price_from || 0) +
+        Number(service.price_extra || 0);
+      const { commissionAmount, barberAmount } = calculateCommissionBreakdown(totalPrice);
       const customerProfile = await getCustomerProfileByUserId(req.user.id, client);
-      const paymentPhone = normalizeUgandaPhoneNumber(req.body.payment_phone || customerProfile?.phone || "");
-      const requiresMobileMoney = isMobileMoneyPayment(paymentMethod);
-      const { commissionAmount, barberAmount } = getBookingPaymentBreakdown(totalPrice, paymentMethod);
+      const paymentPhone = normalizePhoneNumber(req.body.payment_phone || customerProfile?.phone || "");
+      const requiresMobileMoney = ["mtn_mobile_money", "airtel_money"].includes(paymentMethod);
 
       if (requiresMobileMoney && !paymentPhone) {
-        throw httpError(400, "Enter a valid Uganda phone number before paying with MTN Mobile Money.");
+        throw httpError(400, "Add a valid phone number before paying with mobile money.");
       }
 
       if (requiresMobileMoney && idempotencyKey) {
@@ -912,7 +894,7 @@ export async function createBooking(req, res, next) {
           phoneNumber: paymentPhone,
           reference: paymentReference,
           description: `Booking payment for ${barber.business_name}`,
-          callbackUrl: env.mtnCallbackUrl || env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/mtn/callback`,
+          callbackUrl: env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/webhooks/mtn`,
         });
         const paymentStatus = normalizeLifecycleStatus(providerResult.status, "initiated");
 
@@ -955,7 +937,7 @@ export async function createBooking(req, res, next) {
           provider: paymentMethod,
           internalReference: paymentReference,
           providerReference: providerResult.providerReference || "",
-          callbackUrl: env.mtnCallbackUrl || env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/mtn/callback`,
+          callbackUrl: env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/webhooks/mtn`,
           idempotencyKey,
           payerPhone: paymentPhone,
           grossAmount: totalPrice,
@@ -1392,8 +1374,7 @@ export async function handleBookingPaymentWebhook(req, res, next) {
       req.query.token ||
       ""
     ).trim();
-    const isExactMtnCallbackRoute = String(req.path || req.originalUrl || "").split("?")[0] === "/mtn/callback";
-    if (env.mobileMoneyWebhookToken && !isExactMtnCallbackRoute && providedToken !== env.mobileMoneyWebhookToken) {
+    if (env.mobileMoneyWebhookToken && providedToken !== env.mobileMoneyWebhookToken) {
       return res.status(401).json({
         success: false,
         message: "Invalid webhook token.",
@@ -1452,7 +1433,7 @@ export async function handleBookingPaymentWebhook(req, res, next) {
           eventId: webhookEvent.id,
           processingStatus: "ignored",
         });
-        return { unknown: true };
+        return null;
       }
 
       if (["failed", "rejected", "expired", "cancelled", "canceled"].includes(status)) {
@@ -1524,23 +1505,6 @@ export async function handleBookingPaymentWebhook(req, res, next) {
         return { pending: true };
       }
 
-      const booking = await getBookingById(payment.booking_id, client);
-      if (
-        ["successful", "success", "completed", "paid"].includes(status) &&
-        payment.status === "successful" &&
-        booking?.payment_status === "paid"
-      ) {
-        await markWebhookEventProcessed({
-          client,
-          eventId: webhookEvent.id,
-          processingStatus: "duplicate",
-        });
-        return {
-          duplicate: true,
-          booking: await mapBookingRow(booking),
-        };
-      }
-
       await client.run(
         `UPDATE payment_transactions
          SET status = 'successful',
@@ -1577,7 +1541,7 @@ export async function handleBookingPaymentWebhook(req, res, next) {
       });
     });
 
-    if (result?.booking && !result?.duplicate) {
+    if (result?.booking) {
       try {
         await sendBookingConfirmationEmails(result.booking);
       } catch {}
@@ -1589,10 +1553,6 @@ export async function handleBookingPaymentWebhook(req, res, next) {
         ? "Webhook recorded failed payment."
         : result?.pending
         ? "Webhook recorded pending payment."
-        : result?.duplicate
-        ? "Duplicate webhook already processed."
-        : result?.unknown
-        ? "Webhook ignored because the payment reference was not found."
         : "Webhook processed.",
     });
   } catch (error) {

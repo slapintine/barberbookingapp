@@ -12,10 +12,6 @@ export function startSubscriptionUpgrade(payload, idempotencyKey = "") {
   });
 }
 
-export function createSubscriptionPayment(payload, idempotencyKey = "") {
-  return startSubscriptionUpgrade(payload, idempotencyKey);
-}
-
 export function verifySubscriptionUpgrade(reference) {
   return apiFetch("/api/subscriptions/verify", {
     method: "POST",

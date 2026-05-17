@@ -9,8 +9,8 @@ import {
 
 const router = express.Router();
 
-router.get("/me", protect, requireRole("barber", "admin"), getMySubscription);
-router.post("/upgrade", protect, requireRole("barber", "admin"), startSubscriptionUpgrade);
-router.post("/verify", protect, requireRole("barber", "admin"), verifySubscriptionUpgrade);
+router.get("/me", protect, requireRole("barber"), getMySubscription);
+router.post("/upgrade", protect, requireRole("barber"), startSubscriptionUpgrade);
+router.post("/verify", protect, requireRole("barber"), verifySubscriptionUpgrade);
 
 export default router;

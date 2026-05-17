@@ -10,14 +10,12 @@ import {
   FiUsers,
   FiX,
 } from "react-icons/fi";
-import {
-  getBookingPaymentOptions,
-  getPaymentMethodLabel,
-  isOnlinePaymentMethod,
-} from "../../utils/paymentLabels.js";
-import { formatServicePrice, getAvailableServices, getServiceBookingAmount, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
-const BOOKING_ONLINE_PAYMENTS_ENABLED =
-  String(import.meta.env.VITE_BOOKING_ONLINE_PAYMENTS_ENABLED || "").toLowerCase() === "true";
+
+const FALLBACK_SERVICES = [
+  { id: "classic", name: "Classic Cut", extra: 0, duration: "35 mins" },
+  { id: "fade", name: "Fade / Blend", extra: 5000, duration: "45 mins" },
+  { id: "beard", name: "Cut + Beard", extra: 10000, duration: "50 mins" },
+];
 
 function formatMoney(value) {
   return `UGX ${Number(value || 0).toLocaleString()}`;
@@ -57,15 +55,20 @@ function formatTimeLabel(timeStr) {
 
 function getBarberServices(barber) {
   if (!barber?.services?.length) {
-    return [];
+    return FALLBACK_SERVICES.map((item, idx) => ({
+      id: item.id || `fallback-${idx}`,
+      service_name: item.name,
+      price_extra: Number(item.extra || 0),
+      duration_minutes: parseInt(item.duration, 10) || 30,
+    }));
   }
 
-  const available = getAvailableServices(barber.services);
-  return available.length ? available : barber.services.map(normalizeServiceForBooking);
-}
-
-function isValidUgandaPhone(value) {
-  return /^(\+?256|0)?[37]\d{8}$/.test(String(value || "").replace(/\s+/g, ""));
+  return barber.services.map((item, idx) => ({
+    id: item.id || `fallback-${idx}`,
+    service_name: item.service_name || item.name || "Service",
+    price_extra: Number(item.price_extra || item.extra || 0),
+    duration_minutes: Number(item.duration_minutes || 30),
+  }));
 }
 
 export default function BookingModal({
@@ -83,8 +86,6 @@ export default function BookingModal({
   setSelectedTeamMemberId,
   selectedPaymentMethod,
   setSelectedPaymentMethod,
-  paymentPhone,
-  setPaymentPhone,
   pendingPayment,
   onVerifyPayment,
   onClose,
@@ -97,34 +98,7 @@ export default function BookingModal({
   const services = getBarberServices(barber);
   const serviceObj =
     services.find((item) => String(item.id) === String(selectedService)) || services[0];
-  if (!services.length) {
-    return (
-      <>
-        <div className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"} onClick={onClose} />
-        <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
-          <div className="booking-modal-card-v4 booking-modal-clean-v5">
-            <div className="booking-modal-shell-v5">
-              <div className="booking-header-v5">
-                <button type="button" className="profile-back-btn-v4" onClick={onClose}>
-                  <FiArrowLeft />
-                </button>
-                <div className="booking-header-copy-v5">
-                  <div className="booking-header-title-v5">No bookable services</div>
-                  <div className="booking-header-subtitle-v5">This provider has not published a service yet.</div>
-                </div>
-                <button type="button" className="profile-back-btn-v4" onClick={onClose}>
-                  <FiX />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-  const total = Number(barber.price_from || 0) + getServiceBookingAmount(serviceObj);
-  const isQuoteService = String(serviceObj?.pricing_type || "").toLowerCase() === "quote";
-  const totalLabel = isQuoteService ? "Price on consultation" : formatMoney(total);
+  const total = Number(barber.price_from || 0) + Number(serviceObj?.price_extra || 0);
   const teamMembers = Array.isArray(barber.team_members || barber.teamMembers)
     ? (barber.team_members || barber.teamMembers).filter((item) => Number(item?.is_active ?? item?.isActive ?? 1) === 1)
     : [];
@@ -132,13 +106,7 @@ export default function BookingModal({
   const requiresTeamMember = isShopStand && teamMembers.length > 0;
   const selectedTeamMember = teamMembers.find((item) => String(item.id) === String(selectedTeamMemberId));
   const paymentAllowed = ["cash", "mtn_mobile_money", "airtel_money"].includes(selectedPaymentMethod);
-  const paymentOptions = getBookingPaymentOptions({
-    onlinePaymentsEnabled: BOOKING_ONLINE_PAYMENTS_ENABLED,
-  });
-  const selectedPaymentLabel = getPaymentMethodLabel(selectedPaymentMethod);
-  const showsPlatformSplit = isOnlinePaymentMethod(selectedPaymentMethod);
-  const requiresPhone = selectedPaymentMethod === "mtn_mobile_money";
-  const phoneIsValid = !requiresPhone || isValidUgandaPhone(paymentPhone);
+  const paymentLabel = selectedPaymentMethod === "airtel_money" ? "Airtel Money" : "MTN Mobile Money";
   const selectedTimeLabel =
     timeSlots.find((item) => item.value === selectedTime)?.label ||
     (selectedTime ? formatTimeLabel(selectedTime) : "Pick a time");
@@ -147,7 +115,6 @@ export default function BookingModal({
     bookingCooldownInfo?.blocked ||
     !selectedTime ||
     !paymentAllowed ||
-    !phoneIsValid ||
     (requiresTeamMember && !selectedTeamMember);
 
   if (pendingPayment?.bookingId) {
@@ -194,7 +161,7 @@ export default function BookingModal({
                       <strong>{formatMoney(pendingPayment.commissionAmount || 0)}</strong>
                     </div>
                     <div className="booking-summary-row-v5">
-                      <span>Provider payout</span>
+                      <span>Barber payout</span>
                       <strong>{formatMoney(pendingPayment.barberAmount || 0)}</strong>
                     </div>
                     <div className="booking-summary-row-v5">
@@ -213,7 +180,7 @@ export default function BookingModal({
                 <button className="primary-btn-v4 booking-cta-v5" onClick={() => onVerifyPayment?.(pendingPayment.bookingId)} disabled={creatingBooking}>
                   {creatingBooking ? "Checking payment..." : "I approved the payment"}
                 </button>
-                <div className="booking-note-v5">The platform keeps 10% and automatically sends 90% to the provider after confirmation.</div>
+                <div className="booking-note-v5">The platform keeps 10% and automatically sends 90% to the barber after confirmation.</div>
               </div>
             </div>
           </div>
@@ -235,8 +202,8 @@ export default function BookingModal({
                   <FiArrowLeft />
                 </button>
                 <div className="booking-header-copy-v5">
-                  <div className="booking-header-title-v5">Book service</div>
-                  <div className="booking-header-subtitle-v5">Choose a service, date, time, and payment option</div>
+                  <div className="booking-header-title-v5">Book appointment</div>
+                  <div className="booking-header-subtitle-v5">Fast, clean and confirmed in a few taps</div>
                 </div>
                 <button type="button" className="profile-back-btn-v4" onClick={onClose}>
                   <FiX />
@@ -256,15 +223,15 @@ export default function BookingModal({
                       <span>{barber.availability?.start || "08:00"} - {barber.availability?.end || "20:00"}</span>
                     </div>
                   </div>
-                  <div className="booking-hero-badge-v5">{Number(barber.price_from || 0) > 0 ? `From ${formatMoney(barber.price_from)}` : "Book a service"}</div>
+                  <div className="booking-hero-badge-v5">From {formatMoney(barber.price_from)}</div>
                 </div>
               </div>
 
               {isShopStand ? (
                 <div className="booking-section-v5">
                   <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5"><FiUsers /> Choose provider</div>
-                    <div className="booking-section-hint-v5">{teamMembers.length || 1} available</div>
+                    <div className="booking-section-title-v5"><FiUsers /> Choose barber</div>
+                    <div className="booking-section-hint-v5">{teamMembers.length || 1} on stand</div>
                   </div>
                   {teamMembers.length ? (
                     <div className="booking-service-list-v5">
@@ -279,7 +246,7 @@ export default function BookingModal({
                           >
                             <div className="booking-card-service-copy-v5">
                               <div className="booking-card-service-title-v5">{member.name}</div>
-                              <div className="booking-card-service-meta-v5">{member.title || "Provider"}</div>
+                              <div className="booking-card-service-meta-v5">{member.title || "Barber"}</div>
                             </div>
                             {active ? <span className="booking-card-service-check-v5"><FiCheck /></span> : null}
                           </button>
@@ -287,7 +254,7 @@ export default function BookingModal({
                       })}
                     </div>
                   ) : (
-                    <div className="auth-error">This business has no active service agents yet.</div>
+                    <div className="auth-error">This shop stand has no team barbers yet.</div>
                   )}
                 </div>
               ) : null}
@@ -300,6 +267,7 @@ export default function BookingModal({
                 <div className="booking-service-list-v5">
                   {services.map((item) => {
                     const active = String(selectedService) === String(item.id);
+                    const price = Number(barber.price_from || 0) + Number(item.price_extra || 0);
                     return (
                       <button
                         type="button"
@@ -312,7 +280,7 @@ export default function BookingModal({
                           <div className="booking-card-service-meta-v5">{item.duration_minutes} mins</div>
                         </div>
                         <div className="booking-card-service-side-v5">
-                          <div className="booking-card-service-price-v5">{formatServicePrice(item)}</div>
+                          <div className="booking-card-service-price-v5">{formatMoney(price)}</div>
                           {active ? <span className="booking-card-service-check-v5"><FiCheck /></span> : null}
                         </div>
                       </button>
@@ -375,47 +343,34 @@ export default function BookingModal({
                   <div className="booking-section-hint-v5">Required to confirm booking</div>
                 </div>
                 <div className="booking-payment-list-v5">
-                  {paymentOptions.map((option) => (
+                  {[
+                    ["cash", "Cash"],
+                    ["mtn_mobile_money", "MTN Mobile Money"],
+                    ["airtel_money", "Airtel Money"],
+                  ].map(([value, label]) => (
                     <button
                       type="button"
-                      key={option.value}
+                      key={value}
                       className={
-                        selectedPaymentMethod === option.value
+                        selectedPaymentMethod === value
                           ? "booking-payment-option-v5 booking-payment-option-v5-early active"
                           : "booking-payment-option-v5 booking-payment-option-v5-early"
                       }
-                      onClick={() => setSelectedPaymentMethod(option.value)}
+                      onClick={() => value === "cash" && setSelectedPaymentMethod(value)}
+                      disabled={value !== "cash"}
                     >
                       <span className="booking-payment-icon-v5"><FiSmartphone /></span>
                       <span className="booking-payment-copy-v5">
-                        <span className="booking-payment-title-v5">{option.label}</span>
-                        <span className="booking-payment-meta-v5">{option.meta}</span>
+                        <span className="booking-payment-title-v5">{label}</span>
+                        <span className="booking-payment-meta-v5">
+                          {value === "cash" ? "Pay at the appointment. The barber confirms payment after the cut." : "Mobile money checkout will be enabled after payment setup is complete."}
+                        </span>
                       </span>
-                      <span className="booking-payment-pill-v5">{option.pill}</span>
+                      <span className="booking-payment-pill-v5">{value === "cash" ? "Pay later" : "Coming soon"}</span>
                     </button>
                   ))}
                 </div>
-                <div className="booking-note-v5">
-                  Cash is always available. Pay cash directly to the service provider after the service.
-                </div>
-                {requiresPhone ? (
-                  <label className="booking-phone-field-v5">
-                    <span>MTN phone number</span>
-                    <input
-                      type="tel"
-                      value={paymentPhone || ""}
-                      onChange={(event) => setPaymentPhone?.(event.target.value)}
-                      placeholder="0772123456"
-                      inputMode="tel"
-                      autoComplete="tel"
-                    />
-                    <small>
-                      {phoneIsValid
-                        ? "Payment request sent. Please approve the prompt on your phone."
-                        : "Use a Uganda number such as 0772123456 or +256772123456."}
-                    </small>
-                  </label>
-                ) : null}
+                <div className="booking-note-v5">Online payments are coming later. Cash bookings can still be approved and completed now.</div>
               </div>
 
               <div className="booking-summary-v5">
@@ -424,7 +379,7 @@ export default function BookingModal({
                     <div className="booking-summary-title-v5">Your booking</div>
                     <div className="booking-summary-subtitle-v5">Review before you confirm</div>
                   </div>
-                  <div className="booking-summary-total-v5">{totalLabel}</div>
+                  <div className="booking-summary-total-v5">{formatMoney(total)}</div>
                 </div>
                 <div className="booking-summary-grid-v5">
                   <div className="booking-summary-row-v5">
@@ -433,8 +388,8 @@ export default function BookingModal({
                   </div>
                   {isShopStand ? (
                     <div className="booking-summary-row-v5">
-                      <span>Provider</span>
-                      <strong>{selectedTeamMember?.name || "Choose provider"}</strong>
+                      <span>Barber</span>
+                      <strong>{selectedTeamMember?.name || "Choose barber"}</strong>
                     </div>
                   ) : null}
                   <div className="booking-summary-row-v5">
@@ -451,20 +406,16 @@ export default function BookingModal({
                   </div>
                   <div className="booking-summary-row-v5">
                     <span>Payment</span>
-                    <strong>{paymentAllowed ? selectedPaymentLabel : "Choose payment"}</strong>
+                    <strong>{paymentAllowed ? paymentLabel : "Choose payment"}</strong>
                   </div>
-                  {showsPlatformSplit ? (
-                    <>
-                      <div className="booking-summary-row-v5">
-                        <span>Platform commission</span>
-                        <strong>{formatMoney(total * 0.1)}</strong>
-                      </div>
-                      <div className="booking-summary-row-v5">
-                        <span>Provider receives</span>
-                        <strong>{formatMoney(total * 0.9)}</strong>
-                      </div>
-                    </>
-                  ) : null}
+                  <div className="booking-summary-row-v5">
+                    <span>Platform commission</span>
+                    <strong>{formatMoney(total * 0.1)}</strong>
+                  </div>
+                  <div className="booking-summary-row-v5">
+                    <span>Barber receives</span>
+                    <strong>{formatMoney(total * 0.9)}</strong>
+                  </div>
                 </div>
               </div>
 
@@ -490,20 +441,12 @@ export default function BookingModal({
                   : !selectedTime
                   ? "Pick another time"
                   : requiresTeamMember && !selectedTeamMember
-                  ? "Choose provider"
-                  : !phoneIsValid
-                  ? "Enter MTN phone"
+                  ? "Choose barber"
                   : !paymentAllowed
                   ? "Choose payment"
-                  : selectedPaymentMethod === "cash"
-                  ? "Confirm cash booking"
                   : "Continue to payment"}
               </button>
-              <div className="booking-note-v5">
-                {selectedPaymentMethod === "cash"
-                  ? "The provider approves the booking, then confirms cash after the service."
-                  : "The booking becomes confirmed only after successful mobile money payment."}
-              </div>
+              <div className="booking-note-v5">The booking becomes confirmed only after successful mobile money payment.</div>
             </div>
           </div>
         </div>

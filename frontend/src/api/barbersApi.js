@@ -4,10 +4,6 @@ export function getBarbers() {
   return apiFetch("/api/barbers");
 }
 
-export function getMyBarberStand() {
-  return apiFetch("/api/barbers/me");
-}
-
 export function registerBarberStand(payload) {
   return apiFetch("/api/barbers/register", {
     method: "POST",

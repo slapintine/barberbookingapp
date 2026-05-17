@@ -1,13 +1,5 @@
 import db from "../config/db.js";
 
-function normalizeIdentityEmail(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function normalizeIdentityPhone(value) {
-  return String(value || "").replace(/\D/g, "");
-}
-
 export function getMyProfile(req, res, next) {
   db.get(
     `SELECT
@@ -53,9 +45,9 @@ export function upsertMyProfile(req, res, next) {
       if (existing) {
         db.run(
           `UPDATE profiles
-           SET full_name = ?, phone = ?, email = ?, normalized_email = ?, normalized_phone = ?, address = ?, profile_photo = ?
+           SET full_name = ?, phone = ?, email = ?, address = ?, profile_photo = ?
            WHERE user_id = ?`,
-          [full_name, phone, email, normalizeIdentityEmail(email), normalizeIdentityPhone(phone), address, profile_photo, req.user.id],
+          [full_name, phone, email, address, profile_photo, req.user.id],
           (updateErr) => {
             if (updateErr) return next(updateErr);
 
@@ -88,9 +80,9 @@ export function upsertMyProfile(req, res, next) {
         );
       } else {
         db.run(
-          `INSERT INTO profiles (user_id, full_name, phone, email, normalized_email, normalized_phone, address, profile_photo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [req.user.id, full_name, phone, email, normalizeIdentityEmail(email), normalizeIdentityPhone(phone), address, profile_photo],
+          `INSERT INTO profiles (user_id, full_name, phone, email, address, profile_photo)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [req.user.id, full_name, phone, email, address, profile_photo],
           (insertErr) => {
             if (insertErr) return next(insertErr);
 

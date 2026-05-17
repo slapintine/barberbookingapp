@@ -1,9 +1,9 @@
 import { apiFetch } from "../config/api.js";
 
-export function registerUser({ username, email, password, role = "customer" }) {
+export function registerUser({ username, password, role = "customer" }) {
   return apiFetch("/api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ username, email, password, role }),
+    body: JSON.stringify({ username, password, role }),
   });
 }
 
@@ -21,17 +21,27 @@ export function updateAccount({ username, currentPassword, newPassword }) {
   });
 }
 
-export function requestPasswordReset(email) {
+export function requestPasswordReset(identifier) {
   return apiFetch("/api/auth/password-reset/request", {
     method: "POST",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(
+      String(identifier || "").includes("@")
+        ? { email: identifier }
+        : { username: identifier }
+    ),
   });
 }
 
-export function confirmPasswordReset({ email, code, newPassword }) {
+export function confirmPasswordReset({ identifier, code, newPassword }) {
   return apiFetch("/api/auth/password-reset/confirm", {
     method: "POST",
-    body: JSON.stringify({ email, code, newPassword }),
+    body: JSON.stringify({
+      ...(String(identifier || "").includes("@")
+        ? { email: identifier }
+        : { username: identifier }),
+      code,
+      newPassword,
+    }),
   });
 }
 
