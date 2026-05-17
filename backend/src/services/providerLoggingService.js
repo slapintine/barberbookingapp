@@ -3,11 +3,33 @@ import { logger } from "../config/logger.js";
 function redactCredentials(credentials) {
   const entries = Object.entries(credentials || {}).map(([key, value]) => {
     if (!value) return [key, value];
-    const stringValue = String(value);
-    if (stringValue.length <= 8) return [key, "***"];
-    return [key, `${stringValue.slice(0, 4)}...${stringValue.slice(-4)}`];
+    return [key, "[REDACTED]"];
   });
   return Object.fromEntries(entries);
+}
+
+function redactSensitivePayload(value) {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((item) => redactSensitivePayload(item));
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entryValue]) => {
+      const normalizedKey = String(key || "").toLowerCase();
+      if (
+        normalizedKey.includes("token") ||
+        normalizedKey.includes("secret") ||
+        normalizedKey.includes("apikey") ||
+        normalizedKey.includes("api_key") ||
+        normalizedKey.includes("authorization") ||
+        normalizedKey.includes("partyid") ||
+        normalizedKey.includes("phone") ||
+        normalizedKey.includes("msisdn")
+      ) {
+        return [key, "[REDACTED]"];
+      }
+      return [key, redactSensitivePayload(entryValue)];
+    })
+  );
 }
 
 export function logProviderRequest({ provider, operation, endpoint, request, credentials = {} }) {
@@ -18,7 +40,7 @@ export function logProviderRequest({ provider, operation, endpoint, request, cre
     stage: "request",
     endpoint,
     credentials: redactCredentials(credentials),
-    payload: request,
+    payload: redactSensitivePayload(request),
   });
 }
 
@@ -30,6 +52,6 @@ export function logProviderResponse({ provider, operation, endpoint, statusCode,
     stage: "response",
     endpoint,
     statusCode,
-    payload: response,
+    payload: redactSensitivePayload(response),
   });
 }

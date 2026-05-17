@@ -21,7 +21,13 @@ export function deriveSocketUrl() {
 export const SOCKET_URL = deriveSocketUrl();
 
 export function getAuthToken() {
-  return localStorage.getItem("lineup_token") || localStorage.getItem("cutz_token") || "";
+  return (
+    localStorage.getItem("lineup_token") ||
+    sessionStorage.getItem("lineup_token") ||
+    localStorage.getItem("cutz_token") ||
+    sessionStorage.getItem("cutz_token") ||
+    ""
+  );
 }
 
 function broadcastUnauthorized(message) {

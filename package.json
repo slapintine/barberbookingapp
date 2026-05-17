@@ -1,14 +1,18 @@
 {
-  "name": "barber-booking-app",
+  "name": "queless",
   "private": true,
   "scripts": {
     "backend:dev": "npm --prefix backend run dev",
     "backend:start": "npm --prefix backend run start",
     "backend:check": "npm --prefix backend run check",
     "backend:db:migrate": "npm --prefix backend run db:migrate",
+    "build": "npm run frontend:build",
     "frontend:dev": "npm --prefix frontend run dev",
     "frontend:build": "npm --prefix frontend run build",
     "frontend:preview": "npm --prefix frontend run preview",
+    "frontend:test": "npm --prefix frontend run test",
+    "backend:test": "npm --prefix backend run test",
+    "test": "npm run backend:test && npm run frontend:test",
     "check": "npm run backend:check && npm run frontend:build"
   },
   "dependencies": {

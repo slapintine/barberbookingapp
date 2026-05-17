@@ -29,7 +29,7 @@ export function NotificationSheet({
           </div>
 
           {notifications.length === 0 ? (
-            <div className="empty-box-v4">No notifications yet.</div>
+            <div className="empty-box-v4">You're all caught up.</div>
           ) : (
             <div className="notification-list-v4">
               {notifications.map((item) => (

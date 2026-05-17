@@ -63,7 +63,7 @@ export default function SettingsPage({
         <div>
           <div className="panel-title-v4">Settings</div>
           <div className="profile-sub-v4">
-            {accountType === "barber" ? "Barber account controls" : "Customer account controls"}
+            {accountType === "barber" ? "Service provider account controls" : "Customer account controls"}
           </div>
         </div>
       </div>
@@ -73,7 +73,7 @@ export default function SettingsPage({
           <FiUser />
           <div>
             <strong>Account identity</strong>
-              <span>{profile?.fullName || currentUser?.username || "Lineup user"}</span>
+              <span>{profile?.fullName || currentUser?.username || "Queless user"}</span>
           </div>
         </div>
 

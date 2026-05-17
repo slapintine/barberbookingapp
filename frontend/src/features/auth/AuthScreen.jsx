@@ -1,6 +1,50 @@
-import { useState } from "react";
-import { FiArrowRight, FiEye, FiEyeOff, FiLock, FiUser } from "react-icons/fi";
-import logo from "../../assets/logo.png";
+import { useEffect, useState } from "react";
+import { FiEye, FiEyeOff, FiLock, FiMail, FiUser } from "react-icons/fi";
+import logo from "../../assets/queless-logo-full.png";
+
+function AuthTabs({ isLogin, isSignup, setAuthMode, clearAuthMessages }) {
+  const setAuthPath = (nextMode) => {
+    if (typeof window === "undefined") return;
+    const nextPath = nextMode === "signup" ? "/signup" : "/login";
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+  };
+
+  const switchMode = (event, nextMode) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setAuthPath(nextMode);
+    setAuthMode(nextMode);
+    clearAuthMessages();
+  };
+
+  return (
+    <div className="lineup-auth-tabs" role="tablist" aria-label="Authentication mode">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={isLogin}
+        className={isLogin ? "active" : ""}
+        onPointerDown={(event) => switchMode(event, "login")}
+        onClick={(event) => switchMode(event, "login")}
+      >
+        Log In
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        aria-selected={isSignup}
+        className={isSignup ? "active" : ""}
+        onPointerDown={(event) => switchMode(event, "signup")}
+        onClick={(event) => switchMode(event, "signup")}
+      >
+        Sign Up
+      </button>
+    </div>
+  );
+}
 
 export default function AuthScreen(props) {
   const {
@@ -10,6 +54,7 @@ export default function AuthScreen(props) {
     authSuccess,
     authLoading,
     usernameRef,
+    emailRef,
     passwordRef,
     confirmPasswordRef,
     handleLogin,
@@ -29,6 +74,30 @@ export default function AuthScreen(props) {
   const isLogin = authMode === "login";
   const isSignup = authMode === "signup";
 
+  const setAuthPath = (nextMode) => {
+    if (typeof window === "undefined") return;
+    const nextPath = nextMode === "signup" ? "/signup" : "/login";
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+  };
+
+  const switchAuthMode = (event, nextMode) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setAuthPath(nextMode);
+    setAuthMode(nextMode);
+    clearAuthMessages();
+  };
+
+  useEffect(() => {
+    if (resetCooldown <= 0) return undefined;
+    const timer = window.setTimeout(() => {
+      setResetCooldown((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resetCooldown]);
+
   const title = isReset
     ? "Enter reset code"
     : isForgot
@@ -40,100 +109,94 @@ export default function AuthScreen(props) {
   const subtitle = isReset
     ? "Enter the code from your email and choose a new password."
     : isForgot
-    ? "Use your username or email to receive a reset code."
+    ? "Enter the email linked to your Queless account. We'll send a verification code to reset your password."
     : isLogin
     ? "Sign in to continue"
-    : "Create your Line Up account";
+    : "Create your Queless account";
 
   const startResetTimer = () => {
     setResetCooldown(45);
-
-    const timer = setInterval(() => {
-      setResetCooldown((value) => {
-        if (value <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return value - 1;
-      });
-    }, 1000);
   };
 
   return (
-    <main className="lineup-auth-page">
-      <div className="lineup-auth-glow lineup-auth-glow-top" aria-hidden="true" />
-      <div className="lineup-auth-glow lineup-auth-glow-bottom" aria-hidden="true" />
+    <main className="lineup-auth-page" data-auth-mode={authMode}>
+      <div className="lineup-auth-ambient" aria-hidden="true" />
       <div className="lineup-auth-shell">
-      <section className="lineup-auth-card">
-        <div className="lineup-auth-brand">
-          <img src={logo} alt="Line Up" className="lineup-auth-logo" />
-        </div>
-
-        <div className="lineup-auth-header">
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
-        </div>
-
-        {!isForgot && !isReset && (
-          <div className="lineup-auth-tabs">
-            <button
-              type="button"
-              className={isLogin ? "active" : ""}
-              onClick={() => {
-                setAuthMode("login");
-                clearAuthMessages();
-              }}
-            >
-              Log In
-            </button>
-
-            <button
-              type="button"
-              className={isSignup ? "active" : ""}
-              onClick={() => {
-                setAuthMode("signup");
-                clearAuthMessages();
-              }}
-            >
-              Sign Up
-            </button>
+        <div className="lineup-auth-hero">
+          <div className="lineup-auth-brand">
+            <img src={logo} alt="Queless" className="lineup-auth-logo" />
           </div>
-        )}
+
+          <div className="lineup-auth-header">
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
+        </div>
+
+        <section className="lineup-auth-card" aria-label={`${title} form`}>
+          {!isForgot && !isReset && (
+            <AuthTabs
+              isLogin={isLogin}
+              isSignup={isSignup}
+              setAuthMode={setAuthMode}
+              clearAuthMessages={clearAuthMessages}
+            />
+          )}
 
         {isForgot && (
           <p className="lineup-auth-note">
-            Enter your username or email. We will send a verification code before you choose a new password.
+            Enter the email linked to your Queless account. We'll send a verification code to reset your password.
           </p>
         )}
 
         {isReset && (
           <p className="lineup-auth-note">
-            Email sent. Enter the verification code and your new password.
+            Enter the verification code sent to your email and choose a new password.
           </p>
         )}
 
         <div className="lineup-auth-form">
-          <label className="lineup-auth-field">
-            <FiUser />
-            <input
-              ref={usernameRef}
-              placeholder={isReset || isForgot ? "Username or email" : "Username"}
-            />
-          </label>
+          {(isLogin || isSignup) && (
+            <label className="lineup-auth-field">
+              <FiUser />
+              <span className="lineup-auth-label">{isLogin ? "Username or email" : "Username"}</span>
+              <input
+                ref={usernameRef}
+                autoComplete="username"
+                placeholder={isLogin ? "Enter your username or email" : "Choose a username"}
+              />
+            </label>
+          )}
+
+          {(isSignup || isForgot || isReset) && (
+            <label className="lineup-auth-field">
+              <FiMail />
+              <span className="lineup-auth-label">Email address</span>
+              <input
+                ref={emailRef}
+                type="email"
+                autoComplete="email"
+                placeholder="Email address"
+              />
+            </label>
+          )}
 
           {!isForgot && (
             <label className="lineup-auth-field">
               <FiLock />
+              <span className="lineup-auth-label">{isReset ? "Verification code" : "Password"}</span>
               <input
                 ref={passwordRef}
                 type={isReset ? "text" : showPassword ? "text" : "password"}
-                placeholder={isReset ? "Verification code" : "Password"}
+                autoComplete={isLogin ? "current-password" : isReset ? "one-time-code" : "new-password"}
+                placeholder={isReset ? "Verification code" : isLogin ? "Enter your password" : "Create a password"}
               />
 
               {!isReset && (
                 <button
                   type="button"
                   className="lineup-auth-eye"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   onClick={() => setShowPassword((value) => !value)}
                 >
                   {showPassword ? <FiEyeOff /> : <FiEye />}
@@ -146,15 +209,18 @@ export default function AuthScreen(props) {
             <>
               <label className="lineup-auth-field">
                 <FiLock />
+                <span className="lineup-auth-label">{isReset ? "New password" : "Confirm password"}</span>
                 <input
                   ref={confirmPasswordRef}
                   type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   placeholder={isReset ? "New password" : "Confirm Password"}
                 />
 
                 <button
                   type="button"
                   className="lineup-auth-eye"
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                   onClick={() => setShowConfirmPassword((value) => !value)}
                 >
                   {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
@@ -211,9 +277,8 @@ export default function AuthScreen(props) {
                   ? "Sending..."
                   : resetCooldown > 0
                   ? `Resend in ${resetCooldown}s`
-                  : "Send email code"}
+                  : "Send reset code"}
               </span>
-              {!authLoading && resetCooldown === 0 && <FiArrowRight />}
             </button>
 
             <p className="lineup-auth-hint center">
@@ -225,7 +290,7 @@ export default function AuthScreen(props) {
             type="button"
             className="lineup-auth-submit"
             disabled={authLoading}
-            onClick={isReset ? handlePasswordReset : isLogin ? handleLogin : handleRegister}
+            onClick={isReset ? handlePasswordReset : isLogin ? () => handleLogin({ rememberMe }) : handleRegister}
           >
             <span>
               {authLoading
@@ -236,7 +301,6 @@ export default function AuthScreen(props) {
                 ? "Log In"
                 : "Create Account"}
             </span>
-            {!authLoading && <FiArrowRight />}
           </button>
         )}
 
@@ -252,7 +316,33 @@ export default function AuthScreen(props) {
             Back to login
           </button>
         )}
-      </section>
+
+        {isLogin && (
+          <p className="lineup-auth-switch">
+            Don't have an account?{" "}
+            <button
+              type="button"
+              onPointerDown={(event) => switchAuthMode(event, "signup")}
+              onClick={(event) => switchAuthMode(event, "signup")}
+            >
+              Sign up
+            </button>
+          </p>
+        )}
+
+        {isSignup && (
+          <p className="lineup-auth-switch">
+            Already have an account?{" "}
+            <button
+              type="button"
+              onPointerDown={(event) => switchAuthMode(event, "login")}
+              onClick={(event) => switchAuthMode(event, "login")}
+            >
+              Log in
+            </button>
+          </p>
+        )}
+        </section>
       </div>
     </main>
   );

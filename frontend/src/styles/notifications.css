@@ -73,6 +73,33 @@
   color: #2c163a;
 }
 
+.light .notification-card-v4,
+.app-wrap-v4.light .notification-card-v4 {
+  color: var(--text-light) !important;
+}
+
+.light .notification-item-v4.as-card,
+.app-wrap-v4.light .notification-item-v4.as-card {
+  background: rgba(82, 43, 91, 0.06) !important;
+  border: 1px solid rgba(82, 43, 91, 0.10) !important;
+  color: var(--text-light) !important;
+}
+
+.light .notification-title-v4,
+.app-wrap-v4.light .notification-title-v4,
+.light .notification-title-v4 svg,
+.app-wrap-v4.light .notification-title-v4 svg {
+  color: var(--text-light) !important;
+}
+
+.light .notification-card-v4 .profile-sub-v4,
+.light .notification-card-v4 .tiny-meta-v4,
+.app-wrap-v4.light .notification-card-v4 .profile-sub-v4,
+.app-wrap-v4.light .notification-card-v4 .tiny-meta-v4 {
+  color: var(--muted-light) !important;
+  opacity: 1;
+}
+
 @keyframes toastDropV5 {
   from {
     opacity: 0;

@@ -19,6 +19,8 @@ import pushRoutes from "./routes/pushRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
+import marketplaceRoutes from "./routes/marketplaceRoutes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorMiddleware.js";
 import { createRequestLogger } from "./config/logger.js";
 import db from "./config/db.js";
@@ -95,11 +97,13 @@ app.use("/api/push", pushRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api", marketplaceRoutes);
 
 app.get("/api", (req, res) => {
   res.json({
     success: true,
-    message: "Barber booking API is live",
+    message: "Service marketplace API is live",
   });
 });
 

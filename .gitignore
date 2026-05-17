@@ -7,6 +7,16 @@ dist/
 .vscode/
 logs/
 *.log
+*.err
+*.err.log
+*.tar.gz
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+tmp-chrome-*/
+headless-*.txt
+qa-*.png
+layout-*.png
+home-*.png
+auth-*.png
+login-*.png
