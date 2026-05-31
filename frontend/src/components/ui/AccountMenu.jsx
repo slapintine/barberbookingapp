@@ -1,4 +1,4 @@
-import { FiBriefcase, FiCalendar, FiCreditCard, FiHome, FiLogOut, FiSettings, FiShield, FiStar, FiUser, FiX } from "react-icons/fi";
+import { FiBookOpen, FiBriefcase, FiCalendar, FiCreditCard, FiFileText, FiHome, FiLifeBuoy, FiLogOut, FiSettings, FiShield, FiStar, FiUser, FiX, FiZap } from "react-icons/fi";
 
 export default function AccountMenu({
   show,
@@ -24,6 +24,7 @@ export default function AccountMenu({
     ...(isBarber
       ? [
           { id: "dashboard", label: "Provider Dashboard", helper: "Services, bookings, quotes, and profile", icon: <FiBriefcase /> },
+          { id: "aiCoach", label: "AI Coach", helper: "Platinum business recommendations", icon: <FiZap /> },
           { id: "reports", label: "Reviews and analytics", helper: "Ratings, performance, and customer feedback", icon: <FiStar /> },
         ]
       : []),
@@ -32,6 +33,9 @@ export default function AccountMenu({
           { id: "admin", label: "Admin Control Center", helper: "Manage businesses, plans, bookings, and platform health", icon: <FiShield /> },
         ]
       : []),
+    { id: "help", label: "Help Center", helper: "FAQs, booking help, and support channels", icon: <FiBookOpen /> },
+    { id: "support", label: "Contact Support", helper: "Report a problem, provider, or customer", icon: <FiLifeBuoy /> },
+    { id: "policies", label: "Rules and Policies", helper: "Terms, privacy, refunds, provider rules", icon: <FiFileText /> },
     { id: "settings", label: "Settings", helper: "Username, password, security", icon: <FiSettings /> },
   ];
 
@@ -70,7 +74,7 @@ export default function AccountMenu({
           ))}
         </div>
 
-        <button type="button" className="account-menu-logout-v6" onClick={onLogout}>
+        <button type="button" className="account-menu-logout-v6" onClick={() => onLogout?.()}>
           <FiLogOut /> Log out
         </button>
       </div>

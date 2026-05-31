@@ -20,6 +20,12 @@ export const logger = pino({
       "credentials.apiSecret",
       "credentials.consumerSecret",
       "password",
+      "req.body.password",
+      "req.body.currentPassword",
+      "req.body.newPassword",
+      "body.password",
+      "body.currentPassword",
+      "body.newPassword",
       "payload.token",
       "payload.password",
       "response.token",
@@ -32,7 +38,7 @@ export const logger = pino({
           target: "pino-pretty",
           options: {
             colorize: true,
-            translateTime: "SYS:standard",
+            translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l",
             singleLine: true,
           },
         }

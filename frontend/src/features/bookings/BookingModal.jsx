@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react";
 import {
   FiArrowLeft,
   FiCalendar,
   FiCheck,
   FiClock,
-  FiCreditCard,
   FiMapPin,
+  FiNavigation,
   FiScissors,
   FiSmartphone,
   FiUsers,
@@ -16,8 +17,6 @@ import {
   isOnlinePaymentMethod,
 } from "../../utils/paymentLabels.js";
 import { formatServicePrice, getAvailableServices, getServiceBookingAmount, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
-const BOOKING_ONLINE_PAYMENTS_ENABLED =
-  String(import.meta.env.VITE_BOOKING_ONLINE_PAYMENTS_ENABLED || "").toLowerCase() === "true";
 
 function formatMoney(value) {
   return `UGX ${Number(value || 0).toLocaleString()}`;
@@ -68,6 +67,26 @@ function isValidUgandaPhone(value) {
   return /^(\+?256|0)?[37]\d{8}$/.test(String(value || "").replace(/\s+/g, ""));
 }
 
+function getServiceLocationOptions(service, barber) {
+  const serviceType = String(service?.location_type || service?.locationType || "provider_location").toLowerCase();
+  const homeEnabled = Number(barber?.home_service_enabled || barber?.homeServiceEnabled || 0) === 1;
+  const options = [{ value: "provider_location", label: "Provider location", meta: barber?.location || "Provider address" }];
+  if (homeEnabled || serviceType === "customer_location") {
+    options.push({ value: "customer_location", label: "Customer location", meta: "Home service or on-site visit" });
+  }
+  return serviceType === "customer_location" && !homeEnabled ? options.slice(1) : options;
+}
+
+function getServicePriceState(service) {
+  const label = formatServicePrice(service);
+  const pricingType = String(service?.pricing_type || service?.pricingType || "fixed").toLowerCase();
+  const hasDirectPrice = getServiceBookingAmount(service) > 0 || ["range", "starting_from"].includes(pricingType);
+  return {
+    label,
+    quoteOnly: pricingType === "quote" || label === "Price unavailable" || (!hasDirectPrice && label !== "Price on consultation"),
+  };
+}
+
 export default function BookingModal({
   show,
   barber,
@@ -77,6 +96,7 @@ export default function BookingModal({
   selectedTime,
   setSelectedTime,
   timeSlots,
+  availabilityStatus,
   selectedService,
   setSelectedService,
   selectedTeamMemberId,
@@ -85,13 +105,36 @@ export default function BookingModal({
   setSelectedPaymentMethod,
   paymentPhone,
   setPaymentPhone,
+  bookingLocationType,
+  setBookingLocationType,
+  bookingAddress,
+  setBookingAddress,
+  locationDetecting,
+  onUseCurrentLocation,
+  onRequestQuote,
   pendingPayment,
   onVerifyPayment,
+  onlinePaymentsReady = false,
+  paymentReadinessMessage = "",
   onClose,
+  onOpenSmartMatch,
+  smartMatchPremiumActive = false,
   onConfirm,
   creatingBooking,
   bookingCooldownInfo,
+  walletBalance = 0,
 }) {
+  const [step, setStep] = useState(0);
+  const [tutorDetails, setTutorDetails] = useState({
+    subject: "",
+    studentLevel: "",
+    lessonMode: "",
+    duration: "",
+    notes: "",
+  });
+  useEffect(() => {
+    if (show) setStep(0);
+  }, [show, barber?.id]);
   if (!show || !barber) return null;
 
   const services = getBarberServices(barber);
@@ -110,7 +153,7 @@ export default function BookingModal({
                 </button>
                 <div className="booking-header-copy-v5">
                   <div className="booking-header-title-v5">No bookable services</div>
-                  <div className="booking-header-subtitle-v5">This provider has not published a service yet.</div>
+                  <div className="booking-header-subtitle-v5">This provider has not added services yet.</div>
                 </div>
                 <button type="button" className="profile-back-btn-v4" onClick={onClose}>
                   <FiX />
@@ -123,29 +166,69 @@ export default function BookingModal({
     );
   }
   const total = Number(barber.price_from || 0) + getServiceBookingAmount(serviceObj);
-  const isQuoteService = String(serviceObj?.pricing_type || "").toLowerCase() === "quote";
-  const totalLabel = isQuoteService ? "Price on consultation" : formatMoney(total);
+  const isTutorService = [serviceObj?.category, barber?.business_type, barber?.category_name]
+    .filter(Boolean)
+    .some((value) => /tutor|lesson|education|academic/i.test(String(value)));
+  const priceState = getServicePriceState(serviceObj);
+  const isQuoteService = priceState.quoteOnly || String(serviceObj?.pricing_type || "").toLowerCase() === "quote";
+  const totalLabel = isQuoteService ? priceState.label || "Request quote" : formatMoney(total);
   const teamMembers = Array.isArray(barber.team_members || barber.teamMembers)
     ? (barber.team_members || barber.teamMembers).filter((item) => Number(item?.is_active ?? item?.isActive ?? 1) === 1)
     : [];
   const isShopStand = String(barber.stand_type || barber.standType || "individual") === "shop";
   const requiresTeamMember = isShopStand && teamMembers.length > 0;
   const selectedTeamMember = teamMembers.find((item) => String(item.id) === String(selectedTeamMemberId));
-  const paymentAllowed = ["cash", "mtn_mobile_money", "airtel_money"].includes(selectedPaymentMethod);
   const paymentOptions = getBookingPaymentOptions({
-    onlinePaymentsEnabled: BOOKING_ONLINE_PAYMENTS_ENABLED,
+    onlinePaymentsEnabled: onlinePaymentsReady,
+    walletPaymentsEnabled: true,
+    walletBalance,
+    bookingAmount: total,
   });
+  const paymentAllowed = paymentOptions.some((option) => option.value === selectedPaymentMethod && !option.disabled);
   const selectedPaymentLabel = getPaymentMethodLabel(selectedPaymentMethod);
   const showsPlatformSplit = isOnlinePaymentMethod(selectedPaymentMethod);
-  const requiresPhone = selectedPaymentMethod === "mtn_mobile_money";
+  const requiresPhone = isOnlinePaymentMethod(selectedPaymentMethod);
   const phoneIsValid = !requiresPhone || isValidUgandaPhone(paymentPhone);
+  const locationOptions = getServiceLocationOptions(serviceObj, barber);
+  const selectedLocationType = bookingLocationType || locationOptions[0]?.value || "";
+  const locationLabel =
+    selectedLocationType === "customer_location"
+      ? String(bookingAddress || "").trim()
+      : barber.location || "Provider location";
+  const locationValid =
+    Boolean(selectedLocationType) &&
+    (selectedLocationType !== "customer_location" || String(bookingAddress || "").trim().length >= 3);
   const selectedTimeLabel =
     timeSlots.find((item) => item.value === selectedTime)?.label ||
     (selectedTime ? formatTimeLabel(selectedTime) : "Pick a time");
+  const availabilityTitle = availabilityStatus?.loading
+    ? "Checking availability..."
+    : availabilityStatus?.error
+    ? "Availability unavailable"
+    : availabilityStatus?.hasAvailable
+    ? availabilityStatus.selectedDateLabel === "Today"
+      ? `Available today from ${availabilityStatus.nextAvailableLabel}`
+      : `Next available ${availabilityStatus.selectedDateLabel} at ${availabilityStatus.nextAvailableLabel}`
+    : availabilityStatus?.isClosed
+    ? `${availabilityStatus.selectedDateLabel} is closed`
+    : `No slots left ${availabilityStatus?.selectedDateLabel || "for this day"}`;
+  const availabilityMeta = availabilityStatus?.loading
+    ? "Loading provider schedule and existing bookings."
+    : availabilityStatus?.error
+    ? availabilityStatus.error
+    : availabilityStatus?.hasAvailable
+    ? `${availabilityStatus.availableCount} slot${availabilityStatus.availableCount === 1 ? "" : "s"} available.`
+    : availabilityStatus?.workingWindow
+    ? `Working hours: ${availabilityStatus.workingWindow.start || "--:--"} - ${availabilityStatus.workingWindow.end || "--:--"}`
+    : "Pick another day to find an open slot.";
   const isBlocked =
     creatingBooking ||
     bookingCooldownInfo?.blocked ||
+    !selectedService ||
+    isQuoteService ||
     !selectedTime ||
+    !selectedDate ||
+    !locationValid ||
     !paymentAllowed ||
     !phoneIsValid ||
     (requiresTeamMember && !selectedTeamMember);
@@ -222,6 +305,34 @@ export default function BookingModal({
     );
   }
 
+  const steps = [
+    { key: "service", label: "Service", ready: Boolean(selectedService) && !isQuoteService },
+    { key: "time", label: "Time", ready: Boolean(selectedDate && selectedTime) },
+    { key: "location", label: "Location", ready: locationValid },
+    { key: "payment", label: "Payment", ready: paymentAllowed && phoneIsValid },
+    { key: "summary", label: "Summary", ready: !isBlocked },
+  ];
+  const canContinue = step === 0
+    ? steps[0].ready
+    : step === 1
+    ? steps[1].ready
+    : step === 2
+    ? steps[2].ready
+    : step === 3
+    ? steps[3].ready
+    : true;
+  const nextStep = () => setStep((value) => Math.min(value + 1, steps.length - 1));
+  const previousStep = () => setStep((value) => Math.max(value - 1, 0));
+
+  const footerLabel =
+    step < steps.length - 1
+      ? "Continue"
+      : creatingBooking
+      ? "Booking..."
+      : isQuoteService
+      ? "Request quote"
+      : "Confirm Booking";
+
   return (
     <>
       <div className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"} onClick={onClose} />
@@ -231,16 +342,29 @@ export default function BookingModal({
           <div className="booking-modal-shell-v5">
             <div className="booking-modal-scroll-v5">
               <div className="booking-header-v5">
-                <button type="button" className="profile-back-btn-v4" onClick={onClose}>
-                  <FiArrowLeft />
+                <button type="button" className="profile-back-btn-v4" onClick={step > 0 ? previousStep : onClose}>
+                  {step > 0 ? <FiArrowLeft /> : <FiX />}
                 </button>
                 <div className="booking-header-copy-v5">
                   <div className="booking-header-title-v5">Book service</div>
-                  <div className="booking-header-subtitle-v5">Choose a service, date, time, and payment option</div>
+                  <div className="booking-header-subtitle-v5">{steps[step]?.label}: {barber.business_name}</div>
                 </div>
                 <button type="button" className="profile-back-btn-v4" onClick={onClose}>
                   <FiX />
                 </button>
+              </div>
+              <div className="booking-progress-v6">
+                {steps.map((item, index) => (
+                  <button
+                    type="button"
+                    key={item.key}
+                    className={index === step ? "booking-step-dot-v6 active" : item.ready ? "booking-step-dot-v6 done" : "booking-step-dot-v6"}
+                    onClick={() => index <= step && setStep(index)}
+                    aria-label={item.label}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
               </div>
 
               <div className="booking-barber-card-v5">
@@ -261,7 +385,7 @@ export default function BookingModal({
               </div>
 
               {isShopStand ? (
-                <div className="booking-section-v5">
+                <div className={step === 0 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
                   <div className="booking-section-row-v5">
                   <div className="booking-section-title-v5"><FiUsers /> Choose provider</div>
                     <div className="booking-section-hint-v5">{teamMembers.length || 1} available</div>
@@ -292,7 +416,7 @@ export default function BookingModal({
                 </div>
               ) : null}
 
-              <div className="booking-section-v5">
+              <div className={step === 0 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
                 <div className="booking-section-row-v5">
                   <div className="booking-section-title-v5"><FiScissors /> Choose service</div>
                   <div className="booking-section-hint-v5">{services.length} options</div>
@@ -300,6 +424,7 @@ export default function BookingModal({
                 <div className="booking-service-list-v5">
                   {services.map((item) => {
                     const active = String(selectedService) === String(item.id);
+                    const itemPrice = getServicePriceState(item);
                     return (
                       <button
                         type="button"
@@ -309,22 +434,76 @@ export default function BookingModal({
                       >
                         <div className="booking-card-service-copy-v5">
                           <div className="booking-card-service-title-v5">{item.service_name}</div>
-                          <div className="booking-card-service-meta-v5">{item.duration_minutes} mins</div>
+                          {item.description ? <div className="booking-card-service-description-v6">{item.description}</div> : null}
+                          <div className="booking-card-service-meta-v5">
+                            {item.duration_minutes} mins - {String(item.location_type || "").toLowerCase() === "customer_location" ? "Home service" : "Provider location"}
+                          </div>
                         </div>
                         <div className="booking-card-service-side-v5">
-                          <div className="booking-card-service-price-v5">{formatServicePrice(item)}</div>
+                          <div className="booking-card-service-price-v5">{itemPrice.label}</div>
                           {active ? <span className="booking-card-service-check-v5"><FiCheck /></span> : null}
                         </div>
                       </button>
                     );
                   })}
                 </div>
+                {isQuoteService ? (
+                  <div className="booking-warning-v6">
+                    This service needs a quote before booking. Ask the provider for a price and scope first.
+                  </div>
+                ) : null}
+                <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={() => onOpenSmartMatch?.()}>
+                  {smartMatchPremiumActive ? "Not sure? Find My Best Match" : "Not sure? Unlock Smart Match"}
+                </button>
               </div>
 
-              <div className="booking-section-v5">
+              <div className={step === 0 && isTutorService ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
+                <div className="booking-section-row-v5">
+                  <div className="booking-section-title-v5">Tutor lesson details</div>
+                  <div className="booking-section-hint-v5">Optional</div>
+                </div>
+                <div className="booking-tutor-grid-v7">
+                  <label>
+                    <span>Subject</span>
+                    <input value={tutorDetails.subject} onChange={(event) => setTutorDetails((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Mathematics" />
+                  </label>
+                  <label>
+                    <span>Student level</span>
+                    <select value={tutorDetails.studentLevel} onChange={(event) => setTutorDetails((prev) => ({ ...prev, studentLevel: event.target.value }))}>
+                      <option value="">Choose level</option>
+                      {["Nursery", "Primary", "Lower Secondary", "Upper Secondary", "Cambridge", "University", "Adult learning"].map((item) => <option key={item} value={item}>{item}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Lesson mode</span>
+                    <select value={tutorDetails.lessonMode} onChange={(event) => setTutorDetails((prev) => ({ ...prev, lessonMode: event.target.value }))}>
+                      <option value="">Choose mode</option>
+                      {["In-person", "Online", "Home visit", "Student comes to tutor", "Hybrid"].map((item) => <option key={item} value={item}>{item}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Duration</span>
+                    <input value={tutorDetails.duration} onChange={(event) => setTutorDetails((prev) => ({ ...prev, duration: event.target.value }))} placeholder="1 hour" />
+                  </label>
+                  <label className="booking-tutor-notes-v7">
+                    <span>Notes for tutor</span>
+                    <textarea value={tutorDetails.notes} onChange={(event) => setTutorDetails((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Needs help with algebra." />
+                  </label>
+                </div>
+              </div>
+
+              <div className={step === 1 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
                 <div className="booking-section-row-v5">
                   <div className="booking-section-title-v5"><FiCalendar /> Pick date</div>
-                  <div className="booking-section-hint-v5">{dateOptions.length} days</div>
+                  <div className="booking-section-hint-v5">{availabilityStatus?.hasAvailable ? `${availabilityStatus.availableCount} open` : `${dateOptions.length} days`}</div>
+                </div>
+                <div className={
+                  availabilityStatus?.hasAvailable
+                    ? "booking-availability-banner-v6"
+                    : "booking-availability-banner-v6 is-empty"
+                }>
+                  <strong>{availabilityTitle}</strong>
+                  <span>{availabilityMeta}</span>
                 </div>
                 <div className="booking-date-list-v5">
                   {dateOptions.map((item) => (
@@ -340,10 +519,10 @@ export default function BookingModal({
                 </div>
               </div>
 
-              <div className="booking-section-v5">
+              <div className={step === 1 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
                 <div className="booking-section-row-v5">
                   <div className="booking-section-title-v5"><FiClock /> Pick time</div>
-                  <div className="booking-section-hint-v5">Real-time availability</div>
+                  <div className="booking-section-hint-v5">{availabilityStatus?.loading ? "Checking..." : "Live slots"}</div>
                 </div>
                 <div className="booking-time-grid-v5">
                   {timeSlots.map((item) => (
@@ -360,18 +539,65 @@ export default function BookingModal({
                       onClick={() => !item.disabled && setSelectedTime(item.value)}
                       disabled={item.disabled}
                     >
-                      {item.label}
+                      <span>{item.label}</span>
+                      {item.disabled && item.disabledReason ? <small>{item.disabledReason}</small> : null}
                     </button>
                   ))}
                 </div>
                 {!timeSlots.some((item) => !item.disabled) ? (
-                  <div className="auth-error">No open times left for this date. Pick another day.</div>
+                  <div className="auth-error">
+                    {availabilityStatus?.isClosed
+                      ? "This provider is closed on the selected day. Pick another date."
+                      : "No open times left for this date. Pick another day."}
+                  </div>
                 ) : null}
               </div>
 
-              <div className="booking-section-v5">
+              <div className={step === 2 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
                 <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5"><FiCreditCard /> Payment</div>
+                  <div className="booking-section-title-v5"><FiMapPin /> Booking location</div>
+                  <div className="booking-section-hint-v5">{locationOptions.length} option{locationOptions.length === 1 ? "" : "s"}</div>
+                </div>
+                <div className="booking-payment-list-v5">
+                  {locationOptions.map((option) => (
+                    <button
+                      type="button"
+                      key={option.value}
+                      className={selectedLocationType === option.value ? "booking-payment-option-v5 active" : "booking-payment-option-v5"}
+                      onClick={() => setBookingLocationType?.(option.value)}
+                    >
+                      <span className="booking-payment-icon-v5"><FiMapPin /></span>
+                      <span className="booking-payment-copy-v5">
+                        <span className="booking-payment-title-v5">{option.label}</span>
+                        <span className="booking-payment-meta-v5">{option.meta}</span>
+                      </span>
+                      {selectedLocationType === option.value ? <span className="booking-payment-pill-v5">Selected</span> : null}
+                    </button>
+                  ))}
+                </div>
+                {selectedLocationType === "customer_location" ? (
+                  <label className="booking-phone-field-v5">
+                    <span>Customer address</span>
+                    <div className="booking-address-row-v6">
+                      <input
+                        type="text"
+                        value={bookingAddress || ""}
+                        onChange={(event) => setBookingAddress?.(event.target.value)}
+                        placeholder="Gayaza, Nakwero"
+                        autoComplete="street-address"
+                      />
+                      <button type="button" onClick={onUseCurrentLocation} disabled={locationDetecting}>
+                        <FiNavigation /> {locationDetecting ? "Finding..." : "Use location"}
+                      </button>
+                    </div>
+                    <small>Add a readable area and any details the provider needs.</small>
+                  </label>
+                ) : null}
+              </div>
+
+              <div className={step === 3 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
+                <div className="booking-section-row-v5">
+                  <div className="booking-section-title-v5"><FiSmartphone /> Payment</div>
                   <div className="booking-section-hint-v5">Required to confirm booking</div>
                 </div>
                 <div className="booking-payment-list-v5">
@@ -384,6 +610,7 @@ export default function BookingModal({
                           ? "booking-payment-option-v5 booking-payment-option-v5-early active"
                           : "booking-payment-option-v5 booking-payment-option-v5-early"
                       }
+                      disabled={option.disabled}
                       onClick={() => setSelectedPaymentMethod(option.value)}
                     >
                       <span className="booking-payment-icon-v5"><FiSmartphone /></span>
@@ -396,11 +623,14 @@ export default function BookingModal({
                   ))}
                 </div>
                 <div className="booking-note-v5">
-                  Cash is always available. Pay cash directly to the service provider after the service.
+                  Bookings are confirmed only after backend-confirmed mobile money or wallet payment.
                 </div>
+                {!onlinePaymentsReady && paymentReadinessMessage ? (
+                  <div className="booking-warning-v6">{paymentReadinessMessage}</div>
+                ) : null}
                 {requiresPhone ? (
                   <label className="booking-phone-field-v5">
-                    <span>MTN phone number</span>
+                    <span>{selectedPaymentLabel} number</span>
                     <input
                       type="tel"
                       value={paymentPhone || ""}
@@ -418,7 +648,7 @@ export default function BookingModal({
                 ) : null}
               </div>
 
-              <div className="booking-summary-v5">
+              <div className={step === 4 ? "booking-summary-v5" : "booking-summary-v5 booking-section-hidden-v6"}>
                 <div className="booking-summary-top-v5">
                   <div>
                     <div className="booking-summary-title-v5">Your booking</div>
@@ -427,6 +657,10 @@ export default function BookingModal({
                   <div className="booking-summary-total-v5">{totalLabel}</div>
                 </div>
                 <div className="booking-summary-grid-v5">
+                  <div className="booking-summary-row-v5">
+                    <span>Provider</span>
+                    <strong>{barber.business_name}</strong>
+                  </div>
                   <div className="booking-summary-row-v5">
                     <span>Service</span>
                     <strong>{serviceObj?.service_name || "Service"}</strong>
@@ -450,6 +684,10 @@ export default function BookingModal({
                     <strong>{selectedTimeLabel}</strong>
                   </div>
                   <div className="booking-summary-row-v5">
+                    <span>Location</span>
+                    <strong>{locationLabel || "Choose location"}</strong>
+                  </div>
+                  <div className="booking-summary-row-v5">
                     <span>Payment</span>
                     <strong>{paymentAllowed ? selectedPaymentLabel : "Choose payment"}</strong>
                   </div>
@@ -464,6 +702,12 @@ export default function BookingModal({
                         <strong>{formatMoney(total * 0.9)}</strong>
                       </div>
                     </>
+                  ) : null}
+                  {isTutorService && Object.values(tutorDetails).some(Boolean) ? (
+                    <div className="booking-summary-row-v5">
+                      <span>Lesson details</span>
+                      <strong>{[tutorDetails.subject, tutorDetails.studentLevel, tutorDetails.lessonMode, tutorDetails.duration].filter(Boolean).join(" • ") || "Added"}</strong>
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -480,29 +724,29 @@ export default function BookingModal({
                     ? "primary-btn-v4 booking-cta-v5 booking-cta-disabled-v5"
                     : "primary-btn-v4 booking-cta-v5"
                 }
-                onClick={onConfirm}
-                disabled={isBlocked}
+                onClick={() => {
+                  if (step < steps.length - 1) {
+                    nextStep();
+                    return;
+                  }
+                  if (isQuoteService) {
+                    onRequestQuote?.();
+                    return;
+                  }
+                  onConfirm?.({
+                    bookingDetails: isTutorService ? { type: "tutor_lesson", ...tutorDetails } : null,
+                  });
+                }}
+                disabled={step < steps.length - 1 ? !canContinue : isBlocked}
               >
-                {creatingBooking
-                  ? "Booking..."
-                  : bookingCooldownInfo?.blocked
-                  ? "Blocked"
-                  : !selectedTime
-                  ? "Pick another time"
-                  : requiresTeamMember && !selectedTeamMember
-                  ? "Choose provider"
-                  : !phoneIsValid
-                  ? "Enter MTN phone"
-                  : !paymentAllowed
-                  ? "Choose payment"
-                  : selectedPaymentMethod === "cash"
-                  ? "Confirm cash booking"
-                  : "Continue to payment"}
+                {footerLabel}
               </button>
               <div className="booking-note-v5">
-                {selectedPaymentMethod === "cash"
-                  ? "The provider approves the booking, then confirms cash after the service."
-                  : "The booking becomes confirmed only after successful mobile money payment."}
+                {isQuoteService
+                  ? "A quote is required before this service can be booked directly."
+                  : step < steps.length - 1
+                  ? "Complete each step to review and confirm with confidence."
+                  : "The booking becomes confirmed only after successful mobile money or wallet payment."}
               </div>
             </div>
           </div>

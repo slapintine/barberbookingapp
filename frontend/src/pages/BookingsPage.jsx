@@ -29,6 +29,7 @@ export default function BookingsPage({
   barberMatchesBooking,
   formatTimeLabel,
   focusBookingId = "",
+  onReportBooking,
 }) {
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [ratings, setRatings] = useState({});
@@ -59,7 +60,7 @@ export default function BookingsPage({
   };
 
   return (
-    <div className="content-v4 standard-page-v4">
+    <div className="content-v4 app-page-v4">
       <div className="panel-title-v4">{isBarberView ? "Incoming bookings" : "My bookings"}</div>
       <div className="booking-list-v4 space-top">
         {visibleBookings.length === 0 ? (
@@ -109,6 +110,9 @@ export default function BookingsPage({
                 {!isBarberView && (booking.status === "pending" || booking.status === "confirmed") && (
                   <button className="mini-action-btn-v4 danger" onClick={() => cancelBooking(booking.id)}>Cancel</button>
                 )}
+                <button className="mini-action-btn-v4" onClick={() => onReportBooking?.(booking, isBarberView ? "Report customer" : "Report provider")}>
+                  {isBarberView ? "Report customer" : "Report provider"}
+                </button>
               </div>
 
               {!isBarberView && booking.status === "completed" && (

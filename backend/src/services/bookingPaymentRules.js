@@ -1,6 +1,6 @@
-import { calculateCommissionBreakdown } from "./paymentService.js";
+import { calculateCommissionBreakdown, normalizeMoneyAmount } from "./paymentService.js";
 
-export const BOOKING_PAYMENT_METHODS = ["cash", "mtn_mobile_money", "airtel_money"];
+export const BOOKING_PAYMENT_METHODS = ["mtn_mobile_money", "airtel_money", "wallet", "wallet_balance"];
 export const ONLINE_BOOKING_PAYMENT_METHODS = ["mtn_mobile_money", "airtel_money"];
 
 export function isMobileMoneyPayment(method) {
@@ -12,8 +12,7 @@ export function isBookingPaymentMethodEnabled(
   { onlinePaymentsEnabled = false, walletPaymentsEnabled = false } = {}
 ) {
   const normalized = String(method || "cash").toLowerCase();
-  if (normalized === "cash") return true;
-  if (normalized === "wallet") return false;
+  if (normalized === "wallet" || normalized === "wallet_balance") return Boolean(walletPaymentsEnabled);
   if (isMobileMoneyPayment(normalized)) return Boolean(onlinePaymentsEnabled);
   return false;
 }
@@ -23,7 +22,7 @@ export function getBookingPaymentBreakdown(amount, method) {
     return calculateCommissionBreakdown(amount);
   }
 
-  const grossAmount = Number(amount || 0);
+  const grossAmount = normalizeMoneyAmount(amount, "Booking amount");
   return {
     grossAmount,
     commissionAmount: 0,

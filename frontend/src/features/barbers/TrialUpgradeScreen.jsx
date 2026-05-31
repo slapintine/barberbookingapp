@@ -4,7 +4,6 @@ import {
   FiArrowRight,
   FiBarChart2,
   FiCheck,
-  FiCreditCard,
   FiDollarSign,
   FiEye,
   FiLock,
@@ -19,20 +18,19 @@ import { formatMoney, formatPlanName, formatSubscriptionPrice, getPlanAmount, no
 
 const PLANS = PROVIDER_PLANS.map((plan) => ({
   ...plan,
-  badge: plan.recommended ? "Recommended" : plan.tier === "PLATINUM" ? "Best Visibility" : "",
+  badge: plan.recommended ? "Recommended" : plan.tier === "PLATINUM" ? "Best visibility" : "",
 }));
 
 const PAYMENT_METHODS = [
   { id: "mtn_mobile_money", label: "MTN Mobile Money", icon: FiPhone, action: "Pay with MTN Mobile Money" },
   { id: "airtel_money", label: "Airtel Money", icon: FiPhone, action: "Pay with Airtel Money" },
-  { id: "card", label: "Card", icon: FiCreditCard, action: "Pay with Card" },
 ];
 
 const COMPARISON_ROWS = [
   ["Business profile", "Included", "Included", "Included"],
   ["Number of services", "5", "20", "Unlimited"],
   ["Photos/videos", "5 photos", "20 photos", "Unlimited photos and video"],
-  ["Search visibility", "Standard", "Better ranking", "Top search, map, and category ranking"],
+  ["Search visibility", "Basic visibility", "Better ranking", "Top search, map, and category ranking"],
   ["Promotions", "Not included", "Discounts and reminders", "Featured promotions with AI captions"],
   ["Analytics", "Basic reports", "Booking and service insights", "Advanced analytics dashboard"],
   ["AI Business Coach", "Not included", "Not included", "Included"],
@@ -42,7 +40,7 @@ const COMPARISON_ROWS = [
 ];
 
 const PLAN_PREVIEWS = {
-  PRO: [
+  PLUS: [
     { title: "Reviews", text: "Collect and show customer ratings on your business profile.", icon: FiStar },
     { title: "Earnings", text: "Track paid bookings and basic wallet activity.", icon: FiDollarSign },
     { title: "Service list", text: "Publish up to 5 bookable services with prices.", icon: FiCheck },
@@ -80,30 +78,27 @@ export default function TrialUpgradeScreen({
   currentUser,
   isAdmin = false,
 }) {
-  const [selectedTier, setSelectedTier] = useState(() => normalizePlanTier(initialSelectedTier, "PRO"));
+  const [selectedTier, setSelectedTier] = useState(() => normalizePlanTier(initialSelectedTier, "PLUS"));
   const [step, setStep] = useState("plans");
-  const [selectedMethod, setSelectedMethod] = useState("mtn_mobile_money");
+  const [selectedMethod, setSelectedMethod] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [cardDetails, setCardDetails] = useState({
-    cardholderName: "",
-    cardNumber: "",
-    expiryDate: "",
-    cvv: "",
-  });
   const [localMessage, setLocalMessage] = useState("");
   const [status, setStatus] = useState("");
   const [expandedPlan, setExpandedPlan] = useState("");
   const [billingCycle, setBillingCycle] = useState("monthly");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoApplied, setPromoApplied] = useState("");
 
   const selectedPlan = useMemo(
     () => PLANS.find((plan) => plan.tier === selectedTier) || PLANS[0],
     [selectedTier]
   );
-  const selectedPaymentMethod = PAYMENT_METHODS.find((method) => method.id === selectedMethod) || PAYMENT_METHODS[0];
+  const selectedPaymentMethod = PAYMENT_METHODS.find((method) => method.id === selectedMethod);
   const currentTier = String(subscription?.tier || "LOCKED").toUpperCase();
   const currentTierLabel = formatPlanName(currentTier, "Plan required");
   const visibleMessage = localMessage || message || "";
-  const trialAlreadyUsed = Number(barber?.trial_used || barber?.owner_trial_used || subscription?.trial_used || 0) === 1;
+  const planAmount = getPlanAmount(selectedPlan, billingCycle);
+  const promoPreviewAmount = promoApplied ? planAmount : planAmount;
 
   useEffect(() => {
     const normalized = normalizePlanTier(initialSelectedTier);
@@ -126,7 +121,7 @@ export default function TrialUpgradeScreen({
   }, [onClose]);
 
   const selectPlan = (tier) => {
-    setSelectedTier(normalizePlanTier(tier, selectedTier || "PRO"));
+    setSelectedTier(normalizePlanTier(tier, selectedTier || "PLUS"));
     setLocalMessage("");
   };
 
@@ -138,13 +133,8 @@ export default function TrialUpgradeScreen({
 
   const validatePayment = () => {
     if (!currentUser?.username) return "Your session has expired. Please log in again.";
-    if (selectedMethod !== "card" && !phoneNumber.trim()) return "Enter a phone number for Mobile Money payment.";
-    if (selectedMethod === "card") {
-      if (!cardDetails.cardholderName.trim()) return "Enter the cardholder name.";
-      if (!cardDetails.cardNumber.trim()) return "Enter the card number.";
-      if (!cardDetails.expiryDate.trim()) return "Enter the expiry date.";
-      if (!cardDetails.cvv.trim()) return "Enter the CVV.";
-    }
+    if (!selectedMethod) return "Choose MTN Mobile Money or Airtel Money before paying.";
+    if (!phoneNumber.trim()) return "Enter a phone number for Mobile Money payment.";
     return "";
   };
 
@@ -170,8 +160,8 @@ export default function TrialUpgradeScreen({
         method: selectedMethod,
         provider: selectedMethod,
         phoneNumber: phoneNumber.trim(),
-        cardDetails: selectedMethod === "card" ? cardDetails : undefined,
         billingCycle,
+        promoCode: promoApplied || promoCode.trim(),
       });
       if (ok) {
         setStatus("pending");
@@ -179,28 +169,6 @@ export default function TrialUpgradeScreen({
       } else {
         setStatus("failed");
         setLocalMessage("");
-      }
-    } catch (error) {
-      setStatus("failed");
-      setLocalMessage(normalizePaymentError(error));
-    }
-  };
-
-  const startFreeTrial = async () => {
-    try {
-      setStatus("processing");
-      setLocalMessage(`Starting your ${selectedPlan.name} free trial...`);
-      const ok = await onUpgrade?.({
-        tier: selectedPlan.tier,
-        method: "trial",
-        provider: "trial",
-        billingCycle: "monthly",
-      });
-      if (ok) {
-        setStatus("success");
-        setLocalMessage(`Your ${selectedPlan.name} free trial is active. Your business is now visible to customers.`);
-      } else {
-        setStatus("failed");
       }
     } catch (error) {
       setStatus("failed");
@@ -251,7 +219,7 @@ export default function TrialUpgradeScreen({
         <section className="trial-upgrade-hero-v12">
           <div className="trial-hero-badge-v12">
             {isAdmin ? <FiEye /> : <FiLock />}
-            {isAdmin ? "Admin preview mode" : `Current plan: ${currentTier === "LOCKED" ? "Plan required" : currentTierLabel}`}
+            {isAdmin ? "Admin preview mode" : currentTier === "LOCKED" ? "Choose a provider plan to activate your business." : `Selected plan: ${currentTierLabel}`}
           </div>
           <h1>Upgrade to grow faster</h1>
           <p>
@@ -323,22 +291,14 @@ export default function TrialUpgradeScreen({
           <>
             <section className="trial-action-panel-v12">
               <div>
-                <span>Selected plan</span>
-                <strong>{selectedPlan.name} - {formatSubscriptionPrice(selectedPlan, billingCycle)}</strong>
+                <span>Selected plan: {selectedPlan.name}</span>
+                <strong>{formatSubscriptionPrice(selectedPlan, billingCycle)}</strong>
                 {billingCycle === "annual" ? <span>Pay yearly and save {formatMoney(selectedPlan.annualSavings)}</span> : null}
               </div>
               {visibleMessage ? <p className="trial-message-v12">{visibleMessage}</p> : null}
               <button type="button" className="trial-primary-btn-v12" onClick={openPayment} disabled={loading}>
                 Continue to Payment <FiArrowRight />
               </button>
-              {trialAlreadyUsed ? (
-                <p className="trial-message-v12">You have already used your free trial. Select a paid plan to continue.</p>
-              ) : null}
-              {selectedPlan.trialAvailable && !trialAlreadyUsed ? (
-                <button type="button" className="trial-secondary-btn-v12" onClick={startFreeTrial} disabled={loading || status === "processing"}>
-                  Start {selectedPlan.name} Free Trial
-                </button>
-              ) : null}
               <button type="button" className="trial-secondary-btn-v12" onClick={onChooseLater}>
                 Choose Later
               </button>
@@ -354,16 +314,16 @@ export default function TrialUpgradeScreen({
                   <thead>
                     <tr>
                       <th>Feature</th>
-                      <th>Pro</th>
+                      <th>Plus</th>
                       <th>Premium</th>
                       <th>Platinum</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {COMPARISON_ROWS.map(([feature, pro, premium, platinum]) => (
+                    {COMPARISON_ROWS.map(([feature, plus, premium, platinum]) => (
                       <tr key={feature}>
                         <th>{feature}</th>
-                        <td>{pro}</td>
+                        <td>{plus}</td>
                         <td>{premium}</td>
                         <td>{platinum}</td>
                       </tr>
@@ -403,43 +363,40 @@ export default function TrialUpgradeScreen({
               ))}
             </div>
 
-            {selectedMethod === "card" ? (
-              <div className="trial-payment-form-v13">
-                <label>
-                  Cardholder name
-                  <input value={cardDetails.cardholderName} onChange={(event) => setCardDetails((prev) => ({ ...prev, cardholderName: event.target.value }))} />
-                </label>
-                <label>
-                  Card number
-                  <input inputMode="numeric" value={cardDetails.cardNumber} onChange={(event) => setCardDetails((prev) => ({ ...prev, cardNumber: event.target.value }))} />
-                </label>
-                <div className="trial-payment-two-col-v13">
-                  <label>
-                    Expiry date
-                    <input placeholder="MM/YY" value={cardDetails.expiryDate} onChange={(event) => setCardDetails((prev) => ({ ...prev, expiryDate: event.target.value }))} />
-                  </label>
-                  <label>
-                    CVV
-                    <input inputMode="numeric" value={cardDetails.cvv} onChange={(event) => setCardDetails((prev) => ({ ...prev, cvv: event.target.value }))} />
-                  </label>
-                </div>
+            <div className="trial-payment-form-v13">
+              <label>
+                Phone number
+                <input inputMode="tel" placeholder="256700000000" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} />
+              </label>
+              <label>
+                Promo code
+                <span className="trial-promo-row-v16">
+                  <input
+                    placeholder="Enter promo code"
+                    value={promoCode}
+                    onChange={(event) => {
+                      setPromoCode(event.target.value);
+                      setPromoApplied("");
+                    }}
+                  />
+                  <button type="button" onClick={() => setPromoApplied(promoCode.trim())} disabled={!promoCode.trim()}>
+                    Apply
+                  </button>
+                </span>
+              </label>
+              <div className="trial-readonly-row-v13">
+                <span>Network</span>
+                <strong>{selectedPaymentMethod?.label || "Choose a network"}</strong>
               </div>
-            ) : (
-              <div className="trial-payment-form-v13">
-                <label>
-                  Phone number
-                  <input inputMode="tel" placeholder="256700000000" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} />
-                </label>
-                <div className="trial-readonly-row-v13">
-                  <span>Network</span>
-                  <strong>{selectedPaymentMethod.label}</strong>
-                </div>
-              </div>
-            )}
+            </div>
 
             <div className="trial-readonly-row-v13">
               <span>Amount</span>
-              <strong>{formatMoney(getPlanAmount(selectedPlan, billingCycle))}</strong>
+              <strong>{formatMoney(planAmount)}</strong>
+            </div>
+            <div className="trial-readonly-row-v13">
+              <span>Final amount payable</span>
+              <strong>{promoApplied ? "Calculated after server validation" : formatMoney(promoPreviewAmount)}</strong>
             </div>
             <div className="trial-readonly-row-v13">
               <span>Plan</span>
@@ -460,7 +417,7 @@ export default function TrialUpgradeScreen({
               </button>
             ) : (
               <button type="button" className="trial-primary-btn-v12" onClick={submitPayment} disabled={loading || status === "processing"}>
-                {status === "processing" || loading ? "Processing payment..." : selectedPaymentMethod.action}
+                {status === "processing" || loading ? "Processing payment..." : selectedPaymentMethod?.action || "Choose Payment Method"}
                 <FiArrowRight />
               </button>
             )}

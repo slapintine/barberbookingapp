@@ -66,7 +66,7 @@ export const airtelService = {
       phone_number: normalizedPhone,
       reference,
       description,
-      callback_url: callbackUrl || `${env.appPublicUrl}/api/payments/webhooks/airtel`,
+      callback_url: callbackUrl || env.airtelWebhookUrl || `${env.appPublicUrl}/api/payments/webhooks/airtel`,
     };
     const { response, data } = await postJson(getEndpoint("collection"), requestPayload, "collection");
 

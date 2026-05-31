@@ -1,0 +1,403 @@
+.payment-flow-shell-v1 {
+  position: fixed;
+  inset: 0;
+  z-index: 230;
+  display: grid;
+  place-items: end center;
+  padding: 12px;
+  background: rgba(17, 7, 26, 0.48);
+  backdrop-filter: blur(10px);
+  overflow-x: hidden;
+}
+
+.payment-flow-panel-v1 {
+  position: relative;
+  width: min(440px, 100%);
+  max-height: calc(100svh - 24px);
+  display: grid;
+  gap: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+  border: 1px solid rgba(251, 228, 216, 0.14);
+  border-radius: 18px 18px 8px 8px;
+  background:
+    radial-gradient(circle at 96% 0%, rgba(226, 74, 165, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(52, 22, 80, 0.99), rgba(25, 0, 25, 0.99));
+  color: #fff8f4;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.38);
+}
+
+.payment-flow-panel-v1 * {
+  box-sizing: border-box;
+}
+
+.payment-flow-close-v1 {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(251, 228, 216, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: pointer;
+}
+
+.payment-flow-header-v1 {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding-right: 42px;
+}
+
+.payment-flow-mark-v1 {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #6b1f8f, #e24aa5);
+  box-shadow: 0 16px 32px rgba(226, 74, 165, 0.22);
+}
+
+.payment-flow-header-v1 strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1.05;
+  font-weight: 950;
+}
+
+.payment-flow-header-v1 p {
+  margin: 5px 0 0;
+  color: rgba(255, 248, 244, 0.72);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 750;
+}
+
+.payment-flow-alert-v1 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(251, 228, 216, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.075);
+  color: rgba(255, 248, 244, 0.92);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.payment-flow-alert-v1 svg {
+  margin-top: 2px;
+}
+
+.payment-flow-alert-v1 small {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 248, 244, 0.68);
+  overflow-wrap: anywhere;
+}
+
+.payment-flow-alert-v1.success {
+  border-color: rgba(92, 220, 151, 0.3);
+  background: rgba(39, 174, 96, 0.14);
+}
+
+.payment-flow-alert-v1.failed,
+.payment-flow-alert-v1.warning {
+  border-color: rgba(255, 194, 194, 0.28);
+  background: rgba(255, 104, 104, 0.12);
+}
+
+.payment-flow-alert-v1.pending {
+  border-color: rgba(251, 228, 216, 0.22);
+  background: rgba(251, 228, 216, 0.1);
+}
+
+.payment-flow-summary-v1,
+.payment-flow-field-v1 {
+  display: grid;
+  gap: 8px;
+}
+
+.payment-flow-summary-v1 > span,
+.payment-flow-field-v1 span {
+  color: rgba(255, 248, 244, 0.86);
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.payment-flow-summary-v1 strong {
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.payment-flow-summary-v1 label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 12px;
+  border: 1px solid rgba(251, 228, 216, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.payment-flow-summary-v1 em {
+  color: rgba(255, 248, 244, 0.74);
+  font-style: normal;
+  font-weight: 950;
+}
+
+.payment-flow-summary-v1 input,
+.payment-flow-field-v1 input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #fff8f4;
+  font: inherit;
+  font-weight: 900;
+}
+
+.payment-flow-field-v1 input {
+  height: 50px;
+  padding: 0 13px;
+  border: 1px solid rgba(251, 228, 216, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.payment-flow-summary-v1 small,
+.payment-flow-field-v1 small,
+.payment-flow-field-error-v1 {
+  color: rgba(255, 214, 214, 0.92);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.payment-flow-methods-v1 {
+  display: grid;
+  gap: 9px;
+}
+
+.payment-flow-methods-v1 button {
+  width: 100%;
+  min-width: 0;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(251, 228, 216, 0.14);
+  border-radius: 12px;
+  padding: 10px;
+  color: inherit;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.075);
+  cursor: pointer;
+}
+
+.payment-flow-methods-v1 button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.payment-flow-methods-v1 button.active {
+  border-color: rgba(226, 74, 165, 0.56);
+  background: rgba(226, 74, 165, 0.15);
+}
+
+.payment-flow-methods-v1 button > svg:first-child {
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #6b1f8f, #e24aa5);
+}
+
+.payment-flow-methods-v1 span,
+.payment-flow-methods-v1 strong,
+.payment-flow-methods-v1 small {
+  min-width: 0;
+  display: block;
+}
+
+.payment-flow-methods-v1 strong {
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 950;
+}
+
+.payment-flow-methods-v1 small {
+  margin-top: 3px;
+  color: rgba(255, 248, 244, 0.68);
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 750;
+}
+
+.payment-flow-actions-v1 {
+  display: grid;
+  gap: 10px;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.payment-flow-primary-v1,
+.payment-flow-secondary-v1 {
+  width: 100%;
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.payment-flow-primary-v1 {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #6b1f8f, #e24aa5);
+  box-shadow: 0 16px 34px rgba(91, 22, 122, 0.3);
+}
+
+.payment-flow-primary-v1:disabled,
+.payment-flow-secondary-v1:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+.payment-flow-secondary-v1 {
+  border: 1px solid rgba(251, 228, 216, 0.16);
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.payment-flow-spin-v1 {
+  animation: paymentFlowSpin 0.9s linear infinite;
+}
+
+.light .payment-flow-shell-v1 {
+  background: rgba(82, 43, 91, 0.2);
+}
+
+.light .payment-flow-panel-v1 {
+  border-color: rgba(82, 43, 91, 0.12);
+  background:
+    radial-gradient(circle at 96% 0%, rgba(226, 74, 165, 0.13), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(251, 228, 216, 0.96));
+  color: #2c163a;
+  box-shadow: 0 24px 64px rgba(82, 43, 91, 0.22);
+}
+
+.light .payment-flow-close-v1,
+.light .payment-flow-secondary-v1,
+.light .payment-flow-methods-v1 button,
+.light .payment-flow-field-v1 input,
+.light .payment-flow-summary-v1 label {
+  border-color: rgba(82, 43, 91, 0.12);
+  background: rgba(82, 43, 91, 0.055);
+}
+
+.light .payment-flow-header-v1 p,
+.light .payment-flow-methods-v1 small,
+.light .payment-flow-field-v1 small,
+.light .payment-flow-summary-v1 > span,
+.light .payment-flow-field-v1 span,
+.light .payment-flow-summary-v1 em {
+  color: rgba(44, 22, 58, 0.66);
+}
+
+.light .payment-flow-summary-v1 input,
+.light .payment-flow-field-v1 input {
+  color: #2c163a;
+}
+
+.light .payment-flow-alert-v1 {
+  border-color: rgba(82, 43, 91, 0.1);
+  background: rgba(82, 43, 91, 0.055);
+  color: #2c163a;
+}
+
+.light .payment-flow-alert-v1.warning,
+.light .payment-flow-alert-v1.failed {
+  border-color: rgba(199, 66, 102, 0.2);
+  background: rgba(199, 66, 102, 0.08);
+}
+
+.light .payment-flow-alert-v1.success {
+  border-color: rgba(39, 174, 96, 0.22);
+  background: rgba(39, 174, 96, 0.08);
+}
+
+.light .payment-flow-field-error-v1,
+.light .payment-flow-summary-v1 small {
+  color: #a3174c;
+}
+
+@keyframes paymentFlowSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (min-width: 720px) {
+  .payment-flow-shell-v1 {
+    place-items: center;
+  }
+
+  .payment-flow-panel-v1 {
+    border-radius: 22px;
+  }
+}
+
+@media (max-width: 360px) {
+  .payment-flow-shell-v1 {
+    padding: 8px;
+  }
+
+  .payment-flow-panel-v1 {
+    gap: 12px;
+    max-height: calc(100svh - 16px);
+    padding: 16px 12px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .payment-flow-header-v1 {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .payment-flow-mark-v1 {
+    width: 42px;
+    height: 42px;
+  }
+
+  .payment-flow-header-v1 strong {
+    font-size: 20px;
+  }
+
+  .payment-flow-methods-v1 button {
+    min-height: 58px;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    padding: 9px;
+  }
+}

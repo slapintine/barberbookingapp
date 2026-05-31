@@ -34,7 +34,7 @@ export const MARKETPLACE_CATEGORIES = [
   {
     id: "education-tutoring",
     icon: "book",
-    name: "Education & Tutoring",
+    name: "Tutor / Lessons",
     description: "Private tutors, coaching, language lessons, music lessons, and exam prep.",
     image: "https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=900&q=80",
     active: true,

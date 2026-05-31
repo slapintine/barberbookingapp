@@ -100,6 +100,17 @@ button,
   pointer-events: auto !important;
 }
 
+.booking-overlay-v4:not(.open),
+.profile-overlay-v4:not(.open) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.booking-overlay-v4.open,
+.profile-overlay-v4.open {
+  pointer-events: auto !important;
+}
+
 
 .avatar-upload-v4 {
   position: relative;

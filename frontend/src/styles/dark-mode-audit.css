@@ -1,0 +1,801 @@
+/* Final theme audit layer. Keep this import last so semantic tokens win. */
+html[data-theme="light"],
+body[data-theme="light"],
+.app-wrap-v4.light {
+  --background: #fff8f4;
+  --surface: #ffffff;
+  --surface-soft: #fbf4ff;
+  --surface-elevated: #ffffff;
+  --text-primary: #211027;
+  --text-secondary: #5f4a69;
+  --text-muted: #78687f;
+  --border: rgba(62, 29, 80, 0.14);
+  --border-strong: rgba(62, 29, 80, 0.24);
+  --brand: #5f16b8;
+  --brand-strong: #3c0f74;
+  --brand-soft: rgba(95, 22, 184, 0.11);
+  --accent: #c74266;
+  --danger: #c92f5d;
+  --success: #157f4f;
+  --warning: #9a6513;
+  --focus-ring: rgba(95, 22, 184, 0.22);
+  --overlay: rgba(32, 14, 42, 0.26);
+  --shadow-soft: 0 14px 34px rgba(52, 20, 78, 0.12);
+  --shadow-elevated: 0 28px 80px rgba(52, 20, 78, 0.2);
+  --input-bg: rgba(255, 255, 255, 0.94);
+  --disabled-bg: rgba(95, 22, 184, 0.07);
+  --disabled-text: rgba(33, 16, 39, 0.48);
+  --bg-main: var(--background);
+  --bg-card: var(--surface);
+  --bg-soft: var(--surface-soft);
+  --queless-screen-bg: linear-gradient(180deg, #fff8f4 0%, #f8f0ff 58%, #fffaf7 100%);
+  --queless-home-bg: var(--queless-screen-bg);
+  --queless-header-bg: color-mix(in srgb, var(--surface) 88%, transparent);
+  --queless-card-bg: linear-gradient(180deg, var(--surface), #fbf7ff);
+  --queless-card-soft-bg: linear-gradient(180deg, #ffffff, var(--surface-soft));
+  --queless-control-bg: rgba(95, 22, 184, 0.07);
+  --queless-control-hover-bg: rgba(95, 22, 184, 0.12);
+  --queless-border: var(--border);
+  --queless-border-strong: var(--border-strong);
+  --queless-input-bg: var(--input-bg);
+  --queless-muted: var(--text-secondary);
+  --queless-card-shadow: var(--shadow-soft);
+  --queless-shadow: var(--shadow-elevated);
+  --map-popup-bg: var(--surface);
+  --map-popup-surface: var(--surface-soft);
+  --map-popup-text: var(--text-primary);
+  --map-popup-muted: var(--text-secondary);
+  --map-popup-border: var(--border);
+  --map-popup-button-bg: var(--brand);
+  --map-popup-button-text: #ffffff;
+  color-scheme: light;
+}
+
+html[data-theme="dark"],
+body[data-theme="dark"],
+.app-wrap-v4.dark {
+  --background: #18141f;
+  --surface: #221d2b;
+  --surface-soft: #2c2636;
+  --surface-elevated: #342d40;
+  --text-primary: #fff8f2;
+  --text-secondary: #d8ccd8;
+  --text-muted: #b9aabc;
+  --border: rgba(255, 248, 242, 0.13);
+  --border-strong: rgba(255, 248, 242, 0.24);
+  --brand: #b98cff;
+  --brand-strong: #d8c0ff;
+  --brand-soft: rgba(185, 140, 255, 0.16);
+  --accent: #ff8db6;
+  --danger: #ff7b9c;
+  --success: #6fe0a4;
+  --warning: #f4c56b;
+  --focus-ring: rgba(185, 140, 255, 0.32);
+  --overlay: rgba(10, 8, 14, 0.56);
+  --shadow-soft: 0 16px 42px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 30px 90px rgba(0, 0, 0, 0.42);
+  --input-bg: rgba(255, 248, 242, 0.08);
+  --disabled-bg: rgba(255, 248, 242, 0.06);
+  --disabled-text: rgba(255, 248, 242, 0.46);
+  --bg-main: var(--background);
+  --bg-card: var(--surface);
+  --bg-soft: var(--surface-soft);
+  --text-primary-rgb: 255 248 242;
+  --text-secondary-rgb: 216 204 216;
+  --accent-rgb: 185 140 255;
+  --highlight-rgb: 255 141 182;
+  --shadow-rgb: 0 0 0;
+  --queless-screen-bg:
+    radial-gradient(circle at 12% 0%, rgba(185, 140, 255, 0.16), transparent 28%),
+    linear-gradient(180deg, #18141f 0%, #201a28 54%, #17131d 100%);
+  --queless-home-bg: var(--queless-screen-bg);
+  --queless-header-bg: color-mix(in srgb, var(--surface) 86%, transparent);
+  --queless-card-bg: linear-gradient(180deg, rgba(52, 45, 64, 0.98), rgba(34, 29, 43, 0.98));
+  --queless-card-soft-bg: linear-gradient(180deg, rgba(44, 38, 54, 0.98), rgba(34, 29, 43, 0.98));
+  --queless-search-bg: var(--queless-card-bg);
+  --queless-bottom-nav-bg: color-mix(in srgb, var(--surface) 92%, transparent);
+  --queless-control-bg: rgba(255, 248, 242, 0.08);
+  --queless-control-hover-bg: rgba(255, 248, 242, 0.13);
+  --queless-border: var(--border);
+  --queless-border-strong: var(--border-strong);
+  --queless-input-bg: var(--input-bg);
+  --queless-muted: var(--text-secondary);
+  --queless-card-shadow: var(--shadow-soft);
+  --queless-shadow: var(--shadow-elevated);
+  --queless-active-bg: linear-gradient(135deg, rgba(185, 140, 255, 0.24), rgba(255, 141, 182, 0.15));
+  --queless-cta-bg: linear-gradient(135deg, #8b5cf6, #d95f9f);
+  --map-popup-bg: var(--surface);
+  --map-popup-surface: var(--surface-elevated);
+  --map-popup-text: var(--text-primary);
+  --map-popup-muted: var(--text-secondary);
+  --map-popup-border: var(--border);
+  --map-popup-button-bg: #8b5cf6;
+  --map-popup-button-text: #ffffff;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+.app-wrap-v4.light,
+.app-wrap-v4.dark {
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 30%),
+    var(--background) !important;
+  color: var(--text-primary);
+}
+
+.screen-v4,
+.dark .screen-v4,
+.light .screen-v4,
+.content-v4,
+.app-page-v4,
+.tab-scene-v5,
+.queless-utility-page,
+.customer-home-v2,
+.admin-page-v17,
+.ai-coach-page-v1 {
+  background: var(--queless-screen-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.header-v4.queless-app-header,
+.bottom-nav-v4.queless-bottom-nav,
+.queless-map-appbar,
+.queless-map-topbar {
+  background: var(--queless-header-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-soft) !important;
+  backdrop-filter: blur(18px);
+}
+
+.auth-card-v4,
+.search-panel-v4,
+.simple-card-v4,
+.top-barber-card-v4,
+.barber-card-v4,
+.booking-modal-card-v4,
+.barber-profile-card-v4,
+.notification-card-v4,
+.chat-card-v4,
+.verify-card-v4,
+.profile-review-card-v4,
+.profile-confirm-card-v4,
+.queless-empty-state,
+.queless-category-page-card,
+.queless-service-list-card,
+.queless-inbox-card,
+.admin-card-v17,
+.admin-table-wrap-v17,
+.admin-loading-v17,
+.admin-empty-v17,
+.admin-hero-v17,
+.admin-page-intro-v17,
+.reports-section-v11,
+.reports-locked-card-v11,
+.reports-upgrade-wall-v11,
+.ai-coach-hero-v1,
+.ai-coach-lock-v1,
+.ai-coach-loading-v1,
+.ai-coach-error-v1,
+.ai-coach-setup-v1,
+.ai-coach-card-v1,
+.ai-coach-readiness-v1,
+.ai-coach-empty-card-v1 {
+  background: var(--queless-card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+.auth-title-v4,
+.panel-title-v4,
+.profile-title-v4,
+.modal-title-v4,
+.booking-name-v4,
+.barber-name-v4,
+.barber-name-compact-v4,
+.top-name-v4,
+.queless-section-head h2,
+.queless-view-toolbar h1,
+.queless-utility-head h1,
+.admin-page-v17 h1,
+.admin-page-v17 h2,
+.admin-page-v17 h3,
+.ai-coach-page-v1 h1,
+.ai-coach-page-v1 h2,
+.ai-coach-page-v1 h3,
+.reports-section-v11 h2,
+.reports-section-v11 h3,
+.notification-sheet-title-v6 {
+  color: var(--text-primary) !important;
+}
+
+.auth-sub-v4,
+.profile-sub-v4,
+.tiny-meta-v4,
+.profile-review-text-v4,
+.stat-label-v4,
+.queless-view-toolbar p,
+.queless-utility-head p,
+.queless-service-list-card small,
+.queless-inbox-card small,
+.admin-page-v17 p,
+.admin-page-v17 small,
+.ai-coach-page-v1 p,
+.ai-coach-page-v1 small,
+.reports-section-v11 span,
+.reports-section-v11 small {
+  color: var(--text-secondary) !important;
+  opacity: 1 !important;
+}
+
+.field-input-v4,
+.search-input-v4,
+.profile-input-v4,
+.country-code-select-v4,
+.textarea-v4,
+input,
+select,
+textarea,
+.queless-map-search,
+.admin-global-search-v17 {
+  background: var(--input-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+input::placeholder,
+textarea::placeholder,
+.search-input-v4::placeholder,
+.profile-input-v4::placeholder,
+.queless-map-search input::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1;
+}
+
+button,
+.header-icon-btn,
+.profile-back-btn-v4,
+.fav-btn-v4,
+.secondary-btn-v4,
+.mini-action-btn-v4,
+.filter-btn,
+.switch-btn,
+.slot-btn,
+.date-card-v4,
+.service-card-v4,
+.nav-v4,
+.queless-theme-icon-btn,
+.queless-avatar-btn,
+.queless-location-select,
+.admin-topbar-action-v17,
+.admin-menu-btn-v17,
+.admin-action-cluster-v17 button {
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.secondary-btn-v4,
+.mini-action-btn-v4,
+.filter-btn,
+.switch-btn,
+.slot-btn,
+.date-card-v4,
+.service-card-v4,
+.header-icon-btn,
+.profile-back-btn-v4,
+.fav-btn-v4,
+.queless-theme-icon-btn,
+.queless-avatar-btn,
+.queless-location-select,
+.admin-topbar-action-v17,
+.admin-menu-btn-v17,
+.admin-action-cluster-v17 button {
+  background: var(--queless-control-bg) !important;
+}
+
+.secondary-btn-v4:hover,
+.mini-action-btn-v4:hover,
+.filter-btn:hover,
+.switch-btn:hover,
+.slot-btn:hover,
+.date-card-v4:hover,
+.service-card-v4:hover,
+.header-icon-btn:hover,
+.profile-back-btn-v4:hover,
+.fav-btn-v4:hover,
+.queless-theme-icon-btn:hover,
+.queless-avatar-btn:hover,
+.queless-location-select:hover,
+.admin-topbar-action-v17:hover,
+.admin-menu-btn-v17:hover,
+.admin-action-cluster-v17 button:hover {
+  background: var(--queless-control-hover-bg) !important;
+  border-color: var(--border-strong) !important;
+}
+
+.primary-btn-v4,
+.confirm-btn-v4,
+.nearby-button-v4,
+.queless-search-button,
+.queless-map-button,
+.trial-primary-btn-v12,
+.payment-flow-primary-v1,
+.wallet-topup-primary-v16 {
+  background: linear-gradient(135deg, var(--brand), var(--accent)) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--brand) 28%, transparent) !important;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--focus-ring) !important;
+  outline-offset: 2px;
+}
+
+button:disabled,
+.disabled,
+[aria-disabled="true"] {
+  background: var(--disabled-bg) !important;
+  color: var(--disabled-text) !important;
+  border-color: var(--border) !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+}
+
+.booking-overlay-v4.open,
+.profile-overlay-v4.open,
+.payment-flow-shell-v1,
+.wallet-topup-shell-v16 {
+  background: var(--overlay) !important;
+  backdrop-filter: blur(12px) saturate(1.02) !important;
+}
+
+.booking-modal-card-v4,
+.barber-profile-card-v4,
+.chat-card-v4,
+.payment-flow-panel-v1,
+.wallet-topup-panel-v16,
+.smart-match-modal-v1 {
+  background:
+    radial-gradient(circle at 94% 0%, color-mix(in srgb, var(--brand) 13%, transparent), transparent 34%),
+    var(--surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+.booking-modal-card-v4,
+.barber-profile-card-v4,
+.chat-card-v4 {
+  border-radius: 22px 22px 12px 12px !important;
+}
+
+.notification-sheet-v4 {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom)) !important;
+}
+
+.notification-card-v4 {
+  width: min(452px, calc(100vw - 28px)) !important;
+  max-height: min(720px, calc(100dvh - 32px)) !important;
+  gap: 18px !important;
+  padding: 20px !important;
+  border-radius: 22px !important;
+  background:
+    radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--brand) 16%, transparent), transparent 34%),
+    var(--surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+body[data-theme="dark"] .notification-sheet-v4.open .notification-card-v4,
+.app-wrap-v4.dark .notification-sheet-v4.open .notification-card-v4,
+.dark .notification-sheet-v4.open .notification-card-v4 {
+  background:
+    radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--brand) 12%, transparent), transparent 34%),
+    var(--surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+.notification-card-v4::before {
+  display: none !important;
+}
+
+.notification-sheet-header-v6 {
+  grid-template-columns: 46px minmax(0, 1fr) 46px;
+  min-height: 50px;
+}
+
+.notification-sheet-title-v6 {
+  font-size: 20px !important;
+  font-weight: 950;
+}
+
+.notification-icon-btn-v6,
+.notification-close-btn-v6 {
+  border: 1px solid var(--border) !important;
+  background: var(--queless-control-bg) !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+
+.notification-icon-btn-v6 {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+}
+
+.notification-icon-btn-v6:hover,
+.notification-close-btn-v6:hover {
+  background: var(--queless-control-hover-bg) !important;
+  border-color: var(--border-strong) !important;
+}
+
+.notification-list-v4 {
+  gap: 12px;
+  padding: 2px 2px 10px;
+}
+
+.notification-item-v4.as-card {
+  grid-template-columns: 46px minmax(0, 1fr) 12px;
+  gap: 12px;
+  min-height: 88px;
+  padding: 14px !important;
+  border-radius: 16px !important;
+  background: var(--surface-soft) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.notification-item-v4.as-card.unread {
+  background: color-mix(in srgb, var(--brand-soft) 42%, var(--surface-elevated)) !important;
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border)) !important;
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--brand) 12%, transparent) !important;
+}
+
+.notification-item-icon-v6,
+.notification-empty-v6 > span:first-child,
+.notification-toast-icon-v5 {
+  color: var(--brand-strong) !important;
+  background: var(--brand-soft) !important;
+  border: 1px solid color-mix(in srgb, var(--brand) 24%, transparent);
+}
+
+.notification-title-v4 {
+  color: var(--text-primary) !important;
+}
+
+.notification-empty-v6 {
+  min-height: 300px;
+  padding: 30px 18px;
+  border-radius: 18px;
+  background: var(--surface-soft);
+  border: 1px dashed var(--border);
+}
+
+.notification-empty-v6 strong {
+  color: var(--text-primary) !important;
+}
+
+.notification-empty-v6 > span:last-child {
+  color: var(--text-secondary) !important;
+}
+
+.notification-close-btn-v6 {
+  min-height: 52px;
+  border-radius: 14px;
+}
+
+.notification-toast-v5 {
+  left: 50% !important;
+  right: auto !important;
+  width: min(420px, calc(100vw - 28px));
+  border: 1px solid var(--border) !important;
+  background: var(--surface-elevated) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+.notification-toast-main-v5 {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.notification-toast-close-v5 {
+  background: var(--queless-control-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.queless-map-overlay,
+body[data-theme="dark"] .queless-map-overlay,
+.dark .queless-map-overlay {
+  --map-primary: var(--brand);
+  --map-primary-strong: var(--text-primary);
+  --map-surface: var(--surface);
+  --map-line: var(--border);
+  background: var(--background) !important;
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="dark"] .queless-map-appbar,
+.dark .queless-map-appbar,
+body[data-theme="dark"] .queless-map-search,
+.dark .queless-map-search,
+body[data-theme="dark"] .queless-map-empty,
+.dark .queless-map-empty,
+body[data-theme="dark"] .queless-map-message,
+.dark .queless-map-message {
+  background: var(--surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+body[data-theme="dark"] .queless-map-appbar button,
+.dark .queless-map-appbar button {
+  color: var(--text-primary) !important;
+  background: var(--queless-control-bg) !important;
+}
+
+body[data-theme="dark"] .queless-map-search input,
+.dark .queless-map-search input {
+  color: var(--text-primary) !important;
+}
+
+.queless-map-stage {
+  background: #dce7dc !important;
+}
+
+body[data-theme="dark"] .queless-map-stage,
+.dark .queless-map-stage,
+body[data-theme="dark"] .leaflet-container,
+.dark .leaflet-container {
+  background: #20282a !important;
+}
+
+.payment-flow-header-v1 p,
+.payment-flow-methods-v1 small,
+.payment-flow-field-v1 small,
+.payment-flow-summary-v1 > span,
+.payment-flow-field-v1 span,
+.payment-flow-summary-v1 em,
+.wallet-topup-header-v16 p,
+.wallet-topup-note-v16,
+.wallet-topup-field-v16 small {
+  color: var(--text-secondary) !important;
+}
+
+.payment-flow-close-v1,
+.payment-flow-secondary-v1,
+.payment-flow-methods-v1 button,
+.payment-flow-field-v1 input,
+.payment-flow-summary-v1 label,
+.wallet-topup-close-v16,
+.wallet-topup-secondary-v16,
+.wallet-topup-field-v16 input {
+  color: var(--text-primary) !important;
+  background: var(--input-bg) !important;
+  border-color: var(--border) !important;
+}
+
+.payment-flow-alert-v1,
+.wallet-topup-alert-v16,
+.global-error-v4,
+.auth-error,
+.auth-success,
+.chat-error-v4 {
+  background: var(--surface-soft) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+.payment-flow-alert-v1.success,
+.wallet-topup-alert-v16.success,
+.auth-success {
+  color: var(--success) !important;
+  border-color: color-mix(in srgb, var(--success) 36%, transparent) !important;
+  background: color-mix(in srgb, var(--success) 13%, var(--surface)) !important;
+}
+
+.payment-flow-alert-v1.failed,
+.payment-flow-alert-v1.warning,
+.wallet-topup-alert-v16.warning,
+.wallet-topup-alert-v16.error,
+.wallet-topup-alert-v16.failed,
+.global-error-v4,
+.auth-error,
+.chat-error-v4 {
+  color: var(--danger) !important;
+  border-color: color-mix(in srgb, var(--danger) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface)) !important;
+}
+
+.loading-screen-v1,
+.loading-card-v1,
+.empty-box-v4,
+.queless-map-empty,
+.queless-inbox-empty {
+  background: var(--surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+.bottom-nav-v4.queless-bottom-nav .nav-v4 {
+  color: var(--text-secondary) !important;
+}
+
+.bottom-nav-v4.queless-bottom-nav .nav-v4.active {
+  color: var(--text-primary) !important;
+  background: var(--queless-active-bg) !important;
+}
+
+.dark .trial-upgrade-sheet-v14.trial-upgrade-screen-v12,
+.dark .trial-upgrade-sheet-v14,
+.dark .trial-upgrade-panel-v13 {
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 30%),
+    var(--surface) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark .trial-plan-card-v12,
+.dark .trial-action-panel-v12,
+.dark .trial-comparison-v13,
+.dark .trial-payment-panel-v13,
+.dark .trial-footer-note-v12,
+.dark .trial-preview-card-v14 {
+  background: var(--surface-soft) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark .trial-plan-card-v12 small,
+.dark .trial-feature-list-v12 span,
+.dark .trial-action-panel-v12 span,
+.dark .trial-footer-note-v12 span,
+.dark .trial-preview-card-v14 small {
+  color: var(--text-secondary) !important;
+}
+
+@media (max-width: 430px) {
+  .notification-card-v4 {
+    width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    padding: 16px !important;
+    border-radius: 18px !important;
+  }
+
+  .notification-sheet-header-v6 {
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
+  }
+
+  .notification-icon-btn-v6 {
+    width: 42px;
+    height: 42px;
+  }
+
+  .notification-item-v4.as-card {
+    grid-template-columns: 42px minmax(0, 1fr) 10px;
+    padding: 12px !important;
+  }
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .screen-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .content-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .tab-scene-v5,
+body[data-theme="dark"] .app-wrap-v4.dark .app-page-v4 {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(185, 140, 255, 0.16), transparent 28%),
+    linear-gradient(180deg, #18141f 0%, #201a28 54%, #17131d 100%) !important;
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .auth-card-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .search-panel-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .simple-card-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .top-barber-card-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .barber-card-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .profile-review-card-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .profile-confirm-card-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-category-card,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-featured-provider,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-nearby-card,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-result-card,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-service-card,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-provider-card,
+body[data-theme="dark"] .app-wrap-v4.dark .dashboard-card-v15,
+body[data-theme="dark"] .app-wrap-v4.dark .reports-card-v11 {
+  background: var(--queless-card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .field-input-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .search-input-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .profile-input-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .country-code-select-v4,
+body[data-theme="dark"] .app-wrap-v4.dark .textarea-v4 {
+  background: var(--input-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+body[data-theme="dark"] .queless-loading-screen,
+.app-wrap-v4.dark .queless-loading-screen {
+  color: var(--text-primary) !important;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(52, 45, 64, 0.92) 0%, rgba(34, 29, 43, 0.88) 34%, transparent 58%),
+    linear-gradient(180deg, #18141f 0%, #201a28 58%, #17131d 100%) !important;
+}
+
+body[data-theme="dark"] .queless-loading-screen::before,
+.app-wrap-v4.dark .queless-loading-screen::before {
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(185, 140, 255, 0.18), transparent 64%),
+    linear-gradient(180deg, transparent 0%, rgba(52, 45, 64, 0.54) 76%, rgba(34, 29, 43, 0.82) 100%) !important;
+}
+
+body[data-theme="dark"] .queless-loading-glow,
+.app-wrap-v4.dark .queless-loading-glow {
+  background:
+    radial-gradient(ellipse, rgba(185, 140, 255, 0.18) 0%, rgba(255, 141, 182, 0.12) 44%, transparent 72%) !important;
+}
+
+body[data-theme="dark"] .queless-loading-copy,
+.app-wrap-v4.dark .queless-loading-copy {
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="dark"] .queless-loading-tagline,
+.app-wrap-v4.dark .queless-loading-tagline {
+  color: var(--text-secondary) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-search svg,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-appbar button svg,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-locate svg {
+  color: var(--brand-strong) !important;
+  stroke: currentColor !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-search input::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-empty,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-message {
+  background: var(--surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-empty span,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-message span,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-empty small,
+body[data-theme="dark"] .app-wrap-v4.dark .queless-map-message small {
+  color: var(--text-secondary) !important;
+}

@@ -4,6 +4,10 @@ export function getBarberReviews(barberId) {
   return apiFetch(`/api/reviews/barber/${barberId}`);
 }
 
+export function getManagedBarberReviews(barberId) {
+  return apiFetch(`/api/reviews/barber/${barberId}/manage`);
+}
+
 export function createReview(payload) {
   const body = {
     booking_id: payload.booking_id ?? payload.bookingId,
@@ -32,6 +36,13 @@ export function updateReview(reviewId, payload) {
 export function deleteReview(reviewId) {
   return apiFetch(`/api/reviews/${reviewId}`, {
     method: "DELETE",
+  });
+}
+
+export function setReviewPublicBlock(reviewId, payload = {}) {
+  return apiFetch(`/api/reviews/${reviewId}/public-block`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
 

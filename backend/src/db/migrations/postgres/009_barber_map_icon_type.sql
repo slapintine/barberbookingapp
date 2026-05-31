@@ -1,0 +1,2 @@
+ALTER TABLE barbers
+  ADD COLUMN IF NOT EXISTS map_icon_type TEXT DEFAULT '';

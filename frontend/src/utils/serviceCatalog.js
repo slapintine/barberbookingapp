@@ -34,7 +34,7 @@ export const MARKETPLACE_CATEGORIES = [
   {
     id: "education-tutoring",
     icon: "book",
-    name: "Education & Tutoring",
+    name: "Tutor / Lessons",
     description: "Private tutors, coaching, language lessons, music lessons, and exam prep.",
     image: "https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=900&q=80",
     active: true,
@@ -130,7 +130,7 @@ export const CATEGORY_ALIASES = {
   "home-services": ["home", "plumbing", "electrician", "gardening", "moving", "installation", "repair at home"],
   "auto-services": ["auto", "car", "mechanic", "garage", "car wash", "detailing", "towing", "vehicle"],
   "events-photography": ["events", "event", "photography", "photo", "video", "decor", "catering", "dj", "mc"],
-  "education-tutoring": ["education", "tutor", "teacher", "lesson", "training", "coaching", "exam", "school"],
+  "education-tutoring": ["education", "tutoring", "tutor", "private tutor", "teacher", "lesson", "lessons", "academic support", "math", "mathematics", "english", "science", "french", "homework", "exam", "school", "music lessons", "art lessons"],
   "health-fitness": ["health", "fitness", "gym", "trainer", "physio", "wellness", "nutrition", "massage"],
   "repairs-maintenance": ["repair", "maintenance", "appliance", "electronics", "phone repair", "computer", "furniture"],
   "business-services": ["business", "accounting", "legal", "design", "marketing", "it", "printing", "consulting"],

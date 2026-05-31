@@ -4,6 +4,15 @@ import { initDb } from "../db/initDb.js";
 import { get, run } from "../db/query.js";
 import { getSubscriptionEndDate, getSubscriptionTierConfig } from "../services/paymentService.js";
 
+const allowQaSeed = process.env.NODE_ENV === "development" && process.env.ALLOW_QA_SEED === "true";
+
+if (!allowQaSeed) {
+  console.error(
+    "Refusing to seed QA fixtures. Set NODE_ENV=development and ALLOW_QA_SEED=true to run this script against a local development database."
+  );
+  process.exit(1);
+}
+
 const PASSWORD = "PlanQa123";
 const now = new Date();
 
@@ -18,11 +27,11 @@ const EXTRA_CUSTOMER_COUNT = 8;
 
 const PROVIDERS = [
   {
-    username: "qa_pro_provider",
-    tier: "PRO",
-    businessName: "QA Pro Starter Studio",
-    fullName: "QA Pro Owner",
-    email: "qa.pro@queless.test",
+    username: "qa_plus_provider",
+    tier: "PLUS",
+    businessName: "QA Plus Starter Studio",
+    fullName: "QA Plus Owner",
+    email: "qa.plus@queless.test",
     phone: "+256700100101",
     serviceCount: 5,
     photoCount: 5,
@@ -162,7 +171,7 @@ async function upsertProviderBusiness(provider, ownerUserId) {
     provider.averagePrice,
     provider.tier === "PLATINUM" ? "Verified" : "New",
     "Beauty & Grooming",
-    provider.tier === "PRO" ? 0 : 1,
+    provider.tier === "PLUS" ? 0 : 1,
     `${plan.name} QA fixture with realistic dashboard and report data.`,
     JSON.stringify(portfolio),
     provider.tier,
@@ -217,7 +226,7 @@ async function seedServices(barberId, provider) {
         service.category,
         service.price,
         service.duration,
-        provider.tier === "PRO" ? "provider_location" : "customer_location",
+        provider.tier === "PLUS" ? "provider_location" : "customer_location",
         service.description,
         service.featured ? 1 : 0,
       ]

@@ -15,7 +15,7 @@ export default function InboxPage({ messages = [] }) {
     : [];
 
   return (
-    <div className="content-v4 standard-page-v4 queless-utility-page">
+    <div className="content-v4 app-page-v4 queless-utility-page">
       <div className="queless-utility-head">
         <span><FiMessageCircle /></span>
         <div>

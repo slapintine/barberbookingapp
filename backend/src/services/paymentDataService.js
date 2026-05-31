@@ -1,5 +1,8 @@
+import { normalizeMoneyAmount } from "./paymentService.js";
+
 function toAmount(value) {
-  return Number(Number(value || 0).toFixed(2));
+  if (Number(value || 0) === 0) return 0;
+  return normalizeMoneyAmount(value, "Payment amount");
 }
 
 export function normalizeLifecycleStatus(value, fallback = "pending") {

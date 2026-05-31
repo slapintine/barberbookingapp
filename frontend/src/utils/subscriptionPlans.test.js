@@ -7,16 +7,16 @@ import {
   PROVIDER_PLANS,
 } from "./subscriptionPlans.js";
 
-test("frontend provider plan features gate Pro, Premium, and Platinum correctly", () => {
-  const pro = getPlanFeatures("pro");
+test("frontend provider plan features gate Plus, Premium, and Platinum correctly", () => {
+  const plus = getPlanFeatures("plus");
   const premium = getPlanFeatures("premium");
   const platinum = getPlanFeatures("platinum");
 
-  assert.equal(pro.maxServices, 5);
-  assert.equal(pro.maxPhotos, 5);
-  assert.equal(pro.promotions, false);
-  assert.equal(pro.aiBusinessCoach, false);
-  assert.equal(pro.reviewInsights, false);
+  assert.equal(plus.maxServices, 5);
+  assert.equal(plus.maxPhotos, 5);
+  assert.equal(plus.promotions, false);
+  assert.equal(plus.aiBusinessCoach, false);
+  assert.equal(plus.reviewInsights, false);
 
   assert.equal(premium.maxServices, 20);
   assert.equal(premium.maxPhotos, 20);
@@ -34,20 +34,21 @@ test("frontend provider plan features gate Pro, Premium, and Platinum correctly"
 });
 
 test("plan selection keeps normalized plan IDs and tiers stable", () => {
-  assert.equal(normalizePlanId("Pro"), "pro");
+  assert.equal(normalizePlanId("Plus"), "plus");
   assert.equal(normalizePlanId("PREMIUM"), "premium");
   assert.equal(normalizePlanId("platinum"), "platinum");
-  assert.equal(normalizePlanTier("pro"), "PRO");
+  assert.equal(normalizePlanId("legacy"), "");
+  assert.equal(normalizePlanTier("plus"), "PLUS");
   assert.equal(normalizePlanTier("Premium"), "PREMIUM");
   assert.equal(normalizePlanTier("PLATINUM"), "PLATINUM");
-  assert.equal(normalizePlanTier("", "PRO"), "PRO");
+  assert.equal(normalizePlanTier("", "PLUS"), "PLUS");
 });
 
 test("plan comparison prices and feature order remain launch-ready", () => {
   assert.deepEqual(
     PROVIDER_PLANS.map((plan) => [plan.id, plan.monthlyPrice]),
     [
-      ["pro", 6000],
+      ["plus", 6000],
       ["premium", 12000],
       ["platinum", 24000],
     ]

@@ -1,4 +1,6 @@
 import { get, run, transaction } from "../db/query.js";
+import crypto from "node:crypto";
+import { env } from "../config/env.js";
 import {
   createReference,
   FREE_TRIAL_DAYS,
@@ -40,6 +42,61 @@ function getOfficialPlanOrThrow(tier, billingCycle) {
     throw httpError(400, "Plan price unavailable.");
   }
   return { requestedTier, cycle, tierConfig, price };
+}
+
+function normalizePromoCode(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function hashPromoCode(value) {
+  return crypto.createHash("sha256").update(normalizePromoCode(value)).digest("hex");
+}
+
+async function resolveProviderPromo({ client, userId, barberId, rawCode, price }) {
+  const code = normalizePromoCode(rawCode);
+  if (!code) {
+    return { finalAmount: price, discountAmount: 0, promo: null };
+  }
+
+  const expiresAt = env.providerPromoExpiresAt ? new Date(env.providerPromoExpiresAt) : null;
+  if (!expiresAt || !Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+    throw httpError(400, "Promo code is invalid or expired.");
+  }
+
+  const promoOptions = [
+    env.providerPromoFreeCode ? { type: "free_month", code: normalizePromoCode(env.providerPromoFreeCode), discountPercent: 100 } : null,
+    env.providerPromoPercentCode ? { type: "twenty_percent_off", code: normalizePromoCode(env.providerPromoPercentCode), discountPercent: 20 } : null,
+  ].filter(Boolean);
+  const matched = promoOptions.find((item) => item.code && item.code === code);
+  if (!matched) {
+    throw httpError(400, "Promo code is invalid or expired.");
+  }
+
+  const promoHash = hashPromoCode(code);
+  const used = await client.get(
+    `SELECT id FROM payment_transactions
+     WHERE user_id = ?
+       AND transaction_type = 'subscription_payment'
+       AND metadata LIKE ?
+       AND LOWER(COALESCE(status, '')) IN ('pending', 'initiated', 'successful', 'completed')
+     LIMIT 1`,
+    [userId, `%"promoHash":"${promoHash}"%`]
+  );
+  if (used) {
+    throw httpError(409, "Promo code has already been used.");
+  }
+
+  const discountAmount = Math.min(price, Math.round((price * matched.discountPercent) / 100));
+  return {
+    finalAmount: Math.max(0, price - discountAmount),
+    discountAmount,
+    promo: {
+      type: matched.type,
+      discountPercent: matched.discountPercent,
+      promoHash,
+      expiresAt: expiresAt.toISOString(),
+    },
+  };
 }
 
 function getTrialEndDate(startedAt) {
@@ -121,7 +178,7 @@ function mapSubscription(subscription, barber) {
         homeServiceEnabled: false,
         profileCustomizationLevel: "locked",
         visibilityLabel: "Plan required",
-        supportLevel: "Choose PRO, PREMIUM, or PLATINUM",
+        supportLevel: "Choose a provider plan to activate your business.",
         serviceLimit: 0,
         photoLimit: 0,
         videoLimit: 0,
@@ -254,7 +311,7 @@ export async function getMySubscription(req, res, next) {
         success: true,
         adminPreview: true,
         subscription: mapAdminPreviewSubscription(),
-        tiers: ["PRO", "PREMIUM", "PLATINUM"].map((tier) =>
+        tiers: ["PLUS", "PREMIUM", "PLATINUM"].map((tier) =>
           getSubscriptionTierConfig(tier)
         ),
       });
@@ -288,8 +345,12 @@ export async function startSubscriptionUpgrade(req, res, next) {
       throw httpError(400, "Plan details could not be loaded. Please choose a plan again.");
     }
 
-    if (!["mtn_mobile_money", "airtel_money", "card", "trial"].includes(provider)) {
-      throw httpError(400, "Choose MTN Mobile Money, Airtel Money, Card, or free trial.");
+    if (!["mtn_mobile_money", "airtel_money", "trial"].includes(provider)) {
+      throw httpError(400, "Choose MTN Mobile Money or Airtel Money.");
+    }
+
+    if (provider === "trial" && !env.providerFreeTrialsEnabled) {
+      throw httpError(403, "Provider free trials are disabled. Choose a provider plan to activate your business.");
     }
 
     if (req.user?.role === "admin") {
@@ -430,36 +491,71 @@ export async function startSubscriptionUpgrade(req, res, next) {
       }
 
       const phoneNumber = normalizePhoneNumber(req.body.payment_phone || req.body.phoneNumber || barber.phone || "");
-      if (!phoneNumber && provider !== "card") {
+      if (!phoneNumber) {
         throw httpError(400, "Add a valid phone number before upgrading.");
       }
-      if (provider === "card") {
-        const cardDetails = req.body.cardDetails || {};
-        if (
-          !String(cardDetails.cardholderName || "").trim() ||
-          !String(cardDetails.cardNumber || "").trim() ||
-          !String(cardDetails.expiryDate || "").trim() ||
-          !String(cardDetails.cvv || "").trim()
-        ) {
-          throw httpError(400, "Complete all card payment details before upgrading.");
-        }
+      const paymentReference = createReference("subscription", barber.id);
+      const promoResult = await resolveProviderPromo({
+        client,
+        userId: req.user.id,
+        barberId: barber.id,
+        rawCode: req.body.promoCode || req.body.promo_code || "",
+        price,
+      });
+      const payableAmount = promoResult.finalAmount;
+      const paymentMetadata = {
+        ...(promoResult.promo ? { promo: promoResult.promo } : {}),
+        officialPrice: price,
+        payableAmount,
+        discountAmount: promoResult.discountAmount,
+      };
+
+      if (payableAmount <= 0) {
+        const activatedAt = new Date().toISOString();
+        const expiresAt = getSubscriptionEndDate(activatedAt, billingCycle);
+        const insertResult = await client.run(
+          `INSERT INTO barber_subscriptions
+           (barber_id, tier, price, status, payment_reference, provider, billing_cycle, amount_paid, currency, payment_status, is_active, started_at, expires_at, activated_at)
+           VALUES (?, ?, ?, 'active', ?, 'promo', ?, 0, 'UGX', 'paid', 1, ?, ?, ?)`,
+          [barber.id, tierConfig.code, price, paymentReference, billingCycle, activatedAt, expiresAt, activatedAt]
+        );
+        await client.run(
+          `INSERT INTO payment_transactions
+           (barber_id, user_id, subscription_id, transaction_type, provider, internal_reference, provider_reference, idempotency_key, payer_phone, gross_amount, currency, status, metadata)
+           VALUES (?, ?, ?, 'subscription_payment', 'promo', ?, '', ?, ?, 0, 'UGX', 'successful', ?)`,
+          [barber.id, req.user.id, insertResult.lastID, paymentReference, idempotencyKey, phoneNumber || "", JSON.stringify(paymentMetadata)]
+        );
+        await client.run(
+          `UPDATE barbers
+           SET subscription_tier = ?,
+               selected_plan = ?,
+               subscription_status = 'active',
+               subscription_expires_at = ?,
+               business_status = 'active',
+               is_published = 1
+           WHERE id = ?`,
+          [tierConfig.code, tierConfig.id, expiresAt, barber.id]
+        );
+        return {
+          subscription: await client.get(`SELECT * FROM barber_subscriptions WHERE id = ?`, [insertResult.lastID]),
+          payment: {
+            provider: "promo",
+            internal_reference: paymentReference,
+            status: "successful",
+            gross_amount: 0,
+          },
+          barber: await getOwnedBarber(req.user.id, client),
+          promoActivated: true,
+        };
       }
 
-      const paymentReference = createReference("subscription", barber.id);
-      const collection =
-        provider === "card"
-              ? {
-              providerReference: "",
-              status: "pending",
-              rawResponse: { provider: "card", note: "Card payment is pending processor confirmation." },
-            }
-          : await getMobileMoneyService(provider).initiateCollection({
-              provider,
-              amount: price,
-              phoneNumber,
-              reference: paymentReference,
-              description: `${tierConfig.name} ${billingCycle} plan upgrade`,
-            });
+      const collection = await getMobileMoneyService(provider).initiateCollection({
+        provider,
+        amount: payableAmount,
+        phoneNumber,
+        reference: paymentReference,
+        description: `${tierConfig.name} ${billingCycle} plan upgrade`,
+      });
 
       const startedAt = new Date();
       const expiresAt = getSubscriptionEndDate(startedAt, billingCycle);
@@ -467,7 +563,7 @@ export async function startSubscriptionUpgrade(req, res, next) {
         `INSERT INTO barber_subscriptions
          (barber_id, tier, price, status, payment_reference, provider, billing_cycle, amount_paid, currency, payment_status, expires_at)
          VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, 'UGX', 'pending', ?)`,
-        [barber.id, tierConfig.code, price, paymentReference, provider, billingCycle, price, expiresAt]
+        [barber.id, tierConfig.code, price, paymentReference, provider, billingCycle, payableAmount, expiresAt]
       );
 
       await client.run(
@@ -483,9 +579,9 @@ export async function startSubscriptionUpgrade(req, res, next) {
           collection.providerReference || "",
           idempotencyKey,
           phoneNumber || "",
-          price,
+          payableAmount,
           collection.status || "pending",
-          JSON.stringify(collection.rawResponse || {}),
+          JSON.stringify({ ...paymentMetadata, providerResponse: collection.rawResponse || {} }),
         ]
       );
 
@@ -513,10 +609,9 @@ export async function startSubscriptionUpgrade(req, res, next) {
       success: true,
       message: result.trialStarted
         ? `Your ${tierConfig.name} free trial is active. Your business is now visible to customers.`
-        :
-        result.payment.provider === "card"
-          ? `Complete the card authorization to activate ${requestedTier}.`
-          : `Approve the ${getMobileMoneyProviderLabel(result.payment.provider)} prompt to activate ${requestedTier}.`,
+        : result.promoActivated
+        ? "Payment successful. Your business is now active on Queless."
+        : `Approve the ${getMobileMoneyProviderLabel(result.payment.provider)} prompt to activate ${requestedTier}.`,
       subscription: mapSubscription(result.subscription, result.barber),
       payment: {
         reference: result.payment.internal_reference,
@@ -566,9 +661,35 @@ export async function verifySubscriptionUpgrade(req, res, next) {
       if (!payment) {
         throw httpError(404, "Subscription payment not found.");
       }
-
-      if (payment.provider === "card") {
-        throw httpError(402, "Card payment has not completed yet.");
+      const pendingSubscription = await client.get(
+        `SELECT * FROM barber_subscriptions WHERE id = ?`,
+        [payment.subscription_id]
+      );
+      if (!pendingSubscription) {
+        throw httpError(409, "This subscription payment is missing its subscription record.");
+      }
+      if (String(payment.status || "").trim().toLowerCase() === "successful") {
+        const paidExpiry = pendingSubscription.expires_at ? new Date(pendingSubscription.expires_at) : null;
+        const isCurrentPaid =
+          String(pendingSubscription.status || "").trim().toLowerCase() === "active" &&
+          ["paid", "successful"].includes(String(pendingSubscription.payment_status || "").trim().toLowerCase()) &&
+          paidExpiry &&
+          Number.isFinite(paidExpiry.getTime()) &&
+          paidExpiry.getTime() > Date.now();
+        if (!isCurrentPaid) {
+          throw httpError(409, "This subscription payment is no longer attached to a valid active subscription period.");
+        }
+        return {
+          barber: await getOwnedBarber(req.user.id, client),
+          subscription: pendingSubscription,
+        };
+      }
+      if (String(pendingSubscription.status || "").trim().toLowerCase() !== "pending") {
+        throw httpError(409, "This subscription payment can no longer activate the current business state.");
+      }
+      const pendingExpiry = pendingSubscription.expires_at ? new Date(pendingSubscription.expires_at) : null;
+      if (!pendingExpiry || !Number.isFinite(pendingExpiry.getTime()) || pendingExpiry.getTime() <= Date.now()) {
+        throw httpError(409, "This subscription payment window has expired. Start a fresh upgrade.");
       }
 
       const verification = await getMobileMoneyService(payment.provider).verifyTransaction({
@@ -579,7 +700,7 @@ export async function verifySubscriptionUpgrade(req, res, next) {
       });
 
       if (!verification.success) {
-        throw httpError(402, "Subscription payment has not completed yet.");
+        throw httpError(402, "Payment was not completed. Your business has been saved, but it will only go live after payment.");
       }
 
       await client.run(
@@ -594,6 +715,19 @@ export async function verifySubscriptionUpgrade(req, res, next) {
           JSON.stringify(verification.rawResponse || {}),
           payment.id,
         ]
+      );
+      await client.run(
+        `UPDATE barber_subscriptions
+         SET status = 'expired',
+             is_active = 0,
+             expires_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE barber_id = ?
+           AND id <> ?
+           AND LOWER(status) IN ('active', 'trialing')
+           AND expires_at IS NOT NULL
+           AND expires_at > CURRENT_TIMESTAMP`,
+        [barber.id, payment.subscription_id]
       );
 
       await client.run(
@@ -651,7 +785,7 @@ export async function verifySubscriptionUpgrade(req, res, next) {
 
     res.status(200).json({
       success: true,
-      message: "Subscription upgraded successfully.",
+      message: "Payment successful. Your business is now active on Queless.",
       subscription: mapSubscription(result.subscription, result.barber),
     });
   } catch (error) {

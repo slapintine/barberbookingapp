@@ -1,4 +1,3 @@
-import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 
 export function notFoundHandler(req, res, next) {
@@ -9,7 +8,10 @@ export function notFoundHandler(req, res, next) {
 
 export function errorHandler(err, req, res, next) {
   const statusCode = err.statusCode || 500;
-  const message = err.message || "Internal server error";
+  const publicMessage =
+    envSafeProduction() && statusCode >= 500
+      ? "Something went wrong on our side. Please try again shortly."
+      : err.message || "Internal server error";
 
   const requestLogger = req?.log || logger;
   requestLogger.error(
@@ -22,7 +24,11 @@ export function errorHandler(err, req, res, next) {
 
   res.status(statusCode).json({
     success: false,
-    message,
-    stack: env.nodeEnv === "production" ? undefined : err.stack
+    message: publicMessage,
+    requestId: req?.id,
   });
+}
+
+function envSafeProduction() {
+  return process.env.NODE_ENV === "production";
 }

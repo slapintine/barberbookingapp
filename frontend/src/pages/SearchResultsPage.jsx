@@ -8,17 +8,19 @@ import {
   FiSearch,
   FiSliders,
   FiStar,
+  FiZap,
 } from "react-icons/fi";
 import fallbackStandIcon from "../assets/queless-logo-icon.png";
 import { buildCategoryServices } from "../utils/marketplaceServices.js";
 
-const FILTERS = ["All", "Beauty & Grooming", "Cleaning Services", "Home Services", "Repairs & Maintenance"];
+const FILTERS = ["All", "Beauty & Grooming", "Cleaning Services", "Home Services", "Repairs & Maintenance", "Tutor / Lessons"];
 const SORT_OPTIONS = ["Top rated", "Nearest", "Price", "Available today"];
 const CATEGORY_FILTER_TERMS = {
   "Beauty & Grooming": ["beauty", "grooming", "barber", "haircut", "salon", "spa", "makeup", "hair"],
   "Cleaning Services": ["clean", "cleaning", "cleaner", "laundry", "fumigation", "sofa", "carpet", "office cleaning"],
   "Home Services": ["home", "plumbing", "plumber", "electric", "electrical", "gardening", "moving", "home help"],
   "Repairs & Maintenance": ["repair", "maintenance", "carpentry", "carpenter", "appliance", "phone repair", "furniture", "painting"],
+  "Tutor / Lessons": ["tutor", "tutoring", "lesson", "lessons", "teacher", "mathematics", "math", "english", "science", "homework", "exam", "academic"],
 };
 
 const QUERY_GROUPS = {
@@ -30,6 +32,7 @@ const QUERY_GROUPS = {
   paint: ["painting", "paint", "painter"],
   repair: ["repair", "maintenance", "appliance", "phone repair", "electronics"],
   beauty: ["beauty", "makeup", "spa", "massage", "hair braiding", "salon"],
+  tutor: ["tutor", "tutoring", "private tutor", "lessons", "teacher", "mathematics tutor", "homework support"],
 };
 
 function normalize(value) {
@@ -139,7 +142,7 @@ function makeInitials(name) {
     .toUpperCase();
 }
 
-export default function SearchResultsPage({ query = "", location = "", providers = [], onBack, onOpenProvider, onOpenCategory, onOpenMap }) {
+export default function SearchResultsPage({ query = "", location = "", providers = [], onBack, onOpenProvider, onOpenCategory, onOpenMap, onOpenSmartMatch, smartMatchPremiumActive = false }) {
   const [activeCategory, setActiveCategory] = useState("All");
   const [sortBy, setSortBy] = useState("Top rated");
   const cleanQuery = String(query || "").trim();
@@ -167,14 +170,14 @@ export default function SearchResultsPage({ query = "", location = "", providers
   const relatedCategories = FILTERS.filter((item) => item !== "All").slice(0, 4);
 
   return (
-    <div className="content-v4 standard-page-v4 queless-utility-page queless-results-page">
+    <div className="content-v4 app-page-v4 queless-utility-page queless-results-page">
       <div className="queless-view-toolbar">
         <button type="button" onClick={onBack} aria-label="Back">
           <FiArrowLeft />
         </button>
         <div>
           <h1>{heading}</h1>
-          <p>{matchingServices.length ? `${matchingServices.length} matching services available` : "Browse related categories below"}</p>
+          <p>{matchingServices.length ? `${matchingServices.length} matching services available for this area` : "New here? Try related categories or open the map to explore nearby providers."}</p>
         </div>
       </div>
 
@@ -186,6 +189,15 @@ export default function SearchResultsPage({ query = "", location = "", providers
       <button type="button" className="queless-map-button" onClick={() => onOpenMap?.(activeCategory === "All" ? cleanQuery || "All" : activeCategory)}>
         <FiMap /> View Map
       </button>
+      {matchingServices.length ? (
+        <button type="button" className="queless-smart-card-v18 compact" onClick={() => onOpenSmartMatch?.({ category: activeCategory === "All" ? cleanQuery : activeCategory, location: cleanLocation })}>
+          <span><FiZap /></span>
+          <div>
+            <strong>{smartMatchPremiumActive ? "Smart Match these results" : "Try Smart Match with Premium"}</strong>
+            <small>Get matched by location, budget, rating and availability when you do not know who to choose.</small>
+          </div>
+        </button>
+      ) : null}
 
       <div className="queless-filter-chips" aria-label="Category filters">
         {FILTERS.map((category) => (
@@ -257,10 +269,27 @@ export default function SearchResultsPage({ query = "", location = "", providers
           })}
         </div>
       ) : (
-        <div className="queless-empty-state queless-results-empty">
-          <FiSearch />
-          <strong>No services found near you yet.</strong>
-          <span>Try another category or location.</span>
+        <div className="queless-category-empty-v18 queless-results-empty-v18">
+          <span className="queless-empty-icon-v18">
+            <FiSearch />
+          </span>
+          <strong>No providers available yet</strong>
+          <p>Try another service, enter a nearby area, or check the map for providers around you.</p>
+          <div className="queless-empty-actions-v18">
+            <button type="button" className="primary" onClick={() => onOpenCategory?.("All")}>
+              <FiSearch /> Browse Categories
+            </button>
+            <button type="button" onClick={() => onOpenMap?.(activeCategory === "All" ? cleanQuery || "All" : activeCategory)}>
+              <FiMap /> View Map
+            </button>
+          </div>
+          <button type="button" className="queless-smart-card-v18" onClick={() => onOpenSmartMatch?.({ category: cleanQuery || activeCategory, location: cleanLocation })}>
+            <span><FiZap /></span>
+            <div>
+              <strong>{smartMatchPremiumActive ? "Smart Match these results" : "Try Smart Match with Premium"}</strong>
+              <small>Get matched by location, budget, rating and availability when you are unfamiliar with the area.</small>
+            </div>
+          </button>
           <div className="queless-empty-suggestions">
             {relatedCategories.map((category) => (
               <button type="button" key={category} onClick={() => onOpenCategory?.(category)}>

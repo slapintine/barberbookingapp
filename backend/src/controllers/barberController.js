@@ -4,6 +4,7 @@ import {
   getSubscriptionTierConfig,
   getTierRank,
   isValidProviderPlan,
+  normalizeMoneyAmount,
   normalizeProviderPlan,
 } from "../services/paymentService.js";
 import {
@@ -54,6 +55,12 @@ function getBarberByOwnerUserId(ownerUserId) {
       b.longitude,
       b.price_from,
       b.verified_status,
+      b.verification_document_name,
+      b.verification_document_url,
+      b.verification_notes,
+      b.verification_submitted_at,
+      b.verification_reviewed_at,
+      b.verification_reviewed_by,
       b.image,
       b.availability_start,
       b.availability_end,
@@ -61,6 +68,7 @@ function getBarberByOwnerUserId(ownerUserId) {
       b.accepts_cash,
       b.stand_type,
       b.business_type,
+      b.map_icon_type,
       b.home_service_enabled,
       b.intro_text,
       b.portfolio_json,
@@ -127,8 +135,48 @@ function normalizeBusinessType(value) {
   return normalized || "Beauty & Grooming";
 }
 
+function normalizeMapIconType(value, fallback = "") {
+  const normalized = String(value || fallback || "").trim().toLowerCase();
+  return normalized
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function normalizeBusinessName(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function validateImageReference(value, fieldName = "image") {
+  const image = String(value || "").trim();
+  if (!image) return "";
+
+  if (/^data:image\/(png|jpe?g|webp);base64,/i.test(image)) {
+    const base64 = image.split(",", 2)[1] || "";
+    const approxBytes = Math.ceil((base64.length * 3) / 4);
+    if (approxBytes > 2 * 1024 * 1024) {
+      throw validationError(`${fieldName} must be 2MB or smaller.`);
+    }
+    return image;
+  }
+
+  if (/^https?:\/\//i.test(image) || image.startsWith("/")) {
+    if (/javascript:|<|>/i.test(image) || image.length > 2048) {
+      throw validationError(`${fieldName} must be a safe image URL.`);
+    }
+    return image;
+  }
+
+  throw validationError(`${fieldName} must be a PNG, JPG, WebP data image, or a safe image URL.`);
+}
+
+function normalizeVerificationDocumentName(value) {
+  const normalized = String(value || "").trim().replace(/\s+/g, " ");
+  if (!normalized) return "";
+  if (normalized.length > 120 || /[<>]/.test(normalized)) {
+    throw validationError("Verification document reference must be 120 characters or fewer and cannot contain HTML.");
+  }
+  return normalized;
 }
 
 function normalizeBusinessStatus(value, plan) {
@@ -154,8 +202,8 @@ function normalizePortfolioItems(input = []) {
       id: item?.id || `portfolio-${index}`,
       title: String(item?.title || item?.label || "Transformation").trim(),
       service: String(item?.service || "").trim(),
-      beforeImage: String(item?.beforeImage || item?.before_image || "").trim(),
-      afterImage: String(item?.afterImage || item?.after_image || "").trim(),
+      beforeImage: validateImageReference(item?.beforeImage || item?.before_image || "", "Portfolio before image"),
+      afterImage: validateImageReference(item?.afterImage || item?.after_image || "", "Portfolio after image"),
       note: String(item?.note || "").trim(),
     }))
     .filter((item) => item.beforeImage || item.afterImage);
@@ -184,7 +232,7 @@ function normalizeTeamMembers(input = []) {
         name: String(item?.name || "").trim(),
         title: String(item?.title || "Service agent").trim() || "Service agent",
         bio: String(item?.bio || "").trim(),
-        image: String(item?.image || "").trim(),
+        image: validateImageReference(item?.image || "", "Team member image"),
         specialties: Array.isArray(item?.specialties)
           ? item.specialties.join(", ")
           : String(item?.specialties || "").trim(),
@@ -236,6 +284,19 @@ function validationError(message) {
   return error;
 }
 
+function normalizeOptionalMoneyAmount(value, fieldName) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw validationError(`${fieldName} cannot be negative.`);
+  }
+  if (amount === 0) return 0;
+  try {
+    return normalizeMoneyAmount(amount, fieldName);
+  } catch (error) {
+    throw validationError(error.message);
+  }
+}
+
 function normalizeIdentityEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -249,15 +310,35 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1)
   if (limit > -1 && services.length > limit) {
     throw validationError(`You have reached the ${limit} service limit for your plan. Upgrade to add more.`);
   }
+  const seenServices = new Set();
+  for (const service of services) {
+    const serviceName = String(service.service_name || service.serviceName || "").trim();
+    const category = String(service.category || service.service_category || service.serviceCategory || "General").trim();
+    if (!serviceName) {
+      throw validationError("Service name is required.");
+    }
+    const duplicateKey = `${serviceName.toLowerCase()}::${category.toLowerCase()}`;
+    if (seenServices.has(duplicateKey)) {
+      throw validationError(`Duplicate service "${serviceName}" in ${category}. Remove the duplicate before saving.`);
+    }
+    seenServices.add(duplicateKey);
+  }
   await run(`DELETE FROM barber_services WHERE barber_id = ?`, [barberId]);
 
   for (const service of services) {
+    const serviceName = String(service.service_name || service.serviceName || "").trim();
+    const category = String(service.category || service.service_category || service.serviceCategory || "General").trim();
     const pricingType = String(service.pricing_type || service.pricingType || "fixed").trim().toLowerCase();
     const normalizedPricingType = ["fixed", "range", "starting_from", "quote"].includes(pricingType) ? pricingType : "fixed";
-    const price = Number(service.price_extra ?? service.price ?? 0);
-    const minPrice = Number(service.min_price ?? service.minPrice ?? 0);
-    const maxPrice = Number(service.max_price ?? service.maxPrice ?? 0);
-    const startingPrice = Number(service.starting_price ?? service.startingPrice ?? 0);
+    const price = normalizeOptionalMoneyAmount(service.price_extra ?? service.price ?? 0, "Service price");
+    const minPrice = normalizeOptionalMoneyAmount(service.min_price ?? service.minPrice ?? 0, "Minimum service price");
+    const maxPrice = normalizeOptionalMoneyAmount(service.max_price ?? service.maxPrice ?? 0, "Maximum service price");
+    const startingPrice = normalizeOptionalMoneyAmount(service.starting_price ?? service.startingPrice ?? 0, "Starting service price");
+    const durationMinutes = Number(service.duration_minutes || service.durationMinutes || 30);
+    const rawLocationType = String(service.location_type || service.locationType || "provider_location").trim().toLowerCase();
+    const locationType = ["provider_location", "customer_location"].includes(rawLocationType)
+      ? rawLocationType
+      : "provider_location";
 
     if (normalizedPricingType === "fixed" && price <= 0) {
       throw validationError("Please enter a valid price.");
@@ -269,6 +350,9 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1)
     if (normalizedPricingType === "starting_from" && startingPrice <= 0) {
       throw validationError("Please enter a valid price.");
     }
+    if (!Number.isFinite(durationMinutes) || durationMinutes < 5 || durationMinutes > 1440) {
+      throw validationError("Service duration must be between 5 minutes and 24 hours.");
+    }
 
     await run(
       `INSERT INTO barber_services
@@ -276,18 +360,18 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         barberId,
-        service.service_name || "",
-        service.category || service.service_category || "",
+        serviceName,
+        category,
         normalizedPricingType === "fixed" ? price : 0,
         normalizedPricingType,
         normalizedPricingType === "range" ? minPrice : null,
         normalizedPricingType === "range" ? maxPrice : null,
         normalizedPricingType === "starting_from" ? startingPrice : null,
-        Number(service.duration_minutes || 30),
-        service.location_type || "provider_location",
+        durationMinutes,
+        locationType,
         service.description || "",
         service.is_available === false || Number(service.is_available) === 0 ? 0 : 1,
-        service.image || service.service_image || "",
+        validateImageReference(service.image || service.service_image || "", "Service image"),
         service.is_featured ? 1 : 0,
       ]
     );
@@ -359,7 +443,7 @@ function buildSubscriptionMetadata(barber, latestSubscription) {
         homeServiceEnabled: false,
         profileCustomizationLevel: "locked",
         visibilityLabel: "Plan required",
-        supportLevel: "Choose PRO, PREMIUM, or PLATINUM",
+        supportLevel: "Choose a provider plan to activate your business.",
         serviceLimit: 0,
         photoLimit: 0,
         videoLimit: 0,
@@ -443,16 +527,27 @@ export async function registerBarber(req, res, next) {
       stand_type = "individual",
       team_members = [],
       business_type = "Beauty & Grooming",
+      map_icon_type = "",
       home_service_enabled = false,
       intro_text = "",
       portfolio = [],
+      document_name = "",
+      documentName = "",
+      verification_document_name = "",
       selected_plan,
       plan,
+      submit_intent = "draft",
     } = req.body;
     const normalizedStandType = normalizeStandType(stand_type);
     const normalizedBusinessType = normalizeBusinessType(business_type);
+    const normalizedMapIconType = normalizeMapIconType(map_icon_type, normalizedBusinessType);
     const normalizedPortfolio = normalizePortfolioItems(portfolio);
-    const planConfig = getSubscriptionTierConfig(barber.subscription_tier || barber.selected_plan || "PRO");
+    const normalizedVerificationDocumentName = normalizeVerificationDocumentName(
+      verification_document_name || document_name || documentName
+    );
+    const verificationStatus = normalizedVerificationDocumentName ? "Pending verification" : "New";
+    const verificationSubmittedAt = normalizedVerificationDocumentName ? new Date().toISOString() : null;
+    const planConfig = getSubscriptionTierConfig(selected_plan || plan || "PLUS");
     if (Number(planConfig.photoLimit) > -1 && normalizedPortfolio.length > Number(planConfig.photoLimit)) {
       throw validationError(`You have reached the ${planConfig.name} limit of ${planConfig.photoLimit} photos. Upgrade to add more.`);
     }
@@ -488,11 +583,12 @@ export async function registerBarber(req, res, next) {
       return res.status(409).json({
         success: false,
         code: "DUPLICATE_BUSINESS_NAME",
-        message: "A business with this name already exists. If this is your business, report it for review."
+        message: "A business with this name already exists. If this is your business, please contact support or report ownership."
       });
     }
 
-    const selectedPlan = normalizeProviderPlan(selected_plan || plan);
+    const wantsPayment = String(submit_intent || "").trim().toLowerCase() === "payment";
+    const selectedPlan = wantsPayment ? normalizeProviderPlan(selected_plan || plan) : "";
     if (selected_plan || plan) {
       if (!isValidProviderPlan(selectedPlan)) {
         return res.status(402).json({
@@ -501,7 +597,7 @@ export async function registerBarber(req, res, next) {
         });
       }
     }
-    const selectedPlanConfig = getSubscriptionTierConfig(selectedPlan || "PRO");
+    const selectedPlanConfig = getSubscriptionTierConfig(selectedPlan || "PLUS");
     if (Number(selectedPlanConfig.photoLimit) > -1 && normalizedPortfolio.length > Number(selectedPlanConfig.photoLimit)) {
       throw validationError(`You have reached the ${selectedPlanConfig.name} limit of ${selectedPlanConfig.photoLimit} photos. Upgrade to add more.`);
     }
@@ -520,14 +616,15 @@ export async function registerBarber(req, res, next) {
            normalized_phone = ?,
            selected_plan = COALESCE(?, selected_plan)
        WHERE user_id = ?`,
-      [profileEmail, profilePhone, selectedPlan || null, req.user.id]
+      [profileEmail, profilePhone, wantsPayment ? selectedPlan || null : null, req.user.id]
     ).catch(() => {});
 
-    const draftStatus = "pending_subscription";
+    const draftStatus = wantsPayment ? "pending_payment" : "draft";
+    const subscriptionStatus = wantsPayment ? "pending_payment" : "none";
     const insertResult = await run(
       `INSERT INTO barbers
-       (owner_user_id, business_name, normalized_business_name, location, latitude, longitude, price_from, image, accepts_wallet, accepts_cash, stand_type, business_type, home_service_enabled, intro_text, portfolio_json, verified_status, subscription_tier, selected_plan, subscription_status, subscription_expires_at, business_status, is_published, trial_plan, trial_started_at, trial_ends_at, trial_status, used_trials)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (owner_user_id, business_name, normalized_business_name, location, latitude, longitude, price_from, image, accepts_wallet, accepts_cash, stand_type, business_type, map_icon_type, home_service_enabled, intro_text, portfolio_json, verified_status, verification_document_name, verification_submitted_at, subscription_tier, selected_plan, subscription_status, subscription_expires_at, business_status, is_published, trial_plan, trial_started_at, trial_ends_at, trial_status, used_trials)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         business_name,
@@ -535,18 +632,22 @@ export async function registerBarber(req, res, next) {
         location,
         latitude,
         longitude,
-        price_from,
-        image || null,
+        normalizeOptionalMoneyAmount(price_from, "Base service price"),
+        validateImageReference(image || "", "Business image") || null,
         accepts_wallet ? 1 : 0,
         1,
         normalizedStandType,
         normalizedBusinessType,
+        normalizedMapIconType,
         home_service_enabled ? 1 : 0,
         String(intro_text || "").trim(),
         JSON.stringify(normalizedPortfolio),
-        selectedPlan || "NONE",
+        verificationStatus,
+        normalizedVerificationDocumentName,
+        verificationSubmittedAt,
         selectedPlan || null,
-        "none",
+        selectedPlan || null,
+        subscriptionStatus,
         null,
         draftStatus,
         0,
@@ -577,12 +678,16 @@ export async function registerBarber(req, res, next) {
 
     return res.status(201).json({
       success: true,
-      message: "Your business has been saved, but it will only go live after you start a trial or subscribe.",
-      next_step: "upgrade",
+      message: wantsPayment
+        ? "Payment was not completed. Your business has been saved, but it will only go live after payment."
+        : "Business saved as draft. Complete payment later to activate it.",
+      next_step: wantsPayment ? "upgrade" : "draft",
       barber: {
         ...barber,
         image: barber.image || null,
+        document_name: barber.verification_document_name || "",
         business_type: barber.business_type || normalizedBusinessType,
+        map_icon_type: barber.map_icon_type || normalizedMapIconType,
         home_service_enabled: Number(barber.home_service_enabled || 0),
         intro_text: barber.intro_text || "",
         portfolio: parseJsonArray(barber.portfolio_json, normalizedPortfolio),
@@ -605,7 +710,7 @@ export async function getAllBarbers(req, res, next) {
       `UPDATE barbers
        SET business_status = 'pending_subscription',
            is_published = 0,
-           subscription_tier = 'PRO',
+           subscription_tier = 'PLUS',
            subscription_status = 'pending_subscription'
        WHERE subscription_tier IS NULL
           OR TRIM(subscription_tier) = ''
@@ -619,7 +724,7 @@ export async function getAllBarbers(req, res, next) {
        SET business_status = 'active'
        WHERE business_status = 'trialing'
          AND COALESCE(is_published, 0) = 1
-         AND subscription_tier IN ('PRO', 'PREMIUM', 'PLATINUM')
+         AND subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
          AND LOWER(COALESCE(subscription_status, '')) = 'trialing'
          AND LOWER(COALESCE(trial_status, '')) = 'active'
          AND trial_ends_at IS NOT NULL
@@ -634,7 +739,7 @@ export async function getAllBarbers(req, res, next) {
          AND (
            business_status NOT IN ('active', 'approved', 'live')
            OR COALESCE(is_demo, 0) = 1
-           OR subscription_tier NOT IN ('PRO', 'PREMIUM', 'PLATINUM')
+           OR subscription_tier NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')
            OR LOWER(COALESCE(subscription_status, '')) IN (
              'cancelled',
              'draft',
@@ -655,7 +760,7 @@ export async function getAllBarbers(req, res, next) {
                SELECT 1
                FROM barber_subscriptions public_bs
                WHERE public_bs.barber_id = barbers.id
-                 AND public_bs.tier IN ('PRO', 'PREMIUM', 'PLATINUM')
+                 AND public_bs.tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
                  AND LOWER(COALESCE(public_bs.status, '')) = 'active'
                  AND public_bs.expires_at IS NOT NULL
                  AND public_bs.expires_at > ?
@@ -698,6 +803,7 @@ export async function getAllBarbers(req, res, next) {
         b.accepts_cash,
         b.stand_type,
         b.business_type,
+        b.map_icon_type,
         b.home_service_enabled,
         b.intro_text,
         b.portfolio_json,
@@ -720,7 +826,7 @@ export async function getAllBarbers(req, res, next) {
         COUNT(r.id) AS total_reviews
        FROM barbers b
        JOIN users u ON u.id = b.owner_user_id
-       LEFT JOIN reviews r ON r.barber_id = b.id
+       LEFT JOIN reviews r ON r.barber_id = b.id AND COALESCE(r.blocked_from_public, 0) = 0
        WHERE ${publicBusinessWhere("b")}
        GROUP BY
         b.id,
@@ -738,6 +844,7 @@ export async function getAllBarbers(req, res, next) {
         b.accepts_cash,
         b.stand_type,
         b.business_type,
+        b.map_icon_type,
         b.home_service_enabled,
         b.intro_text,
         b.portfolio_json,
@@ -786,6 +893,7 @@ export async function getAllBarbers(req, res, next) {
         avg_rating: Number(barber.avg_rating || 0).toFixed(1),
         total_reviews: Number(barber.total_reviews || 0),
         business_type: barber.business_type || "Beauty & Grooming",
+        map_icon_type: barber.map_icon_type || normalizeMapIconType(barber.business_type, "Beauty & Grooming"),
         home_service_enabled: Number(barber.home_service_enabled || 0),
         intro_text: barber.intro_text || "",
         portfolio: parseJsonArray(barber.portfolio_json, []),
@@ -833,7 +941,7 @@ export async function getMyBarberProfile(req, res, next) {
         `UPDATE barbers
          SET business_status = 'pending_subscription',
              is_published = 0,
-             subscription_tier = 'PRO',
+             subscription_tier = 'PLUS',
              subscription_status = 'pending_subscription'
          WHERE id = ?`,
         [barber.id]
@@ -851,7 +959,9 @@ export async function getMyBarberProfile(req, res, next) {
       barber: {
         ...barber,
         image: barber.image || null,
+        document_name: barber.verification_document_name || "",
         business_type: barber.business_type || "Beauty & Grooming",
+        map_icon_type: barber.map_icon_type || normalizeMapIconType(barber.business_type, "Beauty & Grooming"),
         home_service_enabled: Number(barber.home_service_enabled || 0),
         intro_text: barber.intro_text || "",
         portfolio: parseJsonArray(barber.portfolio_json, []),
@@ -890,18 +1000,44 @@ export async function updateMyBarberProfile(req, res, next) {
       stand_type = barber.stand_type || "individual",
       team_members = [],
       business_type = barber.business_type || "Beauty & Grooming",
+      map_icon_type = barber.map_icon_type || "",
       home_service_enabled = barber.home_service_enabled || false,
       intro_text = barber.intro_text || "",
       portfolio = parseJsonArray(barber.portfolio_json, []),
     } = req.body;
+    const hasVerificationDocumentUpdate =
+      Object.prototype.hasOwnProperty.call(req.body, "verification_document_name") ||
+      Object.prototype.hasOwnProperty.call(req.body, "document_name") ||
+      Object.prototype.hasOwnProperty.call(req.body, "documentName");
     const normalizedStandType = normalizeStandType(stand_type);
     const normalizedBusinessType = normalizeBusinessType(business_type);
+    const normalizedMapIconType = normalizeMapIconType(map_icon_type, normalizedBusinessType);
     const normalizedPortfolio = normalizePortfolioItems(portfolio);
+    const existingVerificationDocumentName = barber.verification_document_name || "";
+    const nextVerificationDocumentName = hasVerificationDocumentUpdate
+      ? normalizeVerificationDocumentName(
+          req.body.verification_document_name || req.body.document_name || req.body.documentName
+        )
+      : existingVerificationDocumentName;
+    const verificationDocumentChanged = nextVerificationDocumentName !== existingVerificationDocumentName;
+    const nextVerificationStatus = verificationDocumentChanged
+      ? nextVerificationDocumentName
+        ? "Pending verification"
+        : "New"
+      : barber.verified_status || "New";
+    const nextVerificationSubmittedAt = verificationDocumentChanged
+      ? nextVerificationDocumentName
+        ? new Date().toISOString()
+        : null
+      : barber.verification_submitted_at || null;
+    const nextVerificationReviewedAt = verificationDocumentChanged ? null : barber.verification_reviewed_at || null;
+    const nextVerificationReviewedBy = verificationDocumentChanged ? null : barber.verification_reviewed_by || null;
+    const nextVerificationNotes = verificationDocumentChanged ? "" : barber.verification_notes || "";
 
     const incomingImage = req.body.image;
     const finalImage =
       typeof incomingImage === "string" && incomingImage.trim() !== ""
-        ? incomingImage
+        ? validateImageReference(incomingImage, "Business image")
         : barber.image || null;
 
     if (!business_name || !location) {
@@ -911,9 +1047,35 @@ export async function updateMyBarberProfile(req, res, next) {
       });
     }
 
+    const normalizedName = normalizeBusinessName(business_name);
+    const duplicateBusiness = await get(
+      `SELECT id FROM barbers
+       WHERE id <> ?
+         AND (
+           normalized_business_name = ?
+           OR LOWER(TRIM(REPLACE(REPLACE(REPLACE(business_name, '  ', ' '), '  ', ' '), '  ', ' '))) = ?
+         )
+       LIMIT 1`,
+      [barber.id, normalizedName, normalizedName]
+    );
+    if (duplicateBusiness) {
+      return res.status(409).json({
+        success: false,
+        code: "DUPLICATE_BUSINESS_NAME",
+        message: "A business with this name already exists. If this is your business, please contact support or report ownership."
+      });
+    }
+
+    const latestSubscriptionForLimit = await getLatestSubscription(barber.id);
+    const tierForLimit =
+      normalizeProviderPlan(latestSubscriptionForLimit?.tier || barber.subscription_tier || barber.selected_plan) ||
+      "PLUS";
+    const planConfig = getSubscriptionTierConfig(tierForLimit);
+
     await run(
       `UPDATE barbers
        SET business_name = ?,
+           normalized_business_name = ?,
            location = ?,
            latitude = ?,
            longitude = ?,
@@ -923,24 +1085,39 @@ export async function updateMyBarberProfile(req, res, next) {
            accepts_cash = ?,
            stand_type = ?,
            business_type = ?,
+           map_icon_type = ?,
            home_service_enabled = ?,
            intro_text = ?,
-           portfolio_json = ?
+           portfolio_json = ?,
+           verification_document_name = ?,
+           verified_status = ?,
+           verification_submitted_at = ?,
+           verification_reviewed_at = ?,
+           verification_reviewed_by = ?,
+           verification_notes = ?
        WHERE owner_user_id = ?`,
       [
         business_name,
+        normalizedName,
         location,
         latitude,
         longitude,
-        Number(price_from || 0),
+        normalizeOptionalMoneyAmount(price_from, "Base service price"),
         finalImage,
         accepts_wallet ? 1 : 0,
         1,
         normalizedStandType,
         normalizedBusinessType,
+        normalizedMapIconType,
         home_service_enabled ? 1 : 0,
         String(intro_text || "").trim(),
         JSON.stringify(normalizedPortfolio),
+        nextVerificationDocumentName,
+        nextVerificationStatus,
+        nextVerificationSubmittedAt,
+        nextVerificationReviewedAt,
+        nextVerificationReviewedBy,
+        nextVerificationNotes,
         req.user.id
       ]
     );
@@ -966,7 +1143,9 @@ export async function updateMyBarberProfile(req, res, next) {
       barber: {
         ...updatedBarber,
         image: updatedBarber.image || null,
+        document_name: updatedBarber.verification_document_name || "",
         business_type: updatedBarber.business_type || normalizedBusinessType,
+        map_icon_type: updatedBarber.map_icon_type || normalizedMapIconType,
         home_service_enabled: Number(updatedBarber.home_service_enabled || 0),
         intro_text: updatedBarber.intro_text || "",
         portfolio: parseJsonArray(updatedBarber.portfolio_json, normalizedPortfolio),

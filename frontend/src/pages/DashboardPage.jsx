@@ -18,6 +18,7 @@ export default function DashboardPage({
   currentUser,
   onOpenManageStand,
   onOpenReports,
+  onOpenAiCoach,
   onOpenUpgradePlan,
   getBookingsForCalendar,
   dateValueToDate,
@@ -27,7 +28,7 @@ export default function DashboardPage({
 }) {
   if (!barber) {
     return (
-      <div className="content-v4 standard-page-v4">
+      <div className="content-v4 app-page-v4">
         <div className="simple-card-v4">No business profile found yet.</div>
       </div>
     );
@@ -78,17 +79,17 @@ export default function DashboardPage({
   }).length;
   const currentPlan = String(subscription?.tier || barber.subscription?.tier || "").toUpperCase();
   const currentPlanLabel = formatPlanName(currentPlan, "Plan pending");
-  const hasValidPlan = ["PRO", "PREMIUM", "PLATINUM"].includes(currentPlan);
+  const hasValidPlan = ["PLUS", "PREMIUM", "PLATINUM"].includes(currentPlan);
   const businessStatus = String(barber.business_status || subscription?.status || barber.subscription?.status || "").toLowerCase();
   const isPublished = Boolean(barber.is_published ?? barber.isPublished ?? false);
   const isActiveBusiness = hasValidPlan && isPublished && ["active", "trialing"].includes(businessStatus);
-  const planVisibilityLabel = subscription?.features?.topBarberBadge ? "Top business badge active" : subscription?.features?.visibilityLabel || "Standard visibility";
+  const planVisibilityLabel = subscription?.features?.topBarberBadge ? "Top business badge active" : subscription?.features?.visibilityLabel || "Basic visibility";
   const isPlatinum = currentPlan === "PLATINUM";
   const isPremium = currentPlan === "PREMIUM";
 
   if (!isActiveBusiness) {
     return (
-      <div className="content-v4 standard-page-v4 dashboard-page-v9">
+      <div className="content-v4 app-page-v4 dashboard-page-v9">
         <div className="dashboard-hero-v4 simple-card-v4">
           <div className="dashboard-hero-copy-v4">
             <div className="panel-title-v4">Almost ready</div>
@@ -96,8 +97,8 @@ export default function DashboardPage({
             <div className="profile-sub-v4">Your business is saved but not visible to customers yet.</div>
             <div className="plan-warning-card">
               <h3>Plan required</h3>
-              <p>Choose a plan or start your free trial to activate your business.</p>
-              <button type="button" className="mini-action-btn-v4 success" onClick={() => onOpenUpgradePlan?.("PRO")}>Choose Plan</button>
+              <p>Choose a provider plan to activate your business.</p>
+              <button type="button" className="mini-action-btn-v4 success" onClick={() => onOpenUpgradePlan?.("PLUS")}>Choose Plan</button>
             </div>
           </div>
           <div className="dashboard-hero-actions-v4">
@@ -110,7 +111,7 @@ export default function DashboardPage({
         <div className="simple-card-v4 dashboard-plan-card-v9">
           <div>
             <div className="panel-title-v4">Plan & visibility</div>
-            <div className="profile-sub-v4">Choose a plan to publish this business to customers.</div>
+          <div className="profile-sub-v4">Choose a provider plan to activate your business.</div>
           </div>
           <span className="booking-badge-v4 status-pending">Draft</span>
         </div>
@@ -119,7 +120,7 @@ export default function DashboardPage({
   }
 
   return (
-    <div className="content-v4 standard-page-v4 dashboard-page-v9">
+    <div className="content-v4 app-page-v4 dashboard-page-v9">
       <div className="dashboard-hero-v4 simple-card-v4">
         <div className="dashboard-hero-copy-v4">
           <div className="panel-title-v4">Business dashboard</div>
@@ -127,12 +128,12 @@ export default function DashboardPage({
           <div className="profile-sub-v4"><FiMapPin /> {barber.location}</div>
           <div className="profile-sub-v4"><FiClock /> {barber.availability?.start} - {barber.availability?.end}</div>
           {hasValidPlan ? (
-            <div className="profile-sub-v4">Plan: {currentPlanLabel} - {planVisibilityLabel}</div>
+            <div className="profile-sub-v4">Selected plan: {currentPlanLabel} - {planVisibilityLabel}</div>
           ) : (
             <div className="plan-warning-card">
               <h3>Plan required</h3>
-              <p>Choose a plan or start your free trial to activate your business.</p>
-              <button type="button" className="mini-action-btn-v4 success" onClick={() => onOpenUpgradePlan?.("PRO")}>Choose Plan</button>
+              <p>Choose a provider plan to activate your business.</p>
+              <button type="button" className="mini-action-btn-v4 success" onClick={() => onOpenUpgradePlan?.("PLUS")}>Choose Plan</button>
             </div>
           )}
         </div>
@@ -142,6 +143,9 @@ export default function DashboardPage({
           </button>
           <button className="secondary-btn-v4 compact-btn-v4" onClick={onOpenReports}>
             <FiStar /> Reports
+          </button>
+          <button className={isPlatinum ? "primary-btn-v4 compact-btn-v4" : "secondary-btn-v4 compact-btn-v4"} onClick={isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PLATINUM")}>
+            <FiZap /> {isPlatinum ? "AI Coach" : "Unlock AI"}
           </button>
         </div>
       </div>
@@ -173,7 +177,7 @@ export default function DashboardPage({
         <span className="booking-badge-v4 status-confirmed">{hasValidPlan ? currentPlan : "Plan required"}</span>
       </div>
 
-      <div className={`dashboard-plan-experience-v15 ${isPlatinum ? "platinum" : isPremium ? "premium" : "pro"}`}>
+      <div className={`dashboard-plan-experience-v15 ${isPlatinum ? "platinum" : isPremium ? "premium" : "plus"}`}>
         <div className="simple-card-v4 dashboard-plan-feature-v15">
           <FiTrendingUp />
           <strong>{isPlatinum ? "Advanced analytics active" : isPremium ? "Booking analytics active" : "Basic reports"}</strong>
@@ -181,13 +185,16 @@ export default function DashboardPage({
         </div>
         <div className="simple-card-v4 dashboard-plan-feature-v15">
           {isPlatinum ? <FiShield /> : isPremium ? <FiAward /> : <FiStar />}
-          <strong>{isPlatinum ? "Verified Top Provider" : isPremium ? "Recommended growth plan" : "Standard visibility"}</strong>
-          <span>{isPlatinum ? "Eligible for homepage, map, category, and top search placement." : isPremium ? "Better ranking than Pro with promotions and home service." : "Upgrade for promotions, badges, and stronger ranking."}</span>
+          <strong>{isPlatinum ? "Verified Top Provider" : isPremium ? "Recommended growth plan" : "Basic visibility"}</strong>
+          <span>{isPlatinum ? "Eligible for homepage, map, category, and top search placement." : isPremium ? "Better ranking than Plus with promotions and home service." : "Upgrade for promotions, badges, and stronger ranking."}</span>
         </div>
         <div className="simple-card-v4 dashboard-plan-feature-v15">
           <FiZap />
           <strong>{isPlatinum ? "AI Business Coach" : isPremium ? "Platinum AI locked" : "Growth tools locked"}</strong>
           <span>{isPlatinum ? "Get weekly suggestions based on bookings, reviews, earnings, and visibility." : "Upgrade to Platinum for AI review summaries, promotion captions, and weekly growth reports."}</span>
+          <button type="button" className={isPlatinum ? "mini-action-btn-v4 success" : "mini-action-btn-v4"} onClick={isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PLATINUM")}>
+            {isPlatinum ? "Open AI Coach" : "Upgrade to Platinum"}
+          </button>
         </div>
       </div>
 

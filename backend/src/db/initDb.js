@@ -60,12 +60,17 @@ async function createIndexes() {
     WHERE status IN ('payment_pending','pending','confirmed')
   `);
   await run(`CREATE INDEX IF NOT EXISTS idx_reviews_barber_id ON reviews(barber_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_reviews_blocked ON reviews(barber_id, blocked_from_public)`).catch(() => {});
   await run(`CREATE INDEX IF NOT EXISTS idx_quote_requests_customer_id ON quote_requests(customer_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_quote_requests_provider_id ON quote_requests(provider_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_support_requests_user_id ON support_requests(user_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_support_requests_status ON support_requests(status, created_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_messages_barber_id ON messages(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_messages_customer_user_id ON messages(customer_user_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_notifications_thread_message ON notifications(user_id, type, barber_id, customer_user_id, read)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_tokens_token ON notification_tokens(token)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_notification_tokens_user_id ON notification_tokens(user_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_schedule_barber_day ON barber_schedule(barber_id, day_of_week)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_team_members_barber_id ON barber_team_members(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_booking_events_booking_id ON booking_events(booking_id)`);
@@ -79,11 +84,14 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_barbers_subscription_tier ON barbers(subscription_tier, subscription_status)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barbers_public_status ON barbers(business_status, is_published, subscription_tier)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barbers_normalized_business_name ON barbers(normalized_business_name)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_barbers_verified_status ON barbers(verified_status)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_barbers_verification_submitted_at ON barbers(verification_submitted_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_wallets_barber_id ON barber_wallets(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_booking_id ON payment_transactions(booking_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_reference ON payment_transactions(internal_reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_provider_reference ON payment_transactions(provider_reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_idempotency ON payment_transactions(idempotency_key)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_customer_subscription_id ON payment_transactions(customer_subscription_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payments_booking_id ON payments(booking_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payments_reference ON payments(internal_reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider_reference)`);
@@ -102,6 +110,13 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_payout_requests_wallet_id ON payout_requests(wallet_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payout_requests_idempotency ON payout_requests(barber_id, idempotency_key)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_subscriptions_barber_id ON barber_subscriptions(barber_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_sms_messages_provider_id ON sms_messages(provider_message_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_sms_messages_dedupe ON sms_messages(dedupe_key)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_sms_messages_outgoing_dedupe ON sms_messages(dedupe_key) WHERE direction = 'outgoing' AND dedupe_key <> ''`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_sms_messages_phone ON sms_messages(phone_number)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_sms_messages_created_at ON sms_messages(created_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_customer_subscriptions_user_status ON customer_subscriptions(user_id, status)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_admin_audit_log_action ON admin_audit_log(action_type, target_type, created_at)`);
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_insert`);
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_update`);
   await run(`
@@ -109,7 +124,7 @@ async function createIndexes() {
     BEFORE INSERT ON barbers
     WHEN NEW.business_status IN ('active', 'approved', 'live')
       AND (
-        NEW.subscription_tier NOT IN ('PRO', 'PREMIUM', 'PLATINUM')
+        NEW.subscription_tier NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')
         OR NOT (
           (
             NEW.subscription_status = 'active'
@@ -138,7 +153,7 @@ async function createIndexes() {
     BEFORE UPDATE ON barbers
     WHEN NEW.business_status IN ('active', 'approved', 'live')
       AND (
-        NEW.subscription_tier NOT IN ('PRO', 'PREMIUM', 'PLATINUM')
+        NEW.subscription_tier NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')
         OR NOT (
           (
             NEW.subscription_status = 'active'
@@ -172,6 +187,36 @@ async function migrateExistingSchema() {
   );
   await addColumnIfMissing(
     "barbers",
+    "verification_document_name",
+    `verification_document_name TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "barbers",
+    "verification_document_url",
+    `verification_document_url TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "barbers",
+    "verification_notes",
+    `verification_notes TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "barbers",
+    "verification_submitted_at",
+    `verification_submitted_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "barbers",
+    "verification_reviewed_at",
+    `verification_reviewed_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "barbers",
+    "verification_reviewed_by",
+    `verification_reviewed_by INTEGER DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "barbers",
     "availability_start",
     `availability_start TEXT DEFAULT '08:00'`
   );
@@ -199,6 +244,11 @@ async function migrateExistingSchema() {
     "barbers",
     "business_type",
     `business_type TEXT NOT NULL DEFAULT 'barber'`
+  );
+  await addColumnIfMissing(
+    "barbers",
+    "map_icon_type",
+    `map_icon_type TEXT DEFAULT ''`
   );
   await addColumnIfMissing(
     "barbers",
@@ -331,13 +381,13 @@ async function migrateExistingSchema() {
          COALESCE(is_published, 0) = 1
          AND NOT (
            business_status IN ('active', 'approved', 'live')
-           AND subscription_tier IN ('PRO', 'PREMIUM', 'PLATINUM')
+           AND subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
            AND (
              EXISTS (
                SELECT 1
                FROM barber_subscriptions public_bs
                WHERE public_bs.barber_id = barbers.id
-                 AND public_bs.tier IN ('PRO', 'PREMIUM', 'PLATINUM')
+                 AND public_bs.tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
                  AND LOWER(COALESCE(public_bs.status, '')) = 'active'
                  AND public_bs.expires_at IS NOT NULL
                  AND public_bs.expires_at > datetime('now')
@@ -502,6 +552,21 @@ async function migrateExistingSchema() {
     "barber_amount",
     `barber_amount REAL NOT NULL DEFAULT 0`
   );
+  await addColumnIfMissing(
+    "bookings",
+    "booking_location_type",
+    `booking_location_type TEXT NOT NULL DEFAULT 'provider_location'`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "booking_address",
+    `booking_address TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "booking_details_json",
+    `booking_details_json TEXT DEFAULT '{}'`
+  );
 
   await addColumnIfMissing(
     "notifications",
@@ -540,6 +605,46 @@ async function migrateExistingSchema() {
     `idempotency_key TEXT DEFAULT ''`
   );
   await addColumnIfMissing(
+    "wallet_topups",
+    "wallet_credited",
+    `wallet_credited INTEGER NOT NULL DEFAULT 0`
+  );
+  await addColumnIfMissing(
+    "wallet_topups",
+    "credited_at",
+    `credited_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "wallet_topups",
+    "mtn_reference",
+    `mtn_reference TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "wallet_topups",
+    "external_transaction_id",
+    `external_transaction_id TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "wallet_topups",
+    "last_status_checked_at",
+    `last_status_checked_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "wallet_topups",
+    "error_message",
+    `error_message TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "otp_codes",
+    "used_at",
+    `used_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "otp_codes",
+    "updated_at",
+    `updated_at TEXT DEFAULT CURRENT_TIMESTAMP`
+  );
+  await addColumnIfMissing(
     "payment_transactions",
     "booking_id",
     `booking_id INTEGER DEFAULT NULL`
@@ -558,6 +663,11 @@ async function migrateExistingSchema() {
     "payment_transactions",
     "subscription_id",
     `subscription_id INTEGER DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "payment_transactions",
+    "customer_subscription_id",
+    `customer_subscription_id INTEGER DEFAULT NULL`
   );
   await addColumnIfMissing(
     "payment_transactions",
@@ -645,6 +755,26 @@ async function migrateExistingSchema() {
     `is_active INTEGER NOT NULL DEFAULT 0`
   );
   await addColumnIfMissing(
+    "reviews",
+    "blocked_from_public",
+    `blocked_from_public INTEGER NOT NULL DEFAULT 0`
+  );
+  await addColumnIfMissing(
+    "reviews",
+    "blocked_by_user_id",
+    `blocked_by_user_id INTEGER DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "reviews",
+    "blocked_at",
+    `blocked_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "reviews",
+    "block_reason",
+    `block_reason TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
     "wallet_transactions",
     "payment_transaction_id",
     `payment_transaction_id INTEGER DEFAULT NULL`
@@ -680,10 +810,8 @@ async function migrateExistingSchema() {
     `metadata TEXT DEFAULT '{}'`
   );
 
-  await run(`UPDATE barbers SET subscription_tier = 'PRO' WHERE subscription_tier = 'FREE'`).catch(() => {});
-  await run(`UPDATE barbers SET subscription_tier = 'PRO' WHERE subscription_tier = 'STANDARD'`).catch(() => {});
-  await run(`UPDATE barber_subscriptions SET tier = 'PRO' WHERE tier = 'FREE'`).catch(() => {});
-  await run(`UPDATE barber_subscriptions SET tier = 'PRO' WHERE tier = 'STANDARD'`).catch(() => {});
+  await run(`UPDATE barbers SET subscription_tier = 'PLUS' WHERE COALESCE(TRIM(subscription_tier), '') <> '' AND UPPER(subscription_tier) NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')`).catch(() => {});
+  await run(`UPDATE barber_subscriptions SET tier = 'PLUS' WHERE COALESCE(TRIM(tier), '') <> '' AND UPPER(tier) NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')`).catch(() => {});
 }
 
 export async function initDb() {
@@ -702,9 +830,24 @@ export async function initDb() {
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'customer',
+        account_status TEXT NOT NULL DEFAULT 'active',
+        email_verified_at TEXT DEFAULT NULL,
+        email_verification_code_hash TEXT DEFAULT '',
+        email_verification_expires_at TEXT DEFAULT NULL,
+        last_email_code_sent_at TEXT DEFAULT NULL,
+        disabled_at TEXT DEFAULT NULL,
+        blocked_at TEXT DEFAULT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    await addColumnIfMissing("users", "account_status", `account_status TEXT NOT NULL DEFAULT 'active'`);
+    await addColumnIfMissing("users", "email_verified_at", `email_verified_at TEXT DEFAULT NULL`);
+    await addColumnIfMissing("users", "email_verification_code_hash", `email_verification_code_hash TEXT DEFAULT ''`);
+    await addColumnIfMissing("users", "email_verification_expires_at", `email_verification_expires_at TEXT DEFAULT NULL`);
+    await addColumnIfMissing("users", "last_email_code_sent_at", `last_email_code_sent_at TEXT DEFAULT NULL`);
+    await addColumnIfMissing("users", "disabled_at", `disabled_at TEXT DEFAULT NULL`);
+    await addColumnIfMissing("users", "blocked_at", `blocked_at TEXT DEFAULT NULL`);
 
     await run(`
       CREATE TABLE IF NOT EXISTS profiles (
@@ -739,6 +882,12 @@ export async function initDb() {
         longitude REAL,
         price_from REAL NOT NULL DEFAULT 0,
         verified_status TEXT NOT NULL DEFAULT 'New',
+        verification_document_name TEXT DEFAULT '',
+        verification_document_url TEXT DEFAULT '',
+        verification_notes TEXT DEFAULT '',
+        verification_submitted_at TEXT DEFAULT NULL,
+        verification_reviewed_at TEXT DEFAULT NULL,
+        verification_reviewed_by INTEGER DEFAULT NULL,
         image TEXT DEFAULT '',
         availability_start TEXT DEFAULT '08:00',
         availability_end TEXT DEFAULT '20:00',
@@ -746,6 +895,7 @@ export async function initDb() {
         accepts_cash INTEGER NOT NULL DEFAULT 1,
         stand_type TEXT NOT NULL DEFAULT 'individual',
         business_type TEXT NOT NULL DEFAULT 'barber',
+        map_icon_type TEXT DEFAULT '',
         home_service_enabled INTEGER NOT NULL DEFAULT 0,
         intro_text TEXT DEFAULT '',
         portfolio_json TEXT DEFAULT '[]',
@@ -788,6 +938,13 @@ export async function initDb() {
 
     await addColumnIfMissing("barbers", "selected_plan", `selected_plan TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "deleted_at", `deleted_at TEXT DEFAULT NULL`);
+    await addColumnIfMissing("barbers", "map_icon_type", `map_icon_type TEXT DEFAULT ''`);
+    await addColumnIfMissing("barbers", "verification_document_name", `verification_document_name TEXT DEFAULT ''`);
+    await addColumnIfMissing("barbers", "verification_document_url", `verification_document_url TEXT DEFAULT ''`);
+    await addColumnIfMissing("barbers", "verification_notes", `verification_notes TEXT DEFAULT ''`);
+    await addColumnIfMissing("barbers", "verification_submitted_at", `verification_submitted_at TEXT DEFAULT NULL`);
+    await addColumnIfMissing("barbers", "verification_reviewed_at", `verification_reviewed_at TEXT DEFAULT NULL`);
+    await addColumnIfMissing("barbers", "verification_reviewed_by", `verification_reviewed_by INTEGER DEFAULT NULL`);
 
     await run(`
       CREATE TABLE IF NOT EXISTS barber_services (
@@ -885,6 +1042,9 @@ export async function initDb() {
         payment_customer_phone TEXT DEFAULT '',
         commission_amount REAL NOT NULL DEFAULT 0,
         barber_amount REAL NOT NULL DEFAULT 0,
+        booking_location_type TEXT NOT NULL DEFAULT 'provider_location',
+        booking_address TEXT DEFAULT '',
+        booking_details_json TEXT DEFAULT '{}',
         team_member_id INTEGER DEFAULT NULL,
         cancelled_by TEXT DEFAULT NULL,
         cancellation_reason TEXT DEFAULT '',
@@ -917,6 +1077,10 @@ export async function initDb() {
         user_id INTEGER NOT NULL,
         rating INTEGER NOT NULL,
         review_text TEXT DEFAULT '',
+        blocked_from_public INTEGER NOT NULL DEFAULT 0,
+        blocked_by_user_id INTEGER DEFAULT NULL,
+        blocked_at TEXT DEFAULT NULL,
+        block_reason TEXT DEFAULT '',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
         FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
@@ -940,6 +1104,23 @@ export async function initDb() {
         FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (provider_id) REFERENCES barbers(id) ON DELETE CASCADE,
         FOREIGN KEY (service_id) REFERENCES barber_services(id) ON DELETE SET NULL
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS support_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        topic TEXT NOT NULL DEFAULT 'Contact Support',
+        name TEXT DEFAULT '',
+        contact TEXT NOT NULL,
+        booking_reference TEXT DEFAULT '',
+        message TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        admin_notes TEXT DEFAULT '',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
 
@@ -1075,10 +1256,16 @@ export async function initDb() {
         wallet_id INTEGER NOT NULL,
         amount REAL NOT NULL,
         method TEXT NOT NULL,
-        provider TEXT NOT NULL DEFAULT 'pesapal',
+        provider TEXT NOT NULL DEFAULT 'mtn_mobile_money',
         reference TEXT NOT NULL UNIQUE,
         status TEXT NOT NULL DEFAULT 'pending',
         provider_reference TEXT DEFAULT '',
+        wallet_credited INTEGER NOT NULL DEFAULT 0,
+        credited_at TEXT DEFAULT NULL,
+        mtn_reference TEXT DEFAULT '',
+        external_transaction_id TEXT DEFAULT '',
+        last_status_checked_at TEXT DEFAULT NULL,
+        error_message TEXT DEFAULT '',
         payment_url TEXT DEFAULT '',
         idempotency_key TEXT DEFAULT '',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -1207,7 +1394,7 @@ export async function initDb() {
       CREATE TABLE IF NOT EXISTS barber_subscriptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         barber_id INTEGER NOT NULL,
-        tier TEXT NOT NULL DEFAULT 'PRO',
+        tier TEXT NOT NULL DEFAULT 'PLUS',
         price REAL NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'active',
         billing_cycle TEXT NOT NULL DEFAULT 'monthly',
@@ -1228,6 +1415,59 @@ export async function initDb() {
     `);
 
     await run(`
+      CREATE TABLE IF NOT EXISTS notification_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        platform TEXT DEFAULT 'web',
+        browser TEXT DEFAULT '',
+        device_label TEXT DEFAULT '',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS customer_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        tier TEXT NOT NULL DEFAULT 'PREMIUM',
+        price REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        billing_cycle TEXT NOT NULL DEFAULT 'monthly',
+        amount_paid REAL NOT NULL DEFAULT 0,
+        currency TEXT NOT NULL DEFAULT 'UGX',
+        payment_status TEXT NOT NULL DEFAULT 'pending',
+        payment_reference TEXT DEFAULT '',
+        provider TEXT DEFAULT 'internal',
+        started_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT DEFAULT NULL,
+        activated_at TEXT DEFAULT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_user_id INTEGER DEFAULT NULL,
+        admin_username TEXT DEFAULT '',
+        action_type TEXT NOT NULL,
+        target_type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        old_value TEXT DEFAULT '{}',
+        new_value TEXT DEFAULT '{}',
+        reason TEXT DEFAULT '',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await run(`
       CREATE TABLE IF NOT EXISTS otp_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER DEFAULT NULL,
@@ -1239,8 +1479,39 @@ export async function initDb() {
         max_attempts INTEGER NOT NULL DEFAULT 5,
         expires_at TEXT NOT NULL,
         verified_at TEXT DEFAULT NULL,
+        used_at TEXT DEFAULT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS sms_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        direction TEXT NOT NULL,
+        provider TEXT NOT NULL DEFAULT 'africastalking',
+        provider_message_id TEXT DEFAULT '',
+        from_number TEXT DEFAULT '',
+        to_number TEXT DEFAULT '',
+        phone_number TEXT DEFAULT '',
+        message TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'received',
+        user_id INTEGER DEFAULT NULL,
+        business_id INTEGER DEFAULT NULL,
+        booking_id INTEGER DEFAULT NULL,
+        payment_id INTEGER DEFAULT NULL,
+        subscription_id INTEGER DEFAULT NULL,
+        raw_payload TEXT DEFAULT '{}',
+        dedupe_key TEXT DEFAULT '',
+        error_message TEXT DEFAULT '',
+        sent_at TEXT DEFAULT NULL,
+        received_at TEXT DEFAULT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (business_id) REFERENCES barbers(id) ON DELETE SET NULL,
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL
       )
     `);
 

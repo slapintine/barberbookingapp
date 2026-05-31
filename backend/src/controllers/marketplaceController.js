@@ -2,6 +2,35 @@ import { all, get, run } from "../db/query.js";
 import { MARKETPLACE_CATEGORIES } from "../data/marketplaceCategories.js";
 import { publicBusinessParams, publicBusinessWhere } from "../services/businessVisibility.js";
 
+const SUPPORT_TOPICS = new Set([
+  "Contact Support",
+  "Report a Problem",
+  "Booking issue",
+  "Payment or refund",
+  "Report provider",
+  "Report customer",
+  "Safety concern",
+  "Account help",
+  "Other",
+]);
+
+function cleanText(value, maxLength) {
+  return String(value || "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/[<>]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, maxLength);
+}
+
+function isReachableContact(value) {
+  const contact = String(value || "").trim();
+  const phoneDigits = contact.replace(/\D/g, "");
+  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
+  const looksLikePhone = phoneDigits.length >= 9 && phoneDigits.length <= 15;
+  return looksLikeEmail || looksLikePhone;
+}
+
 function normalizeProvider(row = {}) {
   return {
     id: row.id,
@@ -9,8 +38,11 @@ function normalizeProvider(row = {}) {
     business_name: row.business_name,
     category_id: row.business_type || "",
     category_name: row.business_type || "",
+    map_icon_type: row.map_icon_type || "",
     description: row.intro_text || "",
     location: row.location || "",
+    latitude: row.latitude,
+    longitude: row.longitude,
     service_area: row.location || "",
     phone: row.phone || "",
     email: row.email || "",
@@ -18,7 +50,16 @@ function normalizeProvider(row = {}) {
     cover_image: row.cover_image || row.image || "",
     is_verified: String(row.verified_status || "").toLowerCase() === "verified",
     subscription_plan: row.subscription_tier || "LOCKED",
-    trial_status: row.subscription_status || "pending_payment",
+    subscription_tier: row.subscription_tier || "",
+    subscription_status: row.subscription_status || "pending_payment",
+    subscription_expires_at: row.subscription_expires_at || null,
+    trial_status: row.trial_status || "",
+    trial_ends_at: row.trial_ends_at || null,
+    business_status: row.business_status || "",
+    is_published: Number(row.is_published || 0),
+    admin_approved: Number(row.admin_approved || 0),
+    is_demo: Number(row.is_demo || 0),
+    deleted_at: row.deleted_at || null,
     rating: Number(row.rating || 0),
     total_reviews: Number(row.total_reviews || 0),
     created_at: row.created_at,
@@ -62,8 +103,8 @@ export async function getProviders(req, res, next) {
          b.*,
          p.phone,
          p.email,
-         (SELECT COALESCE(AVG(r.rating), 0) FROM reviews r WHERE r.barber_id = b.id) AS rating,
-         (SELECT COUNT(*) FROM reviews r WHERE r.barber_id = b.id) AS total_reviews
+         (SELECT COALESCE(AVG(r.rating), 0) FROM reviews r WHERE r.barber_id = b.id AND COALESCE(r.blocked_from_public, 0) = 0) AS rating,
+         (SELECT COUNT(*) FROM reviews r WHERE r.barber_id = b.id AND COALESCE(r.blocked_from_public, 0) = 0) AS total_reviews
        FROM barbers b
        LEFT JOIN profiles p ON p.user_id = b.owner_user_id
        WHERE ${publicBusinessWhere("b")}
@@ -148,6 +189,62 @@ export async function createQuoteRequest(req, res, next) {
         status: "pending",
       },
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createSupportRequest(req, res, next) {
+  try {
+    const topic = cleanText(req.body.topic, 80) || "Contact Support";
+    const normalizedTopic = SUPPORT_TOPICS.has(topic) ? topic : "Other";
+    const name = cleanText(req.body.name || req.user?.username, 120);
+    const contact = cleanText(req.body.contact, 160);
+    const bookingReference = cleanText(req.body.booking_id || req.body.bookingId || req.body.booking_reference, 80);
+    const message = cleanText(req.body.message, 2000);
+
+    if (!isReachableContact(contact)) {
+      return res.status(400).json({ success: false, message: "Add a valid phone number or email so support can reach you." });
+    }
+    if (message.length < 10) {
+      return res.status(400).json({ success: false, message: "Support message must be at least 10 characters." });
+    }
+
+    const result = await run(
+      `INSERT INTO support_requests
+       (user_id, topic, name, contact, booking_reference, message, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'open')`,
+      [req.user.id, normalizedTopic, name, contact, bookingReference, message]
+    );
+
+    res.status(201).json({
+      success: true,
+      support_request: {
+        id: result.lastID,
+        user_id: req.user.id,
+        topic: normalizedTopic,
+        name,
+        contact,
+        booking_reference: bookingReference,
+        status: "open",
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getMySupportRequests(req, res, next) {
+  try {
+    const rows = await all(
+      `SELECT id, topic, booking_reference, status, created_at, updated_at
+       FROM support_requests
+       WHERE user_id = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+    res.json({ success: true, support_requests: rows });
   } catch (error) {
     next(error);
   }

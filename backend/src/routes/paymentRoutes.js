@@ -14,7 +14,6 @@ import {
   testMtnPaymentInitiation,
   verify,
 } from "../controllers/paymentController.js";
-import { handlePesapalIpn } from "../controllers/walletController.js";
 
 const router = express.Router();
 
@@ -30,10 +29,9 @@ router.get("/mtn/status/:reference", protect, getMtnPaymentStatus);
 router.get("/mtn/check-auth", protect, requireRole("admin"), checkMtnAuth);
 router.post("/mtn/test-payment", protect, requireRole("admin"), testMtnPaymentInitiation);
 router.post("/mtn/callback", handleMtnWebhook);
+router.post("/airtel/callback", handleAirtelWebhook);
 router.post("/webhooks/mtn", handleMtnWebhook);
 router.post("/webhooks/airtel", handleAirtelWebhook);
 router.post("/webhooks/mobile-money", handleMtnWebhook);
-router.get("/webhooks/pesapal", handlePesapalIpn);
-router.post("/webhooks/pesapal", handlePesapalIpn);
 
 export default router;

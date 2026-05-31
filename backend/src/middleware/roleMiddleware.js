@@ -2,8 +2,13 @@ import { get } from "../db/query.js";
 
 export function requireRole(...roles) {
   return async (req, res, next) => {
-    const role = req.user?.role;
+    const role = String(req.user?.role || "").trim().toLowerCase();
     const allowed = new Set(roles);
+    if (allowed.has("admin")) {
+      allowed.add("superadmin");
+      allowed.add("super_admin");
+      allowed.add("super-admin");
+    }
     if (allowed.has("barber")) allowed.add("business");
     if (allowed.has("barber")) allowed.add("provider");
     if (allowed.has("business")) allowed.add("barber");

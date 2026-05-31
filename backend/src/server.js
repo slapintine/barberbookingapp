@@ -27,6 +27,10 @@ const io =
   env.nodeEnv === "production"
     ? new Server(server, {
         path: "/socket.io",
+        cors: {
+          origin: env.clientUrls,
+          credentials: true,
+        },
       })
     : new Server(server, {
         path: "/socket.io",
@@ -60,7 +64,7 @@ io.use(async (socket, next) => {
       return next(new Error("Unauthorized"));
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, env.jwtSecret);
     const user = await findUserById(decoded.userId);
 
     if (!user) {

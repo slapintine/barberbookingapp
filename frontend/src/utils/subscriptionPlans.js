@@ -2,15 +2,15 @@ export const BILLING_CYCLES = ["monthly", "annual"];
 
 export const PROVIDER_PLANS = [
   {
-    tier: "PRO",
-    id: "pro",
-    name: "Pro",
+    tier: "PLUS",
+    id: "plus",
+    name: "Plus",
     monthlyPrice: 6000,
     annualPrice: 60000,
     annualSavings: 12000,
-    summary: "Basic online presence for starting providers",
-    trialAvailable: true,
-    features: ["Business profile", "5 services", "5 photos", "Basic bookings", "Cash payments", "Basic reports"],
+    summary: "Basic provider profile, booking management, visibility, and reviews",
+    trialAvailable: false,
+    features: ["Basic provider profile", "Booking management", "Basic visibility", "Customer reviews"],
   },
   {
     tier: "PREMIUM",
@@ -19,10 +19,10 @@ export const PROVIDER_PLANS = [
     monthlyPrice: 12000,
     annualPrice: 120000,
     annualSavings: 24000,
-    summary: "Best for growing businesses",
+    summary: "Better visibility, deeper review insights, and growth tools",
     recommended: true,
-    trialAvailable: true,
-    features: ["20 services", "20 photos", "Promotions", "Home service", "Booking analytics", "Priority support"],
+    trialAvailable: false,
+    features: ["Everything in Plus", "Better visibility", "Review insights", "Growth tips", "Customer feedback insights", "More performance analytics"],
   },
   {
     tier: "PLATINUM",
@@ -31,14 +31,14 @@ export const PROVIDER_PLANS = [
     monthlyPrice: 24000,
     annualPrice: 240000,
     annualSavings: 48000,
-    summary: "Best for maximum visibility",
-    trialAvailable: true,
-    features: ["Unlimited services", "Unlimited photos", "AI Business Coach", "Verified badge", "Homepage feature", "Top visibility"],
+    summary: "Top visibility, AI coaching, advanced analytics, and review controls",
+    trialAvailable: false,
+    features: ["Everything in Premium", "AI Business Coach", "Advanced analytics", "Featured placement", "Review management tools", "Verified badge eligibility", "Top visibility", "Hide up to 10 negative reviews"],
   },
 ];
 
 export const PLAN_FEATURES = {
-  pro: {
+  plus: {
     maxServices: 5,
     maxPhotos: 5,
     promotions: false,
@@ -87,7 +87,7 @@ export const PLAN_FEATURES = {
 
 export function normalizePlanId(value, fallback = "") {
   const normalized = String(value || "").trim().toLowerCase();
-  if (["pro", "premium", "platinum"].includes(normalized)) return normalized;
+  if (["plus", "premium", "platinum"].includes(normalized)) return normalized;
   const byTier = PROVIDER_PLANS.find((plan) => plan.tier === String(value || "").trim().toUpperCase());
   return byTier?.id || fallback;
 }
@@ -99,7 +99,7 @@ export function normalizePlanTier(value, fallback = "") {
 }
 
 export function getPlanFeatures(value) {
-  return PLAN_FEATURES[normalizePlanId(value, "pro")];
+  return PLAN_FEATURES[normalizePlanId(value, "plus")];
 }
 
 export function normalizeBillingCycle(value) {

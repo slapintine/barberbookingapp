@@ -25,6 +25,9 @@ function resolveDefaultService() {
   const mode = String(env.mobileMoneyMode || "mock").trim().toLowerCase();
 
   if (mode === "mock") {
+    if (env.nodeEnv === "production") {
+      throw Object.assign(new Error("Mock mobile money is disabled in production."), { statusCode: 503 });
+    }
     return mockMobileMoneyService;
   }
 
@@ -34,6 +37,10 @@ function resolveDefaultService() {
       : mtnService;
   }
 
+  if (env.nodeEnv === "production") {
+    throw Object.assign(new Error("Mobile money is not configured for production."), { statusCode: 503 });
+  }
+
   return mockMobileMoneyService;
 }
 
@@ -41,7 +48,21 @@ function resolveProviderService(provider) {
   const normalizedProvider = String(provider || "").trim().toLowerCase();
   const mode = String(env.mobileMoneyMode || "mock").trim().toLowerCase();
 
+  if (normalizedProvider === "mock" && mode === "mock") {
+    if (env.nodeEnv === "production") {
+      throw Object.assign(new Error("Mock mobile money is disabled in production."), { statusCode: 503 });
+    }
+    return mockMobileMoneyService;
+  }
+
+  if (!["mtn_mobile_money", "airtel_money"].includes(normalizedProvider)) {
+    throw Object.assign(new Error("Payment method must be MTN Mobile Money or Airtel Money."), { statusCode: 400 });
+  }
+
   if (mode === "mock") {
+    if (env.nodeEnv === "production") {
+      throw Object.assign(new Error("Mock mobile money is disabled in production."), { statusCode: 503 });
+    }
     return mockMobileMoneyService;
   }
 

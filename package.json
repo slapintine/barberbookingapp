@@ -13,7 +13,8 @@
     "frontend:test": "npm --prefix frontend run test",
     "backend:test": "npm --prefix backend run test",
     "test": "npm run backend:test && npm run frontend:test",
-    "check": "npm run backend:check && npm run frontend:build"
+    "check": "npm run backend:check && npm run frontend:build",
+    "verify:launch": "node scripts/launchVerification.cjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

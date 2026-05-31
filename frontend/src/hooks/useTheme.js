@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 
 export default function useTheme(storageKey = "queless-theme", fallback = "light") {
   const normalizeTheme = (value) => (value === "light" || value === "dark" ? value : fallback);
+  const userSetKey = `${storageKey}-user-set`;
 
   const [theme, setStoredTheme] = useState(() => {
     try {
+      const userSetTheme = localStorage.getItem(userSetKey) === "true";
+      if (!userSetTheme) return fallback;
       const saved = localStorage.getItem(storageKey);
       const legacySaved = localStorage.getItem("lineup_theme") || localStorage.getItem("cutz_theme");
       return normalizeTheme(saved || legacySaved || fallback);
@@ -13,6 +16,11 @@ export default function useTheme(storageKey = "queless-theme", fallback = "light
     }
   });
   const setTheme = (value) => {
+    try {
+      localStorage.setItem(userSetKey, "true");
+    } catch {
+      // Ignore storage failures; the in-memory theme can still update.
+    }
     setStoredTheme((previous) => normalizeTheme(typeof value === "function" ? value(previous) : value));
   };
 

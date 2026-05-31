@@ -2,20 +2,25 @@ import { env } from "../config/env.js";
 
 const rateStores = new Map();
 
+function isLoopbackOrigin(origin) {
+  try {
+    const parsed = new URL(origin);
+    return ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function isAllowedOrigin(origin) {
   if (!origin) return true;
 
-  if (env.nodeEnv !== "production") {
-    try {
-      const parsed = new URL(origin);
-      if (["localhost", "127.0.0.1"].includes(parsed.hostname)) return true;
-    } catch {
-      return false;
-    }
+  if (isLoopbackOrigin(origin)) {
+    return env.nodeEnv !== "production";
   }
 
   if (env.nodeEnv !== "production" && env.clientUrls.length === 0) return true;
-  return env.clientUrls.includes(origin);
+  const allowedOrigins = env.nodeEnv === "production" ? env.clientUrls : [...env.clientUrls, ...env.devClientUrls];
+  return allowedOrigins.includes(origin);
 }
 
 export function buildCorsOptions() {
@@ -55,7 +60,8 @@ export function rateLimit({ name, windowMs, max }) {
 
   return function rateLimitMiddleware(req, res, next) {
     const now = Date.now();
-    const key = req.ip || req.socket?.remoteAddress || "unknown";
+    const principal = req.user?.id ? `user:${req.user.id}` : "";
+    const key = `${principal || `ip:${req.ip || req.socket?.remoteAddress || "unknown"}`}:${req.method}:${req.baseUrl || req.path}`;
     const record = store.get(key);
 
     if (!record || record.resetAt <= now) {
@@ -89,4 +95,70 @@ export const authRateLimiter = rateLimit({
   name: "auth",
   windowMs: 15 * 60 * 1000,
   max: 30,
+});
+
+export const paymentRateLimiter = rateLimit({
+  name: "payment",
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+});
+
+export const bookingRateLimiter = rateLimit({
+  name: "booking",
+  windowMs: 15 * 60 * 1000,
+  max: 80,
+});
+
+export const walletTopupRateLimiter = rateLimit({
+  name: "wallet-topup",
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+});
+
+export const otpRateLimiter = rateLimit({
+  name: "otp",
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+});
+
+export const reviewRateLimiter = rateLimit({
+  name: "review",
+  windowMs: 15 * 60 * 1000,
+  max: 12,
+});
+
+export const smartMatchRateLimiter = rateLimit({
+  name: "smart-match",
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+});
+
+export const supportRateLimiter = rateLimit({
+  name: "support",
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+});
+
+export const providerRegistrationRateLimiter = rateLimit({
+  name: "provider-registration",
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+});
+
+export const imageUploadRateLimiter = rateLimit({
+  name: "image-upload",
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+});
+
+export const smsSendRateLimiter = rateLimit({
+  name: "sms-send",
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+});
+
+export const smsWebhookRateLimiter = rateLimit({
+  name: "sms-webhook",
+  windowMs: 15 * 60 * 1000,
+  max: 300,
 });

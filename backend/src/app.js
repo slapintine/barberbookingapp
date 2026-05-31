@@ -3,9 +3,17 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 
 import { env } from "./config/env.js";
-import { buildCorsOptions, securityHeaders, apiRateLimiter, authRateLimiter } from "./middleware/securityMiddleware.js";
+import {
+  buildCorsOptions,
+  securityHeaders,
+  apiRateLimiter,
+  authRateLimiter,
+  paymentRateLimiter,
+  bookingRateLimiter,
+} from "./middleware/securityMiddleware.js";
 import healthRoutes from "./routes/healthRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
@@ -18,9 +26,12 @@ import messageRoutes from "./routes/messageRoutes.js";
 import pushRoutes from "./routes/pushRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
+import customerSubscriptionRoutes from "./routes/customerSubscriptionRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import marketplaceRoutes from "./routes/marketplaceRoutes.js";
+import aiCoachRoutes from "./routes/aiCoachRoutes.js";
+import smsRoutes from "./routes/smsRoutes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorMiddleware.js";
 import { createRequestLogger } from "./config/logger.js";
 import db from "./config/db.js";
@@ -30,14 +41,16 @@ const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "same-origin" },
+  contentSecurityPolicy: false,
+}));
 app.use(securityHeaders);
-if (env.nodeEnv !== "production") {
-  app.use(cors(buildCorsOptions()));
-}
+app.use(cors(buildCorsOptions()));
 app.use("/api", apiRateLimiter);
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "3mb" }));
+app.use(express.urlencoded({ extended: true, limit: "3mb" }));
 
 app.use((req, res, next) => {
   req.id = req.get("x-request-id") || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -88,7 +101,7 @@ app.get("/api/ready", (req, res) => {
 app.use("/api/auth", authRateLimiter, authRoutes);
 app.use("/api/profiles", profileRoutes);
 app.use("/api/barbers", barberRoutes);
-app.use("/api/bookings", bookingRoutes);
+app.use("/api/bookings", bookingRateLimiter, bookingRoutes);
 app.use("/api/favorites", favouriteRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
@@ -96,8 +109,12 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/push", pushRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
-app.use("/api/payments", paymentRoutes);
+app.use("/api/customer-subscriptions", customerSubscriptionRoutes);
+app.use("/api/ai-coach", aiCoachRoutes);
+app.use("/api/payments", paymentRateLimiter, paymentRoutes);
+app.use("/api/sms", smsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/marketplace", marketplaceRoutes);
 app.use("/api", marketplaceRoutes);
 
 app.get("/api", (req, res) => {

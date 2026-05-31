@@ -16,7 +16,7 @@ import {
 import { getPlanFeatures } from "../../utils/subscriptionPlans.js";
 
 const PLAN_RANKS = {
-  PRO: 1,
+  PLUS: 1,
   PREMIUM: 2,
   PLATINUM: 3,
 };
@@ -156,8 +156,30 @@ function LockedCard({ title, text, onUpgradePlan }) {
       <FiLock />
       <strong>{title}</strong>
       <span>{text}</span>
-      <button type="button" className="secondary-btn-v4" onClick={onUpgradePlan}>
+      <button type="button" className="secondary-btn-v4" onClick={() => onUpgradePlan?.(text?.includes("Platinum") ? "PLATINUM" : "PREMIUM")}>
         {text?.includes("Platinum") ? "Upgrade to Platinum" : "Upgrade to Premium"}
+      </button>
+    </section>
+  );
+}
+
+function UpgradeInsightPrompt({ plan, onUpgradePlan }) {
+  if (plan.rank >= 3) return null;
+
+  const targetTier = plan.rank < 2 ? "PREMIUM" : "PLATINUM";
+  const promptText = plan.rank < 2
+    ? "Want deeper business insights? Upgrade to Premium or Platinum for advanced analytics, review insights, and growth tools."
+    : "Want AI coaching and top visibility? Upgrade to Platinum for advanced analytics, featured placement, and review management tools.";
+
+  return (
+    <section className="simple-card-v4 reports-upgrade-nudge-v16">
+      <FiZap />
+      <div>
+        <strong>More insights are available when you need them</strong>
+        <span>{promptText}</span>
+      </div>
+      <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={() => onUpgradePlan?.(targetTier)}>
+        View {targetTier === "PREMIUM" ? "Premium" : "Platinum"}
       </button>
     </section>
   );
@@ -165,7 +187,7 @@ function LockedCard({ title, text, onUpgradePlan }) {
 
 function ReportSection({ title, icon, children, locked, lockText, onUpgradePlan }) {
   if (locked) {
-    return <LockedCard title={title} text={lockText || "Unlock advanced insights with Premium."} onUpgradePlan={onUpgradePlan} />;
+    return null;
   }
 
   return (
@@ -221,7 +243,7 @@ function buildCoachSuggestions({ profileViews, filteredBookings, completedBookin
   return "Your business has healthy activity. Keep your availability fresh and use a featured promotion to convert more repeat bookings.";
 }
 
-export default function ReportsScreen({ barber, reviews = [], bookings = [], subscription: subscriptionProp, onUpgradePlan }) {
+export default function ReportsScreen({ barber, reviews = [], bookings = [], subscription: subscriptionProp, onUpgradePlan, onOpenAiCoach }) {
   const [dateFilter, setDateFilter] = useState("This month");
   const [showReviews, setShowReviews] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("All");
@@ -245,7 +267,7 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
 
   if (!barber) {
     return (
-      <div className="content-v4 standard-page-v4 reports-page-v9">
+      <div className="content-v4 app-page-v4 reports-page-v9">
         <div className="empty-state-v7">
           <FiStar />
           <strong>No business profile found</strong>
@@ -257,7 +279,7 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
 
   if (plan.isLocked) {
     return (
-      <div className="content-v4 standard-page-v4 reports-page-v9">
+      <div className="content-v4 app-page-v4 reports-page-v9">
         <section className="simple-card-v4 reports-upgrade-wall-v11">
           <FiLock />
           <div>
@@ -265,7 +287,7 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
             <div className="profile-sub-v4">Choose a plan to activate your business and unlock Business Insights.</div>
           </div>
           <div className="reports-plan-grid-v11">
-            <div><strong>PRO</strong><span>UGX 6,000/month</span><small>Basic stats and reviews</small></div>
+            <div><strong>Plus</strong><span>UGX 6,000/month</span><small>Basic stats and reviews</small></div>
             <div><strong>PREMIUM</strong><span>UGX 12,000/month</span><small>Full analytics and insights</small></div>
             <div><strong>PLATINUM</strong><span>UGX 24,000/month</span><small>Advanced BI and alerts</small></div>
           </div>
@@ -356,7 +378,7 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
   ];
 
   return (
-    <div className="content-v4 standard-page-v4 reports-page-v9 reports-page-v11">
+    <div className="content-v4 app-page-v4 reports-page-v9 reports-page-v11">
       <header className="reports-header-v11">
         <div>
           <div className="panel-title-v4">Business Insights</div>
@@ -451,6 +473,8 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
         </div>
       </ReportSection>
 
+      <UpgradeInsightPrompt plan={plan} onUpgradePlan={onUpgradePlan} />
+
       <ReportSection title="Customer Feedback Insights" icon={<FiStar />} locked={!planFeatures.reviewInsights} lockText="Unlock Review Insights with Premium." onUpgradePlan={onUpgradePlan}>
         <div className="reports-info-grid-v11">
           <div><strong>Most common positives</strong><span>{positives.length ? positives.map((item) => item.label).join(", ") : "Friendly service, Clean environment, Good results"}</span></div>
@@ -505,21 +529,12 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
             <strong>Weekly growth focus</strong>
             <span>{coachSuggestion}</span>
           </div>
-          <button type="button" className="primary-btn-v4" onClick={() => setCoachOpen(true)}>Ask Queless Coach</button>
+          <button type="button" className="primary-btn-v4" onClick={onOpenAiCoach || (() => setCoachOpen(true))}>Open AI Coach</button>
           <div className="reports-chip-list-v11">
             {coachPrompts.map((item) => <span key={item}>{item}</span>)}
           </div>
         </div>
       </ReportSection>
-
-      {plan.rank < 3 ? (
-        <div className="reports-locked-grid-v15">
-          {plan.rank < 2 ? <LockedCard title="Advanced Analytics" text="Upgrade to Premium for deeper booking and earnings analytics." onUpgradePlan={onUpgradePlan} /> : null}
-          <LockedCard title="AI Weekly Growth Report" text="Unlock weekly AI growth reports with Platinum." onUpgradePlan={onUpgradePlan} />
-          <LockedCard title="Homepage Feature" text="Unlock homepage feature placement with Platinum." onUpgradePlan={onUpgradePlan} />
-          <LockedCard title="Verified Badge" text="Unlock the Verified badge with Platinum." onUpgradePlan={onUpgradePlan} />
-        </div>
-      ) : null}
 
       {showReviews ? (
         <>

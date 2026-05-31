@@ -16,6 +16,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { DEFAULT_SERVICE_TYPES, SERVICE_CATEGORIES, formatServicePrice, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
+import { MAP_ICON_OPTIONS, MULTI_SERVICE_MAP_ICON_TYPE, getMapIconOption, getMapIconTypeForCategory, getMapIconTypeForSelectedCategories } from "../../utils/mapIconCategories.js";
 import { getGeolocationErrorMessage, reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
 import { formatMoney, formatSubscriptionPrice, getPlanFeatures, PROVIDER_PLANS } from "../../utils/subscriptionPlans.js";
 
@@ -24,7 +25,10 @@ const TOTAL_STEPS = 6;
 
 const DEFAULT_FORM = {
   businessName: "",
+  phone: "",
+  documentName: "",
   businessType: "Beauty & Grooming",
+  mapIconType: "beauty-grooming",
   location: "",
   services: [],
   pricing: "20000",
@@ -40,14 +44,14 @@ const DEFAULT_FORM = {
   standType: "individual",
   teamMembers: "",
   portfolio: [],
-  selectedPlan: "PRO",
+  selectedPlan: "PLUS",
   startFreeTrial: false,
 };
 
 function createBlankService(category = SERVICE_CATEGORIES[0]) {
   return {
     id: `service-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    service_name: category,
+    service_name: "",
     category,
     price_extra: 0,
     min_price: "",
@@ -60,6 +64,46 @@ function createBlankService(category = SERVICE_CATEGORIES[0]) {
     is_available: true,
     image: "",
   };
+}
+
+const PRICING_MODES = [
+  { value: "fixed", label: "Fixed", hint: "One clear price" },
+  { value: "range", label: "Range", hint: "Min and max price" },
+  { value: "starting_from", label: "From", hint: "Starting price" },
+  { value: "quote", label: "Quote", hint: "Customer requests quote" },
+];
+
+const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
+
+function getServiceLocationLabel(service = {}) {
+  const type = String(service.location_type || "provider_location").toLowerCase();
+  if (type === "customer_location") return "Customer location";
+  if (type === "online") return "Online";
+  return "Provider location";
+}
+
+function getServiceReadiness(service = {}) {
+  const pricingType = String(service.pricing_type || "fixed").toLowerCase();
+  if (!String(service.service_name || "").trim()) return "Needs title";
+  if (pricingType === "fixed" && Number(service.price_extra || 0) <= 0) return "Add fixed price";
+  if (pricingType === "range") {
+    if (Number(service.min_price || 0) <= 0 || Number(service.max_price || 0) <= 0) return "Complete range";
+    if (Number(service.max_price) <= Number(service.min_price)) return "Check range";
+  }
+  if (pricingType === "starting_from" && Number(service.starting_price || 0) <= 0) return "Add start price";
+  if (Number(service.duration_minutes || 0) < 5) return "Add duration";
+  return pricingType === "quote" ? "Quote required" : "Ready";
+}
+
+function cleanPricingForMode(service = {}, pricingType = "fixed") {
+  const next = { ...service, pricing_type: pricingType };
+  if (pricingType !== "fixed") next.price_extra = 0;
+  if (pricingType !== "range") {
+    next.min_price = "";
+    next.max_price = "";
+  }
+  if (pricingType !== "starting_from") next.starting_price = "";
+  return next;
 }
 
 function normalizeFormServices(value, fallbackToDefaults = false) {
@@ -277,6 +321,24 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
   const maxServices = planFeatures.maxServices;
   const maxPhotos = planFeatures.maxPhotos;
   const selectedCategories = useMemo(() => [...new Set(services.map((service) => service.category).filter(Boolean))], [services]);
+  const selectedCategoryItems = useMemo(
+    () =>
+      selectedCategories.map((category) => ({
+        key: getMapIconTypeForCategory(category),
+        label: category,
+        iconType: getMapIconTypeForCategory(category),
+      })),
+    [selectedCategories]
+  );
+  const selectedMapIconType = useMemo(() => getMapIconTypeForSelectedCategories(selectedCategories), [selectedCategories]);
+  const selectedMapIconOption = selectedMapIconType ? getMapIconOption(selectedMapIconType) : null;
+  const effectiveMapIconType = selectedMapIconType || form.mapIconType || getMapIconTypeForCategory(form.businessType);
+  const mapPreviewTitle = selectedMapIconOption?.label || "No map icon selected";
+  const mapPreviewText = !selectedMapIconOption
+    ? "Choose at least one service category to set your map icon."
+    : selectedMapIconType === MULTI_SERVICE_MAP_ICON_TYPE
+    ? "This icon will appear when your business spans several service categories."
+    : "This icon will appear on the Queless map.";
   const canSubmit = true;
 
   const stepTitles = [
@@ -307,7 +369,10 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
   const updateService = (index, updates) => {
     setForm((prev) => {
       const next = normalizeFormServices(prev.services);
-      next[index] = { ...next[index], ...updates };
+      const merged = { ...next[index], ...updates };
+      next[index] = updates.pricing_type
+        ? cleanPricingForMode(merged, updates.pricing_type)
+        : merged;
       return { ...prev, services: next };
     });
   };
@@ -336,12 +401,16 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     setForm((prev) => {
       const current = normalizeFormServices(prev.services);
       const selected = current.some((service) => service.category === category);
+      const nextServices = selected
+        ? current.filter((service) => service.category !== category)
+        : [...current, createBlankService(category)];
+      const nextCategories = [...new Set(nextServices.map((service) => service.category).filter(Boolean))];
+      const nextMapIconType = getMapIconTypeForSelectedCategories(nextCategories);
       return {
         ...prev,
-        businessType: selected && prev.businessType === category ? current.find((service) => service.category !== category)?.category || prev.businessType : prev.businessType,
-        services: selected
-          ? current.filter((service) => service.category !== category)
-          : [...current, createBlankService(category)],
+        businessType: nextCategories[0] || prev.businessType,
+        mapIconType: nextMapIconType,
+        services: nextServices,
       };
     });
   };
@@ -386,20 +455,28 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     if (step === 1) {
       if (!form.businessName?.trim()) return "Please enter your business name.";
       if (!form.businessType?.trim()) return "Please select your main business category.";
+      if (!form.phone?.trim()) return "Please add a business phone number.";
+      if (String(form.documentName || "").trim().length > 120 || /[<>]/.test(String(form.documentName || ""))) {
+        return "Verification document reference must be 120 characters or fewer and cannot contain HTML.";
+      }
     }
     if (step === 2) {
       if (!form.location?.trim() && (!form.latitude || !form.longitude)) return "Please add your business location or use current location.";
       if (!form.scheduleStart || !form.scheduleEnd) return "Please add your opening and closing time.";
     }
     if (step === 3) {
-      if (!selectedCategories.length) return "Please choose at least one service category.";
+      if (!selectedCategories.length) return "Please select at least one service category.";
     }
     if (step === 4) {
       if (!services.length) return "Please add at least one service.";
       if (Number.isFinite(maxServices) && services.length > maxServices) return `You have reached the ${selectedPlan.name} limit of ${maxServices} services. Upgrade to add more.`;
       const incomplete = services.find((service) => !service.service_name?.trim());
       if (incomplete) return "Please give each service a clear listing title.";
+      const duplicateNames = new Set();
       for (const service of services) {
+        const key = `${String(service.service_name || "").trim().toLowerCase()}|${String(service.category || "").trim().toLowerCase()}`;
+        if (duplicateNames.has(key)) return "Please remove duplicate services in the same category.";
+        duplicateNames.add(key);
         const pricingType = String(service.pricing_type || "fixed");
         if (pricingType === "fixed" && Number(service.price_extra || 0) <= 0) return "Please enter a valid price.";
         if (pricingType === "range") {
@@ -407,6 +484,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
           if (Number(service.max_price) <= Number(service.min_price)) return "Maximum price must be greater than minimum price.";
         }
         if (pricingType === "starting_from" && Number(service.starting_price || 0) <= 0) return "Please enter a valid price.";
+        if (Number(service.duration_minutes || 0) < 5) return "Please set a realistic duration for each service.";
       }
     }
     if (step === 5) {
@@ -434,7 +512,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     setCurrentStep((prev) => Math.max(1, prev - 1));
   };
 
-  const submitWizard = () => {
+  const submitWizard = (intent = "draft") => {
     for (let step = 1; step <= TOTAL_STEPS - 1; step += 1) {
       const message = validateStep(step);
       if (message) {
@@ -444,12 +522,23 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
       }
     }
     setError("");
-    onSubmit({ ...form, services });
+    onSubmit({
+      ...form,
+      submitIntent: intent,
+      categories: selectedCategoryItems.map((category) => category.key),
+      selectedCategories: selectedCategoryItems,
+      primaryCategory: selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : null,
+      businessType: selectedCategories[0] || form.businessType,
+      mapIconType: selectedMapIconType,
+      services,
+    });
   };
 
   if (!show) return null;
 
   const activeService = services[activeServiceIndex];
+  const activePricingType = String(activeService?.pricing_type || "fixed").toLowerCase();
+  const activeServiceReadiness = activeService ? getServiceReadiness(activeService) : "";
 
   return (
     <>
@@ -509,10 +598,31 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                     <select
                       className="field-input-v4 profile-input-v4"
                       value={form.businessType}
-                      onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value }))}
+                      onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value, mapIconType: prev.mapIconType || getMapIconTypeForCategory(e.target.value) }))}
                     >
                       {SERVICE_CATEGORIES.map((category) => (
                         <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="label-v4">
+                    Business phone
+                    <input
+                      className="field-input-v4 profile-input-v4"
+                      value={form.phone}
+                      placeholder="+256 700 000 000"
+                      onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                    />
+                  </label>
+                  <label className="label-v4">
+                    Map icon
+                    <select
+                      className="field-input-v4 profile-input-v4"
+                      value={effectiveMapIconType}
+                      onChange={(e) => setForm((prev) => ({ ...prev, mapIconType: e.target.value }))}
+                    >
+                      {MAP_ICON_OPTIONS.map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
                       ))}
                     </select>
                   </label>
@@ -533,6 +643,15 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       placeholder="Tell customers what makes your business special."
                       value={form.introText}
                       onChange={(e) => setForm((prev) => ({ ...prev, introText: e.target.value }))}
+                    />
+                  </label>
+                  <label className="label-v4">
+                    Verification document or reference
+                    <input
+                      className="field-input-v4 profile-input-v4"
+                      value={form.documentName}
+                      placeholder="National ID, business permit, trade license, or secure upload reference"
+                      onChange={(e) => setForm((prev) => ({ ...prev, documentName: e.target.value }))}
                     />
                   </label>
                 </div>
@@ -640,6 +759,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                         type="button"
                         key={category}
                         className={selected ? "business-category-chip-v10 active" : "business-category-chip-v10"}
+                        aria-pressed={selected}
                         onClick={() => toggleCategory(category)}
                       >
                         {selected ? <FiCheckCircle /> : <FiPlus />}
@@ -652,12 +772,23 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                   <strong>{selectedCategories.length}</strong>
                   <span>{selectedCategories.length === 1 ? "category selected" : "categories selected"}</span>
                 </div>
+                <div className={selectedMapIconOption ? "map-icon-preview-v10" : "map-icon-preview-v10 empty"}>
+                  {selectedMapIconOption ? (
+                    <span dangerouslySetInnerHTML={{ __html: selectedMapIconOption.svg }} />
+                  ) : (
+                    <span><FiMapPin /></span>
+                  )}
+                  <div>
+                    <strong>{mapPreviewTitle}</strong>
+                    <small>{mapPreviewText}</small>
+                  </div>
+                </div>
               </section>
             ) : null}
 
             {currentStep === 4 ? (
               <section className="business-step-card-v10">
-                <WizardNotice>Add the actual services customers can book. Keep each service clear and specific.</WizardNotice>
+                <WizardNotice>Add the actual services customers can book. Use quote-required only when the price depends on scope.</WizardNotice>
                 <div className="service-summary-list-v10">
                   <WizardNotice>
                     {Number.isFinite(maxServices)
@@ -676,7 +807,11 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       </span>
                       <span className="service-summary-copy-v10">
                         <strong>{service.service_name || service.category || "Service"}</strong>
-                        <small>{service.category || "Service"} · {formatServicePrice(service)}</small>
+                        <small>{service.category || "Service"} - {formatServicePrice(service)}</small>
+                        <em>{service.duration_minutes || 30} mins - {getServiceLocationLabel(service)}</em>
+                      </span>
+                      <span className={getServiceReadiness(service) === "Ready" ? "service-ready-pill-v10 ready" : "service-ready-pill-v10"}>
+                        {getServiceReadiness(service)}
                       </span>
                       <FiChevronRight />
                     </button>
@@ -689,10 +824,21 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                 {activeService ? (
                   <div className="single-service-editor-v10">
                     <div className="single-service-head-v10">
-                      <strong>Edit selected service</strong>
+                      <div>
+                        <strong>Edit selected service</strong>
+                        <small>{activeServiceReadiness}</small>
+                      </div>
                       <button type="button" onClick={() => removeService(activeServiceIndex)}>
                         <FiTrash2 /> Remove
                       </button>
+                    </div>
+                    <div className="service-preview-card-v10">
+                      <div>
+                        <span>Customer sees</span>
+                        <strong>{activeService.service_name || "Service title"}</strong>
+                        <small>{formatServicePrice(activeService)} - {activeService.duration_minutes || 30} mins - {getServiceLocationLabel(activeService)}</small>
+                      </div>
+                      <em>{activePricingType === "quote" ? "Quote flow" : "Direct booking"}</em>
                     </div>
                     <label className="availability-toggle-v10">
                       <input
@@ -724,38 +870,29 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                         </select>
                       </label>
                     </div>
-                    <div className="business-field-grid-v10 two-v10">
-                      <label className="label-v4">
-                        Pricing type
-                        <select
-                          className="field-input-v4 profile-input-v4"
-                          value={activeService.pricing_type || "fixed"}
-                          onChange={(e) => updateService(activeServiceIndex, { pricing_type: e.target.value })}
-                        >
-                          <option value="fixed">Fixed Price</option>
-                          <option value="range">Price Range</option>
-                          <option value="starting_from">Starting From</option>
-                          <option value="quote">Quote Required</option>
-                        </select>
-                      </label>
-                      <label className="label-v4">
-                        Duration minutes
-                        <input
-                          className="field-input-v4 profile-input-v4"
-                          type="number"
-                          min="5"
-                          value={activeService.duration_minutes || 30}
-                          onChange={(e) => updateService(activeServiceIndex, { duration_minutes: Number(e.target.value || 30) })}
-                        />
-                      </label>
+                    <div className="service-editor-group-v10">
+                      <div className="service-editor-label-v10">Pricing</div>
+                      <div className="pricing-mode-grid-v10">
+                        {PRICING_MODES.map((mode) => (
+                          <button
+                            type="button"
+                            key={mode.value}
+                            className={activePricingType === mode.value ? "pricing-mode-card-v10 active" : "pricing-mode-card-v10"}
+                            onClick={() => updateService(activeServiceIndex, { pricing_type: mode.value })}
+                          >
+                            <strong>{mode.label}</strong>
+                            <span>{mode.hint}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    {String(activeService.pricing_type || "fixed") === "fixed" ? (
+                    {activePricingType === "fixed" ? (
                       <label className="label-v4">
                         Fixed price
                         <input className="field-input-v4 profile-input-v4" type="number" min="1" value={activeService.price_extra || ""} onChange={(e) => updateService(activeServiceIndex, { price_extra: Number(e.target.value || 0) })} />
                       </label>
                     ) : null}
-                    {String(activeService.pricing_type || "fixed") === "range" ? (
+                    {activePricingType === "range" ? (
                       <div className="business-field-grid-v10 two-v10">
                         <label className="label-v4">
                           Minimum price
@@ -767,27 +904,64 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                         </label>
                       </div>
                     ) : null}
-                    {String(activeService.pricing_type || "fixed") === "starting_from" ? (
+                    {activePricingType === "starting_from" ? (
                       <label className="label-v4">
                         Starting price
                         <input className="field-input-v4 profile-input-v4" type="number" min="1" value={activeService.starting_price || ""} onChange={(e) => updateService(activeServiceIndex, { starting_price: Number(e.target.value || 0) })} />
                       </label>
                     ) : null}
-                    {String(activeService.pricing_type || "fixed") === "quote" ? (
-                      <div className="wizard-note-v10">This service will show as Price on consultation.</div>
+                    {activePricingType === "quote" ? (
+                      <div className="wizard-note-v10">Customers will see Request quote and cannot directly book this service until you agree on price and scope.</div>
                     ) : null}
-                    <label className="label-v4">
-                      Location type
-                      <select
-                        className="field-input-v4 profile-input-v4"
-                        value={activeService.location_type || "provider_location"}
-                        onChange={(e) => updateService(activeServiceIndex, { location_type: e.target.value })}
-                      >
-                          <option value="provider_location">Provider location</option>
-                          <option value="customer_location">Customer location</option>
-                          <option value="online">Online</option>
-                      </select>
-                    </label>
+                    <div className="service-editor-group-v10">
+                      <div className="service-editor-label-v10">Duration</div>
+                      <div className="duration-chip-grid-v10">
+                        {DURATION_PRESETS.map((minutes) => (
+                          <button
+                            type="button"
+                            key={minutes}
+                            className={Number(activeService.duration_minutes || 30) === minutes ? "duration-chip-v10 active" : "duration-chip-v10"}
+                            onClick={() => updateService(activeServiceIndex, { duration_minutes: minutes })}
+                          >
+                            {minutes}m
+                          </button>
+                        ))}
+                      </div>
+                      <label className="label-v4">
+                        Custom duration minutes
+                        <input
+                          className="field-input-v4 profile-input-v4"
+                          type="number"
+                          min="5"
+                          value={activeService.duration_minutes || 30}
+                          onChange={(e) => updateService(activeServiceIndex, { duration_minutes: Number(e.target.value || 30) })}
+                        />
+                      </label>
+                    </div>
+                    <div className="service-editor-group-v10">
+                      <div className="service-editor-label-v10">Where this service happens</div>
+                      <div className="pricing-mode-grid-v10 location-mode-grid-v10">
+                        {[
+                          ["provider_location", "Provider location", form.location || "Your business address"],
+                          ["customer_location", "Customer location", "Home service or on-site visit"],
+                        ].map(([value, label, hint]) => (
+                          <button
+                            type="button"
+                            key={value}
+                            className={String(activeService.location_type || "provider_location") === value ? "pricing-mode-card-v10 active" : "pricing-mode-card-v10"}
+                            onClick={() => {
+                              updateService(activeServiceIndex, { location_type: value });
+                              if (value === "customer_location") {
+                                setForm((prev) => ({ ...prev, homeServiceEnabled: true }));
+                              }
+                            }}
+                          >
+                            <strong>{label}</strong>
+                            <span>{hint}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <ImageUploadInput
                       compact
                       image={activeService.image || ""}
@@ -845,7 +1019,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       readOnly
                     />
                     <span>
-                      <strong>Cash payment — Always available</strong>
+                      <strong>Cash payment - Always available</strong>
                       <small>Customers can pay cash directly after the service.</small>
                     </span>
                   </label>
@@ -914,14 +1088,17 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                     </div>
                   ))}
                   <div className="wizard-note-v10">
-                    Your business will be saved first, then you can start a Pro trial or subscribe before it appears to customers.
+                    Save a draft to finish later, or continue to payment to activate after Mobile Money succeeds.
                   </div>
+                </div>
+                <div className="wizard-note-v10">
+                  Verification pending: Queless may review your phone, service area, profile image, documents, pricing, and service list before customers can book you publicly.
                 </div>
                 <div className="review-business-card-v10">
                   {form.image ? <img src={form.image} alt="Business preview" /> : <span><FiCamera /></span>}
                   <div>
                     <strong>{form.businessName || "Business name missing"}</strong>
-                    <small>{form.businessType || "Category missing"}</small>
+                    <small>{form.businessType || "Category missing"} - {getMapIconOption(effectiveMapIconType).label} map icon</small>
                   </div>
                 </div>
                 <div className="review-grid-v10">
@@ -929,6 +1106,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                   <div><FiClock /><span>Hours</span><strong>{form.scheduleStart} - {form.scheduleEnd}</strong></div>
                   <div><FiUsers /><span>Services</span><strong>{services.length}</strong></div>
                   <div><FiCreditCard /><span>Payments</span><strong>{["Cash", form.acceptsWallet ? "Wallet" : ""].filter(Boolean).join(", ")}</strong></div>
+                  <div><FiCheckCircle /><span>Verification</span><strong>{form.documentName || "Pending document review"}</strong></div>
                 </div>
                 <div className="review-list-v10">
                   <strong>Service categories</strong>
@@ -938,7 +1116,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                   <strong>Services added</strong>
                   {services.length ? (
                     services.map((service, index) => (
-                      <p key={service.id || index}>{service.service_name || service.category} · {formatServicePrice(service)}</p>
+                      <p key={service.id || index}>{service.service_name || service.category} - {formatServicePrice(service)}</p>
                     ))
                   ) : (
                     <p>No services added</p>
@@ -955,7 +1133,14 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
             {currentStep < TOTAL_STEPS ? (
               <button type="button" className="primary-btn-v4" onClick={goNext}>Continue</button>
             ) : (
-              <button type="button" className="primary-btn-v4" onClick={submitWizard} disabled={!canSubmit}>{submitLabel}</button>
+              <>
+                <button type="button" className="secondary-btn-v4" onClick={() => submitWizard("draft")} disabled={!canSubmit}>
+                  Save as Draft
+                </button>
+                <button type="button" className="primary-btn-v4" onClick={() => submitWizard("payment")} disabled={!canSubmit}>
+                  Continue to Payment
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -971,11 +1156,14 @@ export function EditBarberModal({ show, barber, onClose, onSubmit }) {
     if (!show || !barber) return;
     setForm({
       businessName: barber.business_name || "",
+      phone: barber.phone || "",
+      documentName: barber.verification_document_name || barber.document_name || barber.documentName || "",
       location: barber.location || "",
       services: Array.isArray(barber.services)
         ? barber.services.map(normalizeServiceForBooking)
         : DEFAULT_SERVICE_TYPES.map(normalizeServiceForBooking),
       businessType: barber.business_type || barber.businessType || "Beauty & Grooming",
+      mapIconType: barber.map_icon_type || barber.mapIconType || getMapIconTypeForCategory(barber.business_type || barber.businessType || "Beauty & Grooming"),
       pricing: String(barber.price_from || ""),
       scheduleStart: barber.availability?.start || "08:00",
       scheduleEnd: barber.availability?.end || "20:00",
@@ -994,7 +1182,7 @@ export function EditBarberModal({ show, barber, onClose, onSubmit }) {
             .join(", ")
         : "",
       portfolio: Array.isArray(barber.portfolio) ? barber.portfolio : [],
-      selectedPlan: barber.subscription?.tier || barber.subscription_tier || "PRO",
+      selectedPlan: barber.subscription?.tier || barber.subscription_tier || "PLUS",
       startFreeTrial: false,
     });
   }, [show, barber]);

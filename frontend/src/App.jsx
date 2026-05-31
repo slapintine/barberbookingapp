@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { FiAlertTriangle } from "react-icons/fi";
 import { io } from "socket.io-client";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
@@ -17,15 +18,24 @@ import { createMessage, getMessages } from "./api/chatApi.js";
 import { addFavorite, getFavorites as getFavoriteRows, removeFavorite } from "./api/favoritesApi.js";
 import { getNotifications, markNotificationReadRequest } from "./api/notificationsApi.js";
 import { getProfile, saveProfileRequest } from "./api/profilesApi.js";
-import { createReview, deleteReview, getBarberReviews, getMyReviews, updateReview } from "./api/reviewsApi.js";
+import { createReview, deleteReview, getBarberReviews, getManagedBarberReviews, getMyReviews, setReviewPublicBlock, updateReview } from "./api/reviewsApi.js";
 import { getGeolocationErrorMessage, reverseGeocodeCoordinates } from "./utils/locationUtils.js";
 import { getMySubscription, startSubscriptionUpgrade, verifySubscriptionUpgrade } from "./api/subscriptionsApi.js";
-import { getMyWallet, requestWalletWithdrawal } from "./api/walletApi.js";
+import {
+  getMyCustomerSubscription,
+  startCustomerSubscriptionUpgrade,
+  verifyCustomerSubscriptionUpgrade,
+} from "./api/customerSubscriptionsApi.js";
+import { getCustomerWallet, getMyWallet, requestWalletWithdrawal } from "./api/walletApi.js";
 import AppHeader from "./components/ui/AppHeader.jsx";
 import AccountMenu from "./components/ui/AccountMenu.jsx";
 import BottomNav from "./components/ui/BottomNav.jsx";
+import LoadingScreen from "./components/LoadingScreen.jsx";
+import PaymentFlowModal from "./components/payments/PaymentFlowModal.jsx";
 import MarketplaceMapOverlay from "./components/marketplace/MarketplaceMapOverlay.jsx";
-import { getAuthToken, SOCKET_URL } from "./config/api.js";
+import { NotificationSheet, NotificationToast } from "./features/notifications/Notifications.jsx";
+import { apiFetch, getAuthToken, SOCKET_URL } from "./config/api.js";
+import { listenForForegroundNotifications } from "./pushNotifications.js";
 import useAutoScrollToBottom from "./hooks/useAutoScrollToBottom.js";
 import useAvailableTimeSlots from "./hooks/useAvailableTimeSlots.js";
 import useBookingAvailability from "./hooks/useBookingAvailability.js";
@@ -52,6 +62,8 @@ import {
   serviceMatchesCategory,
 } from "./utils/serviceCatalog.js";
 import { isBookingPaymentMethodEnabled, isOnlinePaymentMethod } from "./utils/paymentLabels.js";
+import { DEFAULT_CUSTOMER_SUBSCRIPTION_STATE, isCustomerPremiumActive } from "./utils/customerPremium.js";
+import { isPublicMarketplaceProvider } from "./utils/marketplaceServices.js";
 
 const BarberProfileSheet = lazy(() => import("./features/barbers/BarberProfileSheet.jsx"));
 const AuthScreen = lazy(() => import("./features/auth/AuthScreen.jsx"));
@@ -64,19 +76,18 @@ const BookingsScreen = lazy(() => import("./pages/BookingsPage.jsx"));
 const ProfileScreen = lazy(() => import("./pages/ProfilePage.jsx"));
 const DashboardScreen = lazy(() => import("./pages/DashboardPage.jsx"));
 const SettingsScreen = lazy(() => import("./pages/SettingsPage.jsx"));
+const HelpCenterScreen = lazy(() => import("./pages/HelpCenterPage.jsx"));
+const PoliciesScreen = lazy(() => import("./pages/PoliciesPage.jsx"));
+const SupportScreen = lazy(() => import("./pages/SupportPage.jsx"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel.jsx"));
 const BookingModal = lazy(() => import("./features/bookings/BookingModal.jsx"));
 const BookingConfirmationScreen = lazy(() => import("./features/bookings/BookingConfirmationScreen.jsx"));
 const QuoteRequestModal = lazy(() => import("./features/bookings/QuoteRequestModal.jsx"));
 const ChatSheet = lazy(() => import("./features/chat/ChatSheet.jsx"));
 const ReportsScreen = lazy(() => import("./features/barbers/ReportsScreen.jsx"));
+const AiCoachScreen = lazy(() => import("./features/barbers/AiCoachScreen.jsx"));
+const SmartMatchModal = lazy(() => import("./features/smart-match/SmartMatchModal.jsx"));
 const TrialUpgradeScreen = lazy(() => import("./features/barbers/TrialUpgradeScreen.jsx"));
-const NotificationSheet = lazy(() =>
-  import("./features/notifications/Notifications.jsx").then((module) => ({ default: module.NotificationSheet }))
-);
-const NotificationToast = lazy(() =>
-  import("./features/notifications/Notifications.jsx").then((module) => ({ default: module.NotificationToast }))
-);
 const RegisterBarberModal = lazy(() =>
   import("./features/barbers/BarberStandModals.jsx").then((module) => ({ default: module.RegisterBarberModal }))
 );
@@ -144,11 +155,26 @@ function fileToDataUrl(file) {
 }
 
 function getStoredUsers() {
-  return readStored("users", "auth", []);
+  const rawUsers = readStored("users", "auth", []);
+  const safeUsers = rawUsers.map((user) => {
+    const { password, ...safeUser } = user || {};
+    return safeUser;
+  });
+  if (rawUsers.some((user) => Object.prototype.hasOwnProperty.call(user || {}, "password"))) {
+    writeStored("users", "auth", safeUsers);
+  }
+  return safeUsers;
 }
 
 function saveStoredUsers(users) {
-  return writeStored("users", "auth", users);
+  return writeStored(
+    "users",
+    "auth",
+    (users || []).map((user) => {
+      const { password, ...safeUser } = user || {};
+      return safeUser;
+    })
+  );
 }
 
 function getStoredBarbers() {
@@ -266,11 +292,10 @@ const DEFAULT_SUBSCRIPTION_STATE = {
   },
 };
 
-const VALID_PROVIDER_PLANS = ["PRO", "PREMIUM", "PLATINUM"];
+const VALID_PROVIDER_PLANS = ["PLUS", "PREMIUM", "PLATINUM"];
 
 function normalizeProviderPlan(plan) {
   const normalized = String(plan || "").trim().toUpperCase();
-  if (normalized === "STANDARD" || normalized === "STARTER" || normalized === "FREE") return "PRO";
   return VALID_PROVIDER_PLANS.includes(normalized) ? normalized : "";
 }
 
@@ -280,55 +305,8 @@ function hasProviderAccess(subscription) {
   return Boolean(plan) && (status === "active" || status === "trialing" || subscription?.is_trial);
 }
 
-function isFutureDate(value) {
-  if (!value) return false;
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) && timestamp > Date.now();
-}
-
 function isPublicProvider(barber) {
-  const plan = normalizeProviderPlan(barber?.subscription?.tier || barber?.subscription_tier);
-  const businessStatus = String(barber?.business_status || barber?.status || "").toLowerCase();
-  const subscriptionStatus = String(barber?.subscription?.status || barber?.subscription_status || "").toLowerCase();
-  const trialStatus = String(barber?.trial_status || "").toLowerCase();
-  const adminApproved =
-    barber?.admin_approved === 1 ||
-    barber?.admin_approved === true ||
-    ["approved", "manual_approved", "admin_approved"].includes(subscriptionStatus);
-  const isDemo = barber?.is_demo === 1 || barber?.is_demo === true;
-  const published = barber?.is_published === 1 || barber?.is_published === true || barber?.isPublished === true;
-  const validBusinessStatuses = new Set(["active", "approved", "live"]);
-  const blockedStatuses = new Set([
-    "almost_ready",
-    "cancelled",
-    "draft",
-    "expired",
-    "inactive",
-    "pending_subscription",
-    "pending_payment",
-    "payment_failed",
-    "plan_required",
-    "rejected",
-    "subscription_expired",
-    "suspended",
-    "trial_expired",
-  ]);
-  const hasActiveSubscription =
-    subscriptionStatus === "active" &&
-    isFutureDate(barber?.subscription?.expires_at || barber?.subscription_expires_at || barber?.subscriptionEndDate);
-  const hasActiveTrial =
-    subscriptionStatus === "trialing" &&
-    trialStatus === "active" &&
-    isFutureDate(barber?.trial_ends_at || barber?.trialEndDate || barber?.subscription?.expires_at);
-
-  return (
-    Boolean(plan) &&
-    validBusinessStatuses.has(businessStatus) &&
-    published &&
-    !isDemo &&
-    !blockedStatuses.has(subscriptionStatus) &&
-    (hasActiveSubscription || hasActiveTrial || adminApproved)
-  );
+  return isPublicMarketplaceProvider(barber);
 }
 
 const FILTERS = ["All", "Top Rated", "Nearby", "Open Now", "Customer Location", "Verified", "Featured"];
@@ -346,18 +324,27 @@ const BOOKINGS_PATH = "/bookings";
 const INBOX_PATH = "/inbox";
 const DASHBOARD_PATH = "/dashboard";
 const REPORTS_PATH = "/reports";
+const AI_COACH_PATH = "/provider/ai-coach";
 const PROFILE_PATH = "/profile";
 const LOGIN_PATH = "/login";
 const SIGNUP_PATH = "/signup";
 const REGISTER_PATH = "/register";
 const FORGOT_PASSWORD_PATH = "/forgot-password";
 const ADMIN_PATH = "/super-admin-access";
+const ADMIN_SMS_PATH = "/admin/sms";
 const LEGACY_ADMIN_PATH = "/superadminaccess";
 const UPGRADE_PATH = "/upgrade";
 const LEGACY_UPGRADE_PATH = "/upgrade-plan";
 const SERVICES_PATH = "/services";
 const MAP_PATH = "/map";
+const HELP_PATH = "/help";
+const POLICIES_PATH = "/policies";
+const SUPPORT_PATH = "/support";
 const BOOKING_CONFIRMATION_PATH = "/booking-confirmed";
+const BOOKING_REFRESH_MIN_INTERVAL_MS = 60 * 1000;
+const BOOKING_REFRESH_FALLBACK_INTERVAL_MS = 2 * 60 * 1000;
+const BOOKING_REFRESH_RATE_LIMIT_FALLBACK_MS = 5 * 60 * 1000;
+const BOOKING_REFRESH_MAX_BACKOFF_MS = 15 * 60 * 1000;
 const BOOKING_ONLINE_PAYMENTS_ENABLED =
   String(import.meta.env.VITE_BOOKING_ONLINE_PAYMENTS_ENABLED || "").toLowerCase() === "true";
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin", "super-admin"]);
@@ -412,6 +399,7 @@ function getScreenFromPath(pathname, hasToken) {
   if (
     normalized === "/" ||
     normalized === ADMIN_PATH ||
+    normalized === ADMIN_SMS_PATH ||
     normalized === LEGACY_ADMIN_PATH ||
     normalized === UPGRADE_PATH ||
     normalized === LEGACY_UPGRADE_PATH
@@ -430,19 +418,50 @@ function getAuthModeFromPath(pathname) {
 
 function getTabFromPath(pathname, user) {
   const normalized = stripAppBasePath(pathname);
+  if (normalized === ADMIN_SMS_PATH) return userIsAdmin(user) ? "adminSms" : "home";
   if (normalized === ADMIN_PATH || normalized === LEGACY_ADMIN_PATH) return userIsAdmin(user) ? "admin" : "home";
   if (normalized === UPGRADE_PATH || normalized === LEGACY_UPGRADE_PATH) return "upgrade";
   if (normalized === MAP_PATH) return "home";
   if (normalized === BOOKING_CONFIRMATION_PATH || normalized.startsWith(`${BOOKING_CONFIRMATION_PATH}/`)) return "bookingConfirmation";
   if (normalized === SERVICES_PATH) return "searchResults";
+  if (normalized === HELP_PATH) return "help";
+  if (normalized === POLICIES_PATH) return "policies";
+  if (normalized === SUPPORT_PATH) return "support";
   if (normalized === HOME_PATH || normalized === APP_PATH) return "home";
   if (normalized === CATEGORIES_PATH) return "categories";
   if (normalized === BOOKINGS_PATH) return "bookings";
   if (normalized === INBOX_PATH) return "inbox";
   if (normalized === DASHBOARD_PATH) return userIsAdmin(user) ? "admin" : "dashboard";
   if (normalized === REPORTS_PATH) return userIsAdmin(user) ? "adminReports" : "reports";
+  if (normalized === AI_COACH_PATH) return userIsAdmin(user) ? "adminReports" : "aiCoach";
   if (normalized === PROFILE_PATH) return "profile";
   return "home";
+}
+
+function isAuthRoutePath(pathname) {
+  const normalized = stripAppBasePath(pathname);
+  return normalized === LOGIN_PATH || normalized === SIGNUP_PATH || normalized === REGISTER_PATH || normalized === FORGOT_PASSWORD_PATH;
+}
+
+function getDefaultTabForUser(user = {}) {
+  if (userIsAdmin(user)) return "admin";
+  if (userIsProvider(user)) return "dashboard";
+  return "home";
+}
+
+function getPostLoginTab(pathname, user = {}) {
+  const normalized = stripAppBasePath(pathname);
+  if (!normalized || normalized === APP_PATH || isAuthRoutePath(pathname)) {
+    return getDefaultTabForUser(user);
+  }
+
+  const requestedTab = getTabFromPath(pathname, user);
+  if (requestedTab === "dashboard" && !userIsProvider(user) && !userIsAdmin(user)) return "home";
+  if ((requestedTab === "admin" || requestedTab === "adminReports" || requestedTab === "adminSms") && !userIsAdmin(user)) {
+    return getDefaultTabForUser(user);
+  }
+  if ((requestedTab === "reports" || requestedTab === "aiCoach") && !userIsProvider(user)) return getDefaultTabForUser(user);
+  return requestedTab || getDefaultTabForUser(user);
 }
 
 function getBookingIdFromPath(pathname) {
@@ -453,7 +472,18 @@ function getBookingIdFromPath(pathname) {
 
 function isAdminPath(pathname) {
   const normalized = stripAppBasePath(pathname);
-  return normalized === ADMIN_PATH || normalized === LEGACY_ADMIN_PATH;
+  return normalized === ADMIN_PATH || normalized === ADMIN_SMS_PATH || normalized === LEGACY_ADMIN_PATH;
+}
+
+function getRetryAfterMs(error) {
+  const retryAfter = String(error?.retryAfter || "").trim();
+  if (!retryAfter) return 0;
+
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+  const retryAt = Date.parse(retryAfter);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : 0;
 }
 
 function readSearchRouteParams() {
@@ -608,7 +638,7 @@ function safeJsonParse(value, fallback) {
 
 function getBarberServices(barber) {
   if (!barber?.services?.length) {
-    return SERVICE_TYPES.map(normalizeServiceForBooking);
+    return [];
   }
 
   const available = getAvailableServices(barber.services);
@@ -667,7 +697,9 @@ function mapServerBooking(item) {
     teamMemberTitle: item.team_member_title || item.teamMemberTitle || "",
     customerUsername: item.customer_username || "",
     customerName: item.customer_full_name || item.customer_username || "",
-    location: item.location || "",
+    location: item.booking_address || item.bookingAddress || item.location || "",
+    bookingLocationType: item.booking_location_type || item.bookingLocationType || "provider_location",
+    bookingAddress: item.booking_address || item.bookingAddress || item.location || "",
     service: item.service_name,
     date: item.booking_date,
     dateValue: item.booking_date,
@@ -748,6 +780,7 @@ function normalizeBarber(barber, index) {
     accepts_cash: Number(barber.accepts_cash ?? barber.acceptsCash ?? fallback.accepts_cash ?? 1),
     stand_type: String(barber.stand_type || barber.standType || fallback.stand_type || "individual").toLowerCase() === "shop" ? "shop" : "individual",
     business_type: String(barber.business_type || barber.businessType || getAvailableServices(barber.services || [])[0]?.category || "Services"),
+    map_icon_type: String(barber.map_icon_type || barber.mapIconType || barber.iconCategory || ""),
     home_service_enabled: Number(
       barber.home_service_enabled ??
       barber.homeServiceEnabled ??
@@ -756,6 +789,12 @@ function normalizeBarber(barber, index) {
     ),
     intro_text: String(barber.intro_text || barber.introText || "").trim(),
     verified: barber.verified || barber.verified_status || barber.badge || fallback.verified,
+    verified_status: barber.verified_status || barber.verified || fallback.verified,
+    document_name: barber.document_name || barber.verification_document_name || "",
+    verification_document_name: barber.verification_document_name || barber.document_name || "",
+    verification_notes: barber.verification_notes || "",
+    verification_submitted_at: barber.verification_submitted_at || null,
+    verification_reviewed_at: barber.verification_reviewed_at || null,
     subscription: {
       ...DEFAULT_SUBSCRIPTION_STATE,
       ...(barber.subscription || {}),
@@ -810,6 +849,10 @@ function mapServerReview(item) {
     rating: Number(item.rating || 0),
     text: item.review_text ?? item.text ?? "",
     review_text: item.review_text ?? item.text ?? "",
+    blockedFromPublic: Boolean(item.blockedFromPublic || Number(item.blocked_from_public || 0) === 1),
+    blockedByUsername: item.blocked_by_username || item.blockedByUsername || "",
+    blockedAt: item.blocked_at || item.blockedAt || null,
+    blockReason: item.block_reason || item.blockReason || "",
     createdAt: item.created_at ?? item.createdAt,
   };
 }
@@ -881,6 +924,19 @@ function readSessionExpiry(token) {
   return new Date(Number(payload.exp) * 1000).toISOString();
 }
 
+const LOGIN_ERROR_MESSAGES = {
+  USER_NOT_FOUND: "We couldn’t find an account with that username or email.",
+  INVALID_PASSWORD: "The password you entered is incorrect.",
+  ACCOUNT_INACTIVE: "This account is not active. Please contact support or verify your account.",
+  ACCOUNT_UNVERIFIED: "This account is not active. Please contact support or verify your account.",
+  VALIDATION_ERROR: "",
+};
+
+function getLoginErrorMessage(error) {
+  const code = error?.code || error?.payload?.code || "";
+  return LOGIN_ERROR_MESSAGES[code] || error?.userMessage || error?.message || "Could not log in. Please check your connection and try again.";
+}
+
 function saveAuthSession(token, user, { rememberMe = true } = {}) {
   const storage = rememberMe ? localStorage : sessionStorage;
   const otherStorage = rememberMe ? sessionStorage : localStorage;
@@ -916,6 +972,7 @@ function App() {
   const [screen, setScreen] = useState(() => getScreenFromPath(window.location.pathname, Boolean(getAuthToken())));
   const [authMode, setAuthMode] = useState(() => getAuthModeFromPath(window.location.pathname));
   const [theme, setTheme] = useTheme();
+  const [initialLoadingStage, setInitialLoadingStage] = useState("visible");
   const [token, setToken] = useState(getAuthToken());
   const [currentUser, setCurrentUser] = useState(readAuthUser);
   const [sessionExpiresAt, setSessionExpiresAt] = useState(
@@ -956,6 +1013,12 @@ function App() {
   const [subscriptionReady, setSubscriptionReady] = useState(false);
   const [subscriptionMessage, setSubscriptionMessage] = useState("");
   const [pendingSubscriptionPayment, setPendingSubscriptionPayment] = useState(null);
+  const [customerSubscriptionState, setCustomerSubscriptionState] = useState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
+  const [customerSubscriptionPlan, setCustomerSubscriptionPlan] = useState(null);
+  const [customerSubscriptionLoading, setCustomerSubscriptionLoading] = useState(false);
+  const [customerSubscriptionMessage, setCustomerSubscriptionMessage] = useState("");
+  const [pendingCustomerSubscriptionPayment, setPendingCustomerSubscriptionPayment] = useState(null);
+  const [customerPremiumPaymentOpen, setCustomerPremiumPaymentOpen] = useState(false);
   const [trialUpgradeDismissed, setTrialUpgradeDismissed] = useState(false);
   const [upgradeSelectedTier, setUpgradeSelectedTier] = useState("");
   const [notifications, setNotifications] = useState([]);
@@ -964,9 +1027,15 @@ function App() {
   const [locationLabel, setLocationLabel] = useState(() => readStoredQuelessLocation()?.label || "Near you");
   const [locationMessage, setLocationMessage] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
+  const [bookingOnlinePaymentsReady, setBookingOnlinePaymentsReady] = useState(false);
+  const [bookingPaymentReadinessMessage, setBookingPaymentReadinessMessage] = useState("");
+  const [walletTopupReady, setWalletTopupReady] = useState(false);
+  const [walletTopupReadinessMessage, setWalletTopupReadinessMessage] = useState("");
 
   const [selectedBarber, setSelectedBarber] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showSmartMatch, setShowSmartMatch] = useState(false);
+  const [smartMatchInitial, setSmartMatchInitial] = useState({});
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showBarberProfile, setShowBarberProfile] = useState(false);
   const [showRegisterBarber, setShowRegisterBarber] = useState(false);
@@ -974,8 +1043,21 @@ function App() {
   const [showChat, setShowChat] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [deleteStandConfirmOpen, setDeleteStandConfirmOpen] = useState(false);
+  const [deleteStandLoading, setDeleteStandLoading] = useState(false);
+  const [supportTopic, setSupportTopic] = useState("Contact Support");
   const [notificationToast, setNotificationToast] = useState(null);
   const [dismissedToastIds, setDismissedToastIds] = useState([]);
+
+  useEffect(() => {
+    const hideTimer = window.setTimeout(() => setInitialLoadingStage("hiding"), 5000);
+    const removeTimer = window.setTimeout(() => setInitialLoadingStage("hidden"), 5560);
+
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, []);
 
   useEffect(() => {
     if (screen === "app") {
@@ -1011,6 +1093,54 @@ function App() {
     }
   }, [subscriptionState?.tier, subscriptionState?.status]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPaymentReadiness() {
+      try {
+        const health = await apiFetch("/api/payments/mtn/health");
+        const ready =
+          Boolean(health?.credentialsLoaded) &&
+          Boolean(health?.callbackConfigured) &&
+          String(health?.authStatus || "").toLowerCase() === "success";
+        if (cancelled) return;
+        const unavailableMessage =
+          health?.sanitizedError || "MTN Mobile Money is currently unavailable. Wallet top-up cannot be completed on this deployment.";
+        setWalletTopupReady(ready);
+        setWalletTopupReadinessMessage(
+          ready ? "MTN Mobile Money is ready for wallet top-ups." : unavailableMessage
+        );
+
+        if (!BOOKING_ONLINE_PAYMENTS_ENABLED) {
+          setBookingOnlinePaymentsReady(false);
+          setBookingPaymentReadinessMessage("MTN Mobile Money booking checkout is not enabled for this deployment.");
+          return;
+        }
+
+        setBookingOnlinePaymentsReady(ready);
+        setBookingPaymentReadinessMessage(
+          ready
+            ? "MTN Mobile Money is ready."
+            : health?.sanitizedError || "MTN Mobile Money is not ready yet. Cash remains available."
+        );
+      } catch (error) {
+        if (cancelled) return;
+        const offlineMessage =
+          typeof navigator !== "undefined" && navigator.onLine === false
+            ? "You are offline. Live payments are disabled until your connection returns."
+            : "The Queless server is not reachable yet. Live payments are disabled; cash booking can still be prepared where available.";
+        setWalletTopupReady(false);
+        setWalletTopupReadinessMessage(offlineMessage);
+        setBookingOnlinePaymentsReady(false);
+        setBookingPaymentReadinessMessage(offlineMessage);
+      }
+    }
+
+    loadPaymentReadiness();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [chatText, setChatText] = useState("");
   const [chatCustomerUsername, setChatCustomerUsername] = useState("");
   const [chatTargetName, setChatTargetName] = useState("");
@@ -1018,13 +1148,23 @@ function App() {
   const [chatStatus, setChatStatus] = useState("");
   const [selectedService, setSelectedService] = useState(SERVICE_TYPES[0].id);
   const [selectedTeamMemberId, setSelectedTeamMemberId] = useState("");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("mtn_mobile_money");
   const [mtnPaymentPhone, setMtnPaymentPhone] = useState("");
+
+  useEffect(() => {
+    if (!["mtn_mobile_money", "airtel_money", "wallet_balance", "wallet"].includes(String(selectedPaymentMethod || "").toLowerCase())) {
+      setSelectedPaymentMethod("mtn_mobile_money");
+    }
+  }, [bookingOnlinePaymentsReady, selectedPaymentMethod]);
+  const [bookingLocationType, setBookingLocationType] = useState("provider_location");
+  const [bookingAddress, setBookingAddress] = useState("");
+  const [bookingLocationDetecting, setBookingLocationDetecting] = useState(false);
   const [pendingBookingPayment, setPendingBookingPayment] = useState(null);
   const [creatingBooking, setCreatingBooking] = useState(false);
   const [typingState, setTypingState] = useState({ active: false, name: "" });
   const [reviewSuccess, setReviewSuccess] = useState("");
   const [reviewedBookings, setReviewedBookings] = useReviewedBookings(currentUser?.username);
+  const [reviewBlockUsageByBarber, setReviewBlockUsageByBarber] = useState({});
 
   const usernameRef = useRef(null);
   const emailRef = useRef(null);
@@ -1035,6 +1175,12 @@ function App() {
   const typingTimeoutRef = useRef(null);
   const chatThreadRef = useRef(null);
   const notificationAudioRef = useRef(null);
+  const bookingFetchInFlightRef = useRef(null);
+  const bookingRefreshStateRef = useRef({
+    lastFetchedAt: 0,
+    retryBlockedUntil: 0,
+    consecutiveFailures: 0,
+  });
 
   const dateOptions = useMemo(() => generateDates(), []);
   const timeOptions = useMemo(() => generateTimeSlots(), []);
@@ -1059,7 +1205,11 @@ function App() {
   const effectiveIsBarber = Boolean(
     !isAdmin && (userIsProvider(currentUser) || ownedBarberFromState)
   );
-  const barberDayAvailability = useBookingAvailability({
+  const {
+    availability: barberDayAvailability,
+    loading: barberDayAvailabilityLoading,
+    error: barberDayAvailabilityError,
+  } = useBookingAvailability({
     barberId: selectedBarber?.id,
     bookingDate: selectedDate,
     teamMemberId: selectedTeamMemberId,
@@ -1126,7 +1276,12 @@ function App() {
       setSearchResultsLocation(routeParams.location);
       if (routeParams.query) setQuery(routeParams.query);
     }
-    if (nextTab !== "home" && nextTab !== activeTab) {
+    if (isAuthRoutePath(window.location.pathname)) {
+      const defaultTab = getDefaultTabForUser(currentUser);
+      if (activeTab !== defaultTab) setActiveTab(defaultTab);
+      return;
+    }
+    if (nextTab !== activeTab) {
       setActiveTab(nextTab);
     }
   }, [screen, currentUser?.role]);
@@ -1143,6 +1298,8 @@ function App() {
       screen === "app"
         ? mapState.show
           ? MAP_PATH
+          : activeTab === "adminSms" && isAdmin
+          ? ADMIN_SMS_PATH
           : (activeTab === "admin" || activeTab === "adminReports") && isAdmin
           ? ADMIN_PATH
           : activeTab === "upgrade"
@@ -1163,8 +1320,16 @@ function App() {
           ? DASHBOARD_PATH
           : activeTab === "reports"
           ? REPORTS_PATH
+          : activeTab === "aiCoach"
+          ? AI_COACH_PATH
           : activeTab === "profile"
           ? PROFILE_PATH
+          : activeTab === "help"
+          ? HELP_PATH
+          : activeTab === "policies"
+          ? POLICIES_PATH
+          : activeTab === "support"
+          ? SUPPORT_PATH
           : APP_PATH
         : authMode === "signup"
         ? SIGNUP_PATH
@@ -1316,8 +1481,13 @@ function App() {
 
     socket.on("booking_updated", (booking) => {
       if (!booking) return;
-      setBookings((prev) => upsertById(prev, booking));
-      writeStored("bookings", "global", upsertById(readStored("bookings", "global", []), booking));
+      const normalizedBooking =
+        booking.business_name || booking.booking_date || booking.payment_status
+          ? mapServerBooking(booking)
+          : booking;
+      bookingRefreshStateRef.current.lastFetchedAt = Date.now();
+      setBookings((prev) => upsertById(prev, normalizedBooking));
+      writeStored("bookings", "global", upsertById(readStored("bookings", "global", []), normalizedBooking));
     });
 
     socket.on("typing", (payload) => {
@@ -1411,6 +1581,17 @@ function App() {
   }, [currentUser?.username, effectiveIsBarber, isAdmin]);
 
   useEffect(() => {
+    if (!currentUser?.username || effectiveIsBarber || isAdmin) {
+      setPendingCustomerSubscriptionPayment(null);
+      setCustomerSubscriptionState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
+      setCustomerSubscriptionPlan(null);
+      return;
+    }
+
+    fetchCustomerSubscription();
+  }, [currentUser?.username, effectiveIsBarber, isAdmin]);
+
+  useEffect(() => {
     if (!pendingSubscriptionPayment?.reference || !currentUser?.username) return;
 
     const handleSubscriptionReturn = () => {
@@ -1436,9 +1617,43 @@ function App() {
   }, [pendingSubscriptionPayment?.reference, currentUser?.username]);
 
   useEffect(() => {
+    if (!pendingCustomerSubscriptionPayment?.reference || !currentUser?.username) return;
+
+    const handleCustomerPremiumReturn = () => {
+      if (document.visibilityState === "visible") {
+        verifyCurrentCustomerPremium(pendingCustomerSubscriptionPayment.reference, true);
+      }
+    };
+
+    window.addEventListener("focus", handleCustomerPremiumReturn);
+    document.addEventListener("visibilitychange", handleCustomerPremiumReturn);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        verifyCurrentCustomerPremium(pendingCustomerSubscriptionPayment.reference, true);
+      }
+    }, 12000);
+
+    return () => {
+      window.removeEventListener("focus", handleCustomerPremiumReturn);
+      document.removeEventListener("visibilitychange", handleCustomerPremiumReturn);
+      clearInterval(interval);
+    };
+  }, [pendingCustomerSubscriptionPayment?.reference, currentUser?.username]);
+
+  useEffect(() => {
     if (!selectedBarber?.id) return;
     fetchReviewsForBarber(selectedBarber.id);
   }, [selectedBarber?.id]);
+
+  useEffect(() => {
+    if (!selectedBarber?.id || !currentUser?.username) return;
+    const ownsProfile =
+      selectedBarber.ownerUsername === currentUser.username ||
+      selectedBarber.owner_username === currentUser.username ||
+      Number(selectedBarber.owner_user_id || selectedBarber.ownerUserId || 0) === Number(currentUser.id || 0);
+    if (ownsProfile) fetchManagedReviewsForBarber(selectedBarber.id);
+  }, [selectedBarber?.id, currentUser?.username, currentUser?.id]);
 
   useEffect(() => {
     if (!selectedBarber) return;
@@ -1457,7 +1672,7 @@ function App() {
 
   useEffect(() => {
     if (!selectedBarber) return;
-    setSelectedPaymentMethod("cash");
+    setSelectedPaymentMethod("mtn_mobile_money");
     setMtnPaymentPhone(profile.phone || "");
     setPendingBookingPayment(null);
   }, [selectedBarber, profile.phone]);
@@ -1480,11 +1695,34 @@ function App() {
   useEffect(() => {
     if (!currentUser?.username) return;
 
-    const interval = setInterval(() => {
-      fetchBookings(currentUser.username, effectiveIsBarber ? "barber" : "customer");
-    }, 8000);
+    const refreshWhenUseful = ({ force = false } = {}) => {
+      const now = Date.now();
+      const refreshState = bookingRefreshStateRef.current;
+      const visible = typeof document === "undefined" || document.visibilityState === "visible";
+      const stale = now - refreshState.lastFetchedAt >= BOOKING_REFRESH_MIN_INTERVAL_MS;
 
-    return () => clearInterval(interval);
+      if (!force && (!visible || !stale || now < refreshState.retryBlockedUntil)) return;
+
+      fetchBookings(currentUser.username, effectiveIsBarber ? "barber" : "customer", {
+        force,
+        preserveOnError: true,
+      });
+    };
+
+    const handleReturnToApp = () => refreshWhenUseful({ force: false });
+
+    window.addEventListener("focus", handleReturnToApp);
+    document.addEventListener("visibilitychange", handleReturnToApp);
+
+    const interval = setInterval(() => {
+      refreshWhenUseful({ force: false });
+    }, BOOKING_REFRESH_FALLBACK_INTERVAL_MS);
+
+    return () => {
+      window.removeEventListener("focus", handleReturnToApp);
+      document.removeEventListener("visibilitychange", handleReturnToApp);
+      clearInterval(interval);
+    };
   }, [currentUser?.username, currentUser?.role, effectiveIsBarber]);
 
   useEffect(() => {
@@ -1552,6 +1790,48 @@ function App() {
       return mergeByNewest(prev, [incoming]);
     });
   };
+
+  const notifyBookingUpdate = (booking) => {
+    if (!socketRef.current || !booking || !currentUser?.username) return;
+
+    const recipient = effectiveIsBarber
+      ? booking.customerUsername
+      : booking.barberOwnerUsername || booking.barberUsername;
+
+    if (!recipient || String(recipient) === String(currentUser.username)) return;
+    socketRef.current.emit("booking_updated", { to: recipient, booking });
+  };
+
+  useEffect(() => {
+    if (!currentUser?.username) return undefined;
+
+    let unsubscribe = () => {};
+    let active = true;
+
+    listenForForegroundNotifications((incoming) => {
+      if (!active) return;
+      const normalized = mapServerNotification({
+        ...incoming,
+        user: currentUser.username,
+        read: false,
+      });
+      appendNotificationSafely(normalized);
+      setNotificationToast({
+        id: normalized.id,
+        title: normalized.title,
+        message: normalized.message,
+        type: normalized.type,
+      });
+      playNotificationSound();
+    }).then((cleanup) => {
+      if (active && typeof cleanup === "function") unsubscribe = cleanup;
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [currentUser?.username]);
 
   const openToastNotification = async () => {
     if (!notificationToast?.id) {
@@ -1649,37 +1929,96 @@ const fetchBarbers = async () => {
     }
   };
 
-  const fetchBookings = async (username, role) => {
-    try {
-      const data = await getMyBookings();
+  const fetchBookings = async (username, role, options = {}) => {
+    const now = Date.now();
+    const refreshState = bookingRefreshStateRef.current;
+
+    if (!options.force && now < refreshState.retryBlockedUntil) {
+      return false;
+    }
+
+    if (bookingFetchInFlightRef.current) {
+      return bookingFetchInFlightRef.current;
+    }
+
+    const request = (async () => {
+      try {
+        const data = await getMyBookings();
       const rows = Array.isArray(data?.bookings) ? data.bookings : [];
       const next = rows.map(mapServerBooking);
 
       setBookings(next);
       writeStored("bookings", "global", next);
-    } catch {
-      const saved = readStored("bookings", "global", []);
-      const filtered = Array.isArray(saved)
-        ? saved.filter((item) =>
-            role === "barber"
-              ? item.barberOwnerUsername === username || item.ownerUsername === username || item.barberUsername === username
-              : item.customerUsername === username
-          )
-        : [];
-      setBookings(filtered);
-    }
+        bookingRefreshStateRef.current = {
+          lastFetchedAt: Date.now(),
+          retryBlockedUntil: 0,
+          consecutiveFailures: 0,
+        };
+        return true;
+      } catch (error) {
+        const retryAfterMs = getRetryAfterMs(error);
+        const previousFailures = refreshState.consecutiveFailures || 0;
+        const fallbackBackoffMs =
+          error?.status === 429
+            ? BOOKING_REFRESH_RATE_LIMIT_FALLBACK_MS
+            : Math.min(BOOKING_REFRESH_MAX_BACKOFF_MS, 2 ** previousFailures * 15000);
+        const backoffMs = Math.min(
+          BOOKING_REFRESH_MAX_BACKOFF_MS,
+          Math.max(retryAfterMs, fallbackBackoffMs)
+        );
+
+        bookingRefreshStateRef.current = {
+          ...bookingRefreshStateRef.current,
+          retryBlockedUntil: Date.now() + backoffMs,
+          consecutiveFailures: previousFailures + 1,
+        };
+
+        if (!options.preserveOnError) {
+          const saved = readStored("bookings", "global", []);
+          const filtered = Array.isArray(saved)
+            ? saved.filter((item) =>
+                role === "barber"
+                  ? item.barberOwnerUsername === username || item.ownerUsername === username || item.barberUsername === username
+                  : item.customerUsername === username
+              )
+            : [];
+          setBookings(filtered);
+        }
+        return false;
+      } finally {
+        bookingFetchInFlightRef.current = null;
+      }
+    })();
+
+    bookingFetchInFlightRef.current = request;
+    return request;
   };
 
   const fetchReviewsForBarber = async (barberId) => {
     try {
       const data = await getBarberReviews(barberId);
       const serverReviews = (Array.isArray(data) ? data : data?.reviews || []).map(mapServerReview);
-      const localReviews = readStored("reviews", String(barberId), []);
-      const next = mergeByNewest(localReviews, serverReviews);
+      const next = serverReviews;
       setReviewsByBarber((prev) => ({ ...prev, [barberId]: next }));
+      if (data?.reviewBlockUsage) {
+        setReviewBlockUsageByBarber((prev) => ({ ...prev, [barberId]: data.reviewBlockUsage }));
+      }
       writeStored("reviews", String(barberId), next);
     } catch {
-      setReviewsByBarber((prev) => ({ ...prev, [barberId]: readStored("reviews", String(barberId), []) }));
+      setReviewsByBarber((prev) => ({ ...prev, [barberId]: [] }));
+    }
+  };
+
+  const fetchManagedReviewsForBarber = async (barberId) => {
+    try {
+      const data = await getManagedBarberReviews(barberId);
+      const serverReviews = (Array.isArray(data) ? data : data?.reviews || []).map(mapServerReview);
+      setReviewsByBarber((prev) => ({ ...prev, [barberId]: serverReviews }));
+      if (data?.reviewBlockUsage) {
+        setReviewBlockUsageByBarber((prev) => ({ ...prev, [barberId]: data.reviewBlockUsage }));
+      }
+    } catch (error) {
+      setReviewSuccess(error.message || "Could not load provider review controls.");
     }
   };
 
@@ -1720,21 +2059,20 @@ const fetchBarbers = async () => {
 
   const fetchWallet = async () => {
     if (!currentUser?.username) return;
-    if (!effectiveIsBarber && !isAdmin) {
-      setWalletState(DEFAULT_WALLET_STATE);
-      setWalletMessage("");
-      return;
-    }
 
     try {
-      const data = await getMyWallet();
+      setWalletLoading(true);
+      const data = effectiveIsBarber || isAdmin ? await getMyWallet() : await getCustomerWallet();
       setWalletState({
         wallet: data?.wallet || DEFAULT_WALLET_STATE.wallet,
         transactions: Array.isArray(data?.transactions) ? data.transactions : [],
         withdrawals: Array.isArray(data?.withdrawals) ? data.withdrawals : [],
+        topups: Array.isArray(data?.topups) ? data.topups : [],
       });
     } catch {
       setWalletState(DEFAULT_WALLET_STATE);
+    } finally {
+      setWalletLoading(false);
     }
   };
 
@@ -1777,6 +2115,34 @@ const fetchBarbers = async () => {
     } finally {
       setSubscriptionLoading(false);
       setSubscriptionReady(true);
+    }
+  };
+
+  const fetchCustomerSubscription = async () => {
+    if (!currentUser?.username || effectiveIsBarber || isAdmin) {
+      setCustomerSubscriptionState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
+      setCustomerSubscriptionPlan(null);
+      return;
+    }
+
+    try {
+      setCustomerSubscriptionLoading(true);
+      const data = await getMyCustomerSubscription();
+      setCustomerSubscriptionPlan(data?.plan || null);
+      setCustomerSubscriptionState({
+        ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE,
+        ...(data?.subscription || {}),
+        features: {
+          ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE.features,
+          ...(data?.subscription?.features || {}),
+        },
+      });
+      setPendingCustomerSubscriptionPayment(data?.pendingPayment?.reference ? data.pendingPayment : null);
+    } catch {
+      setCustomerSubscriptionState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
+      setPendingCustomerSubscriptionPayment(null);
+    } finally {
+      setCustomerSubscriptionLoading(false);
     }
   };
 
@@ -1905,8 +2271,13 @@ const fetchBarbers = async () => {
       return;
     }
 
-    if (!username || !password) {
-      setAuthError("Username and password are required.");
+    if (!username) {
+      setAuthError("Username is required.");
+      return;
+    }
+
+    if (!password) {
+      setAuthError("Password is required.");
       return;
     }
 
@@ -1933,22 +2304,7 @@ const fetchBarbers = async () => {
       setAuthMode("login");
       if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
     } catch (error) {
-      if (error.status) {
-        setAuthError(error.message);
-        return;
-      }
-
-      const users = getStoredUsers();
-      if (users.some((item) => item.username === username)) {
-        setAuthError("Username already exists.");
-      } else if (users.some((item) => String(item.email || "").toLowerCase() === email.toLowerCase())) {
-        setAuthError("An account with this email already exists.");
-      } else {
-        saveStoredUsers([...users, { username, email, password, role: "customer" }]);
-        setAuthSuccess("Account created. You can now log in.");
-        setAuthMode("login");
-        if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
-      }
+      setAuthError(error.message || "Could not create your account. Please check your connection and try again.");
     } finally {
       setAuthLoading(false);
     }
@@ -1960,8 +2316,18 @@ const fetchBarbers = async () => {
     const username = usernameRef.current?.value?.trim() || "";
     const password = passwordRef.current?.value || "";
 
-    if (!username || !password) {
-      setAuthError("Username and password are required.");
+    if (!username && !password) {
+      setAuthError("Please enter your username/email and password.");
+      return;
+    }
+
+    if (!username) {
+      setAuthError("Please enter your username or email.");
+      return;
+    }
+
+    if (!password) {
+      setAuthError("Please enter your password.");
       return;
     }
 
@@ -1974,41 +2340,17 @@ const fetchBarbers = async () => {
       setSessionExpiresAt(readSessionExpiry(nextToken));
       setToken(data.token || "");
       setCurrentUser(data.user);
-      setActiveTab(isAdminPath(window.location.pathname) && data.user?.role === "admin" ? "admin" : "home");
+      setActiveTab(getPostLoginTab(window.location.pathname, data.user));
       setScreen("app");
     } catch (error) {
-      const users = getStoredUsers();
-      const identifier = String(username || "").toLowerCase();
-      const found = users.find(
-        (item) =>
-          (String(item.username || "").toLowerCase() === identifier ||
-            String(item.email || "").toLowerCase() === identifier) &&
-          item.password === password
-      );
-      if (!found) {
-        setAuthError(error.message);
-      } else {
-        const ownsBarberStand = getStoredBarbers().some(
-          (item) => String(item.ownerUsername || item.username || "") === String(found.username)
-        );
-        const user = {
-          username: found.username,
-          role: ownsBarberStand ? "barber" : found.role || "customer",
-        };
-        saveAuthSession(`local-${username}`, user, { rememberMe });
-        setSessionExpiresAt(null);
-        setToken(`local-${username}`);
-        setCurrentUser(user);
-        setActiveTab(isAdminPath(window.location.pathname) && user.role === "admin" ? "admin" : "home");
-        setScreen("app");
-      }
+      setAuthError(getLoginErrorMessage(error));
     } finally {
       loginRequestRef.current = false;
       setAuthLoading(false);
     }
   };
 
-  const saveProfile = async (nextProfile) => {
+  const saveProfile = async (nextProfile, options = {}) => {
     if (!currentUser?.username) return;
     try {
       setProfileSaving(true);
@@ -2036,11 +2378,10 @@ const fetchBarbers = async () => {
       setGlobalError("");
       return saved;
     } catch (error) {
-      const fallback = { ...DEFAULT_USER_PROFILE, ...nextProfile, username: currentUser.username };
-      setProfile(fallback);
-      writeStored("profile", currentUser.username, fallback);
-      setGlobalError("");
-      return fallback;
+      if (!options.localErrorOnly) {
+        setGlobalError(error.message || "Could not save your profile. Please check your connection and try again.");
+      }
+      throw error;
     } finally {
       setProfileSaving(false);
     }
@@ -2064,7 +2405,7 @@ const fetchBarbers = async () => {
         const data = await requestPasswordReset(email);
         if (passwordRef.current) passwordRef.current.value = "";
         if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
-        setAuthSuccess(data?.devCode ? `Reset code sent. Dev code: ${data.devCode}` : data?.message || "If an account exists with this email, a reset code has been sent.");
+        setAuthSuccess(data?.message || "If an account exists with this email, a reset code has been sent.");
         setAuthMode("reset");
         showSystemToast("Reset code sent", "Check your email for the verification code.", "system");
         return true;
@@ -2179,48 +2520,6 @@ const fetchBarbers = async () => {
       showSystemToast("Settings saved", "Your account settings were updated.", "system");
       return true;
     } catch (error) {
-      const users = getStoredUsers();
-      const stored = users.find((item) => item.username === previousUsername);
-
-      if (stored && stored.password === currentPassword) {
-        if (wantsUsernameChange && users.some((item) => item.username === nextUsername)) {
-          setAccountMessage("Username already exists.");
-          return false;
-        }
-
-        const nextUser = {
-          ...currentUser,
-          username: nextUsername || previousUsername,
-        };
-        const nextUsers = users.map((item) =>
-          item.username === previousUsername
-            ? {
-                ...item,
-                username: nextUser.username,
-                password: wantsPasswordChange ? newPassword : item.password,
-              }
-            : item
-        );
-        saveStoredUsers(nextUsers);
-      localStorage.setItem("lineup_user", JSON.stringify(nextUser));
-        setCurrentUser(nextUser);
-
-        const nextProfile = { ...profile, username: nextUser.username };
-        setProfile(nextProfile);
-        writeStored("profile", nextUser.username, nextProfile);
-        setBarbers((prev) => {
-          const renamedBarbers = prev.map((item) =>
-            String(item.ownerUsername || "") === String(previousUsername)
-              ? { ...item, ownerUsername: nextUser.username }
-              : item
-          );
-          saveStoredBarbers(renamedBarbers);
-          return renamedBarbers;
-        });
-        setAccountMessage("Account updated locally.");
-        return true;
-      }
-
       setAccountMessage(error.message || "Could not update account.");
       return false;
     } finally {
@@ -2246,11 +2545,52 @@ const fetchBarbers = async () => {
   const requestLocation = () => {
     if (!navigator.geolocation) {
       setLocationMessage("Your browser does not support location detection.");
-      return;
+      return Promise.resolve(false);
     }
     setLocationLoading(true);
     setLocationMessage("");
     setLocationLabel("Detecting location...");
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const nextLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+          let nextLabel = "";
+          try {
+            nextLabel = await reverseGeocodeCoordinates(nextLocation);
+          } catch {
+            nextLabel = "";
+          }
+          saveQuelessLocation({
+            label: nextLabel || "Location detected near your current area",
+            coords: nextLocation,
+            source: "current",
+          });
+          if (!nextLabel) setLocationMessage("Location detected, but the place name could not be loaded.");
+          setLocationLoading(false);
+          resolve(true);
+        },
+        (error) => {
+          const savedLabel = readStoredQuelessLocation()?.label || "Near you";
+          setLocationLabel(savedLabel);
+          setLocationMessage(getGeolocationErrorMessage(error));
+          setLocationLoading(false);
+          resolve(false);
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+      );
+    });
+  };
+
+  const useCurrentLocationForBooking = () => {
+    if (!navigator.geolocation) {
+      setGlobalError("Your browser does not support location detection.");
+      return;
+    }
+    setBookingLocationDetecting(true);
+    setGlobalError("");
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const nextLocation = {
@@ -2263,19 +2603,13 @@ const fetchBarbers = async () => {
         } catch {
           nextLabel = "";
         }
-        saveQuelessLocation({
-          label: nextLabel || "Location detected near your current area",
-          coords: nextLocation,
-          source: "current",
-        });
-        if (!nextLabel) setLocationMessage("Location detected, but the place name could not be loaded.");
-        setLocationLoading(false);
+        setBookingAddress(nextLabel || "Location detected near your current area");
+        setBookingLocationType("customer_location");
+        setBookingLocationDetecting(false);
       },
       (error) => {
-        const savedLabel = readStoredQuelessLocation()?.label || "Near you";
-        setLocationLabel(savedLabel);
-        setLocationMessage(getGeolocationErrorMessage(error));
-        setLocationLoading(false);
+        setGlobalError(getGeolocationErrorMessage(error));
+        setBookingLocationDetecting(false);
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
     );
@@ -2366,15 +2700,21 @@ const registerBarber = async (payload) => {
         price_from: Number(payload.pricing || 0),
         image: payload.image || profile.profilePhoto || "",
         services: selectedServices,
+        categories: Array.isArray(payload.categories) ? payload.categories : [],
+        primary_category: payload.primaryCategory || null,
         stand_type: payload.standType || "individual",
         business_type: payload.businessType || "barber",
+        map_icon_type: payload.mapIconType || payload.iconCategory || "",
         home_service_enabled: Boolean(payload.homeServiceEnabled),
         intro_text: payload.introText || "",
+        verification_document_name: payload.documentName || "",
+        document_name: payload.documentName || "",
         portfolio: Array.isArray(payload.portfolio) ? payload.portfolio : [],
         team_members: payload.standType === "shop" ? parseTeamMembers(payload.teamMembers) : [],
         accepts_wallet: Boolean(payload.acceptsWallet),
         accepts_cash: true,
-        selected_plan: selectedPlan || "",
+        selected_plan: payload.submitIntent === "payment" ? selectedPlan || "" : "",
+        submit_intent: payload.submitIntent || "draft",
         access_type: "subscription",
         start_free_trial: false,
       });
@@ -2395,13 +2735,13 @@ const registerBarber = async (payload) => {
       }
       await fetchBarbers();
       if (data?.next_step === "upgrade" || !startsTrial) {
-        setSubscriptionMessage(data?.message || "Your business has been saved, but it will only go live after you start a trial or subscribe.");
+        setSubscriptionMessage(data?.message || "Business saved as draft. Complete payment later to activate it.");
       }
     } catch (error) {
       setGlobalError(
         error?.payload?.code === "DUPLICATE_BUSINESS_NAME"
           ? "A business with this name already exists. If this is your business, you can report or claim it."
-          : error.message || "Your business has been saved, but it will only go live after you start a trial or subscribe."
+          : error.message || "Payment was not completed. Your business has been saved, but it will only go live after payment."
       );
       return;
     }
@@ -2423,8 +2763,10 @@ const registerBarber = async (payload) => {
     setShowRegisterBarber(false);
     if (startsTrial) {
       setActiveTab("dashboard");
+    } else if (payload.submitIntent === "payment") {
+      openUpgradePlan(selectedPlan || "PLUS");
     } else {
-      openUpgradePlan(selectedPlan || "PRO");
+      setActiveTab("dashboard");
     }
 
     const uploadNotification = {
@@ -2434,7 +2776,9 @@ const registerBarber = async (payload) => {
       title: startsTrial ? "Business profile uploaded" : "Business draft saved",
       message: startsTrial
         ? "Your business page was uploaded successfully."
-        : "Your business has been saved, but it will only go live after you start a trial or subscribe.",
+        : payload.submitIntent === "payment"
+        ? "Payment was started. Your business will only go live after payment."
+        : "Business saved as draft. Complete payment later to activate it.",
       createdAt: new Date().toISOString(),
       read: false,
     };
@@ -2452,6 +2796,14 @@ const updateBarberStand = async (payload) => {
           .map((item) => item.trim())
           .filter(Boolean)
           .map(normalizeServiceForBooking);
+    const nextDocumentName = String(payload.documentName || "").trim();
+    const existingDocumentName = String(myBarberProfile.verification_document_name || myBarberProfile.document_name || "").trim();
+    const verificationChanged = nextDocumentName !== existingDocumentName;
+    const nextVerificationStatus = verificationChanged
+      ? nextDocumentName
+        ? "Pending verification"
+        : "New"
+      : myBarberProfile.verified_status || myBarberProfile.verified || "New";
 
     const nextBarber = normalizeBarber(
       {
@@ -2460,6 +2812,8 @@ const updateBarberStand = async (payload) => {
         location: payload.location,
         price_from: Number(payload.pricing || 0),
         services: selectedServices,
+        categories: Array.isArray(payload.categories) ? payload.categories : [],
+        primary_category: payload.primaryCategory || null,
         availability: { start: payload.scheduleStart, end: payload.scheduleEnd },
         latitude: Number(payload.latitude || DEFAULT_CENTER[0]),
         longitude: Number(payload.longitude || DEFAULT_CENTER[1]),
@@ -2468,22 +2822,19 @@ const updateBarberStand = async (payload) => {
         accepts_cash: 1,
         stand_type: payload.standType || "individual",
         business_type: payload.businessType || myBarberProfile.business_type || "barber",
+        map_icon_type: payload.mapIconType || myBarberProfile.map_icon_type || myBarberProfile.mapIconType || "",
         home_service_enabled: payload.homeServiceEnabled ? 1 : 0,
         intro_text: payload.introText || "",
+        document_name: nextDocumentName,
+        verification_document_name: nextDocumentName,
         portfolio: Array.isArray(payload.portfolio) ? payload.portfolio : myBarberProfile.portfolio || [],
         team_members: payload.standType === "shop" ? parseTeamMembers(payload.teamMembers) : [],
-        verified: getBadgeLabel(myBarberProfile.verified || "New"),
+        verified: getBadgeLabel(nextVerificationStatus),
+        verified_status: nextVerificationStatus,
         ownerUsername: currentUser.username,
       },
       0
     );
-
-    const localUpdated = getStoredBarbers().map((item) =>
-      String(item.id) === String(myBarberProfile.id) ? nextBarber : item
-    );
-    saveStoredBarbers(localUpdated);
-    setBarbers(localUpdated);
-    setSelectedBarber(nextBarber);
 
     try {
       await updateMyBarberStand({
@@ -2494,19 +2845,31 @@ const updateBarberStand = async (payload) => {
         price_from: nextBarber.price_from,
         image: nextBarber.image || "",
         services: nextBarber.services,
+        categories: Array.isArray(payload.categories) ? payload.categories : [],
+        primary_category: payload.primaryCategory || null,
         stand_type: nextBarber.stand_type || "individual",
         business_type: nextBarber.business_type || "barber",
+        map_icon_type: nextBarber.map_icon_type || payload.mapIconType || "",
         home_service_enabled: Boolean(nextBarber.home_service_enabled),
         intro_text: nextBarber.intro_text || "",
+        verification_document_name: nextDocumentName,
+        document_name: nextDocumentName,
         portfolio: nextBarber.portfolio || [],
         team_members: nextBarber.team_members || [],
         accepts_wallet: Boolean(nextBarber.accepts_wallet),
         accepts_cash: true,
       });
 
+      const localUpdated = getStoredBarbers().map((item) =>
+        String(item.id) === String(myBarberProfile.id) ? nextBarber : item
+      );
+      saveStoredBarbers(localUpdated);
+      setBarbers(localUpdated);
+      setSelectedBarber(nextBarber);
       await fetchBarbers();
     } catch (error) {
-      // local state already updated
+      setGlobalError(error.message || "Could not update your business profile. Please check your connection and try again.");
+      return;
     }
 
     setShowEditBarber(false);
@@ -2525,18 +2888,17 @@ const updateBarberStand = async (payload) => {
     fetchNotifications();
   };
 
-const deleteBarberStand = async () => {
+  const deleteBarberStand = async () => {
     if (!currentUser?.username || !myBarberProfile) return;
 
-    const confirmed = window.confirm(
-      "Are you sure you want to hide this business profile? It will no longer be visible to customers, and your trial history will be preserved."
-    );
-    if (!confirmed) return;
-
     try {
+      setDeleteStandLoading(true);
       await deleteMyBarberStand();
     } catch (error) {
-      // fallback to local removal below
+      setGlobalError(error.message || "Could not remove this business profile. Please check your connection and try again.");
+      return;
+    } finally {
+      setDeleteStandLoading(false);
     }
 
     const remainingBarbers = getStoredBarbers().filter(
@@ -2548,7 +2910,7 @@ const deleteBarberStand = async () => {
     setBarbers(remainingBarbers);
 
     const updatedUser = { ...currentUser, role: "customer" };
-      localStorage.setItem("lineup_user", JSON.stringify(updatedUser));
+    localStorage.setItem("lineup_user", JSON.stringify(updatedUser));
     setCurrentUser(updatedUser);
 
     const users = getStoredUsers();
@@ -2565,6 +2927,7 @@ const deleteBarberStand = async () => {
     setShowBookingModal(false);
     setShowEditBarber(false);
     setShowChat(false);
+    setDeleteStandConfirmOpen(false);
     const removalNotification = {
       id: makeId("ntf"),
       user: currentUser.username,
@@ -2577,9 +2940,10 @@ const deleteBarberStand = async () => {
     appendStored("notifications", currentUser.username, removalNotification);
     fetchNotifications();
     setGlobalError("");
+    showSystemToast("Stand deleted", "Your stand was removed from public search and bookings.", "system");
   };
 
-  const createBooking = async () => {
+  const createBooking = async (options = {}) => {
     if (!selectedBarber || !currentUser?.username || !selectedDate || !selectedTime || creatingBooking) return;
     if (effectiveIsBarber) {
       setGlobalError("Business accounts cannot place bookings.");
@@ -2593,15 +2957,16 @@ const deleteBarberStand = async () => {
     }
 
     const paymentAllowed = isBookingPaymentMethodEnabled(selectedPaymentMethod, {
-      onlinePaymentsEnabled: BOOKING_ONLINE_PAYMENTS_ENABLED,
+      onlinePaymentsEnabled: bookingOnlinePaymentsReady,
+      walletPaymentsEnabled: true,
     });
     if (!paymentAllowed) {
-      setGlobalError("Online payments are coming later. Choose cash for now.");
+      setGlobalError(bookingPaymentReadinessMessage || "Choose MTN Mobile Money, Airtel Money, or Wallet Balance.");
       return;
     }
     const mobileMoneyPhone = String(mtnPaymentPhone || "").trim();
     if (isOnlinePaymentMethod(selectedPaymentMethod) && !/^(\+?256|0)?[37]\d{8}$/.test(mobileMoneyPhone.replace(/\s+/g, ""))) {
-      setGlobalError("Enter a valid Uganda phone number for MTN Mobile Money.");
+      setGlobalError("Enter a valid Uganda phone number for mobile money.");
       return;
     }
     const teamMembers = normalizeTeamMembers(selectedBarber.team_members || selectedBarber.teamMembers || []);
@@ -2626,14 +2991,41 @@ const deleteBarberStand = async () => {
       if (!serviceObj?.id) {
         throw new Error("Please select a valid service.");
       }
+      const pricingType = String(serviceObj.pricing_type || "fixed").toLowerCase();
+      const hasBookablePrice =
+        pricingType === "range" ||
+        pricingType === "starting_from" ||
+        Number(serviceObj.price_extra || serviceObj.price || 0) > 0 ||
+        Number(selectedBarber.price_from || 0) > 0;
+      if (pricingType === "quote" || !hasBookablePrice) {
+        throw new Error("This service needs a quote before booking.");
+      }
+      const normalizedLocationType = String(bookingLocationType || "provider_location").toLowerCase();
+      const serviceLocationType = String(serviceObj.location_type || "provider_location").toLowerCase();
+      const homeServiceAllowed =
+        Number(selectedBarber.home_service_enabled || selectedBarber.homeServiceEnabled || 0) === 1 ||
+        serviceLocationType === "customer_location";
+      if (normalizedLocationType === "customer_location" && !homeServiceAllowed) {
+        throw new Error("This service is only available at the provider location.");
+      }
+      const cleanBookingAddress =
+        normalizedLocationType === "customer_location"
+          ? String(bookingAddress || "").trim()
+          : selectedBarber.location || "";
+      if (normalizedLocationType === "customer_location" && cleanBookingAddress.length < 3) {
+        throw new Error("Add your address or use your current location before booking.");
+      }
 
       const data = await createBookingRequest({
         barber_id: Number(selectedBarber.id),
         service_id: serviceObj.id,
         booking_date: selectedDate,
         booking_time: selectedTime,
+        booking_location_type: normalizedLocationType,
+        booking_address: cleanBookingAddress,
         payment_method: selectedPaymentMethod,
         payment_phone: isOnlinePaymentMethod(selectedPaymentMethod) ? mobileMoneyPhone : profile.phone,
+        booking_details: options.bookingDetails || null,
         idempotencyKey: makeId("booking-payment"),
         team_member_id: selectedTeamMember?.id || null,
       });
@@ -2644,7 +3036,9 @@ const deleteBarberStand = async () => {
       const nextBooking = mapServerBooking({
         ...created,
         business_name: selectedBarber.business_name,
-        location: selectedBarber.location,
+        location: cleanBookingAddress || selectedBarber.location,
+        booking_location_type: normalizedLocationType,
+        booking_address: cleanBookingAddress,
         payment_method: selectedPaymentMethod,
         team_member_id: selectedTeamMember?.id || created.team_member_id || null,
         team_member_name: selectedTeamMember?.name || created.team_member_name || "",
@@ -2689,7 +3083,7 @@ const deleteBarberStand = async () => {
       }
       setShowBarberProfile(false);
       setActiveTab(data?.payment?.reference ? "bookings" : "bookingConfirmation");
-      fetchBookings(currentUser.username, effectiveIsBarber ? "barber" : "customer");
+      notifyBookingUpdate(nextBooking);
       fetchNotifications();
       fetchWallet();
     } catch (error) {
@@ -2728,9 +3122,7 @@ const deleteBarberStand = async () => {
         )
       );
 
-      if (currentUser?.username) {
-        fetchBookings(currentUser.username, effectiveIsBarber ? "barber" : "customer");
-      }
+      notifyBookingUpdate(updatedBooking);
       vibrate([10, 20, 10]);
       showSystemToast("Booking updated", `Status changed to ${status}.`, "booking");
       fetchNotifications();
@@ -2764,7 +3156,7 @@ const deleteBarberStand = async () => {
         setActiveTab("bookingConfirmation");
       }
       showSystemToast("Booking confirmed", data?.message || "Payment confirmed and booking secured.", "booking");
-      fetchBookings(currentUser.username, "customer");
+      if (updatedBooking) notifyBookingUpdate(updatedBooking);
       fetchNotifications();
       return true;
     } catch (error) {
@@ -2804,7 +3196,7 @@ const deleteBarberStand = async () => {
           method: provider,
           payment_phone: payload.phoneNumber || payload.payment_phone || profile.phone,
           phoneNumber: payload.phoneNumber || payload.payment_phone || profile.phone,
-          cardDetails: payload.cardDetails,
+          promoCode: payload.promoCode || payload.promo_code || "",
         },
         idempotencyKey
       );
@@ -2814,7 +3206,8 @@ const deleteBarberStand = async () => {
         tier,
         provider,
       });
-      if (provider === "trial" && data?.subscription) {
+      const activatedImmediately = ["active", "trialing"].includes(String(data?.subscription?.status || "").toLowerCase());
+      if ((provider === "trial" || activatedImmediately) && data?.subscription) {
         setSubscriptionState({
           ...DEFAULT_SUBSCRIPTION_STATE,
           ...data.subscription,
@@ -2824,6 +3217,9 @@ const deleteBarberStand = async () => {
           },
         });
         setPendingSubscriptionPayment(null);
+        if (activatedImmediately && provider !== "trial") {
+          showSystemToast("Payment successful", data?.message || "Your business is now active on Queless.", "system");
+        }
         fetchBarbers();
         setActiveTab(effectiveIsBarber ? "dashboard" : "profile");
       }
@@ -2867,6 +3263,79 @@ const deleteBarberStand = async () => {
     }
   };
 
+  const openCustomerPremiumPayment = () => {
+    setCustomerSubscriptionMessage("");
+    setCustomerPremiumPaymentOpen(true);
+  };
+
+  const startCurrentCustomerPremiumUpgrade = async (request = {}) => {
+    try {
+      setCustomerSubscriptionLoading(true);
+      setCustomerSubscriptionMessage("");
+      const idempotencyKey = makeId("customer-premium");
+      const data = await startCustomerSubscriptionUpgrade(
+        {
+          billingCycle: request.billingCycle || "monthly",
+          provider: request.provider || "mtn_mobile_money",
+          method: request.provider || "mtn_mobile_money",
+          phoneNumber: request.phoneNumber || profile.phone,
+          payment_phone: request.phoneNumber || profile.phone,
+        },
+        idempotencyKey
+      );
+      setCustomerSubscriptionPlan(data?.plan || customerSubscriptionPlan);
+      setCustomerSubscriptionState({
+        ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE,
+        ...(data?.subscription || {}),
+        features: {
+          ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE.features,
+          ...(data?.subscription?.features || {}),
+        },
+      });
+      setPendingCustomerSubscriptionPayment(data?.payment?.reference ? {
+        reference: data.payment.reference,
+        provider: data.payment.provider || request.provider || "mtn_mobile_money",
+        status: data.payment.status || "pending",
+        amount: data.payment.amount || 0,
+        billingCycle: data.payment.billingCycle || request.billingCycle || "monthly",
+      } : null);
+      setCustomerSubscriptionMessage(data?.message || "Approve the Mobile Money prompt to activate Customer Premium.");
+      return true;
+    } catch (error) {
+      setCustomerSubscriptionMessage(getFriendlyPaymentError(error));
+      return false;
+    } finally {
+      setCustomerSubscriptionLoading(false);
+    }
+  };
+
+  const verifyCurrentCustomerPremium = async (reference = pendingCustomerSubscriptionPayment?.reference, silent = false) => {
+    if (!reference) return false;
+    try {
+      setCustomerSubscriptionLoading(true);
+      const data = await verifyCustomerSubscriptionUpgrade(reference);
+      setCustomerSubscriptionState({
+        ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE,
+        ...(data?.subscription || {}),
+        features: {
+          ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE.features,
+          ...(data?.subscription?.features || {}),
+        },
+      });
+      setPendingCustomerSubscriptionPayment(null);
+      setCustomerSubscriptionMessage(data?.message || "Customer Premium is active. Smart Match is unlocked.");
+      showSystemToast("Customer Premium active", data?.message || "Smart Match is unlocked.", "system");
+      return true;
+    } catch (error) {
+      if (!silent) {
+        setCustomerSubscriptionMessage(getFriendlyPaymentError(error) || "Customer Premium payment has not completed yet.");
+      }
+      return false;
+    } finally {
+      setCustomerSubscriptionLoading(false);
+    }
+  };
+
   const requestCurrentWithdrawal = async (amount) => {
     try {
       setWalletLoading(true);
@@ -2880,7 +3349,7 @@ const deleteBarberStand = async () => {
       setWalletMessage(data?.message || "Withdrawal requested.");
       showSystemToast("Withdrawal requested", data?.message || "Withdrawal request created.", "system");
     } catch (error) {
-      setWalletMessage(error.message || "Could not request withdrawal.");
+      setWalletMessage(error.userMessage || "Could not request payout. Please try again in a moment.");
     } finally {
       setWalletLoading(false);
     }
@@ -2912,7 +3381,7 @@ const deleteBarberStand = async () => {
           String(item.id) === String(bookingId) ? updatedBooking : item
         )
       );
-      fetchBookings(currentUser?.username || "", effectiveIsBarber ? "barber" : "customer");
+      notifyBookingUpdate(updatedBooking);
       fetchNotifications();
       showSystemToast("Payment confirmed", "Cash payment marked as received.", "booking");
     } catch (error) {
@@ -2947,7 +3416,7 @@ const deleteBarberStand = async () => {
         )
       );
 
-      fetchBookings(currentUser?.username || "", effectiveIsBarber ? "barber" : "customer");
+      notifyBookingUpdate(cancelled);
       fetchNotifications();
     } catch (error) {
       setGlobalError(error.message || "Could not cancel booking.");
@@ -2956,6 +3425,12 @@ const deleteBarberStand = async () => {
 
   const submitReview = async (booking, rating, text) => {
     if (!booking?.id || !booking?.barberId || !currentUser?.username) return;
+    const cleanText = String(text || "").trim();
+    if (!cleanText) {
+      setReviewSuccess("Please add a short review before submitting.");
+      setTimeout(() => setReviewSuccess(""), 2200);
+      return;
+    }
 
     const reviewedMap = readStored("reviewedBookings", currentUser.username, reviewedBookings || {});
     if (reviewedMap[String(booking.id)]) {
@@ -2963,19 +3438,6 @@ const deleteBarberStand = async () => {
       setTimeout(() => setReviewSuccess(""), 2200);
       return;
     }
-
-    const localReview = {
-      id: makeId("rvw"),
-      bookingId: booking.id,
-      barberId: booking.barberId,
-      username: currentUser.username,
-      name: profile.fullName || currentUser.username,
-      rating: Number(rating || 5),
-      text: text || "",
-      createdAt: new Date().toISOString(),
-    };
-    let submittedReview = localReview;
-
     try {
       const data = await createReview({
         bookingId: booking.id,
@@ -2983,16 +3445,21 @@ const deleteBarberStand = async () => {
         username: currentUser.username,
         name: profile.fullName || currentUser.username,
         rating: Number(rating || 5),
-        text,
+        text: cleanText,
       });
-      const savedReview = mapServerReview(data?.review || data || localReview);
-      submittedReview = savedReview;
+      const savedReview = mapServerReview(data?.review || data);
       const next = mergeByNewest(reviewsByBarber[booking.barberId] || [], [savedReview]);
       setReviewsByBarber((prev) => ({
         ...prev,
         [booking.barberId]: next,
       }));
       writeStored("reviews", String(booking.barberId), next);
+      const nextReviewed = {
+        ...reviewedMap,
+        [String(booking.id)]: savedReview,
+      };
+      setReviewedBookings(nextReviewed);
+      writeStored("reviewedBookings", currentUser.username, nextReviewed);
     } catch (error) {
       if (String(error?.message || "").toLowerCase().includes("already been reviewed")) {
         await fetchMyReviews(currentUser.username);
@@ -3000,20 +3467,10 @@ const deleteBarberStand = async () => {
         setTimeout(() => setReviewSuccess(""), 2200);
         return;
       }
-
-      const next = mergeByNewest(reviewsByBarber[booking.barberId] || [], [localReview]);
-      submittedReview = localReview;
-      setReviewsByBarber((prev) => ({ ...prev, [booking.barberId]: next }));
-      writeStored("reviews", String(booking.barberId), next);
-      setGlobalError("");
+      setReviewSuccess(error.message || "Could not submit review.");
+      setTimeout(() => setReviewSuccess(""), 2200);
+      return;
     }
-
-    const nextReviewed = {
-      ...reviewedMap,
-      [String(booking.id)]: submittedReview,
-    };
-    setReviewedBookings(nextReviewed);
-    writeStored("reviewedBookings", currentUser.username, nextReviewed);
 
     setReviewSuccess("Review submitted successfully.");
     setTimeout(() => setReviewSuccess(""), 2200);
@@ -3023,6 +3480,12 @@ const deleteBarberStand = async () => {
 
   const editBookingReview = async (booking, rating, text) => {
     if (!booking?.id || !booking?.barberId || !currentUser?.username) return;
+    const cleanText = String(text || "").trim();
+    if (!cleanText) {
+      setReviewSuccess("Please add a short review before saving.");
+      setTimeout(() => setReviewSuccess(""), 2200);
+      return;
+    }
 
     const existingReview =
       (reviewsByBarber[booking.barberId] || []).find(
@@ -3038,9 +3501,9 @@ const deleteBarberStand = async () => {
     try {
       const data = await updateReview(existingReview.id, {
         rating: Number(rating || existingReview.rating || 5),
-        review_text: text,
+        review_text: cleanText,
       });
-      const savedReview = data?.review || { ...existingReview, rating: Number(rating || 5), review_text: text };
+      const savedReview = data?.review || { ...existingReview, rating: Number(rating || 5), review_text: cleanText };
       const next = (reviewsByBarber[booking.barberId] || []).map((item) =>
         String(item.id) === String(savedReview.id) ? savedReview : item
       );
@@ -3532,7 +3995,34 @@ const deleteBarberStand = async () => {
     setSelectedTime,
     getServices: getBarberServices,
     rangesOverlap: timeRangesOverlap,
+    workingWindow: barberDayAvailability?.workingWindow,
   });
+
+  const bookingAvailabilityStatus = useMemo(() => {
+    const selectedDateOption = dateOptions.find((item) => item.value === selectedDate);
+    const openSlots = availableTimeSlots.filter((item) => !item.disabled);
+    const nextSlot = openSlots[0] || null;
+    const workingWindow = barberDayAvailability?.workingWindow || selectedBarber?.availability || null;
+    const allReasons = new Set(availableTimeSlots.map((item) => item.disabledReason).filter(Boolean));
+    return {
+      loading: barberDayAvailabilityLoading,
+      error: barberDayAvailabilityError,
+      selectedDateLabel: selectedDateOption?.label || selectedDate || "Selected day",
+      nextAvailableLabel: nextSlot?.label || "",
+      availableCount: openSlots.length,
+      hasAvailable: openSlots.length > 0,
+      isClosed: availableTimeSlots.length > 0 && !openSlots.length && allReasons.size === 1 && allReasons.has("Outside business hours"),
+      workingWindow,
+    };
+  }, [
+    availableTimeSlots,
+    barberDayAvailability?.workingWindow,
+    barberDayAvailabilityError,
+    barberDayAvailabilityLoading,
+    dateOptions,
+    selectedBarber?.availability,
+    selectedDate,
+  ]);
 
   const bookingCooldownInfo = useMemo(
     () => getBookingCooldownInfo(bookings, currentUser, selectedBarber),
@@ -3636,6 +4126,7 @@ const deleteBarberStand = async () => {
   };
 
   const handleAccountMenuNavigate = (target) => {
+    setMapState((prev) => ({ ...prev, show: false }));
     setShowBarberProfile(false);
     setShowBookingModal(false);
     setShowChat(false);
@@ -3649,7 +4140,7 @@ const deleteBarberStand = async () => {
       return;
     }
 
-    if ((target === "dashboard" || target === "reports") && !effectiveIsBarber) {
+    if ((target === "dashboard" || target === "reports" || target === "aiCoach") && !effectiveIsBarber) {
       setActiveTab("profile");
       return;
     }
@@ -3659,6 +4150,35 @@ const deleteBarberStand = async () => {
     }
 
     setActiveTab(target);
+  };
+
+  const toggleReviewPublicBlock = async (review, blocked = true) => {
+    if (!review?.id || !selectedBarber?.id) return;
+    try {
+      const result = await setReviewPublicBlock(review.id, {
+        blocked,
+        reason: blocked ? "Provider hid this review from the public stand" : "",
+      });
+      setReviewBlockUsageByBarber((prev) => ({
+        ...prev,
+        [selectedBarber.id]: result.reviewBlockUsage || prev[selectedBarber.id],
+      }));
+      await fetchManagedReviewsForBarber(selectedBarber.id);
+      setReviewSuccess(result.message || (blocked ? "Review hidden from public stand." : "Review restored to public stand."));
+    } catch (error) {
+      setReviewSuccess(error.message || "Could not update review visibility.");
+    }
+  };
+
+  const openSupportFlow = (topic = "Contact Support") => {
+    setSupportTopic(topic);
+    setShowAccountMenu(false);
+    setShowNotifications(false);
+    setShowBarberProfile(false);
+    setShowBookingModal(false);
+    setShowQuoteModal(false);
+    setShowChat(false);
+    setActiveTab("support");
   };
 
   const exitAdminAccess = (target = "home") => {
@@ -3674,6 +4194,8 @@ const deleteBarberStand = async () => {
   };
 
   const subscriptionTier = String(subscriptionState?.tier || "").toUpperCase();
+  const customerPremiumActive = isCustomerPremiumActive(customerSubscriptionState);
+  const canUseSmartMatch = String(currentUser?.role || "").toLowerCase() === "customer" && customerPremiumActive;
   const trialAccessExpired =
     effectiveIsBarber &&
     !isAdmin &&
@@ -3770,6 +4292,16 @@ const deleteBarberStand = async () => {
     return true;
   };
 
+  const openSmartMatch = (initial = {}) => {
+    setSmartMatchInitial(initial || {});
+    setShowSmartMatch(true);
+    setShowBarberProfile(false);
+    setShowBookingModal(false);
+    setShowQuoteModal(false);
+    setShowChat(false);
+    setMapState((prev) => ({ ...prev, show: false }));
+  };
+
   const openCategoryServices = (category) => {
     const nextCategory = category || "All";
     setSelectedCategory(nextCategory);
@@ -3792,9 +4324,11 @@ const deleteBarberStand = async () => {
     setActiveTab(returnTab);
   };
 
+  const isAdminActive = isAdmin && (activeTab === "admin" || activeTab === "adminReports" || activeTab === "adminSms");
+
   const content = (
     <>
-      {activeTab !== "bookingConfirmation" && (
+      {activeTab !== "bookingConfirmation" && !isAdminActive && (
       <AppHeader
         theme={theme}
         setTheme={setTheme}
@@ -3824,7 +4358,7 @@ const deleteBarberStand = async () => {
       />
       )}
 
-      {activeTab !== "bookingConfirmation" && (
+      {activeTab !== "bookingConfirmation" && !isAdminActive && (
       <AccountMenu
         show={showAccountMenu}
         isBarber={effectiveIsBarber}
@@ -3862,11 +4396,22 @@ const deleteBarberStand = async () => {
             setConfirmedBooking(activeConfirmationBooking);
             setActiveTab("bookings");
           }}
+          onMessageProvider={() => {
+            const provider = activeConfirmationProvider || selectedBarber;
+            if (provider) {
+              openConversation({
+                barber: provider,
+                customerUsername: currentUser?.username || "",
+                targetName: provider.business_name || "Provider",
+              });
+            }
+          }}
           onBackHome={() => {
             setConfirmedBooking(null);
             setFocusedBookingId("");
             setActiveTab("home");
           }}
+          onReportProblem={() => openSupportFlow("Report a Problem")}
         />
       )}
 
@@ -3890,6 +4435,8 @@ const deleteBarberStand = async () => {
               onOpenCategory={openCategoryServices}
               onOpenMap={openMarketplaceMap}
               onSearchSubmit={openSearchResults}
+              onOpenSmartMatch={openSmartMatch}
+              smartMatchPremiumActive={canUseSmartMatch}
               onBecomeProvider={() => {
                 if (effectiveIsBarber) {
                   setActiveTab("dashboard");
@@ -3921,6 +4468,9 @@ const deleteBarberStand = async () => {
             onBack={() => setActiveTab(previousMobileView === "categoryServices" ? "home" : previousMobileView || "home")}
             onOpenProvider={openProviderProfile}
             onOpenMap={openMarketplaceMap}
+            onOpenSmartMatch={openSmartMatch}
+            onSearchSubmit={openSearchResults}
+            smartMatchPremiumActive={canUseSmartMatch}
           />
         </div>
       )}
@@ -3935,6 +4485,8 @@ const deleteBarberStand = async () => {
             onOpenProvider={openProviderProfile}
             onOpenCategory={openCategoryServices}
             onOpenMap={openMarketplaceMap}
+            onOpenSmartMatch={openSmartMatch}
+            smartMatchPremiumActive={canUseSmartMatch}
           />
         </div>
       )}
@@ -3957,6 +4509,7 @@ const deleteBarberStand = async () => {
           barberMatchesBooking={barberMatchesBooking}
           formatTimeLabel={formatTimeLabel}
           focusBookingId={focusedBookingId}
+          onReportBooking={(_booking, topic) => openSupportFlow(topic)}
         />
         </div>
       )}
@@ -3986,8 +4539,18 @@ const deleteBarberStand = async () => {
           pendingSubscriptionPayment={pendingSubscriptionPayment}
           onUpgradeSubscription={startCurrentSubscriptionUpgrade}
           onVerifySubscription={verifyCurrentSubscription}
+          customerSubscriptionState={customerSubscriptionState}
+          customerSubscriptionPlan={customerSubscriptionPlan}
+          customerSubscriptionLoading={customerSubscriptionLoading}
+          customerSubscriptionMessage={customerSubscriptionMessage}
+          pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
+          onUpgradeCustomerPremium={openCustomerPremiumPayment}
+          onVerifyCustomerPremium={verifyCurrentCustomerPremium}
           onOpenUpgradePlan={openUpgradePlan}
           onRequestWithdrawal={requestCurrentWithdrawal}
+          onWalletUpdated={fetchWallet}
+          walletTopupReady={walletTopupReady}
+          walletTopupMessage={walletTopupReadinessMessage}
           favoriteBarbers={favoriteBarbers}
           myBarberProfile={myBarberProfile}
           onOpenBarber={(barber) => {
@@ -3999,7 +4562,7 @@ const deleteBarberStand = async () => {
             setSelectedBarber(myBarberProfile);
             setShowEditBarber(true);
           }}
-          onDeleteBarberStand={deleteBarberStand}
+          onDeleteBarberStand={() => setDeleteStandConfirmOpen(true)}
           logout={logout}
           phoneCountries={PHONE_COUNTRIES}
           splitPhoneNumber={splitPhoneNumber}
@@ -4035,6 +4598,7 @@ const deleteBarberStand = async () => {
             setShowEditBarber(true);
           }}
           onOpenReports={() => setActiveTab("reports")}
+          onOpenAiCoach={() => setActiveTab("aiCoach")}
           onOpenUpgradePlan={openUpgradePlan}
           getBookingsForCalendar={getBookingsForCalendar}
           dateValueToDate={dateValueToDate}
@@ -4052,16 +4616,35 @@ const deleteBarberStand = async () => {
           bookings={bookings}
           subscription={subscriptionState}
           reviews={myBarberProfile ? (reviewsByBarber[myBarberProfile.id] || []) : []}
-          onUpgradePlan={() => openUpgradePlan("PREMIUM")}
+          onUpgradePlan={openUpgradePlan}
+          onOpenAiCoach={() => setActiveTab("aiCoach")}
         />
       </div>
       )}
 
-      {isAdmin && (activeTab === "admin" || activeTab === "adminReports") && (
+      {effectiveIsBarber && activeTab === "aiCoach" && (
+        <div className="tab-scene-v5">
+          <AiCoachScreen
+            barber={myBarberProfile}
+            subscription={subscriptionState}
+            onUpgradePlan={() => openUpgradePlan("PLATINUM")}
+            onEditProfile={() => {
+              setSelectedBarber(myBarberProfile);
+              setShowEditBarber(true);
+            }}
+            onOpenReports={() => setActiveTab("reports")}
+            onOpenBookings={() => setActiveTab("bookings")}
+            onOpenDashboard={() => setActiveTab("dashboard")}
+            onShowActionHint={(message) => showSystemToast("AI Coach action", message, "system")}
+          />
+        </div>
+      )}
+
+      {isAdmin && (activeTab === "admin" || activeTab === "adminReports" || activeTab === "adminSms") && (
         <div className="tab-scene-v5">
           <AdminPanel
             currentUser={currentUser}
-            initialSection={activeTab === "adminReports" ? "reports" : "dashboard"}
+            initialSection={activeTab === "adminReports" ? "reports" : activeTab === "adminSms" ? "sms" : "dashboard"}
             onBackToApp={() => exitAdminAccess(previousMobileView === "admin" ? "home" : previousMobileView || "home")}
             onGoDashboard={() => exitAdminAccess("home")}
           />
@@ -4078,11 +4661,38 @@ const deleteBarberStand = async () => {
             accountLoading={accountLoading}
             accountMessage={accountMessage}
             sessionExpiresAt={sessionExpiresAt}
+            onNotificationToast={showSystemToast}
           />
         </div>
       )}
 
-      {activeTab !== "bookingConfirmation" && (
+      {activeTab === "help" && (
+        <div className="tab-scene-v5">
+          <HelpCenterScreen
+            onOpenSupport={openSupportFlow}
+            onBackHome={() => setActiveTab("home")}
+          />
+        </div>
+      )}
+
+      {activeTab === "policies" && (
+        <div className="tab-scene-v5">
+          <PoliciesScreen onOpenSupport={openSupportFlow} />
+        </div>
+      )}
+
+      {activeTab === "support" && (
+        <div className="tab-scene-v5">
+          <SupportScreen
+            initialTopic={supportTopic}
+            profile={profile}
+            currentUser={currentUser}
+            onBackHome={() => setActiveTab("home")}
+          />
+        </div>
+      )}
+
+      {activeTab !== "bookingConfirmation" && !isAdminActive && (
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -4090,7 +4700,14 @@ const deleteBarberStand = async () => {
         isAdmin={isAdmin}
         currentUser={currentUser}
         unreadMessages={unreadMessages}
-        isOverlayOpen={activeTab === "upgrade" || showTrialUpgradeScreen || mapState.show || showBarberProfile || showBookingModal || showQuoteModal || showChat || showRegisterBarber || showEditBarber || showNotifications || showAccountMenu}
+        unreadNotifications={unreadNotifications.length}
+        onOpenMap={() => openMarketplaceMap("All")}
+        onOpenNotifications={() => {
+          setShowNotifications((value) => !value);
+          setShowAccountMenu(false);
+          fetchNotifications();
+        }}
+        isOverlayOpen={activeTab === "upgrade" || showTrialUpgradeScreen || mapState.show || showBarberProfile || showBookingModal || showSmartMatch || showQuoteModal || showChat || showRegisterBarber || showEditBarber || showNotifications || showAccountMenu}
       />
       )}
 
@@ -4103,11 +4720,10 @@ const deleteBarberStand = async () => {
         locationLabel={locationLabel}
         locationMessage={locationMessage}
         locationLoading={locationLoading}
-        unreadCount={unreadNotifications.length}
         onClose={closeMarketplaceMap}
-        onOpenNotifications={() => {
-          setShowNotifications(true);
-          fetchNotifications();
+        onOpenMenu={() => {
+          setShowAccountMenu(true);
+          setShowNotifications(false);
         }}
         onUseCurrentLocation={requestLocation}
         onManualLocation={changeLocation}
@@ -4118,12 +4734,24 @@ const deleteBarberStand = async () => {
       <BarberProfileSheet
         show={showBarberProfile}
         barber={selectedBarber ? { ...selectedBarber, reviews: reviewsByBarber[selectedBarber.id] || [], reviewCount: (reviewsByBarber[selectedBarber.id] || []).length, rating: getAverageRating(reviewsByBarber[selectedBarber.id] || []) } : selectedBarber}
+        reviewBlockUsage={selectedBarber ? reviewBlockUsageByBarber[selectedBarber.id] : null}
         currentUser={currentUser}
         currentUserIsBarber={effectiveIsBarber}
         fallbackImage={fallbackStandIcon}
         onClose={() => setShowBarberProfile(false)}
         onToggleFavorite={toggleFavorite}
         onBook={() => {
+          const services = getBarberServices(selectedBarber);
+          const firstService = services[0];
+          if (firstService?.id) {
+            setSelectedService(firstService.id);
+            const firstLocationType = String(firstService.location_type || "provider_location").toLowerCase();
+            const supportsHome =
+              Number(selectedBarber?.home_service_enabled || selectedBarber?.homeServiceEnabled || 0) === 1 ||
+              firstLocationType === "customer_location";
+            setBookingLocationType(firstLocationType === "customer_location" && supportsHome ? "customer_location" : "provider_location");
+            setBookingAddress("");
+          }
           setShowBookingModal(true);
           setShowChat(false);
           setShowQuoteModal(false);
@@ -4138,6 +4766,8 @@ const deleteBarberStand = async () => {
           customerUsername: currentUser?.username || "",
           targetName: selectedBarber?.business_name || "Provider",
         })}
+        onReportProvider={() => openSupportFlow("Report provider")}
+        onToggleReviewBlock={toggleReviewPublicBlock}
       />
 
       <BookingModal
@@ -4149,6 +4779,7 @@ const deleteBarberStand = async () => {
         selectedTime={selectedTime}
         setSelectedTime={setSelectedTime}
         timeSlots={availableTimeSlots}
+        availabilityStatus={bookingAvailabilityStatus}
         selectedService={selectedService}
         setSelectedService={setSelectedService}
         selectedTeamMemberId={selectedTeamMemberId}
@@ -4157,12 +4788,27 @@ const deleteBarberStand = async () => {
         setSelectedPaymentMethod={setSelectedPaymentMethod}
         paymentPhone={mtnPaymentPhone}
         setPaymentPhone={setMtnPaymentPhone}
+        bookingLocationType={bookingLocationType}
+        setBookingLocationType={setBookingLocationType}
+        bookingAddress={bookingAddress}
+        setBookingAddress={setBookingAddress}
+        locationDetecting={bookingLocationDetecting}
+        onUseCurrentLocation={useCurrentLocationForBooking}
+        onRequestQuote={() => {
+          setShowQuoteModal(true);
+          setShowBookingModal(false);
+        }}
         pendingPayment={pendingBookingPayment}
         onVerifyPayment={verifyCurrentBookingPayment}
+        onlinePaymentsReady={bookingOnlinePaymentsReady}
+        paymentReadinessMessage={bookingPaymentReadinessMessage}
         onClose={() => setShowBookingModal(false)}
+        onOpenSmartMatch={() => openSmartMatch({ category: selectedBarber?.business_type || selectedBarber?.category_name || "" })}
+        smartMatchPremiumActive={canUseSmartMatch}
         onConfirm={createBooking}
         creatingBooking={creatingBooking}
         bookingCooldownInfo={bookingCooldownInfo}
+        walletBalance={Number(walletState?.wallet?.balance || 0)}
       />
 
       <QuoteRequestModal
@@ -4219,6 +4865,51 @@ const deleteBarberStand = async () => {
         onSubmit={registerBarber}
       />
 
+      <SmartMatchModal
+        show={showSmartMatch}
+        initial={smartMatchInitial}
+        providers={enrichedBarbers.filter(isPublicProvider)}
+        locationLabel={locationLabel}
+        customerSubscription={customerSubscriptionState}
+        customerSubscriptionLoading={customerSubscriptionLoading}
+        customerSubscriptionMessage={customerSubscriptionMessage}
+        pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
+        onClose={() => setShowSmartMatch(false)}
+        onUpgradePremium={openCustomerPremiumPayment}
+        onVerifyPremium={(reference) => verifyCurrentCustomerPremium(reference)}
+        onContinueManualSearch={() => {
+          setShowSmartMatch(false);
+          setActiveTab("searchResults");
+        }}
+        onOpenProvider={(provider) => {
+          setShowSmartMatch(false);
+          openProviderProfile(provider);
+        }}
+      />
+
+      <PaymentFlowModal
+        show={customerPremiumPaymentOpen}
+        title="Customer Premium"
+        subtitle="Choose how you want to pay for Smart Match access."
+        amountLabel="Premium: UGX 10,000/month"
+        amount={Math.max(10000, Number(customerSubscriptionPlan?.monthlyPrice || 10000))}
+        defaultPhone={profile.phone || currentUser?.phone || ""}
+        loading={customerSubscriptionLoading}
+        message={customerSubscriptionMessage}
+        pendingPayment={pendingCustomerSubscriptionPayment}
+        mtnReady={walletTopupReady}
+        mtnReadinessMessage={walletTopupReadinessMessage}
+        airtelReady={false}
+        submitLabel="Confirm Premium Payment"
+        onClose={() => setCustomerPremiumPaymentOpen(false)}
+        onSubmit={({ method, phoneNumber }) => startCurrentCustomerPremiumUpgrade({ billingCycle: "monthly", provider: method, phoneNumber })}
+        onVerify={async (reference) => {
+          const ok = await verifyCurrentCustomerPremium(reference);
+          if (ok) window.setTimeout(() => setCustomerPremiumPaymentOpen(false), 900);
+          return ok;
+        }}
+      />
+
       {(showTrialUpgradeScreen || activeTab === "upgrade") && (
         <TrialUpgradeScreen
           barber={myBarberProfile}
@@ -4230,7 +4921,7 @@ const deleteBarberStand = async () => {
           message={subscriptionMessage}
           onUpgrade={startCurrentSubscriptionUpgrade}
           onVerify={verifyCurrentSubscription}
-          initialSelectedTier={showTrialUpgradeScreen ? (normalizeProviderPlan(myBarberProfile?.selected_plan || subscriptionState?.tier) || "PRO") : upgradeSelectedTier}
+          initialSelectedTier={showTrialUpgradeScreen ? (normalizeProviderPlan(myBarberProfile?.selected_plan || subscriptionState?.tier) || "PLUS") : upgradeSelectedTier}
           currentUser={currentUser}
           isAdmin={isAdmin}
           onClose={() => {
@@ -4249,18 +4940,41 @@ const deleteBarberStand = async () => {
           }}
         />
       )}
+
+      {deleteStandConfirmOpen ? (
+        <>
+          <div className="booking-overlay-v4 open" onClick={() => !deleteStandLoading && setDeleteStandConfirmOpen(false)} />
+          <section className="delete-stand-confirm-v16" role="dialog" aria-modal="true" aria-labelledby="delete-stand-title">
+            <div className="delete-stand-icon-v16"><FiAlertTriangle /></div>
+            <div>
+              <h2 id="delete-stand-title">Delete stand?</h2>
+              <p>Are you sure you want to delete this stand? This action may remove the business from public search and bookings.</p>
+            </div>
+            {globalError ? <div className="form-error-v4">{globalError}</div> : null}
+            <div className="delete-stand-actions-v16">
+              <button type="button" className="secondary-btn-v4" onClick={() => setDeleteStandConfirmOpen(false)} disabled={deleteStandLoading}>
+                Cancel
+              </button>
+              <button type="button" className="danger-btn-v16" onClick={deleteBarberStand} disabled={deleteStandLoading}>
+                {deleteStandLoading ? "Deleting..." : "Yes, Delete Stand"}
+              </button>
+            </div>
+          </section>
+        </>
+      ) : null}
     </>
   );
 
   const appContent = content;
 
   const isAuthScreen = screen === "login";
+  const showInitialLoadingScreen = initialLoadingStage !== "hidden";
 
   return (
     <div className={`app-wrap-v4 ${theme} ${isAuthScreen ? "app-auth-v4" : ""}`}>
       <div className={`phone-frame-v4 ${isAuthScreen ? "phone-frame-auth-v4" : ""}`}>
         <div className={`screen-v4 ${isAuthScreen ? "screen-auth-v4" : ""}`}>
-          <Suspense fallback={<div className="content-v4 standard-page-v4">Loading...</div>}>
+          <Suspense fallback={<div className="content-v4 app-page-v4">Loading...</div>}>
             {screen === "login" ? (
               <AuthScreen
                 authMode={authMode}
@@ -4282,6 +4996,7 @@ const deleteBarberStand = async () => {
               appContent
             )}
           </Suspense>
+          {showInitialLoadingScreen ? <LoadingScreen visible={initialLoadingStage === "visible"} /> : null}
         </div>
       </div>
     </div>

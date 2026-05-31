@@ -1,11 +1,22 @@
 import { all, get, run, transaction } from "../db/query.js";
-import { sendPushToUser } from "./pushController.js";
+import {
+  sendBookingNotification,
+  sendNotificationToBusiness,
+  sendPaymentNotification,
+} from "../services/notificationService.js";
+import {
+  sendBookingCreatedProviderSmsFallback,
+  sendBookingStatusCustomerSmsFallback,
+  sendPaidBookingProviderSmsFallback,
+  sendPaymentSmsFallback,
+} from "../services/lifecycleSmsService.js";
 import { requireClockTime, requireIsoDate, toPositiveInteger } from "../utils/validation.js";
 import { bookingConfirmationEmail, sendEmail } from "../services/emailService.js";
 import { env } from "../config/env.js";
 import {
   createReference,
   getMobileMoneyProviderLabel,
+  normalizeMoneyAmount,
   normalizeUgandaPhoneNumber,
 } from "../services/paymentService.js";
 import {
@@ -45,6 +56,7 @@ function getBarberById(barberId, client = { get }) {
        availability_end,
        accepts_wallet,
        accepts_cash,
+       home_service_enabled,
        stand_type,
        subscription_tier,
        subscription_status,
@@ -89,7 +101,7 @@ function getProfileByUserId(userId, client = { get }) {
 
 function getBarberServiceById(serviceId, barberId, client = { get }) {
   return client.get(
-    `SELECT id, barber_id, service_name, price_extra, pricing_type, min_price, max_price, starting_price, duration_minutes, is_available
+    `SELECT id, barber_id, service_name, price_extra, pricing_type, min_price, max_price, starting_price, duration_minutes, location_type, is_available
      FROM barber_services
      WHERE id = ? AND barber_id = ? AND COALESCE(is_available, 1) = 1`,
     [serviceId, barberId]
@@ -329,10 +341,44 @@ function httpError(statusCode, message) {
   return error;
 }
 
+function isSuccessfulPaymentStatus(value) {
+  return ["successful", "success", "completed", "paid"].includes(String(value || "").trim().toLowerCase());
+}
+
+function isFailedPaymentStatus(value) {
+  return ["failed", "rejected", "expired", "cancelled", "canceled"].includes(String(value || "").trim().toLowerCase());
+}
+
+async function verifyProviderCallbackStatus({ payment, providerReference, reference, expected }) {
+  const provider = String(payment?.provider || "").trim().toLowerCase();
+  if (!["mtn_mobile_money", "airtel_money"].includes(provider)) {
+    return { accepted: false, status: "unsupported", rawResponse: {} };
+  }
+
+  const verification = await getMobileMoneyService(provider).verifyTransaction({
+    provider,
+    providerReference: providerReference || payment.provider_reference,
+    reference: reference || payment.internal_reference,
+    amount: payment.gross_amount,
+  });
+
+  const status = String(verification.status || "").trim().toLowerCase();
+  const accepted =
+    expected === "successful"
+      ? Boolean(verification.success) || isSuccessfulPaymentStatus(status)
+      : isFailedPaymentStatus(status);
+
+  return {
+    accepted,
+    status,
+    providerReference: verification.providerReference || providerReference || payment.provider_reference || "",
+    rawResponse: verification.rawResponse || {},
+  };
+}
+
 function normalizePaymentMethod(value, barber) {
-  const requested = String(value || "").trim().toLowerCase() || "cash";
-  const acceptsWallet = Number(barber?.accepts_wallet || 0) === 1;
-  const acceptsCash = true;
+  const requestedRaw = String(value || "").trim().toLowerCase();
+  const requested = requestedRaw === "wallet_balance" ? "wallet" : requestedRaw || "mtn_mobile_money";
 
   if (!BOOKING_PAYMENT_METHODS.includes(requested)) {
     throw httpError(400, "Invalid payment method.");
@@ -344,11 +390,7 @@ function normalizePaymentMethod(value, barber) {
       walletPaymentsEnabled: env.bookingWalletPaymentsEnabled,
     })
   ) {
-    throw httpError(503, "This booking payment method is not available yet. Choose cash for now.");
-  }
-
-  if (requested === "wallet" && !acceptsWallet) {
-    throw httpError(400, "This barber does not accept wallet payments.");
+    throw httpError(503, "This booking payment method is not available yet.");
   }
 
   if (requested === "airtel_money" && !env.airtelEnabled) {
@@ -365,10 +407,15 @@ function normalizePaymentMethod(value, barber) {
 function resolveServiceBookingPrice(barber, service) {
   const basePrice = Number(barber.price_from || 0);
   const pricingType = String(service?.pricing_type || "fixed").toLowerCase();
-  if (pricingType === "quote") return basePrice;
-  if (pricingType === "range") return basePrice + Number(service?.min_price || service?.price_extra || 0);
-  if (pricingType === "starting_from") return basePrice + Number(service?.starting_price || service?.price_extra || 0);
-  return basePrice + Number(service?.price_extra || 0);
+  const total =
+    pricingType === "quote"
+      ? basePrice
+      : pricingType === "range"
+      ? basePrice + Number(service?.min_price || service?.price_extra || 0)
+      : pricingType === "starting_from"
+      ? basePrice + Number(service?.starting_price || service?.price_extra || 0)
+      : basePrice + Number(service?.price_extra || 0);
+  return normalizeMoneyAmount(total, "Booking price");
 }
 
 async function ensureWallet(userId, client) {
@@ -387,13 +434,19 @@ async function ensureWallet(userId, client) {
   return wallet;
 }
 
-async function transferWalletPayment({ fromUserId, toUserId, bookingId, amount, client }) {
-  if (!toUserId) {
-    throw httpError(400, "This barber cannot receive wallet payments yet.");
-  }
-
+async function transferWalletPayment({ fromUserId, barberId, bookingId, amount, barberAmount = amount, paymentTransactionId = null, reference = "", client }) {
   const customerWallet = await ensureWallet(fromUserId, client);
-  const barberWallet = await ensureWallet(toUserId, client);
+  const ledgerReference = reference || `wallet-booking-${bookingId}-customer`;
+  const existingDebit = await client.get(
+    `SELECT id FROM wallet_ledger
+     WHERE owner_type = 'customer'
+       AND owner_id = ?
+       AND booking_id = ?
+       AND reference = ?
+     LIMIT 1`,
+    [fromUserId, bookingId, ledgerReference]
+  );
+  if (existingDebit) return false;
 
   const debit = await client.run(
     `UPDATE wallets
@@ -406,53 +459,34 @@ async function transferWalletPayment({ fromUserId, toUserId, bookingId, amount, 
     throw httpError(402, "Insufficient wallet balance.");
   }
   await client.run(
-    `UPDATE wallets SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [amount, barberWallet.id]
-  );
-  await client.run(
     `INSERT INTO wallet_ledger
-     (owner_type, owner_id, booking_id, direction, balance_bucket, amount, reference, description, metadata)
-     VALUES ('customer', ?, ?, 'debit', 'available', ?, ?, ?, ?)`,
+     (owner_type, owner_id, booking_id, payment_id, direction, balance_bucket, amount, reference, description, metadata)
+     VALUES ('customer', ?, ?, ?, 'debit', 'available', ?, ?, ?, ?)`,
     [
       fromUserId,
       bookingId,
+      paymentTransactionId,
       amount,
-      `wallet-booking-${bookingId}-customer`,
+      ledgerReference,
       `Booking #${bookingId} wallet payment`,
       JSON.stringify({ walletId: customerWallet.id }),
     ]
   );
-  await client.run(
-    `INSERT INTO wallet_ledger
-     (owner_type, owner_id, booking_id, direction, balance_bucket, amount, reference, description, metadata)
-     VALUES ('barber_user', ?, ?, 'credit', 'available', ?, ?, ?, ?)`,
-    [
-      toUserId,
-      bookingId,
-      amount,
-      `wallet-booking-${bookingId}-barber`,
-      `Booking #${bookingId} wallet earning`,
-      JSON.stringify({ walletId: barberWallet.id }),
-    ]
-  );
+  await creditPendingBarberShare({
+    client,
+    barberId,
+    bookingId,
+    paymentTransactionId,
+    amount: barberAmount,
+    reference: reference || `wallet-booking-${bookingId}`,
+  });
+  return true;
 }
 
-async function refundWalletPayment({ fromUserId, toUserId, bookingId, amount, client }) {
-  if (!fromUserId || !toUserId || !amount) return false;
+async function refundWalletPayment({ fromUserId, barberId, bookingId, amount, client }) {
+  if (!fromUserId || !barberId || !amount) return false;
 
   const customerWallet = await ensureWallet(fromUserId, client);
-  const barberWallet = await ensureWallet(toUserId, client);
-
-  const debit = await client.run(
-    `UPDATE wallets
-     SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ? AND balance >= ?`,
-    [amount, barberWallet.id, amount]
-  );
-
-  if (!debit?.changes) {
-    throw httpError(409, "Cannot refund this wallet booking because the barber wallet balance is insufficient.");
-  }
 
   await client.run(
     `UPDATE wallets SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -472,18 +506,19 @@ async function refundWalletPayment({ fromUserId, toUserId, bookingId, amount, cl
     ]
   );
   await client.run(
-    `INSERT INTO wallet_ledger
-     (owner_type, owner_id, booking_id, direction, balance_bucket, amount, reference, description, metadata)
-     VALUES ('barber_user', ?, ?, 'debit', 'available', ?, ?, ?, ?)`,
-    [
-      toUserId,
-      bookingId,
-      amount,
-      `wallet-refund-${bookingId}-barber`,
-      `Booking #${bookingId} refund`,
-      JSON.stringify({ walletId: barberWallet.id }),
-    ]
+    `UPDATE payment_transactions
+     SET status = CASE WHEN status = 'successful' THEN 'refunded' ELSE status END,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE booking_id = ? AND provider = 'wallet'`,
+    [bookingId]
   );
+  await reversePendingBarberShare({
+    client,
+    barberId,
+    bookingId,
+    amount,
+    reference: `wallet-refund-${bookingId}-barber`,
+  }).catch(() => false);
 
   return true;
 }
@@ -522,6 +557,15 @@ async function mapBookingRow(row) {
     ...row,
     business_name: barber?.business_name || "",
     location: barber?.location || "",
+    booking_location_type: row.booking_location_type || "provider_location",
+    booking_address: row.booking_address || barber?.location || "",
+    booking_details: (() => {
+      try {
+        return JSON.parse(row.booking_details_json || "{}");
+      } catch {
+        return {};
+      }
+    })(),
     barber_owner_username: barberOwner?.username || "",
     barber_username: barberOwner?.username || "",
     team_member_id: row.team_member_id || null,
@@ -547,7 +591,7 @@ async function sendBookingConfirmationEmails(booking) {
     : null;
 
   const base = {
-    barberName: barber?.business_name || "Lineup barber",
+    barberName: barber?.business_name || "Queless provider",
     customerName: customerProfile?.full_name || customerUser?.username || "Customer",
     serviceName: booking.service_name,
     bookingDate: booking.booking_date,
@@ -805,6 +849,43 @@ export async function createBooking(req, res, next) {
       if (!service) {
         throw httpError(404, "Service not found.");
       }
+      const servicePricingType = String(service.pricing_type || "fixed").toLowerCase();
+      const directBookingPrice =
+        servicePricingType === "range" ||
+        servicePricingType === "starting_from" ||
+        Number(service.price_extra || 0) > 0 ||
+        Number(barber.price_from || 0) > 0;
+      if (servicePricingType === "quote" || !directBookingPrice) {
+        throw httpError(400, "This service requires a quote before booking.");
+      }
+      const bookingLocationType = String(req.body.booking_location_type || "provider_location").toLowerCase();
+      if (!["provider_location", "customer_location"].includes(bookingLocationType)) {
+        throw httpError(400, "Choose a valid booking location.");
+      }
+      const serviceLocationType = String(service.location_type || "provider_location").toLowerCase();
+      const supportsCustomerLocation = Number(barber.home_service_enabled || 0) === 1 || serviceLocationType === "customer_location";
+      if (bookingLocationType === "customer_location" && !supportsCustomerLocation) {
+        throw httpError(400, "This service is only available at the provider location.");
+      }
+      const bookingAddress =
+        bookingLocationType === "customer_location"
+          ? String(req.body.booking_address || "").trim().slice(0, 240)
+          : barber.location || "";
+      if (bookingLocationType === "customer_location" && bookingAddress.length < 3) {
+        throw httpError(400, "Customer address is required for home service bookings.");
+      }
+      const bookingDetailsJson = JSON.stringify(
+        req.body.booking_details && typeof req.body.booking_details === "object"
+          ? {
+              type: String(req.body.booking_details.type || "").slice(0, 40),
+              subject: String(req.body.booking_details.subject || "").slice(0, 80),
+              studentLevel: String(req.body.booking_details.studentLevel || "").slice(0, 80),
+              lessonMode: String(req.body.booking_details.lessonMode || "").slice(0, 80),
+              duration: String(req.body.booking_details.duration || "").slice(0, 40),
+              notes: String(req.body.booking_details.notes || "").slice(0, 500),
+            }
+          : {}
+      );
 
       const active = await getActiveBookingsForCustomerWithBarber(req.user.id, barberId, client);
       if (active.length) {
@@ -869,8 +950,8 @@ export async function createBooking(req, res, next) {
 
       const result = await client.run(
         `INSERT INTO bookings
-         (barber_id, customer_user_id, team_member_id, service_name, booking_date, booking_time, price, service_duration_minutes, status, payment_method, payment_status, paid_at, payment_provider, payment_customer_phone, commission_amount, barber_amount)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (barber_id, customer_user_id, team_member_id, service_name, booking_date, booking_time, price, service_duration_minutes, status, payment_method, payment_status, paid_at, payment_provider, payment_customer_phone, commission_amount, barber_amount, booking_location_type, booking_address, booking_details_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           barberId,
           req.user.id,
@@ -888,6 +969,9 @@ export async function createBooking(req, res, next) {
           paymentPhone,
           commissionAmount,
           barberAmount,
+          bookingLocationType,
+          bookingAddress,
+          bookingDetailsJson,
         ]
       );
 
@@ -895,11 +979,56 @@ export async function createBooking(req, res, next) {
       let payment = null;
 
       if (paymentMethod === "wallet") {
+        const paymentReference = createReference("wallet-booking", createdBooking.id);
+        await client.run(
+          `UPDATE bookings
+           SET payment_reference = ?,
+               payment_provider = 'wallet',
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [paymentReference, createdBooking.id]
+        );
+        await client.run(
+          `INSERT INTO payment_transactions
+           (booking_id, barber_id, user_id, transaction_type, provider, internal_reference, provider_reference, idempotency_key, payer_phone, gross_amount, commission_amount, net_amount, currency, status, metadata)
+           VALUES (?, ?, ?, 'booking_payment', 'wallet', ?, '', ?, '', ?, ?, ?, 'UGX', 'successful', ?)`,
+          [
+            createdBooking.id,
+            barberId,
+            req.user.id,
+            paymentReference,
+            idempotencyKey,
+            totalPrice,
+            commissionAmount,
+            barberAmount,
+            JSON.stringify({ source: "customer_wallet", bookingId: createdBooking.id }),
+          ]
+        );
+        payment = await getPaymentTransactionByBookingId(createdBooking.id, client);
+        await createPaymentRecord({
+          client,
+          bookingId: createdBooking.id,
+          barberId,
+          userId: req.user.id,
+          flowType: "booking",
+          provider: "wallet",
+          internalReference: paymentReference,
+          providerReference: "",
+          idempotencyKey,
+          grossAmount: totalPrice,
+          commissionAmount,
+          barberAmount,
+          status: "successful",
+          metadata: { source: "customer_wallet", bookingId: createdBooking.id },
+        });
         await transferWalletPayment({
           fromUserId: req.user.id,
-          toUserId: barber.owner_user_id,
+          barberId,
           bookingId: createdBooking.id,
           amount: totalPrice,
+          barberAmount,
+          paymentTransactionId: payment?.id || null,
+          reference: paymentReference,
           client
         });
       }
@@ -1002,17 +1131,34 @@ export async function createBooking(req, res, next) {
     if (mappedBooking.payment_status === "paid") {
       try {
         await sendBookingConfirmationEmails(mappedBooking);
-        await sendPushToUser(mappedBooking.barber_owner_username, {
-          title: "New booking",
-          body: `${mappedBooking.customer_full_name} booked ${mappedBooking.service_name} at ${normalizedBookingTime}`
-        });
       } catch {}
     }
+
+    const providerPushResult = await sendNotificationToBusiness(
+      barberId,
+      mappedBooking.payment_status === "paid" ? "New paid booking" : "New booking request",
+      mappedBooking.payment_status === "paid"
+        ? `${mappedBooking.customer_full_name || "A customer"} booked ${mappedBooking.service_name} at ${normalizedBookingTime}.`
+        : `A new booking request arrived for ${normalizedBookingTime}.`,
+      {
+        type: "booking",
+        bookingId: mappedBooking.id,
+        status: mappedBooking.status,
+        route: "/bookings",
+      },
+      { persist: false }
+    ).catch(() => {});
+    const providerForSms = await getBarberById(barberId).catch(() => null);
+    await sendBookingCreatedProviderSmsFallback({
+      booking: mappedBooking,
+      providerUserId: providerForSms?.owner_user_id,
+      pushResult: providerPushResult,
+    });
 
     return res.status(201).json({
       success: true,
       booking: mappedBooking,
-      payment: payment
+      payment: payment && isMobileMoneyPayment(payment.provider)
         ? {
             reference: payment.internal_reference,
             provider: payment.provider,
@@ -1069,6 +1215,178 @@ export async function getMyBookings(req, res, next) {
     return res.status(200).json({
       success: true,
       bookings
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function payBookingWithWallet(req, res, next) {
+  try {
+    const bookingId = Number(req.params.id || req.body.bookingId || req.body.booking_id);
+    const idempotencyKey = String(req.body.idempotencyKey || req.get("Idempotency-Key") || "").trim().slice(0, 120);
+    if (!Number.isInteger(bookingId) || bookingId <= 0) {
+      throw httpError(400, "Booking id is required.");
+    }
+
+    const result = await transaction(async (client) => {
+      const booking = await getBookingById(bookingId, client);
+      if (!booking) throw httpError(404, "Booking not found.");
+      if (Number(booking.customer_user_id) !== Number(req.user.id)) {
+        throw httpError(403, "You can only pay for your own booking.");
+      }
+      if (String(booking.payment_status || "").toLowerCase() === "paid") {
+        return { mappedBooking: await mapBookingRow(booking), alreadyPaid: true };
+      }
+      if (["cancelled", "rejected", "completed"].includes(String(booking.status || "").toLowerCase())) {
+        throw httpError(400, "This booking cannot be paid with wallet.");
+      }
+
+      const existingPayment = await getPaymentTransactionByBookingId(bookingId, client);
+      if (
+        existingPayment?.provider &&
+        existingPayment.provider !== "wallet" &&
+        ["pending", "initiated", "successful"].includes(String(existingPayment.status || "").toLowerCase())
+      ) {
+        throw httpError(409, "This booking already has another payment in progress.");
+      }
+
+      const amount = Number(booking.price || 0);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw httpError(400, "Booking amount must be greater than 0.");
+      }
+      const { commissionAmount, barberAmount } = getBookingPaymentBreakdown(amount, "wallet");
+      const paymentReference = booking.payment_reference || createReference("wallet-booking", booking.id);
+
+      await client.run(
+        `UPDATE bookings
+         SET payment_method = 'wallet',
+             payment_status = 'paid',
+             payment_provider = 'wallet',
+             payment_reference = ?,
+             paid_at = COALESCE(paid_at, CURRENT_TIMESTAMP),
+             status = CASE WHEN status = 'payment_pending' THEN 'confirmed' ELSE status END,
+             commission_amount = ?,
+             barber_amount = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [paymentReference, commissionAmount, barberAmount, booking.id]
+      );
+
+      let payment = existingPayment;
+      if (!payment || payment.provider !== "wallet") {
+        await client.run(
+          `INSERT INTO payment_transactions
+           (booking_id, barber_id, user_id, transaction_type, provider, internal_reference, provider_reference, idempotency_key, payer_phone, gross_amount, commission_amount, net_amount, currency, status, metadata)
+           VALUES (?, ?, ?, 'booking_payment', 'wallet', ?, '', ?, '', ?, ?, ?, 'UGX', 'successful', ?)`,
+          [
+            booking.id,
+            booking.barber_id,
+            req.user.id,
+            paymentReference,
+            idempotencyKey,
+            amount,
+            commissionAmount,
+            barberAmount,
+            JSON.stringify({ source: "customer_wallet_pay_existing", bookingId: booking.id }),
+          ]
+        );
+        payment = await getPaymentTransactionByBookingId(booking.id, client);
+      } else {
+        await client.run(
+          `UPDATE payment_transactions
+           SET provider = 'wallet',
+               status = 'successful',
+               gross_amount = ?,
+               commission_amount = ?,
+               net_amount = ?,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [amount, commissionAmount, barberAmount, payment.id]
+        );
+      }
+
+      await createPaymentRecord({
+        client,
+        bookingId: booking.id,
+        barberId: booking.barber_id,
+        userId: req.user.id,
+        flowType: "booking",
+        provider: "wallet",
+        internalReference: paymentReference,
+        providerReference: "",
+        idempotencyKey,
+        grossAmount: amount,
+        commissionAmount,
+        barberAmount,
+        status: "successful",
+        metadata: { source: "customer_wallet_pay_existing", bookingId: booking.id },
+      }).catch(() => null);
+
+      await transferWalletPayment({
+        fromUserId: req.user.id,
+        barberId: booking.barber_id,
+        bookingId: booking.id,
+        amount,
+        barberAmount,
+        paymentTransactionId: payment?.id || null,
+        reference: paymentReference,
+        client,
+      });
+
+      const updated = await getBookingById(booking.id, client);
+      await client.run(
+        `INSERT INTO booking_events (booking_id, actor_user_id, event_type, event_note)
+         VALUES (?, ?, 'wallet_payment_confirmed', ?)`,
+        [booking.id, req.user.id, "Customer paid with wallet"]
+      );
+
+      return { mappedBooking: await mapBookingRow(updated), alreadyPaid: false };
+    });
+
+    if (!result.alreadyPaid) {
+      const customerPushResult = await sendPaymentNotification({
+        userId: result.mappedBooking.customerUserId || result.mappedBooking.customer_user_id,
+        title: "Payment received",
+        body: "Your wallet payment was confirmed and the appointment is now secured.",
+        bookingId,
+        status: "paid",
+        type: "payment",
+      }, { persist: false }).catch(() => {});
+      await sendPaymentSmsFallback({
+        userId: result.mappedBooking.customerUserId || result.mappedBooking.customer_user_id,
+        booking: result.mappedBooking,
+        status: "paid",
+        title: "Payment received",
+        body: "Your wallet payment was confirmed and the appointment is now secured.",
+        pushResult: customerPushResult,
+      });
+
+      const providerPushResult = await sendNotificationToBusiness(
+        result.mappedBooking.barberId || result.mappedBooking.barber_id,
+        "New paid booking",
+        "A wallet booking was paid and added to your pending wallet balance.",
+        {
+          type: "booking",
+          bookingId: result.mappedBooking.id,
+          status: "paid",
+          route: "/bookings",
+        },
+        { persist: false }
+      ).catch(() => {});
+      const providerForSms = await getBarberById(result.mappedBooking.barberId || result.mappedBooking.barber_id).catch(() => null);
+      await sendPaidBookingProviderSmsFallback({
+        booking: result.mappedBooking,
+        providerUserId: providerForSms?.owner_user_id,
+        pushResult: providerPushResult,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      already_paid: Boolean(result.alreadyPaid),
+      booking: result.mappedBooking,
+      message: result.alreadyPaid ? "Booking is already paid." : "Booking paid with wallet.",
     });
   } catch (error) {
     next(error);
@@ -1172,10 +1490,9 @@ export async function updateBookingStatus(req, res, next) {
         booking.payment_method === "wallet" &&
         booking.payment_status === "paid"
       ) {
-        const barber = await getBarberById(booking.barber_id, client);
         refunded = await refundWalletPayment({
           fromUserId: booking.customer_user_id,
-          toUserId: barber?.owner_user_id,
+          barberId: booking.barber_id,
           bookingId: booking.id,
           amount: Number(booking.price || 0),
           client,
@@ -1199,7 +1516,7 @@ export async function updateBookingStatus(req, res, next) {
 
       if (
         status === "completed" &&
-        ["mtn_mobile_money", "airtel_money"].includes(String(booking.payment_method || "")) &&
+        ["mtn_mobile_money", "airtel_money", "wallet"].includes(String(booking.payment_method || "")) &&
         booking.payment_status === "paid" &&
         booking.status !== "completed"
       ) {
@@ -1258,6 +1575,33 @@ export async function updateBookingStatus(req, res, next) {
           ? `Booking completed. Barber earnings are now available for withdrawal.`
           : `Booking status changed to ${status}`
       }).catch(() => {});
+
+      const pushResult = await sendBookingNotification({
+        booking: mappedBooking,
+        recipientUserId: notifyUserId,
+        title:
+          status === "confirmed"
+            ? "Booking accepted"
+            : ["cancelled", "rejected"].includes(status)
+            ? "Booking status changed"
+            : "Booking updated",
+        body: refunded
+          ? `Booking status changed to ${status}. Wallet payment was refunded.`
+          : releasedToAvailable
+          ? "Booking completed. Earnings are now available for withdrawal."
+          : status === "confirmed"
+          ? "Your booking has been accepted and confirmed."
+          : `Booking status changed to ${status}.`,
+        status,
+      }, { persist: false }).catch(() => {});
+      if (isBarberOwner) {
+        await sendBookingStatusCustomerSmsFallback({
+          booking: mappedBooking,
+          status,
+          refunded,
+          pushResult,
+        });
+      }
     }
 
     await logAudit(req.user.id, `Updated booking #${bookingId} to ${status}`);
@@ -1328,6 +1672,23 @@ export async function confirmCashPayment(req, res, next) {
 
     await logAudit(req.user.id, `Confirmed cash payment for booking #${bookingId}`);
 
+    const pushResult = await sendPaymentNotification({
+      userId: mappedBooking.customerUserId || mappedBooking.customer_user_id,
+      title: "Payment confirmed",
+      body: "Your cash payment was confirmed.",
+      bookingId,
+      status: "paid",
+      type: "payment",
+    }, { persist: false }).catch(() => {});
+    await sendPaymentSmsFallback({
+      userId: mappedBooking.customerUserId || mappedBooking.customer_user_id,
+      booking: mappedBooking,
+      status: "paid",
+      title: "Payment confirmed",
+      body: "Your cash payment was confirmed.",
+      pushResult,
+    });
+
     res.status(200).json({
       success: true,
       message: "Cash payment confirmed.",
@@ -1367,6 +1728,43 @@ export async function verifyBookingPayment(req, res, next) {
     try {
       await sendBookingConfirmationEmails(result.booking);
     } catch {}
+
+    const customerPushResult = await sendBookingNotification({
+      booking: result.booking,
+      recipientUserId: result.booking.customerUserId || result.booking.customer_user_id,
+      title: "Payment received",
+      body: "Your booking payment was confirmed and the appointment is now secured.",
+      status: "paid",
+    }, { persist: false }).catch(() => {});
+    await sendPaymentSmsFallback({
+      userId: result.booking.customerUserId || result.booking.customer_user_id,
+      booking: result.booking,
+      paymentId: result.payment?.id,
+      status: "paid",
+      title: "Payment received",
+      body: "Your booking payment was confirmed and the appointment is now secured.",
+      pushResult: customerPushResult,
+    });
+
+    const providerPushResult = await sendNotificationToBusiness(
+      result.booking.barberId || result.booking.barber_id,
+      "New paid booking",
+      "A paid booking was confirmed and added to your pending wallet balance.",
+      {
+        type: "booking",
+        bookingId: result.booking.id,
+        status: "paid",
+        route: "/bookings",
+      },
+      { persist: false }
+    ).catch(() => {});
+    const providerForSms = await getBarberById(result.booking.barberId || result.booking.barber_id).catch(() => null);
+    await sendPaidBookingProviderSmsFallback({
+      booking: result.booking,
+      providerUserId: providerForSms?.owner_user_id,
+      paymentId: result.payment?.id,
+      pushResult: providerPushResult,
+    });
 
     res.status(200).json({
       success: true,
@@ -1455,14 +1853,52 @@ export async function handleBookingPaymentWebhook(req, res, next) {
         return { unknown: true };
       }
 
-      if (["failed", "rejected", "expired", "cancelled", "canceled"].includes(status)) {
+      const booking = await getBookingById(payment.booking_id, client);
+      const paymentAlreadySuccessful = String(payment.status || "").toLowerCase() === "successful";
+      const bookingAlreadyPaid = String(booking?.payment_status || "").toLowerCase() === "paid";
+      const callbackSuccessful = isSuccessfulPaymentStatus(status);
+
+      if (bookingAlreadyPaid || (paymentAlreadySuccessful && !callbackSuccessful)) {
+        await markWebhookEventProcessed({
+          client,
+          eventId: webhookEvent.id,
+          processingStatus: "duplicate",
+        });
+        return {
+          duplicate: true,
+          booking: await mapBookingRow(booking),
+        };
+      }
+
+      if (isFailedPaymentStatus(status)) {
+        const verifiedFailure = await verifyProviderCallbackStatus({
+          payment,
+          providerReference,
+          reference,
+          expected: "failed",
+        }).catch(() => ({ accepted: false }));
+
+        if (!verifiedFailure.accepted) {
+          await markWebhookEventProcessed({
+            client,
+            eventId: webhookEvent.id,
+            processingStatus: "unverified_terminal_callback",
+          });
+          return {
+            pending: true,
+            booking: await mapBookingRow(booking),
+            paymentId: payment.id,
+          };
+        }
+
         await client.run(
           `UPDATE payment_transactions
            SET status = 'failed',
+               provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
                metadata = ?,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = ?`,
-          [JSON.stringify(payload), payment.id]
+          [verifiedFailure.providerReference || providerReference, JSON.stringify({ ...payload, verification: verifiedFailure.rawResponse }), payment.id]
         );
         await client.run(
           `UPDATE bookings
@@ -1474,19 +1910,23 @@ export async function handleBookingPaymentWebhook(req, res, next) {
         await updatePaymentRecord({
           client,
           internalReference: payment.internal_reference,
-          providerReference,
+          providerReference: verifiedFailure.providerReference || providerReference,
           status: "failed",
-          metadata: payload,
+          metadata: { ...payload, verification: verifiedFailure.rawResponse },
         });
         await markWebhookEventProcessed({
           client,
           eventId: webhookEvent.id,
           processingStatus: "processed_failed",
         });
-        return { failed: true };
+        return {
+          failed: true,
+          booking: await mapBookingRow(await getBookingById(payment.booking_id, client)),
+          paymentId: payment.id,
+        };
       }
 
-      if (!["successful", "success", "completed", "paid"].includes(status)) {
+      if (!isSuccessfulPaymentStatus(status)) {
         await client.run(
           `UPDATE payment_transactions
            SET status = 'pending',
@@ -1521,23 +1961,43 @@ export async function handleBookingPaymentWebhook(req, res, next) {
           eventId: webhookEvent.id,
           processingStatus: "processed_pending",
         });
-        return { pending: true };
+        return {
+          pending: true,
+          booking: await mapBookingRow(await getBookingById(payment.booking_id, client)),
+          paymentId: payment.id,
+        };
       }
 
-      const booking = await getBookingById(payment.booking_id, client);
-      if (
-        ["successful", "success", "completed", "paid"].includes(status) &&
-        payment.status === "successful" &&
-        booking?.payment_status === "paid"
-      ) {
+      const verifiedSuccess = await verifyProviderCallbackStatus({
+        payment,
+        providerReference,
+        reference,
+        expected: "successful",
+      }).catch(() => ({ accepted: false }));
+
+      if (!verifiedSuccess.accepted) {
+        await client.run(
+          `UPDATE payment_transactions
+           SET status = 'pending',
+               provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+               metadata = ?,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [
+            providerReference,
+            JSON.stringify({ ...payload, verification: { accepted: false } }),
+            payment.id,
+          ]
+        );
         await markWebhookEventProcessed({
           client,
           eventId: webhookEvent.id,
-          processingStatus: "duplicate",
+          processingStatus: "unverified_success_callback",
         });
         return {
-          duplicate: true,
-          booking: await mapBookingRow(booking),
+          pending: true,
+          booking: await mapBookingRow(await getBookingById(payment.booking_id, client)),
+          paymentId: payment.id,
         };
       }
 
@@ -1549,8 +2009,8 @@ export async function handleBookingPaymentWebhook(req, res, next) {
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
-          providerReference,
-          JSON.stringify(payload),
+          verifiedSuccess.providerReference || providerReference,
+          JSON.stringify({ ...payload, verification: verifiedSuccess.rawResponse }),
           payment.id,
         ]
       );
@@ -1558,9 +2018,9 @@ export async function handleBookingPaymentWebhook(req, res, next) {
       await updatePaymentRecord({
         client,
         internalReference: payment.internal_reference,
-        providerReference,
+        providerReference: verifiedSuccess.providerReference || providerReference,
         status: "successful",
-        metadata: payload,
+        metadata: { ...payload, verification: verifiedSuccess.rawResponse },
       });
 
       await markWebhookEventProcessed({
@@ -1581,6 +2041,69 @@ export async function handleBookingPaymentWebhook(req, res, next) {
       try {
         await sendBookingConfirmationEmails(result.booking);
       } catch {}
+    }
+
+    if (result?.failed && result?.booking) {
+      const pushResult = await sendPaymentNotification({
+        userId: result.booking.customerUserId || result.booking.customer_user_id,
+        title: "Payment failed",
+        body: "Your booking payment failed. Please try again or choose another payment method.",
+        paymentId: result.paymentId,
+        bookingId: result.booking.id,
+        status: "failed",
+      }).catch(() => {});
+      await sendPaymentSmsFallback({
+        userId: result.booking.customerUserId || result.booking.customer_user_id,
+        booking: result.booking,
+        paymentId: result.paymentId,
+        status: "failed",
+        title: "Payment failed",
+        body: "Your booking payment failed. Please try again or choose another payment method.",
+        pushResult,
+      });
+    } else if (result?.pending && result?.booking) {
+      await sendPaymentNotification({
+        userId: result.booking.customerUserId || result.booking.customer_user_id,
+        title: "Payment pending",
+        body: "Your booking payment is still pending. Please approve the mobile money prompt.",
+        paymentId: result.paymentId,
+        bookingId: result.booking.id,
+        status: "pending",
+      }).catch(() => {});
+    } else if (result?.booking && !result?.duplicate) {
+      const customerPushResult = await sendPaymentNotification({
+        userId: result.booking.customerUserId || result.booking.customer_user_id,
+        title: "Payment received",
+        body: "Your booking payment was confirmed and the appointment is now secured.",
+        bookingId: result.booking.id,
+        status: "paid",
+      }, { persist: false }).catch(() => {});
+      await sendPaymentSmsFallback({
+        userId: result.booking.customerUserId || result.booking.customer_user_id,
+        booking: result.booking,
+        status: "paid",
+        title: "Payment received",
+        body: "Your booking payment was confirmed and the appointment is now secured.",
+        pushResult: customerPushResult,
+      });
+      const providerPushResult = await sendNotificationToBusiness(
+        result.booking.barberId || result.booking.barber_id,
+        "New paid booking",
+        "A paid booking was confirmed and added to your pending wallet balance.",
+        {
+          type: "booking",
+          bookingId: result.booking.id,
+          status: "paid",
+          route: "/bookings",
+        },
+        { persist: false }
+      ).catch(() => {});
+      const providerForSms = await getBarberById(result.booking.barberId || result.booking.barber_id).catch(() => null);
+      await sendPaidBookingProviderSmsFallback({
+        booking: result.booking,
+        providerUserId: providerForSms?.owner_user_id,
+        pushResult: providerPushResult,
+      });
     }
 
     res.status(200).json({

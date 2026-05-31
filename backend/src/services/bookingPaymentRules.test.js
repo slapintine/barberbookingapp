@@ -6,8 +6,8 @@ import {
   isMobileMoneyPayment,
 } from "./bookingPaymentRules.js";
 
-test("does not apply commission to cash booking payments", () => {
-  assert.deepEqual(getBookingPaymentBreakdown(20000, "cash"), {
+test("does not apply commission to wallet booking payments", () => {
+  assert.deepEqual(getBookingPaymentBreakdown(20000, "wallet_balance"), {
     grossAmount: 20000,
     commissionAmount: 0,
     barberAmount: 20000,
@@ -28,11 +28,12 @@ test("detects mobile money providers explicitly", () => {
   assert.equal(isMobileMoneyPayment("airtel_money"), true);
 });
 
-test("keeps unfinished booking payment methods behind feature flags", () => {
-  assert.equal(isBookingPaymentMethodEnabled("cash"), true);
+test("keeps digital booking payment methods behind feature flags", () => {
+  assert.equal(isBookingPaymentMethodEnabled("cash"), false);
   assert.equal(isBookingPaymentMethodEnabled("wallet"), false);
   assert.equal(isBookingPaymentMethodEnabled("mtn_mobile_money"), false);
   assert.equal(isBookingPaymentMethodEnabled("airtel_money"), false);
-  assert.equal(isBookingPaymentMethodEnabled("wallet", { walletPaymentsEnabled: true }), false);
+  assert.equal(isBookingPaymentMethodEnabled("wallet", { walletPaymentsEnabled: true }), true);
+  assert.equal(isBookingPaymentMethodEnabled("wallet_balance", { walletPaymentsEnabled: true }), true);
   assert.equal(isBookingPaymentMethodEnabled("mtn_mobile_money", { onlinePaymentsEnabled: true }), true);
 });

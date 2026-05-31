@@ -2202,3 +2202,67 @@ body[data-theme="light"] .trial-upgrade-overlay-v14 {
 .trial-upgrade-sheet-v14 {
   padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
 }
+
+.trial-upgrade-sheet-v14.trial-upgrade-screen-v12 {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(125, 45, 240, 0.12), transparent 30%),
+    linear-gradient(180deg, #ffffff 0%, #fff8fb 48%, #f8f2ff 100%) !important;
+}
+
+.trial-upgrade-hero-v12 {
+  border: 1px solid rgba(95, 22, 184, 0.12) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(135deg, rgba(95, 22, 184, 0.09), rgba(223, 63, 136, 0.08)),
+    rgba(255, 255, 255, 0.82) !important;
+}
+
+.trial-upgrade-hero-v12 h1 {
+  color: #22003f !important;
+}
+
+.trial-plans-v12 {
+  gap: 14px !important;
+}
+
+.trial-plan-card-v12 {
+  border-radius: 8px !important;
+  border-color: rgba(82, 43, 91, 0.12) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(253, 249, 255, 0.92)) !important;
+  box-shadow: 0 16px 40px rgba(47, 7, 85, 0.08) !important;
+}
+
+.trial-plan-card-v12.selected {
+  border-color: rgba(95, 22, 184, 0.45) !important;
+  box-shadow: 0 20px 48px rgba(95, 22, 184, 0.18) !important;
+}
+
+.trial-plan-card-v12:nth-child(2) {
+  background:
+    radial-gradient(circle at 90% 0%, rgba(223, 63, 136, 0.12), transparent 30%),
+    linear-gradient(180deg, #ffffff, #fbf6ff) !important;
+}
+
+.trial-plan-card-v12:nth-child(3) {
+  background:
+    radial-gradient(circle at 88% 0%, rgba(255, 194, 88, 0.18), transparent 30%),
+    linear-gradient(180deg, #ffffff, #f9f4ff) !important;
+}
+
+.trial-plan-top-v12 em {
+  border-radius: 999px !important;
+  background: rgba(95, 22, 184, 0.1) !important;
+  color: #4a1668 !important;
+  white-space: nowrap;
+}
+
+.trial-feature-list-v12 span {
+  line-height: 1.35 !important;
+}
+
+.trial-select-btn-v13,
+.trial-view-more-btn-v14,
+.trial-primary-btn-v12,
+.trial-secondary-btn-v12 {
+  border-radius: 8px !important;
+}

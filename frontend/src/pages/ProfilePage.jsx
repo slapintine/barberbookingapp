@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { FiArrowDownLeft, FiArrowLeft, FiArrowUpRight, FiBriefcase, FiCamera, FiCheckCircle, FiCreditCard, FiEdit2, FiHeart, FiLogOut, FiMoon, FiShield, FiSmartphone, FiSun, FiUser, FiX } from "react-icons/fi";
 import { sendEmailVerification, sendPhoneOtp, verifyOtp } from "../api/authApi.js";
+import TopUpWalletModal from "../components/wallet/TopUpWalletModal.jsx";
 import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
 import { formatPlanName, formatSubscriptionPrice, PROVIDER_PLANS } from "../utils/subscriptionPlans.js";
+import { formatCustomerPremiumPrice, isCustomerPremiumActive } from "../utils/customerPremium.js";
 
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
@@ -37,8 +39,18 @@ export default function ProfilePage({
   pendingSubscriptionPayment,
   onUpgradeSubscription,
   onVerifySubscription,
+  customerSubscriptionState,
+  customerSubscriptionPlan,
+  customerSubscriptionLoading,
+  customerSubscriptionMessage,
+  pendingCustomerSubscriptionPayment,
+  onUpgradeCustomerPremium,
+  onVerifyCustomerPremium,
   onOpenUpgradePlan,
   onRequestWithdrawal,
+  onWalletUpdated,
+  walletTopupReady = false,
+  walletTopupMessage = "",
   favoriteBarbers,
   myBarberProfile,
   onOpenBarber,
@@ -58,9 +70,14 @@ export default function ProfilePage({
   const [phoneCode, setPhoneCode] = useState("");
   const [sendingEmailCode, setSendingEmailCode] = useState(false);
   const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [verifyError, setVerifyError] = useState("");
   const [verifyStatus, setVerifyStatus] = useState("");
   const [verificationPage, setVerificationPage] = useState("email");
+  const [emailCodeSent, setEmailCodeSent] = useState(false);
+  const [emailDraft, setEmailDraft] = useState(profile.email || "");
+  const [changingEmail, setChangingEmail] = useState(false);
   const [verifiedChannels, setVerifiedChannels] = useState({
     email: Boolean(profile.emailVerified || profile.email_verified),
     phone: Boolean(profile.phoneVerified || profile.phone_verified),
@@ -68,7 +85,7 @@ export default function ProfilePage({
   const [resendCooldowns, setResendCooldowns] = useState({ email: 0, phone: 0 });
   const [withdrawAmount, setWithdrawAmount] = useState("10000");
   const [planDetailsTier, setPlanDetailsTier] = useState("");
-  const [customerWalletModal, setCustomerWalletModal] = useState("");
+  const [topupOpen, setTopupOpen] = useState(false);
   const initialPhone = splitPhoneNumber(profile.phone);
   const [phoneCountryCode, setPhoneCountryCode] = useState(initialPhone.countryCode);
   const [phoneLocalNumber, setPhoneLocalNumber] = useState(initialPhone.localNumber);
@@ -84,8 +101,29 @@ export default function ProfilePage({
     setPhoneLocalNumber(next.localNumber);
   }, [profile.phone]);
 
+  useEffect(() => {
+    setVerifiedChannels({
+      email: Boolean(profile.emailVerified || profile.email_verified),
+      phone: Boolean(profile.phoneVerified || profile.phone_verified),
+    });
+  }, [profile.emailVerified, profile.email_verified, profile.phoneVerified, profile.phone_verified]);
+
+  useEffect(() => {
+    setEmailDraft(profile.email || "");
+    setEmailCode("");
+    setEmailCodeSent(false);
+    setChangingEmail(false);
+    setResendCooldowns((prev) => ({ ...prev, email: 0 }));
+  }, [profile.email]);
+
+  const resetEmailVerificationCodeState = () => {
+    setEmailCode("");
+    setEmailCodeSent(false);
+    setResendCooldowns((prev) => ({ ...prev, email: 0 }));
+  };
+
   const startResendCooldown = (type) => {
-    setResendCooldowns((prev) => ({ ...prev, [type]: 45 }));
+    setResendCooldowns((prev) => ({ ...prev, [type]: type === "email" ? 60 : 45 }));
     const timer = setInterval(() => {
       setResendCooldowns((prev) => {
         const nextValue = Math.max(0, Number(prev[type] || 0) - 1);
@@ -115,6 +153,8 @@ export default function ProfilePage({
     setVerifyStatus("");
 
     if (type === "email") {
+      setEmailCode("");
+      setEmailCodeSent(false);
       if (!profile.email?.trim()) {
         setVerifyError("Please save your email in Profile first.");
         return;
@@ -128,10 +168,12 @@ export default function ProfilePage({
       try {
         setSendingEmailCode(true);
         const data = await sendEmailVerification(profile.email.trim());
-        setVerifyStatus(data?.devCode ? `Email code sent. Dev code: ${data.devCode}` : "Email code sent.");
+        setEmailCodeSent(true);
+        setVerifyStatus(data?.message || "Verification code sent to your email. Check your inbox or spam folder.");
         startResendCooldown("email");
       } catch (error) {
-        setVerifyError(error.message || "Could not send email code.");
+        resetEmailVerificationCodeState();
+        setVerifyError(error.message || "Email sending failed. Please try again later.");
       } finally {
         setSendingEmailCode(false);
       }
@@ -151,8 +193,8 @@ export default function ProfilePage({
 
     try {
       setSendingPhoneCode(true);
-      const data = await sendPhoneOtp(profile.phone.trim());
-      setVerifyStatus(data?.devCode ? `Phone code sent. Dev code: ${data.devCode}` : "Phone code sent.");
+      await sendPhoneOtp(profile.phone.trim());
+      setVerifyStatus("Phone code sent.");
       startResendCooldown("phone");
     } catch (error) {
       setVerifyError(error.message || "Could not send phone code.");
@@ -173,6 +215,7 @@ export default function ProfilePage({
     }
 
     try {
+      if (type === "email") setVerifyingEmail(true);
       const data = await verifyOtp({
         channel: type === "email" ? "email" : "sms",
         destination,
@@ -180,8 +223,38 @@ export default function ProfilePage({
       });
       setVerifyStatus(data?.message || "Verification completed.");
       setVerifiedChannels((prev) => ({ ...prev, [type]: true }));
+      if (type === "email") {
+        resetEmailVerificationCodeState();
+        setProfile((prev) => ({ ...prev, emailVerified: true, email_verified: true }));
+      }
     } catch (error) {
       setVerifyError(error.message || "Could not verify code.");
+    } finally {
+      if (type === "email") setVerifyingEmail(false);
+    }
+  };
+
+  const saveEmailForVerification = async () => {
+    const nextEmail = emailDraft.trim();
+    setVerifyError("");
+    setVerifyStatus("");
+    if (!isValidEmail(nextEmail)) {
+      setVerifyError("Please enter a valid email address.");
+      return;
+    }
+    try {
+      setSavingEmail(true);
+      const previousEmail = String(profile.email || "").trim().toLowerCase();
+      const saved = await saveProfile({ ...profile, email: nextEmail }, { localErrorOnly: true });
+      const changed = previousEmail !== nextEmail.toLowerCase();
+      setVerifiedChannels((prev) => ({ ...prev, email: changed ? false : Boolean(saved?.emailVerified || saved?.email_verified || prev.email) }));
+      resetEmailVerificationCodeState();
+      setChangingEmail(false);
+      setVerifyStatus(changed ? "Email saved. Send a verification code to confirm it." : "Email saved.");
+    } catch (error) {
+      setVerifyError(error.message || "Could not save email.");
+    } finally {
+      setSavingEmail(false);
     }
   };
 
@@ -192,14 +265,9 @@ export default function ProfilePage({
   const walletWithdrawnTotal = Number(walletState?.wallet?.withdrawn_total || 0);
   const walletTransactions = walletState?.transactions || [];
   const withdrawalRows = walletState?.withdrawals || [];
-  const customerWalletBalance = Number(
-    walletState?.wallet?.balance ??
-    walletState?.wallet?.available_balance ??
-    walletState?.balance ??
-    0
-  );
-  const walletLastFour = String(currentUser?.id || walletState?.wallet?.id || "2048").padStart(4, "0").slice(-4);
-  const customerDisplayName = String(profile.fullName || currentUser?.username || "Queless User").trim();
+  const customerWalletBalance = Number(walletState?.wallet?.balance || 0);
+  const customerWalletTransactions = walletState?.transactions || [];
+  const customerTopups = walletState?.topups || [];
   const customerBookingPayments = (bookings || [])
     .filter((item) => {
       const customer = String(item.customerUsername || item.customer_username || item.customer || "");
@@ -211,7 +279,18 @@ export default function ProfilePage({
   const subscriptionPlans = PROVIDER_PLANS;
   const currentPlan = String(subscriptionState?.tier || "").toUpperCase();
   const currentPlanLabel = formatPlanName(currentPlan, "No active plan");
-  const hasActivePlan = ["PRO", "PREMIUM", "PLATINUM"].includes(currentPlan);
+  const hasActivePlan = ["PLUS", "PREMIUM", "PLATINUM"].includes(currentPlan);
+  const customerPremiumActive = isCustomerPremiumActive(customerSubscriptionState);
+  const profileCompletionItems = [
+    { label: "Add your name", done: Boolean(profile.fullName) },
+    { label: "Add phone number", done: Boolean(profile.phone) },
+    { label: "Set location", done: Boolean(profile.address) },
+    { label: "Choose first service category", done: Boolean(favoriteBarbers.length || bookings.length) },
+  ];
+  const profileCompletionCount = profileCompletionItems.filter((item) => item.done).length;
+  const customerPremiumExpiry = customerSubscriptionState?.expires_at
+    ? new Date(customerSubscriptionState.expires_at).toLocaleDateString()
+    : "";
   const openPaymentHistory = () => {
     paymentHistoryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -236,7 +315,7 @@ export default function ProfilePage({
 
   if (editing) {
     return (
-      <div className="content-v4 standard-page-v4 profile-edit-page-v7">
+      <div className="content-v4 app-page-v4 profile-edit-page-v7">
         <div className="barber-profile-topbar-v4 profile-edit-topbar-v7">
           <button type="button" className="profile-back-btn-v4" onClick={() => setEditing(false)}>
             <FiArrowLeft />
@@ -361,7 +440,7 @@ export default function ProfilePage({
   }
 
   return (
-    <div className="content-v4 standard-page-v4 profile-page-v15">
+    <div className="content-v4 app-page-v4 profile-page-v15">
       <div className="simple-card-v4">
         <div className="profile-hero-v4">
           <button
@@ -415,6 +494,28 @@ export default function ProfilePage({
           <strong>{isLightTheme ? "Light" : "Dark"}</strong>
         </button>
       </div>
+
+      {!isProviderAccount ? (
+        <div className="simple-card-v4">
+          <div className="panel-title-v4">Get ready for your first booking</div>
+          <div className="profile-sub-v4">Complete your profile, set your area, browse categories, and save providers you trust. Customer Free stays available; Premium is only for Smart Match.</div>
+          <div className="profile-review-list-v4 space-top">
+            {profileCompletionItems.map((item) => (
+              <div key={item.label} className="profile-review-card-v4">
+                <div className="profile-review-head-v4">
+                  <strong>{item.label}</strong>
+                  <span className="profile-review-rating-v4">{item.done ? "Done" : "Next"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="profile-sub-v4">{profileCompletionCount} of {profileCompletionItems.length} steps complete.</div>
+          <div className="inline-actions-v4 space-top">
+            <button type="button" className="mini-action-btn-v4 success" onClick={() => setEditing(true)}>Complete profile</button>
+            <button type="button" className="mini-action-btn-v4" onClick={openPaymentHistory}>View payments</button>
+          </div>
+        </div>
+      ) : null}
 
       {isProviderAccount ? (
         <div className="wallet-shell-v5">
@@ -559,10 +660,10 @@ export default function ProfilePage({
             <div className="customer-pay-glow-v15" aria-hidden="true" />
             <div className="customer-pay-card-top-v15">
               <div>
-                <div className="customer-pay-brand-v15">QUELESS PAY</div>
+                <div className="customer-pay-brand-v15">Customer Wallet</div>
                 <div className="customer-pay-status-v15">
                   <FiCheckCircle />
-                  Customer Wallet
+                  Pay for bookings
                 </div>
               </div>
               <div className="customer-pay-chip-v15" aria-hidden="true">
@@ -570,34 +671,25 @@ export default function ProfilePage({
               </div>
             </div>
             <div className="customer-pay-main-v15">
-              <span>Available Balance</span>
+              <span>Wallet Balance</span>
               <strong>UGX {customerWalletBalance.toLocaleString()}</strong>
-              <small>Cash supported | Wallet optional</small>
-            </div>
-            <div className="customer-pay-number-v15" aria-label={`Wallet ending in ${walletLastFour}`}>
-              <span>••••</span>
-              <span>••••</span>
-              <span>••••</span>
-              <strong>{walletLastFour}</strong>
+              <small>Use your wallet balance to pay for bookings faster.</small>
             </div>
             <div className="customer-pay-card-bottom-v15">
               <span>
-                Customer Account
-                <strong>{customerDisplayName.toUpperCase()}</strong>
+                Use Wallet for Booking
+                <strong>{customerWalletBalance > 0 ? "Available when balance is enough" : "Top up to activate"}</strong>
               </span>
-              <em>Cash • Mobile Money • Wallet</em>
+              <em>UGX</em>
             </div>
           </div>
 
           <div className="customer-wallet-actions-v15" aria-label="Customer wallet actions">
-            <button type="button" onClick={() => setCustomerWalletModal("topup")}>
+            <button type="button" onClick={() => setTopupOpen(true)}>
               <FiCreditCard /> Top Up Wallet
             </button>
             <button type="button" onClick={openPaymentHistory}>
-              <FiCheckCircle /> Payment History
-            </button>
-            <button type="button" onClick={() => setCustomerWalletModal("booking")}>
-              <FiSmartphone /> Pay During Booking
+              <FiCheckCircle /> Recent Activity
             </button>
           </div>
 
@@ -605,12 +697,12 @@ export default function ProfilePage({
             <div className="wallet-section-head-v5">
               <div>
                 <div className="wallet-panel-title-v5">Payment Methods</div>
-                <div className="wallet-section-sub-v5">Choose how you want to pay when booking.</div>
+                <div className="wallet-section-sub-v5">Pay at checkout when you book a service.</div>
               </div>
               <FiCreditCard />
             </div>
             <div className="customer-payment-copy-v15">
-              Pay securely when booking a service. Cash is always available, and mobile money may be available depending on the provider.
+              Cash is always available. MTN Mobile Money appears only when Queless verifies that production payments are ready.
             </div>
             <div className="customer-method-grid-v15">
               <div className="customer-method-card-v15">
@@ -667,6 +759,43 @@ export default function ProfilePage({
               </div>
             ))}
           </div>
+
+          <div className="wallet-history-v5">
+            <div className="wallet-section-head-v5">
+              <div>
+                <div className="wallet-section-title-v5">Recent wallet activity</div>
+                <div className="wallet-section-sub-v5">Top-ups, booking payments, and refunds</div>
+              </div>
+              <FiCreditCard />
+            </div>
+            {walletLoading ? (
+              <EmptyState icon={<FiCreditCard />} title="Loading wallet" text="Fetching your wallet activity." />
+            ) : customerWalletTransactions.length === 0 && customerTopups.length === 0 ? (
+              <EmptyState icon={<FiCreditCard />} title="No wallet activity yet" text="Your top-ups and wallet booking payments will appear here." />
+            ) : (
+              [...customerWalletTransactions, ...customerTopups.map((item) => ({
+                ...item,
+                direction: String(item.status || "").toLowerCase() === "successful" && (item.walletCredited === true || Number(item.wallet_credited || 0) === 1) ? "credit" : "pending",
+                description: `Wallet top-up - Payment Status: ${String(item.paymentStatus || item.status || "pending").replaceAll("_", " ")} - Wallet Credited: ${item.walletCredited === true || Number(item.wallet_credited || 0) === 1 ? "Yes" : "No"}`,
+              }))]
+                .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+                .slice(0, 8)
+                .map((item) => (
+                  <div key={`wallet-${item.id}-${item.reference || ""}`} className="wallet-row-v5">
+                    <span className={item.direction === "debit" ? "wallet-row-icon-v5 debit" : "wallet-row-icon-v5 credit"}>
+                      {item.direction === "debit" ? <FiArrowUpRight /> : <FiArrowDownLeft />}
+                    </span>
+                    <span className="wallet-row-copy-v5">
+                      <strong>{item.description || item.note || String(item.type || "wallet activity").replaceAll("_", " ")}</strong>
+                      <small>{item.reference || item.provider || "Customer wallet"}</small>
+                    </span>
+                    <strong className={item.direction === "debit" ? "wallet-debit-v5" : item.direction === "credit" ? "wallet-credit-v5" : ""}>
+                      {item.direction === "debit" ? "-" : item.direction === "credit" ? "+" : ""}UGX {Number(item.amount || 0).toLocaleString()}
+                    </strong>
+                  </div>
+                ))
+            )}
+          </div>
         </div>
       )}
 
@@ -674,7 +803,7 @@ export default function ProfilePage({
         <div className="simple-card-v4">
           <div className="panel-title-v4">Subscription</div>
           <div className="profile-sub-v4">
-            Current plan: {hasActivePlan ? currentPlanLabel : "No active plan"}
+            {hasActivePlan ? `Selected plan: ${currentPlanLabel}` : "Choose a provider plan to activate your business."}
             {subscriptionState?.is_trial
               ? ` - ${currentPlanLabel} trial ends in ${subscriptionState?.trial_days_left || 0} day${Number(subscriptionState?.trial_days_left || 0) === 1 ? "" : "s"}`
               : subscriptionState?.expires_at
@@ -710,14 +839,14 @@ export default function ProfilePage({
                 </div>
                 {planDetailsTier === tier ? (
                   <div className="profile-review-text-v4">
-                    Plan name: {plan.name}. Monthly price: {formatSubscriptionPrice(plan, "monthly")}. Annual price: {formatSubscriptionPrice(plan, "annual")}. Trial availability: Start manually from the plan page. Trial duration: 30 days. {detail}.
+                    Plan name: {plan.name}. Monthly price: {formatSubscriptionPrice(plan, "monthly")}. Annual price: {formatSubscriptionPrice(plan, "annual")}. Provider plans activate after mobile money payment. {detail}.
                   </div>
                 ) : null}
               </div>
             );})}
           </div>
           <div className="profile-sub-v4">
-            Visibility: {subscriptionFeatures.visibilityLabel || (subscriptionFeatures.homepageFeatured ? "Homepage featured" : "Regular listing")} - Analytics: {subscriptionFeatures.analyticsLevel || "none"} - Badge: {subscriptionFeatures.verifiedBadge ? "Verified" : subscriptionFeatures.topBarberBadge ? "Top business" : "Standard"}
+            Visibility: {subscriptionFeatures.visibilityLabel || (subscriptionFeatures.homepageFeatured ? "Homepage featured" : "Regular listing")} - Analytics: {subscriptionFeatures.analyticsLevel || "none"} - Badge: {subscriptionFeatures.verifiedBadge ? "Verified" : subscriptionFeatures.topBarberBadge ? "Top business" : "Basic"}
           </div>
           {pendingSubscriptionPayment?.reference ? (
             <div className="inline-actions-v4 space-top">
@@ -731,23 +860,62 @@ export default function ProfilePage({
       ) : (
         <div className="simple-card-v4">
           <div className="panel-title-v4">Customer plan</div>
-          <div className="profile-sub-v4">Customer accounts stay free while businesses subscribe for visibility, trust, and growth tools. Customer premium can be introduced later as an ad-free upgrade.</div>
+          <div className="profile-sub-v4">
+            Customer Premium unlocks Smart Match while normal browsing, manual search, and booking stay free.
+          </div>
           <div className="profile-review-list-v4">
             <div className="profile-review-card-v4">
               <div className="profile-review-head-v4">
-                <strong>FREE</strong>
+                <strong>Free</strong>
                 <span className="profile-review-rating-v4">Free</span>
               </div>
-              <div className="profile-review-text-v4">Book trusted service providers for free.</div>
+              <div className="profile-review-text-v4">Manual search, categories, provider profiles, and normal booking.</div>
             </div>
             <div className="profile-review-card-v4">
               <div className="profile-review-head-v4">
-                <strong>PREMIUM</strong>
-                <span className="profile-review-rating-v4">Coming soon</span>
+                <strong>Customer Premium</strong>
+                <span className="profile-review-rating-v4">
+                  {customerPremiumActive ? "Active" : formatCustomerPremiumPrice(customerSubscriptionPlan, "monthly")}
+                </span>
               </div>
-              <div className="profile-review-text-v4">Future customer premium can remove ads and unlock richer discovery perks.</div>
+              <div className="profile-review-text-v4">
+                Smart Match, ranked recommendations, budget matching, location matching, availability matching, and payment-option matching.
+                {customerPremiumActive && customerPremiumExpiry ? ` Active until ${customerPremiumExpiry}.` : ""}
+                {!customerPremiumActive && pendingCustomerSubscriptionPayment?.reference ? ` Payment pending: ${pendingCustomerSubscriptionPayment.reference}.` : ""}
+              </div>
+              <div className="inline-actions-v4">
+                {customerPremiumActive ? (
+                  <button className="mini-action-btn-v4 success" type="button" disabled>
+                    Smart Match unlocked
+                  </button>
+                ) : (
+                  <button
+                    className="mini-action-btn-v4 success"
+                    type="button"
+                    onClick={() => onUpgradeCustomerPremium?.()}
+                    disabled={customerSubscriptionLoading}
+                  >
+                    Upgrade to Premium
+                  </button>
+                )}
+                {pendingCustomerSubscriptionPayment?.reference ? (
+                  <button
+                    className="mini-action-btn-v4"
+                    type="button"
+                    onClick={() => onVerifyCustomerPremium?.(pendingCustomerSubscriptionPayment.reference)}
+                    disabled={customerSubscriptionLoading}
+                  >
+                    Verify Premium payment
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
+          {customerSubscriptionMessage ? (
+            <div className={customerSubscriptionMessage.toLowerCase().includes("could not") || customerSubscriptionMessage.toLowerCase().includes("failed") ? "auth-error" : "auth-success"}>
+              {customerSubscriptionMessage}
+            </div>
+          ) : null}
         </div>
       )}
       <div className="simple-card-v4 profile-details-inline-v7">
@@ -839,14 +1007,14 @@ export default function ProfilePage({
       <div className="simple-card-v4 profile-confirm-card-v4">
         <div className="profile-confirm-copy-v4">
           <h3>Account security</h3>
-          <p>Keep email and phone verification current for recovery, alerts, and booking trust.</p>
+          <p>Manage email verification for booking and account updates.</p>
         </div>
 
         <div className="security-status-grid-v7">
           <div className={verifiedChannels.email ? "security-status-card-v7 verified" : "security-status-card-v7"}>
             <FiShield />
             <strong>Email</strong>
-            <span>{verifiedChannels.email ? "Verified" : profile.email?.trim() ? "Ready to verify" : "Missing"}</span>
+            <span>{verifiedChannels.email ? "Verified" : profile.email?.trim() ? "Email not verified" : "Missing"}</span>
           </div>
           <div className={verifiedChannels.phone ? "security-status-card-v7 verified" : "security-status-card-v7"}>
             <FiSmartphone />
@@ -873,7 +1041,9 @@ export default function ProfilePage({
               <div className="verify-pager-sub-v4">
                 {verificationPage === "email"
                   ? (profile.email?.trim()
-                      ? "Your email is ready for verification."
+                      ? verifiedChannels.email
+                        ? "Your email is verified."
+                        : "Email not verified."
                       : "Add and save your email first.")
                   : (profile.phone?.trim()
                       ? "Your phone number is ready for verification."
@@ -912,42 +1082,117 @@ export default function ProfilePage({
                 <div>
                   <div className="verify-page-label-v4">Email verification</div>
                   <div className="verify-page-helper-v4">
-                    We will send a code to your saved email so you can confirm account ownership.
+                    {verifiedChannels.email
+                      ? "Your email is verified for account recovery and booking updates."
+                      : profile.email?.trim()
+                      ? "Verify your email to receive booking and account updates."
+                      : "Add your email to secure your account and receive booking updates."}
                   </div>
                 </div>
                 <span className={verifiedChannels.email ? "verify-status-chip-v4 ready verified" : profile.email?.trim() ? "verify-status-chip-v4 ready" : "verify-status-chip-v4 missing"}>
-                  {verifiedChannels.email ? "Verified" : profile.email?.trim() ? "Ready" : "Missing"}
+                  {verifiedChannels.email ? "Verified" : profile.email?.trim() ? "Email not verified" : "Missing"}
                 </span>
               </div>
 
-              <div className="verify-channel-row-v4">
-                <strong>Saved email</strong>
-                <span>{profile.email?.trim() || "No email saved yet"}</span>
-              </div>
+              {!profile.email?.trim() ? (
+                <div className="verify-email-step-v16">
+                  <label className="label-v4">
+                    Email address
+                    <input
+                      className="field-input-v4 profile-input-v4"
+                      placeholder="you@example.com"
+                      value={emailDraft}
+                      onChange={(e) => setEmailDraft(e.target.value)}
+                    />
+                  </label>
+                  <button type="button" className="mini-action-btn-v4 success" onClick={saveEmailForVerification} disabled={savingEmail}>
+                    {savingEmail ? "Saving email..." : "Save email"}
+                  </button>
+                </div>
+              ) : verifiedChannels.email ? (
+                <div className="verify-channel-row-v4 verified-row-v16">
+                  <strong><FiCheckCircle /> Email verified</strong>
+                  <span>{profile.email.trim()}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="verify-channel-row-v4">
+                    <strong>Email not verified</strong>
+                    <span>{profile.email.trim()}</span>
+                    {!changingEmail ? (
+                      <button type="button" className="verify-change-link-v16" onClick={() => {
+                        setChangingEmail(true);
+                        setEmailDraft("");
+                        resetEmailVerificationCodeState();
+                        setVerifyError("");
+                        setVerifyStatus("");
+                      }}>
+                        Change email
+                      </button>
+                    ) : null}
+                  </div>
 
-              <button type="button" className="secondary-btn-v4 verify-send-btn-v4" onClick={() => sendVerification("email")} disabled={sendingEmailCode || resendCooldowns.email > 0}>
-                {sendingEmailCode ? "Sending..." : resendCooldowns.email > 0 ? `Resend in ${resendCooldowns.email}s` : "Send code"}
-              </button>
-              <div className="cooldown-note-v7">Email codes can be requested every 45 seconds.</div>
+                  {changingEmail ? (
+                    <div className="verify-email-step-v16">
+                      <label className="label-v4">
+                        New email address
+                        <input
+                          className="field-input-v4 profile-input-v4"
+                          value={emailDraft}
+                          onChange={(e) => setEmailDraft(e.target.value)}
+                        />
+                      </label>
+                      <button type="button" className="mini-action-btn-v4 success" onClick={saveEmailForVerification} disabled={savingEmail}>
+                        {savingEmail ? "Saving email..." : "Save email"}
+                      </button>
+                      <button type="button" className="verify-change-link-v16" onClick={() => {
+                        setChangingEmail(false);
+                        setEmailDraft(profile.email || "");
+                        resetEmailVerificationCodeState();
+                        setVerifyError("");
+                        setVerifyStatus("");
+                      }}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : null}
 
-              <label className="label-v4">
-                Verification code
-                <input
-                  className="field-input-v4 profile-input-v4"
-                  placeholder="Enter email code"
-                  value={emailCode}
-                  onChange={(e) => setEmailCode(e.target.value)}
-                />
-              </label>
+                  {!emailCodeSent && !changingEmail ? (
+                    <button type="button" className="mini-action-btn-v4 success" onClick={() => sendVerification("email")} disabled={sendingEmailCode || resendCooldowns.email > 0}>
+                      {sendingEmailCode ? "Sending code..." : resendCooldowns.email > 0 ? `Resend in ${resendCooldowns.email}s` : "Send code"}
+                    </button>
+                  ) : null}
 
-              <div className="verify-page-actions-v4">
-                <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmVerification("email")}>
-                  <FiCheckCircle /> Verify email
-                </button>
-                <button type="button" className="mini-action-btn-v4" onClick={() => setVerificationPage("phone")}>
-                  Continue to phone &rarr;
-                </button>
-              </div>
+                  {emailCodeSent && !changingEmail ? (
+                    <>
+                      <label className="label-v4">
+                        Verification code
+                        <input
+                          className="field-input-v4 profile-input-v4"
+                          placeholder="Enter 6-digit code"
+                          inputMode="numeric"
+                          value={emailCode}
+                          onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        />
+                      </label>
+                      <div className="cooldown-note-v7">Check your inbox or spam folder.</div>
+                      <div className="cooldown-note-v7">
+                        {resendCooldowns.email > 0
+                          ? `You can resend the code in ${resendCooldowns.email} seconds.`
+                          : "You can resend the code now."}
+                      </div>
+                      <div className="verify-page-actions-v4">
+                        <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmVerification("email")} disabled={verifyingEmail}>
+                          <FiCheckCircle /> {verifyingEmail ? "Verifying..." : "Verify code"}
+                        </button>
+                        <button type="button" className="mini-action-btn-v4" onClick={() => sendVerification("email")} disabled={sendingEmailCode || resendCooldowns.email > 0}>
+                          {sendingEmailCode ? "Sending..." : "Resend code"}
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </>
+              )}
             </div>
           ) : (
             <div className="verify-page-card-v4">
@@ -1054,27 +1299,15 @@ export default function ProfilePage({
         <FiLogOut /> Log out
       </button>
 
-      {customerWalletModal ? (
-        <div className="customer-wallet-modal-backdrop-v15" role="presentation" onClick={() => setCustomerWalletModal("")}>
-          <div className="customer-wallet-modal-v15" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="profile-back-btn-v4" aria-label="Close wallet message" onClick={() => setCustomerWalletModal("")}>
-              <FiX />
-            </button>
-            <div className="customer-wallet-modal-icon-v15">
-              {customerWalletModal === "topup" ? <FiCreditCard /> : <FiSmartphone />}
-            </div>
-            <strong>{customerWalletModal === "topup" ? "Wallet top-up is coming soon" : "Pay during booking"}</strong>
-            <p>
-              {customerWalletModal === "topup"
-                ? "Wallet top-up is coming soon. For now, you can pay directly when booking using Cash or Mobile Money where available."
-                : "Choose a service, review the price, then select Cash, Mobile Money where available, or Wallet when your balance is sufficient."}
-            </p>
-            <button type="button" className="secondary-btn-v4" onClick={() => setCustomerWalletModal("")}>
-              Got it
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <TopUpWalletModal
+        show={topupOpen}
+        onClose={() => setTopupOpen(false)}
+        ready={walletTopupReady}
+        readinessMessage={walletTopupMessage}
+        defaultPhone={profile.phone || currentUser?.phone || ""}
+        onWalletUpdated={onWalletUpdated}
+      />
+
     </div>
   );
 }

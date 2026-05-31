@@ -12,7 +12,7 @@ test("hides draft or unpublished businesses even when a plan exists", () => {
       {
         business_status: "draft",
         is_published: 1,
-        subscription_tier: "PRO",
+        subscription_tier: "PLUS",
         subscription_status: "active",
         subscription_expires_at: future,
       },
@@ -27,7 +27,7 @@ test("hides draft or unpublished businesses even when a plan exists", () => {
       {
         business_status: "active",
         is_published: 0,
-        subscription_tier: "PRO",
+        subscription_tier: "PLUS",
         subscription_status: "active",
         subscription_expires_at: future,
       },
@@ -59,7 +59,7 @@ test("hides active businesses when subscription or trial access is expired", () 
       {
         business_status: "active",
         is_published: 1,
-        subscription_tier: "PRO",
+        subscription_tier: "PLUS",
         subscription_status: "trialing",
         trial_status: "active",
         trial_ends_at: past,
@@ -92,7 +92,7 @@ test("allows only published active businesses with unexpired paid or trial acces
       {
         business_status: "active",
         is_published: 1,
-        subscription_tier: "PRO",
+        subscription_tier: "PLUS",
         subscription_status: "trialing",
         trial_status: "active",
         trial_ends_at: future,
@@ -110,12 +110,46 @@ test("allows manually approved live businesses without a paid subscription", () 
       {
         business_status: "approved",
         is_published: 1,
-        subscription_tier: "PRO",
+        subscription_tier: "PLUS",
         subscription_status: "manual_approved",
       },
       null,
       now
     ),
     true
+  );
+});
+
+test("hides demo-like active businesses even when flags are missing", () => {
+  assert.equal(
+    isBusinessPubliclyVisible(
+      {
+        business_name: "Demo Cuts",
+        business_status: "active",
+        is_published: 1,
+        subscription_tier: "PLUS",
+        subscription_status: "active",
+        subscription_expires_at: future,
+      },
+      null,
+      now
+    ),
+    false
+  );
+
+  assert.equal(
+    isBusinessPubliclyVisible(
+      {
+        business_name: "QA Premium Growth Studio",
+        business_status: "active",
+        is_published: 1,
+        subscription_tier: "PREMIUM",
+        subscription_status: "active",
+        subscription_expires_at: future,
+      },
+      null,
+      now
+    ),
+    false
   );
 });

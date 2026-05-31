@@ -96,6 +96,10 @@ CREATE TABLE reviews (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   rating INTEGER NOT NULL,
   review_text TEXT DEFAULT '',
+  blocked_from_public INTEGER NOT NULL DEFAULT 0,
+  blocked_by_user_id BIGINT DEFAULT NULL,
+  blocked_at TIMESTAMPTZ DEFAULT NULL,
+  block_reason TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -2,26 +2,20 @@ export const PLATFORM_COMMISSION_RATE = 0.1;
 export const FREE_TRIAL_DAYS = 30;
 export const VALID_BILLING_CYCLES = ["monthly", "annual"];
 
-const SUBSCRIPTION_ALIASES = {
-  FREE: "PRO",
-  STANDARD: "PRO",
-  STARTER: "PRO",
-};
-
 export const SUBSCRIPTION_TIERS = {
-  PRO: {
-    code: "PRO",
-    id: "pro",
-    name: "Pro",
+  PLUS: {
+    code: "PLUS",
+    id: "plus",
+    name: "Plus",
     price: 6000,
     monthlyPrice: 6000,
     annualPrice: 60000,
     annualSavings: 12000,
     currency: "UGX",
-    trialAvailable: true,
+    trialAvailable: false,
     trialDurationDays: FREE_TRIAL_DAYS,
     rankingWeight: 1,
-    analyticsLevel: "standard",
+    analyticsLevel: "basic",
     homepageFeatured: false,
     searchPriority: 1,
     topBarberBadge: false,
@@ -31,8 +25,8 @@ export const SUBSCRIPTION_TIERS = {
     marketingPushEnabled: false,
     homeServiceEnabled: false,
     profileCustomizationLevel: "enhanced",
-    visibilityLabel: "Standard visibility",
-    supportLevel: "Standard support",
+    visibilityLabel: "Basic visibility",
+    supportLevel: "Plus support",
     serviceLimit: 5,
     photoLimit: 5,
     videoLimit: 0,
@@ -61,7 +55,7 @@ export const SUBSCRIPTION_TIERS = {
     annualSavings: 24000,
     currency: "UGX",
     recommended: true,
-    trialAvailable: true,
+    trialAvailable: false,
     trialDurationDays: FREE_TRIAL_DAYS,
     rankingWeight: 2,
     analyticsLevel: "advanced",
@@ -103,7 +97,7 @@ export const SUBSCRIPTION_TIERS = {
     annualPrice: 240000,
     annualSavings: 48000,
     currency: "UGX",
-    trialAvailable: true,
+    trialAvailable: false,
     trialDurationDays: FREE_TRIAL_DAYS,
     rankingWeight: 3,
     analyticsLevel: "advanced_plus",
@@ -139,13 +133,12 @@ export const SUBSCRIPTION_TIERS = {
 };
 
 export function getSubscriptionTierConfig(tier) {
-  const normalized = String(tier || "PRO").trim().toUpperCase();
-  const resolved = SUBSCRIPTION_ALIASES[normalized] || normalized;
-  return SUBSCRIPTION_TIERS[resolved] || SUBSCRIPTION_TIERS.PRO;
+  const normalized = String(tier || "PLUS").trim().toUpperCase();
+  return SUBSCRIPTION_TIERS[normalized] || SUBSCRIPTION_TIERS.PLUS;
 }
 
 export function getSubscriptionPlans() {
-  return ["PRO", "PREMIUM", "PLATINUM"].map((tier) => getSubscriptionTierConfig(tier));
+  return ["PLUS", "PREMIUM", "PLATINUM"].map((tier) => getSubscriptionTierConfig(tier));
 }
 
 export function normalizeBillingCycle(value) {
@@ -173,10 +166,26 @@ export function getTierRank(tier) {
   return Number(getSubscriptionTierConfig(tier).rankingWeight || 0);
 }
 
+export function normalizeMoneyAmount(amount, fieldName = "amount", { minimum = 1, maximum = null } = {}) {
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw Object.assign(new Error(`${fieldName} must be greater than 0.`), { statusCode: 400 });
+  }
+  if (!Number.isInteger(value)) {
+    throw Object.assign(new Error(`${fieldName} must be a whole UGX amount.`), { statusCode: 400 });
+  }
+  if (value < minimum) {
+    throw Object.assign(new Error(`${fieldName} must be at least UGX ${minimum.toLocaleString()}.`), { statusCode: 400 });
+  }
+  if (maximum !== null && value > maximum) {
+    throw Object.assign(new Error(`${fieldName} cannot exceed UGX ${maximum.toLocaleString()}.`), { statusCode: 400 });
+  }
+  return value;
+}
+
 export function normalizeProviderPlan(tier) {
   const normalized = String(tier || "").trim().toUpperCase();
-  const resolved = SUBSCRIPTION_ALIASES[normalized] || normalized;
-  return ["PRO", "PREMIUM", "PLATINUM"].includes(resolved) ? resolved : "";
+  return ["PLUS", "PREMIUM", "PLATINUM"].includes(normalized) ? normalized : "";
 }
 
 export function isValidProviderPlan(tier) {
@@ -184,9 +193,9 @@ export function isValidProviderPlan(tier) {
 }
 
 export function calculateCommissionBreakdown(amount) {
-  const grossAmount = Number(amount || 0);
-  const commissionAmount = Number((grossAmount * PLATFORM_COMMISSION_RATE).toFixed(2));
-  const barberAmount = Number((grossAmount - commissionAmount).toFixed(2));
+  const grossAmount = normalizeMoneyAmount(amount, "Payment amount");
+  const commissionAmount = Math.round(grossAmount * PLATFORM_COMMISSION_RATE);
+  const barberAmount = grossAmount - commissionAmount;
 
   return {
     grossAmount,

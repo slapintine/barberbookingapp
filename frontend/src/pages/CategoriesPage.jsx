@@ -30,7 +30,7 @@ export default function CategoriesPage({ selectedCategory, setSelectedCategory, 
   const categories = Array.isArray(MARKETPLACE_CATEGORIES) ? MARKETPLACE_CATEGORIES.filter((item) => item.active) : [];
 
   return (
-    <div className="content-v4 standard-page-v4 queless-utility-page">
+    <div className="content-v4 app-page-v4 queless-utility-page">
       <div className="queless-utility-head">
         <span><FiGrid /></span>
         <div>

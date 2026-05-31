@@ -1,10 +1,15 @@
 const BASE_URL = String(process.env.QA_API_URL || "http://127.0.0.1:5000").replace(/\/+$/, "");
 const PASSWORD = "PlanQa123";
 
+if (process.env.NODE_ENV !== "development" || process.env.ALLOW_QA_SEED !== "true") {
+  console.error("Refusing to verify QA fixtures outside an explicitly enabled local development QA run.");
+  process.exit(1);
+}
+
 const ACCOUNTS = [
   {
-    username: "qa_pro_provider",
-    tier: "PRO",
+    username: "qa_plus_provider",
+    tier: "PLUS",
     serviceCount: 5,
     photoCount: 5,
     aiBusinessCoach: false,

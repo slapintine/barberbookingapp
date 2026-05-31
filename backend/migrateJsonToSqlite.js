@@ -8,6 +8,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dataDir = path.join(__dirname, "src", "data");
 
+if (process.env.NODE_ENV !== "development" || process.env.ALLOW_JSON_MIGRATION !== "true") {
+  console.error("Refusing JSON migration. Set NODE_ENV=development and ALLOW_JSON_MIGRATION=true for a local-only migration run.");
+  process.exit(1);
+}
+
 function readJson(fileName) {
   const fullPath = path.join(dataDir, fileName);
   if (!fs.existsSync(fullPath)) return [];
@@ -77,9 +82,12 @@ async function migrate() {
     if (existing) {
       newUserId = existing.id;
     } else {
+      if (!oldUser.password_hash && !oldUser.password) {
+        throw new Error(`User ${oldUser.username} is missing a password hash and cannot be imported.`);
+      }
       const passwordHash = oldUser.password_hash
         ? oldUser.password_hash
-        : await bcrypt.hash(oldUser.password || "secret123", 10);
+        : await bcrypt.hash(oldUser.password, 10);
 
       const result = await run(
         `INSERT INTO users (username, password_hash, role, created_at)

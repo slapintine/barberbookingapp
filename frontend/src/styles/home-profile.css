@@ -126,7 +126,7 @@
 }
 
 /* bring whole top section slightly upward */
-.standard-page-v4 {
+.app-page-v4 {
   padding-top: 2px !important;
 }
 
@@ -332,6 +332,40 @@
   border-radius: 16px;
 }
 
+.verify-email-step-v16 {
+  display: grid;
+  gap: 10px;
+}
+
+.verify-email-step-v16 .mini-action-btn-v4 {
+  justify-self: start;
+}
+
+.verified-row-v16 strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #1d7e44;
+}
+
+.verify-change-link-v16 {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: underline;
+  cursor: pointer;
+  opacity: 0.78;
+}
+
+.verify-change-link-v16:hover {
+  opacity: 1;
+}
+
 .dark .verify-channel-row-v4 {
   background: rgba(255,255,255,0.05);
 }
@@ -361,6 +395,8 @@
 .verify-page-actions-v4 {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .verify-page-actions-v4 .mini-action-btn-v4 {
@@ -384,3 +420,62 @@
 }
 
 
+.delete-stand-confirm-v16 {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 1200;
+  width: min(420px, calc(100vw - 32px));
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 18px;
+  background: var(--surface-card, #fff);
+  color: var(--text-strong, #111827);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.delete-stand-icon-v16 {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.delete-stand-confirm-v16 h2 {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+}
+
+.delete-stand-confirm-v16 p {
+  margin: 0;
+  color: var(--text-muted, #64748b);
+  line-height: 1.5;
+}
+
+.delete-stand-actions-v16 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.danger-btn-v16 {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #fff;
+  background: #dc2626;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.danger-btn-v16:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}

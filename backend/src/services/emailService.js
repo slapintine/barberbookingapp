@@ -10,7 +10,7 @@ function escapeHtml(value) {
 }
 
 export function otpEmail({ code, purpose = "account_verification" }) {
-  const title = purpose === "password_reset" ? "Reset your Lineup Barber Booking password" : "Verify your Lineup Barber Booking account";
+  const title = purpose === "password_reset" ? "Reset your Queless password" : "Verify your Queless account";
   const safeCode = escapeHtml(code);
   return {
     subject: title,
@@ -44,7 +44,7 @@ export function bookingConfirmationEmail({ recipientName, barberName, customerNa
     .join("");
 
   return {
-    subject: "Your Lineup Barber Booking appointment is confirmed",
+    subject: "Your Queless appointment is confirmed",
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.5;color:#1b1029">
         <h2>${heading}</h2>

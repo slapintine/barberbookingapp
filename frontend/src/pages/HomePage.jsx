@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiArrowRight,
+  FiBookOpen,
   FiBriefcase,
   FiCheckCircle,
   FiDroplet,
@@ -15,21 +16,24 @@ import {
   FiZap,
 } from "react-icons/fi";
 import fallbackStandIcon from "../assets/queless-logo-icon.png";
-import heroProfessional from "../assets/queless-hero-service-pro.png";
+import heroProfessional from "../assets/queless-hero-service-professional.png";
 
 const CATEGORY_CHIPS = [
-  { label: "Cleaning", icon: FiDroplet, category: "Cleaning Services" },
+  { label: "Barber", icon: FiUsers, category: "Beauty & Grooming" },
+  { label: "Salon", icon: FiUsers, category: "Beauty & Grooming" },
+  { label: "Spa", icon: FiStar, category: "Beauty & Grooming" },
   { label: "Plumbing", icon: FiTool, category: "Home Services" },
-  { label: "Electrical", icon: FiZap, category: "Home Services" },
   { label: "Carpentry", icon: FiHome, category: "Repairs & Maintenance" },
-  { label: "Beauty", icon: FiUsers, category: "Beauty & Grooming" },
-  { label: "Home", icon: FiHome, category: "Home Services" },
+  { label: "Cleaning", icon: FiDroplet, category: "Cleaning Services" },
+  { label: "Repairs", icon: FiTool, category: "Repairs & Maintenance" },
+  { label: "Tutor", icon: FiBookOpen, category: "Tutor / Lessons" },
+  { label: "Other", icon: FiBriefcase, category: "All" },
 ];
 
 const TRUST_BADGES = [
   {
     title: "Verified Professionals",
-    text: "Skilled and background-checked providers.",
+    text: "Trust signals help you choose providers when you are new to an area.",
     icon: FiShield,
   },
   {
@@ -130,9 +134,9 @@ function getPopularItemRating(item = {}) {
   return typeof rating === "string" && rating.trim() ? rating.trim() : "";
 }
 
-function getPopularItemLocation(item = {}, fallbackLocation = "Gayaza Town") {
+function getPopularItemLocation(item = {}, fallbackLocation = "") {
   const location = item.location || item.address || item.town || item.area || item.city || item.business_location;
-  return String(location || fallbackLocation || "Gayaza Town").split(",")[0];
+  return String(location || fallbackLocation || "Location unavailable").split(",")[0];
 }
 
 function getReviewCount(item = {}) {
@@ -152,9 +156,7 @@ function hasRealProviderMarker(item = {}) {
       item.ownerUserId ||
       item.username ||
       item.created_at ||
-      item.createdAt ||
-      item.id ||
-      item.business_id
+      item.createdAt
   );
 }
 
@@ -168,6 +170,8 @@ export default function HomeScreen({
   onOpenCategory,
   onOpenMap,
   onSearchSubmit,
+  onOpenSmartMatch,
+  smartMatchPremiumActive = false,
   openBarber,
   onBecomeProvider,
   popularServices = [],
@@ -278,9 +282,9 @@ export default function HomeScreen({
         <div className="customer-home-hero-copy">
           <span className="customer-home-eyebrow">Trusted local services</span>
           <h1>Find trusted services near you</h1>
-          <p>Book home services, salons, spas, repairs and more.</p>
+          <p>New around here? Discover nearby providers, compare trust signals, and book services without guessing where to go.</p>
           <button type="button" className="customer-home-primary-btn" onClick={submitSearch}>
-            Book a Service
+            Find Services
             <FiArrowRight aria-hidden="true" />
           </button>
         </div>
@@ -304,7 +308,7 @@ export default function HomeScreen({
             onKeyDown={(event) => {
               if (event.key === "Enter") submitSearch();
             }}
-            placeholder="What service do you need?"
+            placeholder="What service or area do you need?"
             autoComplete="off"
           />
         </label>
@@ -315,6 +319,10 @@ export default function HomeScreen({
         <button type="button" className="customer-home-search-btn" onClick={submitSearch} aria-label="Search">
           <FiSearch aria-hidden="true" />
           <span>Search</span>
+        </button>
+        <button type="button" className="customer-home-search-btn smart" onClick={() => onOpenSmartMatch?.({ category: serviceQuery })}>
+          <FiZap aria-hidden="true" />
+          <span>Smart Match</span>
         </button>
       </section>
 
@@ -408,7 +416,7 @@ export default function HomeScreen({
             ) : null}
           </>
         ) : (
-          <div className="customer-home-empty-state">No services found near you yet. Try another category or location.</div>
+          <div className="customer-home-empty-state">No providers found here yet. Try a nearby area, browse categories, or open the map to widen your search.</div>
         )}
       </section>
 
@@ -420,8 +428,21 @@ export default function HomeScreen({
           </span>
           <div>
             <strong>View Map</strong>
-            <small>Find trusted providers near you</small>
+            <small>New around here? See trusted providers around your current or selected area.</small>
           </div>
+          <FiArrowRight aria-hidden="true" />
+        </button>
+      </section>
+
+      <section className="customer-home-section">
+        <button type="button" className="customer-home-premium-card" onClick={() => onOpenSmartMatch?.({ category: serviceQuery })}>
+          <span className="customer-home-premium-icon">
+            <FiZap aria-hidden="true" />
+          </span>
+          <span>
+            <strong>{smartMatchPremiumActive ? "Smart Match ready" : "Smart Match with Premium"}</strong>
+            <small>Location, budget, rating and availability matching for unfamiliar places.</small>
+          </span>
           <FiArrowRight aria-hidden="true" />
         </button>
       </section>
@@ -443,7 +464,7 @@ export default function HomeScreen({
         </div>
       </section>
 
-      <section className="customer-home-pro-cta">
+      <section className="customer-home-premium-cta">
         <div>
           <small>For Local Professionals</small>
           <h2>Join Queless</h2>

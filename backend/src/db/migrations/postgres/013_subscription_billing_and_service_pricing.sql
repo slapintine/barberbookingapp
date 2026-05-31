@@ -10,6 +10,6 @@ ALTER TABLE barber_services ADD COLUMN IF NOT EXISTS max_price NUMERIC DEFAULT N
 ALTER TABLE barber_services ADD COLUMN IF NOT EXISTS starting_price NUMERIC DEFAULT NULL;
 
 UPDATE barbers SET accepts_cash = 1 WHERE accepts_cash IS NULL OR accepts_cash = 0;
-UPDATE barber_subscriptions SET price = 6000, amount_paid = COALESCE(NULLIF(amount_paid, 0), 6000) WHERE tier = 'PRO' AND billing_cycle = 'monthly';
+UPDATE barber_subscriptions SET price = 6000, amount_paid = COALESCE(NULLIF(amount_paid, 0), 6000) WHERE tier = 'PLUS' AND billing_cycle = 'monthly';
 UPDATE barber_subscriptions SET price = 12000, amount_paid = COALESCE(NULLIF(amount_paid, 0), 12000) WHERE tier = 'PREMIUM' AND billing_cycle = 'monthly';
 UPDATE barber_subscriptions SET price = 24000, amount_paid = COALESCE(NULLIF(amount_paid, 0), 24000) WHERE tier = 'PLATINUM' AND billing_cycle = 'monthly';

@@ -50,7 +50,9 @@ export default function BookingConfirmationScreen({
   booking,
   provider,
   onViewDetails,
+  onMessageProvider,
   onBackHome,
+  onReportProblem,
 }) {
   const serviceName = booking?.service || booking?.serviceName || "Selected service";
   const providerName = booking?.barberName || provider?.business_name || "Queless provider";
@@ -114,17 +116,23 @@ export default function BookingConfirmationScreen({
       <div className="booking-confirm-reminder">
         <span><FiBell /></span>
         <div>
-          <strong>We&apos;ll be there!</strong>
-          <small>You&apos;ll receive updates and reminders before your service.</small>
+          <strong>Stay safe and keep records</strong>
+          <small>Confirm price, location, and time in the app. Report no-shows, unsafe conduct, or payment pressure.</small>
         </div>
       </div>
 
       <div className="booking-confirm-actions">
         <button type="button" className="booking-confirm-primary" onClick={onViewDetails}>
-          View booking details
+          View Booking
+        </button>
+        <button type="button" className="booking-confirm-secondary" onClick={onMessageProvider}>
+          Message Provider
         </button>
         <button type="button" className="booking-confirm-secondary" onClick={onBackHome}>
-          Back to home
+          Back Home
+        </button>
+        <button type="button" className="booking-confirm-secondary" onClick={onReportProblem}>
+          Report Problem
         </button>
       </div>
     </div>

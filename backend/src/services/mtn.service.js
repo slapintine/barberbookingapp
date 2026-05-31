@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { env } from "../config/env.js";
-import { normalizeUgandaPhoneNumber } from "./paymentService.js";
+import { normalizeMoneyAmount, normalizeUgandaPhoneNumber } from "./paymentService.js";
 import { logProviderRequest, logProviderResponse } from "./providerLoggingService.js";
 
 const MTN_PROVIDER = "mtn_mobile_money";
@@ -16,7 +16,7 @@ function ensureConfigured() {
   const missing = [];
 
   if (!hasMomoCollectionCredentials() && !usesConsumerCredentials()) {
-    if (!env.mtnApiUserId) missing.push("MTN_API_USER or MTN_API_USER_ID");
+    if (!env.mtnApiUserId) missing.push("MTN_API_USER_ID");
     if (!env.mtnApiKey) missing.push("MTN_API_KEY");
     if (!env.mtnCollectionSubscriptionKey) {
       missing.push("MTN_SUBSCRIPTION_KEY, MTN_COLLECTION_PRIMARY_KEY, or MTN_COLLECTION_SECONDARY_KEY");
@@ -41,11 +41,11 @@ function toIsoPhone(phoneNumber) {
 }
 
 function toAmount(value) {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    throw httpError(400, "Amount must be greater than 0.");
+  try {
+    return normalizeMoneyAmount(value, "Amount").toFixed(2);
+  } catch (error) {
+    throw httpError(error.statusCode || 400, error.message);
   }
-  return numeric.toFixed(2);
 }
 
 function buildCollectionTokenUrl() {

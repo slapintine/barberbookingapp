@@ -1,6 +1,6 @@
 import { transaction } from "../db/query.js";
 import { env } from "../config/env.js";
-import { createReference, normalizeUgandaPhoneNumber } from "../services/paymentService.js";
+import { createReference, getMobileMoneyProviderLabel, normalizeMoneyAmount, normalizeUgandaPhoneNumber } from "../services/paymentService.js";
 import { getMobileMoneyService } from "../services/mobileMoneyService.js";
 import {
   createPaymentRecord,
@@ -10,9 +10,11 @@ import {
   updatePaymentRecord,
 } from "../services/paymentDataService.js";
 import { createWalletTransaction, ensureBarberWallet } from "../services/ledgerService.js";
-import { getMyWallet, requestWithdrawal } from "./walletController.js";
+import { getMyWallet, handleCustomerWalletTopupWebhook, requestWithdrawal } from "./walletController.js";
 import { finalizeBookingPayment, handleBookingPaymentWebhook, verifyBookingPayment } from "./bookingController.js";
 import { mtnService } from "../services/mtn.service.js";
+import { sendNotificationToBusiness, sendPaymentNotification } from "../services/notificationService.js";
+import { sendBusinessPaymentSmsFallback, sendPaymentSmsFallback } from "../services/lifecycleSmsService.js";
 
 function httpError(statusCode, message) {
   const error = new Error(message);
@@ -62,15 +64,15 @@ function normalizeMomoStatus(value) {
 }
 
 function toAmount(value) {
-  return Number(Number(value || 0).toFixed(2));
+  return normalizeMoneyAmount(value, "Payment amount");
 }
 
 function validatePositiveAmount(value) {
-  const amount = Number(value || 0);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw httpError(400, "Payment amount must be greater than 0.");
+  try {
+    return normalizeMoneyAmount(value, "Payment amount");
+  } catch (error) {
+    throw httpError(error.statusCode || 400, error.message);
   }
-  return toAmount(amount);
 }
 
 async function processPayoutWebhook({ client, providerReference, reference, status, payload }) {
@@ -157,6 +159,7 @@ async function processPayoutWebhook({ client, providerReference, reference, stat
       flow: "payout",
       status: "paid",
       payoutRequestId: payoutRequest.id,
+      barberId: payoutRequest.barber_id,
     };
   }
 
@@ -214,6 +217,7 @@ async function processPayoutWebhook({ client, providerReference, reference, stat
       flow: "payout",
       status: "failed",
       payoutRequestId: payoutRequest.id,
+      barberId: payoutRequest.barber_id,
     };
   }
 
@@ -240,6 +244,7 @@ async function processPayoutWebhook({ client, providerReference, reference, stat
     flow: "payout",
     status: "processing",
     payoutRequestId: payoutRequest.id,
+    barberId: payoutRequest.barber_id,
   };
 }
 
@@ -272,9 +277,6 @@ export async function checkout(req, res, next) {
       if (!["mtn_mobile_money", "airtel_money"].includes(paymentProvider)) {
         throw httpError(400, "Checkout only supports MTN or Airtel mobile money bookings.");
       }
-      if (paymentProvider !== "mtn_mobile_money") {
-        throw httpError(503, "Only MTN Mobile Money is enabled right now.");
-      }
 
       if (booking.payment_status === "paid") {
         const existingPaid = await getPaymentRecordByBookingId(bookingId, client);
@@ -293,9 +295,12 @@ export async function checkout(req, res, next) {
       }
 
       const reference = booking.payment_reference || createReference("booking", booking.id);
-      const callbackUrl = env.mtnCallbackUrl || env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/mtn/callback`;
+      const callbackUrl =
+        paymentProvider === "airtel_money"
+          ? env.airtelCallbackUrl || env.airtelWebhookUrl || `${env.appPublicUrl}/api/payments/airtel/callback`
+          : env.mtnCallbackUrl || env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/mtn/callback`;
       const pendingMetadata = {
-        source: "mtn_initiate",
+        source: `${paymentProvider}_initiate`,
         bookingId: booking.id,
         status: "pending_before_provider_request",
       };
@@ -388,8 +393,8 @@ export async function checkout(req, res, next) {
             ...pendingMetadata,
             providerStatusCode: error.statusCode || 502,
             providerMessage: [401, 403].includes(Number(error.statusCode || 0))
-              ? "MTN Mobile Money Collections may not be enabled for this app yet."
-              : error.message || "MTN rejected the payment request.",
+              ? `${getMobileMoneyProviderLabel(paymentProvider)} Collections may not be enabled for this app yet.`
+              : error.message || `${getMobileMoneyProviderLabel(paymentProvider)} rejected the payment request.`,
           };
 
           await updatePaymentRecord({
@@ -422,8 +427,8 @@ export async function checkout(req, res, next) {
             statusCode: error.statusCode || 502,
             message:
               [401, 403].includes(Number(error.statusCode || 0))
-                ? "MTN Mobile Money is not fully enabled yet. Please choose Cash or try again later."
-                : "MTN could not send the payment request. Please check the phone number or try again later.",
+                ? `${getMobileMoneyProviderLabel(paymentProvider)} is not fully enabled yet. Please try again later.`
+                : `${getMobileMoneyProviderLabel(paymentProvider)} could not send the payment request. Please check the phone number or try again later.`,
           };
         });
 
@@ -472,7 +477,7 @@ export async function checkout(req, res, next) {
     if (result.providerRejected) {
       return res.status(result.statusCode || 502).json({
         success: false,
-        message: result.message || "MTN could not send the payment request. Please try again later.",
+        message: result.message || "Mobile money could not send the payment request. Please try again later.",
         booking: result.booking,
         payment: result.payment,
       });
@@ -534,49 +539,91 @@ export async function verify(req, res, next) {
   }
 }
 
-export async function handleMtnWebhook(req, res, next) {
+async function handleMobileMoneyWebhook(req, res, next, providerKey) {
   try {
     const providedToken = readWebhookToken(req);
-    const isExactMtnCallbackRoute = String(req.path || req.originalUrl || "").split("?")[0] === "/mtn/callback";
-    if (env.mobileMoneyWebhookToken && !isExactMtnCallbackRoute && providedToken !== env.mobileMoneyWebhookToken) {
+    const routePath = String(req.path || req.originalUrl || "").split("?")[0];
+    const isProviderCallbackRoute = ["/mtn/callback", "/airtel/callback"].includes(routePath);
+    if (env.mobileMoneyWebhookToken && !isProviderCallbackRoute && providedToken !== env.mobileMoneyWebhookToken) {
       return res.status(401).json({
         success: false,
         message: "Invalid webhook token.",
       });
     }
 
+    const providerReference =
+      req.body?.provider_reference ||
+      req.body?.providerReference ||
+      req.body?.referenceId ||
+      req.body?.transaction?.id ||
+      req.get("x-reference-id") ||
+      req.get("x-momo-reference") ||
+      "";
+    const reference =
+      req.body?.reference ||
+      req.body?.externalId ||
+      req.body?.external_id ||
+      req.body?.transaction?.reference ||
+      req.query?.reference ||
+      "";
+    const status =
+      req.body?.status ||
+      req.body?.financialTransactionStatus ||
+      req.body?.transaction?.status ||
+      req.query?.status ||
+      "pending";
+
     const payload = {
       ...(req.body || {}),
-      provider: "mtn_mobile_money",
-      provider_reference:
-        req.body?.provider_reference ||
-        req.body?.referenceId ||
-        req.get("x-reference-id") ||
-        req.get("x-momo-reference") ||
-        "",
-      reference:
-        req.body?.reference ||
-        req.body?.externalId ||
-        req.query?.reference ||
-        "",
-      status:
-        req.body?.status ||
-        req.body?.financialTransactionStatus ||
-        req.query?.status ||
-        "pending",
+      provider: providerKey,
+      provider_reference: providerReference,
+      reference,
+      status,
     };
 
-    const payoutWebhookResult = await transaction(async (client) =>
-      processPayoutWebhook({
-        client,
-        providerReference: String(payload.provider_reference || "").trim(),
-        reference: String(payload.reference || "").trim(),
-        status: payload.status,
-        payload,
-      })
-    );
+    const payoutWebhookResult =
+      providerKey === "mtn_mobile_money"
+        ? await transaction(async (client) =>
+            processPayoutWebhook({
+              client,
+              providerReference: String(payload.provider_reference || "").trim(),
+              reference: String(payload.reference || "").trim(),
+              status: payload.status,
+              payload,
+            })
+          )
+        : null;
 
     if (payoutWebhookResult) {
+      const pushResult = await sendNotificationToBusiness(
+        payoutWebhookResult.barberId,
+        payoutWebhookResult.status === "paid" ? "Withdrawal paid" : payoutWebhookResult.status === "failed" ? "Withdrawal failed" : "Withdrawal processing",
+        payoutWebhookResult.status === "paid"
+          ? "Your withdrawal was paid successfully."
+          : payoutWebhookResult.status === "failed"
+          ? "Your withdrawal failed and the funds were returned to your wallet."
+          : "Your withdrawal is still processing.",
+        {
+          type: "wallet",
+          paymentId: payoutWebhookResult.payoutRequestId,
+          status: payoutWebhookResult.status,
+          route: "/profile",
+        }
+      ).catch(() => {});
+      if (["paid", "failed"].includes(String(payoutWebhookResult.status || "").toLowerCase())) {
+        await sendBusinessPaymentSmsFallback({
+          businessId: payoutWebhookResult.barberId,
+          paymentId: payoutWebhookResult.payoutRequestId,
+          status: payoutWebhookResult.status,
+          title: payoutWebhookResult.status === "paid" ? "Withdrawal paid" : "Withdrawal failed",
+          body: payoutWebhookResult.status === "paid"
+            ? "Your withdrawal was paid successfully."
+            : "Your withdrawal failed and the funds were returned to your wallet.",
+          type: "wallet",
+          pushResult,
+        });
+      }
+
       return res.status(200).json({
         success: true,
         message:
@@ -588,6 +635,54 @@ export async function handleMtnWebhook(req, res, next) {
       });
     }
 
+    const topupWebhookResult = await transaction(async (client) =>
+      handleCustomerWalletTopupWebhook({
+        client,
+        providerReference: String(payload.provider_reference || "").trim(),
+        reference: String(payload.reference || "").trim(),
+        status: payload.status,
+        payload,
+      })
+    );
+
+    if (topupWebhookResult) {
+      const pushResult = await sendPaymentNotification({
+        userId: topupWebhookResult.userId,
+        title: topupWebhookResult.status === "successful" ? "Top-up successful" : topupWebhookResult.status === "failed" ? "Top-up failed" : "Top-up pending",
+        body: topupWebhookResult.status === "successful"
+          ? "Your wallet top-up was successful and your balance has been updated."
+          : topupWebhookResult.status === "failed"
+          ? "Your wallet top-up failed. Please try again."
+          : "Your wallet top-up is still pending.",
+        paymentId: topupWebhookResult.topupId,
+        status: topupWebhookResult.status,
+        type: "wallet",
+      }).catch(() => {});
+      if (["successful", "failed", "cancelled", "expired"].includes(String(topupWebhookResult.status || "").toLowerCase())) {
+        await sendPaymentSmsFallback({
+          userId: topupWebhookResult.userId,
+          paymentId: topupWebhookResult.topupId,
+          status: topupWebhookResult.status,
+          title: topupWebhookResult.status === "successful" ? "Top-up successful" : "Top-up failed",
+          body: topupWebhookResult.status === "successful"
+            ? "Your wallet top-up was successful and your balance has been updated."
+            : "Your wallet top-up was not completed. Please try again.",
+          type: "wallet",
+          pushResult,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message:
+          topupWebhookResult.status === "successful"
+            ? "Customer wallet top-up processed successfully."
+            : topupWebhookResult.status === "failed"
+            ? "Customer wallet top-up marked failed."
+            : "Customer wallet top-up remains pending.",
+      });
+    }
+
     req.body = payload;
     return handleBookingPaymentWebhook(req, res, next);
   } catch (error) {
@@ -595,11 +690,19 @@ export async function handleMtnWebhook(req, res, next) {
   }
 }
 
+export async function handleMtnWebhook(req, res, next) {
+  return handleMobileMoneyWebhook(req, res, next, "mtn_mobile_money");
+}
+
 export async function handleAirtelWebhook(req, res, next) {
-  return res.status(503).json({
-    success: false,
-    message: "Airtel Money webhooks are disabled.",
-  });
+  if (!env.airtelEnabled) {
+    return res.status(503).json({
+      success: false,
+      message: "Airtel Money webhooks are disabled until Airtel credentials are configured.",
+    });
+  }
+
+  return handleMobileMoneyWebhook(req, res, next, "airtel_money");
 }
 
 export async function checkMtnAuth(req, res, next) {

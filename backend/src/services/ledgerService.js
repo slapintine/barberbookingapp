@@ -1,8 +1,8 @@
-import { createReference, normalizePhoneNumber } from "./paymentService.js";
+import { createReference, normalizeMoneyAmount, normalizePhoneNumber } from "./paymentService.js";
 import { getMobileMoneyService } from "./mobileMoneyService.js";
 
 function toAmount(value) {
-  return Number(Number(value || 0).toFixed(2));
+  return normalizeMoneyAmount(value, "Wallet amount");
 }
 
 function toLegacyDirection(entryType) {

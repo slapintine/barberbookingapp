@@ -199,7 +199,7 @@ export default function ScheduleWorkspace({
                 </button>
               </div>
 
-              <div className="schedule-pro-shell-v7">
+              <div className="schedule-workspace-shell-v7">
                 <section className="schedule-calendar-panel-v7">
                   <div className="schedule-calendar-toolbar-v7">
                     <button type="button" className="schedule-nav-btn-v7" onClick={() => changeScheduleMonth(-1)}>
@@ -284,7 +284,7 @@ export default function ScheduleWorkspace({
                   </div>
 
                   {selectedDayBookings.length === 0 ? (
-                    <div className="schedule-empty-pro-v7">
+                    <div className="schedule-empty-workspace-v7">
                       <FiCalendar />
                       <strong>Free day</strong>
                       <span>No appointments are booked on this date.</span>

@@ -17,10 +17,30 @@ const BLOCKED_SUBSCRIPTION_STATUSES = new Set([
   "almost_ready",
 ]);
 
+function normalizedText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function isFutureDate(value, now = new Date()) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) && timestamp > now.getTime();
+}
+
+export function isDemoLikeBusiness(business = {}) {
+  const businessName = normalizedText(business.business_name || business.name);
+  const image = normalizedText(business.image || business.profile_image || business.cover_image);
+  const location = normalizedText(business.location);
+
+  return (
+    Number(business.is_demo ?? 0) === 1 ||
+    business.is_demo === true ||
+    /\b(demo|sample|fake|test)\b/.test(businessName) ||
+    businessName.startsWith("qa ") ||
+    businessName.startsWith("qa_") ||
+    image.includes("placeholder") ||
+    ["test location", "demo location", "sample location"].includes(location)
+  );
 }
 
 export function isBusinessPubliclyVisible(business = {}, latestSubscription = null, now = new Date()) {
@@ -33,7 +53,6 @@ export function isBusinessPubliclyVisible(business = {}, latestSubscription = nu
     Number(business.admin_approved ?? 0) === 1 ||
     business.admin_approved === true ||
     ["approved", "manual_approved", "admin_approved"].includes(subscriptionStatus);
-  const isDemo = Number(business.is_demo ?? 0) === 1 || business.is_demo === true;
 
   const hasActiveSubscription =
     subscriptionStatus === "active" &&
@@ -48,10 +67,30 @@ export function isBusinessPubliclyVisible(business = {}, latestSubscription = nu
     Boolean(plan) &&
     VALID_PUBLIC_STATUSES.has(businessStatus) &&
     isPublished &&
-    !isDemo &&
+    !isDemoLikeBusiness(business) &&
     !BLOCKED_SUBSCRIPTION_STATUSES.has(subscriptionStatus) &&
     (hasActiveSubscription || hasActiveTrial || manuallyApproved)
   );
+}
+
+function publicDemoNameExclusion(column) {
+  return `
+    AND LOWER(COALESCE(${column}, '')) NOT IN ('demo', 'sample', 'fake', 'test')
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE 'demo %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE '% demo'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE '% demo %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE 'sample %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE '% sample'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE '% sample %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE 'fake %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE '% fake'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE '% fake %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE 'test %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE '% test'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE '% test %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE 'qa %'
+    AND LOWER(COALESCE(${column}, '')) NOT LIKE 'qa\\_%' ESCAPE '\\'
+  `;
 }
 
 export function publicBusinessWhere(alias = "b") {
@@ -61,7 +100,10 @@ export function publicBusinessWhere(alias = "b") {
     ${prefix}business_status IN ('active', 'approved', 'live')
     AND COALESCE(${prefix}is_published, 0) = 1
     AND COALESCE(${prefix}is_demo, 0) = 0
-    AND ${prefix}subscription_tier IN ('PRO', 'PREMIUM', 'PLATINUM')
+    ${publicDemoNameExclusion(`${prefix}business_name`)}
+    AND LOWER(COALESCE(${prefix}image, '')) NOT LIKE '%placeholder%'
+    AND LOWER(COALESCE(${prefix}location, '')) NOT IN ('test location', 'demo location', 'sample location')
+    AND ${prefix}subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
     AND LOWER(COALESCE(${prefix}subscription_status, '')) NOT IN (
       'cancelled',
       'draft',
@@ -82,7 +124,7 @@ export function publicBusinessWhere(alias = "b") {
         SELECT 1
         FROM barber_subscriptions public_bs
         WHERE public_bs.barber_id = ${barberId}
-          AND public_bs.tier IN ('PRO', 'PREMIUM', 'PLATINUM')
+          AND public_bs.tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
           AND LOWER(COALESCE(public_bs.status, '')) = 'active'
           AND public_bs.expires_at IS NOT NULL
           AND public_bs.expires_at > ?

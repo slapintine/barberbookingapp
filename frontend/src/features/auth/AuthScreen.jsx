@@ -2,10 +2,22 @@ import { useEffect, useState } from "react";
 import { FiEye, FiEyeOff, FiLock, FiMail, FiUser } from "react-icons/fi";
 import logo from "../../assets/queless-logo-full.png";
 
+function normalizeBasePath(value) {
+  const trimmed = String(value || "").trim().replace(/^\/+|\/+$/g, "");
+  return trimmed ? `/${trimmed}` : "";
+}
+
+const APP_BASE_PATH = normalizeBasePath(import.meta.env.VITE_BASE_PATH || import.meta.env.BASE_URL);
+
+function appPath(path) {
+  const normalized = String(path || "/").startsWith("/") ? String(path || "/") : `/${path}`;
+  return APP_BASE_PATH ? `${APP_BASE_PATH}${normalized === "/" ? "/" : normalized}` : normalized;
+}
+
 function AuthTabs({ isLogin, isSignup, setAuthMode, clearAuthMessages }) {
   const setAuthPath = (nextMode) => {
     if (typeof window === "undefined") return;
-    const nextPath = nextMode === "signup" ? "/signup" : "/login";
+    const nextPath = appPath(nextMode === "signup" ? "/signup" : "/login");
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, "", nextPath);
     }
@@ -76,7 +88,7 @@ export default function AuthScreen(props) {
 
   const setAuthPath = (nextMode) => {
     if (typeof window === "undefined") return;
-    const nextPath = nextMode === "signup" ? "/signup" : "/login";
+    const nextPath = appPath(nextMode === "signup" ? "/signup" : "/login");
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, "", nextPath);
     }
@@ -104,18 +116,22 @@ export default function AuthScreen(props) {
     ? "Forgot password"
     : isLogin
     ? "Welcome back"
-    : "Create account";
+    : "Find trusted services";
 
   const subtitle = isReset
     ? "Enter the code from your email and choose a new password."
     : isForgot
     ? "Enter the email linked to your Queless account. We'll send a verification code to reset your password."
     : isLogin
-    ? "Sign in to continue"
-    : "Create your Queless account";
+    ? "Sign in to book, discover nearby providers, and manage your service requests."
+    : "Create your Queless account to discover trusted providers wherever you are.";
 
   const startResetTimer = () => {
     setResetCooldown(45);
+  };
+
+  const handleAuthInput = () => {
+    if (authError || authSuccess) clearAuthMessages();
   };
 
   return (
@@ -164,6 +180,7 @@ export default function AuthScreen(props) {
                 ref={usernameRef}
                 autoComplete="username"
                 placeholder={isLogin ? "Enter your username or email" : "Choose a username"}
+                onInput={handleAuthInput}
               />
             </label>
           )}
@@ -177,6 +194,7 @@ export default function AuthScreen(props) {
                 type="email"
                 autoComplete="email"
                 placeholder="Email address"
+                onInput={handleAuthInput}
               />
             </label>
           )}
@@ -190,6 +208,7 @@ export default function AuthScreen(props) {
                 type={isReset ? "text" : showPassword ? "text" : "password"}
                 autoComplete={isLogin ? "current-password" : isReset ? "one-time-code" : "new-password"}
                 placeholder={isReset ? "Verification code" : isLogin ? "Enter your password" : "Create a password"}
+                onInput={handleAuthInput}
               />
 
               {!isReset && (
@@ -215,6 +234,7 @@ export default function AuthScreen(props) {
                   type={showConfirmPassword ? "text" : "password"}
                   autoComplete="new-password"
                   placeholder={isReset ? "New password" : "Confirm Password"}
+                  onInput={handleAuthInput}
                 />
 
                 <button
