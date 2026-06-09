@@ -20,6 +20,15 @@ if (typeof document !== 'undefined') {
   document.body.dataset.cutzTheme = savedTheme
 }
 
+// Build marker — confirms the browser loaded the freshly deployed bundle and not
+// a cached/stale shell. The values are injected at build time by vite.config.js.
+try {
+  // eslint-disable-next-line no-undef
+  console.log("Queless frontend build:", __QUELESS_BUILD_VERSION__, "built", __QUELESS_BUILD_TIME__)
+} catch {
+  /* defines unavailable (e.g. tests) — ignore */
+}
+
 getFirebaseAnalyticsIfSupported().catch(() => {})
 
 createRoot(document.getElementById('root')).render(

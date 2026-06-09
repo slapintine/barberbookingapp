@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FiEye, FiEyeOff, FiLock, FiMail, FiUser } from "react-icons/fi";
 import logo from "../../assets/queless-logo-full.png";
+import { sanitizeErrorMessage } from "../../utils/errorMessages.js";
 
 function normalizeBasePath(value) {
   const trimmed = String(value || "").trim().replace(/^\/+|\/+$/g, "");
@@ -278,7 +279,7 @@ export default function AuthScreen(props) {
           </div>
         )}
 
-        {authError && <div className="lineup-auth-error">{authError}</div>}
+        {authError && <div className="lineup-auth-error">{sanitizeErrorMessage(authError)}</div>}
         {authSuccess && <div className="lineup-auth-success">{authSuccess}</div>}
 
         {isForgot ? (

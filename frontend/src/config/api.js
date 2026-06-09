@@ -1,3 +1,5 @@
+import { sanitizeErrorMessage } from "../utils/errorMessages.js";
+
 function normalizeBaseUrl(value) {
   const normalized = String(value || "").trim().replace(/\/+$/, "");
   return normalized;
@@ -39,6 +41,8 @@ export function deriveSocketUrl() {
 }
 
 export const SOCKET_URL = deriveSocketUrl();
+export const SERVER_UNAVAILABLE_MESSAGE =
+  "We're having trouble connecting to the server. Please try again in a moment.";
 
 export function getAuthToken() {
   return (
@@ -86,7 +90,7 @@ export async function apiFetch(url, options = {}) {
     const error = new Error(
       typeof navigator !== "undefined" && navigator.onLine === false
         ? "You appear to be offline. Check your connection and try again."
-        : "Queless is having trouble reaching the server. Please try again in a moment."
+        : SERVER_UNAVAILABLE_MESSAGE
     );
     error.status = 0;
     error.serverUnavailable = true;
@@ -98,29 +102,46 @@ export async function apiFetch(url, options = {}) {
   }
 
   const contentType = response.headers.get("content-type") || "";
-  const data = contentType.includes("application/json") ? await response.json() : await response.text();
+  const isJsonResponse = contentType.includes("application/json");
+  let data = null;
+
+  if (isJsonResponse) {
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+  } else {
+    await response.text().catch(() => "");
+  }
 
   if (!response.ok) {
-    const isHtmlError = typeof data === "string" && /<html|<body|nginx|request entity too large/i.test(data);
+    const isServerUnavailable = [502, 503, 504].includes(response.status);
     const friendlyServerMessage =
       response.status === 413
-        ? "The uploaded data is too large. Please reduce image size or try again."
-        : isHtmlError
+        ? "The uploaded data is too large. Please reduce the image size or upgrade your plan."
+        : isServerUnavailable
+        ? SERVER_UNAVAILABLE_MESSAGE
+        : !isJsonResponse
         ? "Queless could not complete that request. Please try again in a moment."
         : "";
-    const message =
+    const rawMessage =
       friendlyServerMessage ||
-      (typeof data === "string"
-        ? data
-        : data?.error || data?.message || "Request failed.");
+      data?.error ||
+      data?.message ||
+      "Request failed.";
+    // Final guard: never let a raw HTML / proxy error page reach the UI, no matter
+    // what the backend or reverse proxy returned.
+    const message = sanitizeErrorMessage(rawMessage);
     if (response.status === 401 && tokenValue) {
       broadcastUnauthorized(message);
     }
     const error = new Error(message);
     error.status = response.status;
     error.payload = data;
-    error.code = typeof data === "string" ? "" : data?.code || "";
-    error.userMessage = typeof data === "string" ? message : data?.message || message;
+    error.serverUnavailable = isServerUnavailable;
+    error.code = data?.code || "";
+    error.userMessage = sanitizeErrorMessage(data?.message || message);
     error.retryAfter = response.headers.get("Retry-After") || "";
     throw error;
   }
