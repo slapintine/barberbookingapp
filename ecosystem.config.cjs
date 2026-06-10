@@ -1,10 +1,11 @@
 module.exports = {
   apps: [
     {
-      name: "Queless-backend",
+      name: "queless-backend",
       cwd: "/var/www/queless.org/current/barber-booking-app/backend",
-      script: "src/server.js",
-      interpreter: "node",
+      script: "npm",
+      args: "start",
+      interpreter: "none",
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
@@ -15,8 +16,9 @@ module.exports = {
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
       env: {
         NODE_ENV: "production",
-        PORT: 5000,
+        PORT: "5000",
         HOST: "127.0.0.1",
+        ENV_FILE: ".env.production",
       },
     },
   ],

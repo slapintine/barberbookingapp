@@ -2,6 +2,16 @@
    CLICK FIX (CRITICAL)
    ================================ */
 
+/* Notification page — full-screen, sits above everything */
+.notif-screen,
+.notif-screen * {
+  pointer-events: auto;
+}
+
+.notif-card {
+  pointer-events: auto;
+}
+
 /* Ensure overlay is below content */
 .booking-overlay-v4,
 .profile-overlay-v4 {
@@ -114,21 +124,30 @@ button,
 
 .avatar-upload-v4 {
   position: relative;
+  /* overflow: hidden is kept from .avatar-v4 — do NOT override it here.
+     The badge is positioned inside the container so it respects the
+     rounded corners and clips cleanly with the image. */
 }
 
 .avatar-upload-badge-v4 {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 28px;
-  height: 28px;
+  right: 7px;
+  bottom: 7px;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(82, 43, 91, 0.92);
+  /* semi-transparent so it reads well over any image */
+  background: rgba(20, 0, 28, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: #fff;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+  z-index: 2;
+  pointer-events: none;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
 }
 
 

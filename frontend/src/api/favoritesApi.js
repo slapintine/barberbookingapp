@@ -1,18 +1,18 @@
 import { apiFetch } from "../config/api.js";
 
-export function getFavorites(username) {
-  return apiFetch(`/api/favorites/${encodeURIComponent(username)}`);
+export function getFavorites() {
+  return apiFetch("/api/favorites");
 }
 
-export function addFavorite({ username, barberId }) {
+export function addFavorite({ barberId }) {
   return apiFetch("/api/favorites", {
     method: "POST",
-    body: JSON.stringify({ username, barber_id: barberId }),
+    body: JSON.stringify({ barber_id: barberId }),
   });
 }
 
-export function removeFavorite({ username, barberId }) {
-  return apiFetch(`/api/favorites/${encodeURIComponent(username)}/${barberId}`, {
+export function removeFavorite({ barberId }) {
+  return apiFetch(`/api/favorites/${barberId}`, {
     method: "DELETE",
   });
 }

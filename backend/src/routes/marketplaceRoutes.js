@@ -20,6 +20,7 @@ router.get("/categories", getCategories);
 router.get("/providers", getProviders);
 router.get("/service-listings", getServiceListings);
 router.post("/smart-match", protect, requireRole("customer"), requireCustomerPremium, smartMatchRateLimiter, smartMatch);
+router.post("/smart-match/search", protect, requireRole("customer"), requireCustomerPremium, smartMatchRateLimiter, smartMatch);
 router.get("/quote-requests/me", protect, getMyQuoteRequests);
 router.post("/quote-requests", protect, supportRateLimiter, createQuoteRequest);
 router.get("/support-requests/me", protect, getMySupportRequests);

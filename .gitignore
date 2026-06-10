@@ -2,6 +2,8 @@ node_modules
 dist
 build
 dist/
+.codex-logs/
+.codex-temp/
 .env
 .env.*
 !.env.example
@@ -21,6 +23,10 @@ logs/
 *.err.log
 *.tar.gz
 *.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
 *.sqlite-shm
 *.sqlite-wal
 tmp-chrome-*/
@@ -30,3 +36,9 @@ layout-*.png
 home-*.png
 auth-*.png
 login-*.png
+
+# Tooling / vendored copies — not part of the app
+.claude/
+claude-code-main/
+odysseus/
+tmp_video_frames/

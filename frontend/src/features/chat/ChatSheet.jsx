@@ -20,12 +20,14 @@ export default function ChatSheet({
 
   return (
     <>
-      <div className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"} onClick={onClose} />
+      <button
+        type="button"
+        className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"}
+        onClick={onClose}
+        aria-label="Close chat"
+      />
       <div className={show ? "booking-modal-v4 open chat-sheet-wrap-v4" : "booking-modal-v4 chat-sheet-wrap-v4"}>
-        <div
-          className="booking-modal-card-v4 chat-card-v4"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="booking-modal-card-v4 chat-card-v4">
           <div className="barber-profile-topbar-v4">
             <button type="button" className="profile-back-btn-v4" onClick={onClose}>
               <FiArrowLeft />

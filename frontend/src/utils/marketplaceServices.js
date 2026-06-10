@@ -1,16 +1,14 @@
-import fallbackStandIcon from "../assets/queless-logo-icon.png";
+import { resolveProviderImage } from "./providerImage.js";
 import { formatServicePrice, getServiceBookingAmount, normalizeCategoryKey, serviceMatchesCategory } from "./serviceCatalog.js";
 
-const VALID_PROVIDER_PLANS = new Set(["PLUS", "PREMIUM", "PLATINUM"]);
+const VALID_PROVIDER_PLANS = new Set(["FREE", "PREMIUM", "PLATINUM"]);
 const VALID_PUBLIC_STATUSES = new Set(["active", "approved", "live"]);
+// Only statuses that represent a truly terminal or hard-blocked billing state.
+// "pending_subscription", "draft", "inactive" are NOT terminal — a free provider
+// with no sub row simply has no status set, which is fine.
 const BLOCKED_SUBSCRIPTION_STATUSES = new Set([
-  "almost_ready",
   "cancelled",
-  "draft",
   "expired",
-  "inactive",
-  "pending_subscription",
-  "pending_payment",
   "payment_failed",
   "plan_required",
   "rejected",
@@ -57,38 +55,94 @@ export function isDemoLikeProvider(provider = {}) {
   );
 }
 
-export function isPublicMarketplaceProvider(provider = {}, now = Date.now()) {
-  const plan = normalizeProviderPlan(provider?.subscription?.tier || provider?.subscription_tier || provider?.subscription_plan);
+function isVerificationApproved(value) {
+  const status = normalizeText(value);
+  return ["approved", "verified", "complete", "completed"].includes(status);
+}
+
+export function isPublicMarketplaceProvider(provider = {}) {
+  // Treat missing/unknown plan as FREE — a provider without an explicit plan is still a free provider.
+  const rawPlan = normalizeProviderPlan(provider?.subscription?.tier || provider?.subscription_tier || provider?.subscription_plan);
+  const plan = rawPlan || "FREE";
   const businessStatus = normalizeText(provider?.business_status || provider?.status);
-  const subscriptionStatus = normalizeText(provider?.subscription?.status || provider?.subscription_status || provider?.trial_status);
-  const trialStatus = normalizeText(provider?.trial_status || provider?.subscription?.trial_status);
-  const adminApproved =
-    provider?.admin_approved === 1 ||
-    provider?.admin_approved === true ||
-    ["approved", "manual_approved", "admin_approved"].includes(subscriptionStatus);
+  const subscriptionStatus = normalizeText(provider?.subscription?.status || provider?.subscription_status);
   const published =
     provider?.is_published === 1 ||
     provider?.is_published === true ||
     provider?.isPublished === true ||
+    String(provider?.is_published) === "1" ||
     provider?.published === true;
-  const deleted = Boolean(provider?.deleted_at || provider?.deletedAt);
-  const hasActiveSubscription =
-    subscriptionStatus === "active" &&
-    isFutureDate(provider?.subscription?.expires_at || provider?.subscription_expires_at || provider?.subscriptionEndDate, now);
-  const hasActiveTrial =
-    subscriptionStatus === "trialing" &&
-    trialStatus === "active" &&
-    isFutureDate(provider?.trial_ends_at || provider?.trialEndDate || provider?.subscription?.expires_at, now);
-
+  const deleted = Boolean(
+    provider?.deleted_at || provider?.deletedAt || businessStatus === "deleted"
+  );
+  const isBanned = provider?.is_banned === 1 || provider?.is_banned === true;
+  const isSuspended = provider?.is_suspended === 1 || provider?.is_suspended === true;
   return (
     Boolean(plan) &&
     VALID_PUBLIC_STATUSES.has(businessStatus) &&
     published &&
+    !isBanned &&
+    !isSuspended &&
     !deleted &&
     !isDemoLikeProvider(provider) &&
-    !BLOCKED_SUBSCRIPTION_STATUSES.has(subscriptionStatus) &&
-    (hasActiveSubscription || hasActiveTrial || adminApproved)
+    !BLOCKED_SUBSCRIPTION_STATUSES.has(subscriptionStatus)
   );
+}
+
+/**
+ * True when the logged-in user owns this provider stand. Used to switch the UI
+ * into "self-view" (no Book Now / no self-booking) across web and mobile.
+ */
+export function isOwnProvider(provider = {}, currentUser = null) {
+  if (!provider || !currentUser) return false;
+  const userId = currentUser.id ?? currentUser.user_id;
+  const ownerId = provider.owner_user_id ?? provider.ownerUserId ?? provider.owner_id;
+  if (userId != null && ownerId != null && Number(userId) === Number(ownerId)) return true;
+  const username = normalizeText(currentUser.username);
+  const ownerUsername = normalizeText(provider.ownerUsername || provider.owner_username);
+  return Boolean(username) && username === ownerUsername;
+}
+
+/** Provider subscription tier: "PLATINUM" | "PREMIUM" | "FREE". */
+export function getProviderTier(provider = {}) {
+  return (
+    normalizeProviderPlan(
+      provider?.subscription?.tier || provider?.subscription_tier || provider?.subscription_plan
+    ) || "FREE"
+  );
+}
+
+/** True when a provider is verified (admin-approved / certified). */
+export function isProviderVerified(provider = {}) {
+  if (provider?.is_verified === true || provider?.is_verified === 1) return true;
+  return (
+    isVerificationApproved(provider?.verified) ||
+    isVerificationApproved(provider?.verified_status) ||
+    ["verified", "certified", "top rated", "top-rated"].includes(normalizeText(provider?.verified))
+  );
+}
+
+function timeToMinutes(value) {
+  const [hours, minutes] = String(value || "").split(":").map((part) => Number.parseInt(part, 10));
+  if (!Number.isFinite(hours)) return null;
+  return hours * 60 + (Number.isFinite(minutes) ? minutes : 0);
+}
+
+/** Closing time string (e.g. "20:00") when availability hours are known. */
+export function getProviderClosingTime(provider = {}) {
+  return provider?.availability?.end || provider?.availability_end || "";
+}
+
+/**
+ * True when the provider is currently open per its availability window.
+ * When hours are unknown we assume open (don't hide providers without hours).
+ */
+export function isProviderOpenNow(provider = {}, now = new Date()) {
+  const start = timeToMinutes(provider?.availability?.start || provider?.availability_start);
+  const end = timeToMinutes(provider?.availability?.end || provider?.availability_end);
+  if (start == null || end == null) return true;
+  const current = now.getHours() * 60 + now.getMinutes();
+  return current >= start && current < end;
 }
 
 export function getServiceName(service = {}) {
@@ -109,7 +163,9 @@ export function getServicePrice(service = {}, provider = {}) {
 }
 
 export function getProviderImage(provider = {}, service = {}) {
-  return service.image || service.image_url || service.photo || provider.image || fallbackStandIcon;
+  // Real uploaded image when present, otherwise a branded initials avatar —
+  // never the Queless logo (see utils/providerImage.js).
+  return resolveProviderImage(provider, service);
 }
 
 export function categoryMatches(service = {}, category = "") {

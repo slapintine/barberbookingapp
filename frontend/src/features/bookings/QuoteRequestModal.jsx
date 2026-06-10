@@ -40,7 +40,7 @@ export default function QuoteRequestModal({ show, provider, onClose, onSubmit })
 
   return (
     <>
-      <div className="booking-overlay-v4 open" onClick={onClose} />
+      <button type="button" className="booking-overlay-v4 open" onClick={onClose} aria-label="Close quote request" />
       <div className="booking-modal-v4 open">
         <div className="booking-modal-card-v4 booking-modal-clean-v5">
           <div className="booking-sheet-handle-v5" />

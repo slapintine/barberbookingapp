@@ -30,39 +30,39 @@ export default function BottomNav({ activeTab, setActiveTab, isOverlayOpen, unre
 
   return (
     <div className={isOverlayOpen ? "bottom-nav-v4 queless-bottom-nav hidden" : "bottom-nav-v4 queless-bottom-nav"}>
-      <button className={activeTab === "home" ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("home")}>
+      <button type="button" className={activeTab === "home" ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("home")}>
         <FiHome />
         <span>Home</span>
       </button>
       {!isProviderStyle ? (
-        <button className={isCategoriesActive ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("categories")}>
+        <button type="button" className={isCategoriesActive ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("categories")}>
           <FiGrid />
           <span>Categories</span>
         </button>
       ) : null}
-      <button className={activeTab === "bookings" ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("bookings")}>
+      <button type="button" className={activeTab === "bookings" ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("bookings")}>
         <FiCalendar />
         <span>Bookings</span>
       </button>
       {isProviderStyle ? (
         <>
-          <button className={isDashboardActive ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab(dashboardTab)}>
+          <button type="button" className={isDashboardActive ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab(dashboardTab)}>
             <FiGrid />
             <span>Dashboard</span>
           </button>
-          <button className={isReportsActive ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab(reportsTab)}>
+          <button type="button" className={isReportsActive ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab(reportsTab)}>
             <FiBarChart2 />
             <span>Reports</span>
           </button>
         </>
       ) : (
-        <button className={activeTab === "inbox" ? "nav-v4 queless-inbox-nav active" : "nav-v4 queless-inbox-nav"} onClick={() => setActiveTab("inbox")}>
+        <button type="button" className={activeTab === "inbox" ? "nav-v4 queless-inbox-nav active" : "nav-v4 queless-inbox-nav"} onClick={() => setActiveTab("inbox")}>
           <FiMessageCircle />
           <span>Inbox</span>
           {messageBadge > 0 ? <i>{messageBadge > 9 ? "9+" : messageBadge}</i> : null}
         </button>
       )}
-      <button className={activeTab === "profile" ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("profile")}>
+      <button type="button" className={activeTab === "profile" ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("profile")}>
         <FiUser />
         <span>Profile</span>
       </button>

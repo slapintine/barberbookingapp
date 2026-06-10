@@ -117,6 +117,8 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_sms_messages_created_at ON sms_messages(created_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_customer_subscriptions_user_status ON customer_subscriptions(user_id, status)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_admin_audit_log_action ON admin_audit_log(action_type, target_type, created_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_provider_coach_usage_daily ON provider_coach_usage(barber_id, usage_date)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_provider_coach_usage_user ON provider_coach_usage(user_id, created_at)`);
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_insert`);
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_update`);
   await run(`
@@ -124,8 +126,13 @@ async function createIndexes() {
     BEFORE INSERT ON barbers
     WHEN NEW.business_status IN ('active', 'approved', 'live')
       AND (
-        NEW.subscription_tier NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')
+        NEW.subscription_tier NOT IN ('FREE', 'PREMIUM', 'PLATINUM')
         OR NOT (
+          (
+            NEW.subscription_tier = 'FREE'
+            AND NEW.subscription_status = 'active'
+          )
+          OR
           (
             NEW.subscription_status = 'active'
             AND NEW.subscription_expires_at IS NOT NULL
@@ -153,8 +160,13 @@ async function createIndexes() {
     BEFORE UPDATE ON barbers
     WHEN NEW.business_status IN ('active', 'approved', 'live')
       AND (
-        NEW.subscription_tier NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')
+        NEW.subscription_tier NOT IN ('FREE', 'PREMIUM', 'PLATINUM')
         OR NOT (
+          (
+            NEW.subscription_tier = 'FREE'
+            AND NEW.subscription_status = 'active'
+          )
+          OR
           (
             NEW.subscription_status = 'active'
             AND NEW.subscription_expires_at IS NOT NULL
@@ -381,23 +393,33 @@ async function migrateExistingSchema() {
          COALESCE(is_published, 0) = 1
          AND NOT (
            business_status IN ('active', 'approved', 'live')
-           AND subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
+           AND subscription_tier IN ('FREE', 'PREMIUM', 'PLATINUM')
            AND (
              EXISTS (
                SELECT 1
                FROM barber_subscriptions public_bs
                WHERE public_bs.barber_id = barbers.id
-                 AND public_bs.tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
+                 AND public_bs.tier IN ('FREE', 'PREMIUM', 'PLATINUM')
                  AND LOWER(COALESCE(public_bs.status, '')) = 'active'
-                 AND public_bs.expires_at IS NOT NULL
-                 AND public_bs.expires_at > datetime('now')
+                 AND (
+                   public_bs.tier = 'FREE'
+                   OR (
+                     public_bs.expires_at IS NOT NULL
+                     AND public_bs.expires_at > datetime('now')
+                   )
+                 )
              )
              OR COALESCE(admin_approved, 0) = 1
              OR LOWER(COALESCE(subscription_status, '')) IN ('approved', 'manual_approved', 'admin_approved')
              OR (
                LOWER(COALESCE(subscription_status, '')) = 'active'
-               AND subscription_expires_at IS NOT NULL
-               AND subscription_expires_at > datetime('now')
+               AND (
+                 subscription_tier = 'FREE'
+                 OR (
+                   subscription_expires_at IS NOT NULL
+                   AND subscription_expires_at > datetime('now')
+                 )
+               )
              )
              OR (
                LOWER(COALESCE(subscription_status, '')) = 'trialing'
@@ -745,6 +767,11 @@ async function migrateExistingSchema() {
     `payment_status TEXT NOT NULL DEFAULT 'pending'`
   );
   await addColumnIfMissing(
+    "customer_subscriptions",
+    "metadata",
+    `metadata TEXT DEFAULT '{}'`
+  );
+  await addColumnIfMissing(
     "barber_subscriptions",
     "trial_status",
     `trial_status TEXT DEFAULT NULL`
@@ -810,8 +837,10 @@ async function migrateExistingSchema() {
     `metadata TEXT DEFAULT '{}'`
   );
 
-  await run(`UPDATE barbers SET subscription_tier = 'PLUS' WHERE COALESCE(TRIM(subscription_tier), '') <> '' AND UPPER(subscription_tier) NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')`).catch(() => {});
-  await run(`UPDATE barber_subscriptions SET tier = 'PLUS' WHERE COALESCE(TRIM(tier), '') <> '' AND UPPER(tier) NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')`).catch(() => {});
+  await run(`UPDATE barbers SET subscription_tier = 'PREMIUM', selected_plan = CASE WHEN UPPER(COALESCE(selected_plan, '')) = CHAR(80) || CHAR(76) || CHAR(85) || CHAR(83) THEN 'PREMIUM' ELSE selected_plan END WHERE UPPER(COALESCE(subscription_tier, '')) = CHAR(80) || CHAR(76) || CHAR(85) || CHAR(83)`).catch(() => {});
+  await run(`UPDATE barber_subscriptions SET tier = 'PREMIUM', price = CASE WHEN COALESCE(price, 0) IN (0, 12000 / 2, 120000 / 2) THEN CASE WHEN LOWER(COALESCE(billing_cycle, 'monthly')) = 'annual' THEN 120000 ELSE 12000 END ELSE price END WHERE UPPER(COALESCE(tier, '')) = CHAR(80) || CHAR(76) || CHAR(85) || CHAR(83)`).catch(() => {});
+  await run(`UPDATE barbers SET subscription_tier = 'FREE' WHERE COALESCE(TRIM(subscription_tier), '') <> '' AND UPPER(subscription_tier) NOT IN ('FREE', 'PREMIUM', 'PLATINUM')`).catch(() => {});
+  await run(`UPDATE barber_subscriptions SET tier = 'FREE' WHERE COALESCE(TRIM(tier), '') <> '' AND UPPER(tier) NOT IN ('FREE', 'PREMIUM', 'PLATINUM')`).catch(() => {});
 }
 
 export async function initDb() {
@@ -945,6 +974,16 @@ export async function initDb() {
     await addColumnIfMissing("barbers", "verification_submitted_at", `verification_submitted_at TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "verification_reviewed_at", `verification_reviewed_at TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "verification_reviewed_by", `verification_reviewed_by INTEGER DEFAULT NULL`);
+
+    // Provider verification / moderation system
+    await addColumnIfMissing("barbers", "review_status", `review_status TEXT NOT NULL DEFAULT 'pending_review'`);
+    await addColumnIfMissing("barbers", "is_verified", `is_verified INTEGER NOT NULL DEFAULT 0`);
+    await addColumnIfMissing("barbers", "is_suspended", `is_suspended INTEGER NOT NULL DEFAULT 0`);
+    await addColumnIfMissing("barbers", "is_banned", `is_banned INTEGER NOT NULL DEFAULT 0`);
+    await addColumnIfMissing("barbers", "verification_change_reason", `verification_change_reason TEXT DEFAULT ''`);
+    await addColumnIfMissing("barbers", "moderation_note", `moderation_note TEXT DEFAULT ''`);
+    await addColumnIfMissing("barbers", "moderated_at", `moderated_at TEXT DEFAULT NULL`);
+    await addColumnIfMissing("barbers", "moderated_by", `moderated_by INTEGER DEFAULT NULL`);
 
     await run(`
       CREATE TABLE IF NOT EXISTS barber_services (
@@ -1394,7 +1433,7 @@ export async function initDb() {
       CREATE TABLE IF NOT EXISTS barber_subscriptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         barber_id INTEGER NOT NULL,
-        tier TEXT NOT NULL DEFAULT 'PLUS',
+        tier TEXT NOT NULL DEFAULT 'FREE',
         price REAL NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'active',
         billing_cycle TEXT NOT NULL DEFAULT 'monthly',
@@ -1442,6 +1481,7 @@ export async function initDb() {
         payment_status TEXT NOT NULL DEFAULT 'pending',
         payment_reference TEXT DEFAULT '',
         provider TEXT DEFAULT 'internal',
+        metadata TEXT DEFAULT '{}',
         started_at TEXT DEFAULT CURRENT_TIMESTAMP,
         expires_at TEXT DEFAULT NULL,
         activated_at TEXT DEFAULT NULL,
@@ -1464,6 +1504,19 @@ export async function initDb() {
         reason TEXT DEFAULT '',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS provider_coach_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        question_id TEXT NOT NULL,
+        usage_date TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
 

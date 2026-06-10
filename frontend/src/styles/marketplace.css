@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --queless-deep: #100019;
   --queless-dark: #28124C;
   --queless-mid: #502B6B;
@@ -84,7 +84,7 @@ body,
 
 .queless-location-select span {
   min-width: 0;
-  max-width: 104px;
+  max-width: min(220px, 52vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1057,7 +1057,7 @@ body[data-theme="dark"] .queless-category-empty-v18 > p {
   color: var(--queless-deep);
   font-size: 17px;
   line-height: 1.2;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .queless-result-title span {
@@ -1078,7 +1078,7 @@ body[data-theme="dark"] .queless-category-empty-v18 > p {
 .queless-result-body em,
 .queless-result-body b {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .queless-result-body small {
@@ -1554,7 +1554,7 @@ body[data-theme="dark"] .queless-category-empty-v18 > p {
   }
 
   .queless-location-select span {
-    max-width: 92px;
+    max-width: min(160px, 46vw);
   }
 
   .queless-provider-rail {
@@ -2125,4 +2125,35 @@ body[data-theme="dark"] .queless-map-search input,
 body[data-theme="dark"] .queless-map-search input::placeholder,
 .dark .queless-map-search input::placeholder {
   color: rgba(43, 18, 76, 0.44) !important;
+}
+
+body[data-theme="dark"] .queless-smart-card-v18 > span,
+.dark .queless-smart-card-v18 > span,
+body[data-theme="dark"] .queless-empty-icon-v18,
+.dark .queless-empty-icon-v18 {
+  color: #ffffff;
+  background: linear-gradient(135deg, #7b2eb8 0%, #4b146f 58%, #2b0649 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.26);
+}
+
+body[data-theme="dark"] .queless-service-pin,
+.dark .queless-service-pin {
+  color: #4b146f !important;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.34)) !important;
+}
+
+body[data-theme="dark"] .queless-service-pin::before,
+.dark .queless-service-pin::before {
+  border-color: #6d28a8;
+  background: linear-gradient(180deg, #fffaf7 0%, #f4e9ff 100%);
+}
+
+body[data-theme="dark"] .queless-service-pin-surface,
+.dark .queless-service-pin-surface,
+body[data-theme="dark"] .queless-map-popup-icon,
+.dark .queless-map-popup-icon {
+  color: #4b146f;
+  background: rgba(109, 40, 168, 0.12);
+  border-color: rgba(75, 20, 111, 0.18);
 }

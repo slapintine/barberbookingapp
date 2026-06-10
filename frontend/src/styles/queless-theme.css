@@ -1400,13 +1400,13 @@ body[data-theme="light"] .trial-plan-top-v12 em {
 }
 
 .trial-primary-btn-v12 {
-  background: linear-gradient(135deg, var(--accent), var(--bg-soft)) !important;
-  color: var(--highlight) !important;
+  background: #6b21a8 !important;
+  color: #fff !important;
 }
 
 body[data-theme="light"] .trial-primary-btn-v12 {
-  background: linear-gradient(135deg, var(--text-primary), var(--accent)) !important;
-  color: var(--bg-card) !important;
+  background: #2b0038 !important;
+  color: #fff !important;
 }
 
 .trial-secondary-btn-v12 {
@@ -2040,14 +2040,14 @@ body[data-theme="light"] .trial-upgrade-overlay-v14 {
 }
 
 .queless-location-select {
-  width: 100% !important;
-  max-width: 180px !important;
+  width: auto !important;
+  max-width: 260px !important;
   justify-content: flex-start !important;
 }
 
 .queless-location-select span {
   min-width: 0 !important;
-  max-width: min(116px, 28vw) !important;
+  max-width: min(220px, 52vw) !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
@@ -2069,12 +2069,12 @@ body[data-theme="light"] .trial-upgrade-overlay-v14 {
   }
 
   .queless-location-select {
-    max-width: 142px !important;
+    max-width: 200px !important;
     padding-inline: 6px !important;
   }
 
   .queless-location-select span {
-    max-width: min(86px, 24vw) !important;
+    max-width: min(160px, 46vw) !important;
   }
 }
 
@@ -2265,4 +2265,410 @@ body[data-theme="light"] .trial-upgrade-overlay-v14 {
 .trial-primary-btn-v12,
 .trial-secondary-btn-v12 {
   border-radius: 8px !important;
+}
+
+.trial-upgrade-overlay-v14 {
+  background: rgba(25, 0, 25, 0.44) !important;
+  backdrop-filter: blur(14px);
+}
+
+.trial-upgrade-sheet-v14.trial-upgrade-screen-v12,
+.trial-upgrade-sheet-v14.trial-upgrade-panel-v13 {
+  width: min(720px, calc(100vw - 28px)) !important;
+  max-height: min(92vh, 980px) !important;
+  border: 1px solid rgba(82, 43, 91, 0.14) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fbf8ff 58%, #f7f1ff 100%) !important;
+  color: #190019 !important;
+  box-shadow: 0 28px 80px rgba(25, 0, 25, 0.18) !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-upgrade-topbar-v13 {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -2px -2px 0;
+  padding: 12px 2px 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.9));
+  border-bottom: 1px solid rgba(82, 43, 91, 0.1);
+}
+
+.trial-upgrade-sheet-v14 .trial-upgrade-topbar-v13 h1 {
+  font-size: 1.08rem !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0 !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-back-icon-btn-v13,
+.trial-upgrade-sheet-v14 .trial-close-icon-btn-v14 {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(82, 43, 91, 0.12);
+  background: #ffffff;
+  color: #2b124c;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-helper-v16 {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px !important;
+  border: 1px solid rgba(82, 43, 91, 0.12) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(135deg, rgba(82, 43, 91, 0.07), rgba(255, 255, 255, 0.92)) !important;
+  box-shadow: none !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-helper-v16 p {
+  margin: 0;
+  color: #5a5062 !important;
+  font-size: 0.95rem;
+}
+
+.trial-upgrade-sheet-v14 .trial-hero-badge-v12 {
+  width: fit-content;
+  border: 1px solid rgba(82, 43, 91, 0.14);
+  background: rgba(82, 43, 91, 0.08);
+  color: #2b124c;
+  border-radius: 999px;
+}
+
+.trial-billing-toggle-v15 {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto 4px;
+  padding: 4px;
+  border: 1px solid rgba(82, 43, 91, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.trial-billing-toggle-v15 button {
+  min-height: 42px;
+  border-radius: 6px !important;
+  color: #5a5062;
+}
+
+.trial-billing-toggle-v15 button.active {
+  background: linear-gradient(135deg, #2b124c, #522b5b) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(43, 18, 76, 0.18);
+}
+
+.trial-upgrade-sheet-v14 .trial-plans-v12 {
+  display: grid;
+  gap: 12px !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-card-v12,
+.trial-upgrade-sheet-v14 .trial-plan-card-v12:nth-child(2),
+.trial-upgrade-sheet-v14 .trial-plan-card-v12:nth-child(3) {
+  display: grid;
+  gap: 12px;
+  padding: 16px !important;
+  border: 1px solid rgba(82, 43, 91, 0.12) !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-card-v12.selected {
+  border-color: rgba(82, 43, 91, 0.56) !important;
+  background: linear-gradient(180deg, #ffffff, #fbf8ff) !important;
+  box-shadow: 0 0 0 2px rgba(82, 43, 91, 0.09) !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-select-v13 {
+  gap: 8px;
+  text-align: left;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-top-v12 span {
+  color: #190019;
+  font-size: 1.05rem;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-top-v12 em {
+  border: 1px solid rgba(82, 43, 91, 0.12);
+  background: #f7f1ff !important;
+  color: #522b5b !important;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0 !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-select-v13 strong {
+  color: #2b124c;
+  font-size: 1rem;
+}
+
+.trial-upgrade-sheet-v14 .trial-plan-select-v13 small,
+.trial-upgrade-sheet-v14 .trial-feature-list-v12 span {
+  color: #5a5062 !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-feature-list-v12 {
+  gap: 8px !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-feature-list-v12 svg {
+  color: #522b5b;
+}
+
+.trial-upgrade-sheet-v14 .trial-select-btn-v13,
+.trial-upgrade-sheet-v14 .trial-primary-btn-v12 {
+  min-height: 44px;
+  border: 1px solid rgba(82, 43, 91, 0.22) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(135deg, #2b124c 0%, #522b5b 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(43, 18, 76, 0.18) !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-select-btn-v13:hover,
+.trial-upgrade-sheet-v14 .trial-primary-btn-v12:hover {
+  filter: brightness(1.04);
+}
+
+.trial-upgrade-sheet-v14 .trial-secondary-btn-v12,
+.trial-upgrade-sheet-v14 .trial-view-more-btn-v14,
+.trial-upgrade-sheet-v14 .trial-back-btn-v13,
+.trial-upgrade-sheet-v14 .trial-admin-test-btn-v13 {
+  min-height: 42px;
+  border: 1px solid rgba(82, 43, 91, 0.14) !important;
+  border-radius: 8px !important;
+  background: rgba(82, 43, 91, 0.06) !important;
+  color: #2b124c !important;
+  box-shadow: none !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-action-panel-v12 {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin: 4px -2px 0;
+  border: 1px solid rgba(82, 43, 91, 0.12) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 -16px 36px rgba(43, 18, 76, 0.08) !important;
+  backdrop-filter: blur(14px);
+}
+
+.trial-upgrade-sheet-v14 .trial-action-panel-v12 > div {
+  gap: 4px;
+}
+
+.trial-upgrade-sheet-v14 .trial-action-panel-v12 strong {
+  color: #2b124c;
+}
+
+.trial-upgrade-sheet-v14 .trial-message-v12 {
+  border-radius: 8px;
+}
+
+.trial-upgrade-sheet-v14 .trial-payment-panel-v13,
+.trial-upgrade-sheet-v14 .trial-comparison-v13,
+.trial-upgrade-sheet-v14 .trial-footer-note-v12,
+.trial-upgrade-sheet-v14 .trial-payment-summary-v13,
+.trial-upgrade-sheet-v14 .trial-readonly-row-v13 {
+  border: 1px solid rgba(82, 43, 91, 0.12) !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.trial-upgrade-sheet-v14 .trial-method-grid-v13 button.selected {
+  border-color: rgba(82, 43, 91, 0.5) !important;
+  background: #f7f1ff !important;
+}
+
+body[data-theme="dark"] .trial-upgrade-sheet-v14.trial-upgrade-screen-v12,
+.dark .trial-upgrade-sheet-v14.trial-upgrade-screen-v12 {
+  background: linear-gradient(180deg, #18141f 0%, #201a28 100%) !important;
+  color: #fff8f4 !important;
+}
+
+body[data-theme="dark"] .trial-upgrade-sheet-v14 .trial-upgrade-topbar-v13,
+.dark .trial-upgrade-sheet-v14 .trial-upgrade-topbar-v13,
+body[data-theme="dark"] .trial-upgrade-sheet-v14 .trial-plan-card-v12,
+.dark .trial-upgrade-sheet-v14 .trial-plan-card-v12,
+body[data-theme="dark"] .trial-upgrade-sheet-v14 .trial-action-panel-v12,
+.dark .trial-upgrade-sheet-v14 .trial-action-panel-v12,
+body[data-theme="dark"] .trial-upgrade-sheet-v14 .trial-payment-panel-v13,
+.dark .trial-upgrade-sheet-v14 .trial-payment-panel-v13,
+body[data-theme="dark"] .trial-upgrade-sheet-v14 .trial-comparison-v13,
+.dark .trial-upgrade-sheet-v14 .trial-comparison-v13,
+body[data-theme="dark"] .trial-upgrade-sheet-v14 .trial-footer-note-v12,
+.dark .trial-upgrade-sheet-v14 .trial-footer-note-v12 {
+  background: rgba(34, 29, 43, 0.96) !important;
+  border-color: rgba(255, 248, 244, 0.13) !important;
+}
+
+.dashboard-plan-feature-v15 .mini-action-btn-v4,
+.reports-locked-card-v11 .secondary-btn-v4,
+.reports-upgrade-nudge-v16 button,
+.reports-upgrade-wall-v11 button,
+.ai-coach-upgrade-v1 button,
+.ai-coach-paywall-v1 button,
+.payment-flow-modal-v16 button[type="submit"],
+.payment-flow-modal-v16 .payment-primary-btn-v16 {
+  border: 1px solid rgba(82, 43, 91, 0.22) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(135deg, #2b124c 0%, #522b5b 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(43, 18, 76, 0.16) !important;
+}
+
+.dashboard-plan-feature-v15 .mini-action-btn-v4:hover,
+.reports-locked-card-v11 .secondary-btn-v4:hover,
+.reports-upgrade-nudge-v16 button:hover,
+.reports-upgrade-wall-v11 button:hover,
+.ai-coach-upgrade-v1 button:hover,
+.ai-coach-paywall-v1 button:hover {
+  filter: brightness(1.04);
+}
+
+.ai-coach-card-head-v1 span,
+.ai-coach-insight-icon-v1,
+.smart-match-upgrade-card-v1 .smart-match-icon-v1 {
+  background: linear-gradient(135deg, #2b124c, #522b5b) !important;
+}
+
+.auth-error,
+.global-error-v4,
+.lineup-auth-error {
+  border: 1px solid rgba(190, 18, 60, 0.2) !important;
+  border-radius: 8px !important;
+  background: #fff1f2 !important;
+  color: #9f1239 !important;
+  box-shadow: none !important;
+}
+
+.auth-success,
+.lineup-auth-success {
+  border: 1px solid rgba(21, 128, 61, 0.2) !important;
+  border-radius: 8px !important;
+  background: #f0fdf4 !important;
+  color: #166534 !important;
+  box-shadow: none !important;
+}
+
+.auth-info,
+.wizard-note-v10,
+.trial-message-v12,
+.profile-review-notice-v10,
+.image-upload-message-v10 {
+  border: 1px solid rgba(82, 43, 91, 0.16) !important;
+  border-radius: 8px !important;
+  background: #f7f1ff !important;
+  color: #2b124c !important;
+  box-shadow: none !important;
+}
+
+.profile-review-notice-v10,
+.image-upload-message-v10 {
+  margin-top: 10px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.profile-review-notice-v10.success,
+.image-upload-message-v10.success {
+  border-color: rgba(21, 128, 61, 0.18) !important;
+  background: #f0fdf4 !important;
+  color: #166534 !important;
+}
+
+.profile-review-notice-v10.error,
+.image-upload-message-v10.error {
+  border-color: rgba(190, 18, 60, 0.2) !important;
+  background: #fff1f2 !important;
+  color: #9f1239 !important;
+}
+
+.profile-review-notice-v10.upgrade {
+  border-color: rgba(82, 43, 91, 0.22) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f1ff 100%) !important;
+}
+
+.image-upload-message-v10.upgrade {
+  border-color: rgba(82, 43, 91, 0.2) !important;
+  background: #f7f1ff !important;
+  color: #2b124c !important;
+}
+
+.dashboard-page-v9 .dashboard-hero-v4 {
+  border-radius: 8px !important;
+  border: 1px solid rgba(82, 43, 91, 0.12) !important;
+  background: #ffffff !important;
+  box-shadow: 0 16px 36px rgba(43, 18, 76, 0.08) !important;
+}
+
+.dashboard-page-v9 .dashboard-hero-copy-v4 {
+  gap: 8px;
+}
+
+.dashboard-page-v9 .plan-warning-card {
+  max-width: 520px;
+  border: 1px solid rgba(82, 43, 91, 0.14) !important;
+  border-radius: 8px !important;
+  background: #fbf8ff !important;
+  box-shadow: none !important;
+}
+
+.dashboard-page-v9 .plan-warning-card h3 {
+  color: #190019;
+}
+
+.dashboard-page-v9 .plan-warning-card p,
+.dashboard-page-v9 .profile-sub-v4 {
+  color: #5a5062;
+}
+
+.dashboard-page-v9 .provider-primary-action-v10,
+.dashboard-page-v9 .dashboard-hero-actions-v4 .primary-btn-v4 {
+  border: none !important;
+  border-radius: 10px !important;
+  background: #2b0038 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(43,0,56,0.22) !important;
+}
+
+.dashboard-page-v9 .dashboard-hero-actions-v4 .secondary-btn-v4,
+.dashboard-page-v9 .compact-btn-v4 {
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  min-height: 40px !important;
+}
+
+.dashboard-page-v9 .dashboard-plan-card-v9 {
+  align-items: center;
+  border: 1px solid rgba(43,0,56,0.08) !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  padding: 14px 16px !important;
+}
+
+.dark .dashboard-page-v9 .dashboard-plan-card-v9 {
+  background: rgba(255,255,255,0.05) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+}
+
+.dashboard-page-v9 .provider-status-pill-v10,
+.dashboard-page-v9 .booking-badge-v4.status-pending.provider-status-pill-v10 {
+  border: 1px solid rgba(82, 43, 91, 0.16) !important;
+  background: #f4f0f7 !important;
+  color: #522b5b !important;
+  letter-spacing: 0 !important;
+}
+
+/* Simple-card general refinements on dashboard */
+.dashboard-page-v9 .simple-card-v4 {
+  border-radius: 16px !important;
+  border: 1px solid rgba(43,0,56,0.07) !important;
+}
+.dark .dashboard-page-v9 .simple-card-v4 {
+  border-color: rgba(255,255,255,0.07) !important;
 }

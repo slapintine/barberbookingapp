@@ -38,14 +38,24 @@ function getOfficialPlanOrThrow(tier, billingCycle) {
   }
   const tierConfig = getSubscriptionTierConfig(requestedTier);
   const price = getPlanPrice(requestedTier, cycle);
-  if (!price || price <= 0) {
+  if (requestedTier !== "FREE" && (!price || price <= 0)) {
     throw httpError(400, "Plan price unavailable.");
   }
   return { requestedTier, cycle, tierConfig, price };
 }
 
 function normalizePromoCode(value) {
-  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+  return String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s\u200B-\u200D\uFEFF]+/g, "");
+}
+
+function getProviderCallbackUrl(provider) {
+  return provider === "airtel_money"
+    ? env.airtelCallbackUrl || env.airtelWebhookUrl || `${env.appPublicUrl}/api/payments/airtel/callback`
+    : env.mtnCallbackUrl || env.mobileMoneyCallbackUrl || `${env.appPublicUrl}/api/payments/mtn/callback`;
 }
 
 function hashPromoCode(value) {
@@ -59,8 +69,11 @@ async function resolveProviderPromo({ client, userId, barberId, rawCode, price }
   }
 
   const expiresAt = env.providerPromoExpiresAt ? new Date(env.providerPromoExpiresAt) : null;
-  if (!expiresAt || !Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
-    throw httpError(400, "Promo code is invalid or expired.");
+  if (env.providerPromoExpiresAt && (!expiresAt || !Number.isFinite(expiresAt.getTime()))) {
+    throw httpError(400, "This promo code has expired.");
+  }
+  if (expiresAt && expiresAt.getTime() < Date.now()) {
+    throw httpError(400, "This promo code has expired.");
   }
 
   const promoOptions = [
@@ -69,7 +82,11 @@ async function resolveProviderPromo({ client, userId, barberId, rawCode, price }
   ].filter(Boolean);
   const matched = promoOptions.find((item) => item.code && item.code === code);
   if (!matched) {
-    throw httpError(400, "Promo code is invalid or expired.");
+    const customerCodes = [
+      normalizePromoCode(env.customerPremiumPromoFreeCode),
+      normalizePromoCode(env.customerPremiumPromoPercentCode),
+    ].filter(Boolean);
+    throw httpError(400, customerCodes.includes(code) ? "This promo code is not valid for this plan." : "Invalid promo code.");
   }
 
   const promoHash = hashPromoCode(code);
@@ -83,7 +100,7 @@ async function resolveProviderPromo({ client, userId, barberId, rawCode, price }
     [userId, `%"promoHash":"${promoHash}"%`]
   );
   if (used) {
-    throw httpError(409, "Promo code has already been used.");
+    throw httpError(409, "This promo code has already been used.");
   }
 
   const discountAmount = Math.min(price, Math.round((price * matched.discountPercent) / 100));
@@ -94,7 +111,7 @@ async function resolveProviderPromo({ client, userId, barberId, rawCode, price }
       type: matched.type,
       discountPercent: matched.discountPercent,
       promoHash,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAt ? expiresAt.toISOString() : null,
     },
   };
 }
@@ -181,6 +198,7 @@ function mapSubscription(subscription, barber) {
         supportLevel: "Choose a provider plan to activate your business.",
         serviceLimit: 0,
         photoLimit: 0,
+        imageUploadLimitMb: 0,
         videoLimit: 0,
         reviewsEnabled: false,
         earningsTracking: false,
@@ -234,6 +252,7 @@ function mapSubscription(subscription, barber) {
       supportLevel: tierConfig.supportLevel,
       serviceLimit: tierConfig.serviceLimit,
       photoLimit: tierConfig.photoLimit,
+      imageUploadLimitMb: tierConfig.imageUploadLimitMb,
       videoLimit: tierConfig.videoLimit,
       reviewsEnabled: tierConfig.reviewsEnabled,
       earningsTracking: tierConfig.earningsTracking,
@@ -284,7 +303,8 @@ function mapAdminPreviewSubscription(tier = "PLATINUM") {
       visibilityLabel: "Admin preview mode",
       supportLevel: "Admin unrestricted access",
       serviceLimit: -1,
-      photoLimit: -1,
+      photoLimit: tierConfig.photoLimit,
+      imageUploadLimitMb: tierConfig.imageUploadLimitMb,
       videoLimit: -1,
       reviewsEnabled: true,
       earningsTracking: true,
@@ -304,6 +324,31 @@ function mapAdminPreviewSubscription(tier = "PLATINUM") {
   };
 }
 
+function isVerificationApprovedStatus(value) {
+  return ["approved", "verified", "complete", "completed"].includes(String(value || "").trim().toLowerCase());
+}
+
+function getPublishFields(barber) {
+  const verificationApproved = isVerificationApprovedStatus(barber?.verified_status || barber?.verification_status);
+  return {
+    verificationApproved,
+    businessStatus: verificationApproved ? "active" : "draft",
+    isPublished: verificationApproved ? 1 : 0,
+  };
+}
+
+function getActivationMessage({ planName = "plan", verificationApproved = false, paymentPending = false, free = false } = {}) {
+  if (paymentPending) return "Payment pending. Your paid plan will activate after payment confirmation.";
+  if (!verificationApproved) {
+    return free
+      ? "Free plan activated. Verification is still required before your business becomes visible to customers."
+      : `${planName} activated. Verification is still required before your business becomes visible to customers.`;
+  }
+  return free
+    ? "Business active. Your business is visible to customers on the Free plan."
+    : "Payment successful. Your business is now active on Queless.";
+}
+
 export async function getMySubscription(req, res, next) {
   try {
     if (req.user?.role === "admin") {
@@ -311,7 +356,7 @@ export async function getMySubscription(req, res, next) {
         success: true,
         adminPreview: true,
         subscription: mapAdminPreviewSubscription(),
-        tiers: ["PLUS", "PREMIUM", "PLATINUM"].map((tier) =>
+        tiers: ["FREE", "PREMIUM", "PLATINUM"].map((tier) =>
           getSubscriptionTierConfig(tier)
         ),
       });
@@ -335,22 +380,24 @@ export async function getMySubscription(req, res, next) {
 }
 
 export async function startSubscriptionUpgrade(req, res, next) {
+  let requestedTierForError = "";
   try {
     const requestedTierRaw = req.body.planId || req.body.tier;
     const billingCycleRaw = req.body.billingCycle || req.body.billing_cycle || "monthly";
     const provider = String(req.body.provider || req.body.method || "mtn_mobile_money").trim().toLowerCase();
     const idempotencyKey = String(req.body.idempotencyKey || req.get("Idempotency-Key") || "").trim().slice(0, 120);
     const { requestedTier, cycle: billingCycle, tierConfig, price } = getOfficialPlanOrThrow(requestedTierRaw, billingCycleRaw);
+    requestedTierForError = requestedTier;
     if (req.body.price !== undefined && Number(req.body.price) !== price) {
       throw httpError(400, "Plan details could not be loaded. Please choose a plan again.");
     }
 
-    if (!["mtn_mobile_money", "airtel_money", "trial"].includes(provider)) {
+    if (requestedTier !== "FREE" && !["mtn_mobile_money", "airtel_money"].includes(provider)) {
       throw httpError(400, "Choose MTN Mobile Money or Airtel Money.");
     }
 
-    if (provider === "trial" && !env.providerFreeTrialsEnabled) {
-      throw httpError(403, "Provider free trials are disabled. Choose a provider plan to activate your business.");
+    if (provider === "trial") {
+      throw httpError(400, "Provider trials have been replaced by the Free plan. Choose Free to activate without payment.");
     }
 
     if (req.user?.role === "admin") {
@@ -373,6 +420,52 @@ export async function startSubscriptionUpgrade(req, res, next) {
       const barber = await getOwnedBarber(req.user.id, client);
       if (!barber) {
         throw httpError(404, "Barber profile not found.");
+      }
+
+      if (requestedTier === "FREE") {
+        const activatedAt = new Date().toISOString();
+        const publish = getPublishFields(barber);
+        const insertResult = await client.run(
+          `INSERT INTO barber_subscriptions
+           (barber_id, tier, price, status, payment_reference, provider, billing_cycle, amount_paid, currency, payment_status, is_active, started_at, expires_at, activated_at)
+           VALUES (?, 'FREE', 0, 'active', ?, 'free', 'monthly', 0, 'UGX', 'free', 1, ?, NULL, ?)`,
+          [barber.id, createReference("free", barber.id), activatedAt, activatedAt]
+        );
+        await client.run(
+          `UPDATE barbers
+           SET subscription_tier = 'FREE',
+               selected_plan = 'free',
+               subscription_status = 'active',
+               subscription_expires_at = NULL,
+               business_status = ?,
+               is_published = ?
+           WHERE id = ?`,
+          [publish.businessStatus, publish.isPublished, barber.id]
+        );
+        await client.run(
+          `UPDATE profiles
+           SET subscription_status = 'active',
+               selected_plan = 'FREE'
+           WHERE user_id = ?`,
+          [req.user.id]
+        ).catch(() => {});
+        await client.run(
+          `INSERT INTO subscription_events (user_id, business_id, event_type, plan_id, status, metadata)
+           VALUES (?, ?, 'free_plan_started', 'FREE', 'active', ?)`,
+          [req.user.id, barber.id, JSON.stringify({ activatedAt })]
+        ).catch(() => {});
+        return {
+          subscription: await client.get(`SELECT * FROM barber_subscriptions WHERE id = ?`, [insertResult.lastID]),
+          payment: {
+            provider: "free",
+            internal_reference: "",
+            status: "free",
+            gross_amount: 0,
+          },
+          barber: await getOwnedBarber(req.user.id, client),
+          freeActivated: true,
+          verificationApproved: publish.verificationApproved,
+        };
       }
 
       if (provider === "trial") {
@@ -400,7 +493,7 @@ export async function startSubscriptionUpgrade(req, res, next) {
           [req.user.id, normalizedEmail, normalizedEmail, normalizedPhone, `%${normalizedPhone.slice(-9)}`]
         );
         if (identityTrial || Number(barber.owner_trial_used || 0) === 1) {
-          throw httpError(409, "You have already used your free trial. Please choose a paid plan to continue making your business visible.");
+          throw httpError(409, "Provider trials have been replaced by the Free plan. Choose Free to activate without payment.");
         }
 
         const usedTrials = (() => {
@@ -412,11 +505,12 @@ export async function startSubscriptionUpgrade(req, res, next) {
           }
         })();
         if (Number(barber.trial_used || 0) === 1 || usedTrials.length > 0) {
-          throw httpError(409, "You have already used your free trial. Please choose a paid plan to continue making your business visible.");
+          throw httpError(409, "Provider trials have been replaced by the Free plan. Choose Free to activate without payment.");
         }
 
         const trialStartedAt = new Date().toISOString();
         const trialEndsAt = getTrialEndDate(trialStartedAt).toISOString();
+        const publish = getPublishFields(barber);
         const insertResult = await client.run(
           `INSERT INTO barber_subscriptions
            (barber_id, tier, price, status, payment_reference, provider, billing_cycle, amount_paid, currency, payment_status, trial_status, is_active, started_at, expires_at, activated_at)
@@ -428,8 +522,8 @@ export async function startSubscriptionUpgrade(req, res, next) {
            SET subscription_tier = ?,
                subscription_status = 'trialing',
                subscription_expires_at = ?,
-               business_status = 'active',
-               is_published = 1,
+               business_status = ?,
+               is_published = ?,
                trial_plan = ?,
                trial_started_at = ?,
                trial_ends_at = ?,
@@ -437,7 +531,7 @@ export async function startSubscriptionUpgrade(req, res, next) {
                trial_used = 1,
                used_trials = ?
            WHERE id = ?`,
-          [requestedTier, trialEndsAt, requestedTier, trialStartedAt, trialEndsAt, JSON.stringify([...new Set([...usedTrials, requestedTier.toLowerCase()])]), barber.id]
+          [requestedTier, trialEndsAt, publish.businessStatus, publish.isPublished, requestedTier, trialStartedAt, trialEndsAt, JSON.stringify([...new Set([...usedTrials, requestedTier.toLowerCase()])]), barber.id]
         );
         await client.run(
           `UPDATE profiles
@@ -466,6 +560,7 @@ export async function startSubscriptionUpgrade(req, res, next) {
           },
           barber: await getOwnedBarber(req.user.id, client),
           trialStarted: true,
+          verificationApproved: publish.verificationApproved,
         };
       }
 
@@ -490,10 +585,6 @@ export async function startSubscriptionUpgrade(req, res, next) {
         }
       }
 
-      const phoneNumber = normalizePhoneNumber(req.body.payment_phone || req.body.phoneNumber || barber.phone || "");
-      if (!phoneNumber) {
-        throw httpError(400, "Add a valid phone number before upgrading.");
-      }
       const paymentReference = createReference("subscription", barber.id);
       const promoResult = await resolveProviderPromo({
         client,
@@ -509,10 +600,12 @@ export async function startSubscriptionUpgrade(req, res, next) {
         payableAmount,
         discountAmount: promoResult.discountAmount,
       };
+      const phoneNumber = normalizePhoneNumber(req.body.payment_phone || req.body.phoneNumber || barber.phone || "");
 
       if (payableAmount <= 0) {
         const activatedAt = new Date().toISOString();
         const expiresAt = getSubscriptionEndDate(activatedAt, billingCycle);
+        const publish = getPublishFields(barber);
         const insertResult = await client.run(
           `INSERT INTO barber_subscriptions
            (barber_id, tier, price, status, payment_reference, provider, billing_cycle, amount_paid, currency, payment_status, is_active, started_at, expires_at, activated_at)
@@ -531,10 +624,10 @@ export async function startSubscriptionUpgrade(req, res, next) {
                selected_plan = ?,
                subscription_status = 'active',
                subscription_expires_at = ?,
-               business_status = 'active',
-               is_published = 1
+               business_status = ?,
+               is_published = ?
            WHERE id = ?`,
-          [tierConfig.code, tierConfig.id, expiresAt, barber.id]
+          [tierConfig.code, tierConfig.id, expiresAt, publish.businessStatus, publish.isPublished, barber.id]
         );
         return {
           subscription: await client.get(`SELECT * FROM barber_subscriptions WHERE id = ?`, [insertResult.lastID]),
@@ -546,7 +639,15 @@ export async function startSubscriptionUpgrade(req, res, next) {
           },
           barber: await getOwnedBarber(req.user.id, client),
           promoActivated: true,
+          verificationApproved: publish.verificationApproved,
         };
+      }
+
+      if (!phoneNumber) {
+        throw httpError(400, "Add a valid phone number before upgrading.");
+      }
+      if (provider === "airtel_money" && !env.airtelEnabled) {
+        throw httpError(503, "Airtel Money is coming soon.");
       }
 
       const collection = await getMobileMoneyService(provider).initiateCollection({
@@ -555,6 +656,7 @@ export async function startSubscriptionUpgrade(req, res, next) {
         phoneNumber,
         reference: paymentReference,
         description: `${tierConfig.name} ${billingCycle} plan upgrade`,
+        callbackUrl: getProviderCallbackUrl(provider),
       });
 
       const startedAt = new Date();
@@ -608,10 +710,12 @@ export async function startSubscriptionUpgrade(req, res, next) {
     res.status(201).json({
       success: true,
       message: result.trialStarted
-        ? `Your ${tierConfig.name} free trial is active. Your business is now visible to customers.`
+        ? getActivationMessage({ planName: `${tierConfig.name} Free plan`, verificationApproved: result.verificationApproved })
+        : result.freeActivated
+        ? getActivationMessage({ verificationApproved: result.verificationApproved, free: true })
         : result.promoActivated
-        ? "Payment successful. Your business is now active on Queless."
-        : `Approve the ${getMobileMoneyProviderLabel(result.payment.provider)} prompt to activate ${requestedTier}.`,
+        ? getActivationMessage({ planName: tierConfig.name, verificationApproved: result.verificationApproved })
+        : getActivationMessage({ paymentPending: true }),
       subscription: mapSubscription(result.subscription, result.barber),
       payment: {
         reference: result.payment.internal_reference,
@@ -622,6 +726,10 @@ export async function startSubscriptionUpgrade(req, res, next) {
       },
     });
   } catch (error) {
+    if (requestedTierForError === "FREE" && String(error?.code || "").startsWith("SQLITE_CONSTRAINT")) {
+      next(httpError(400, "We couldn't activate your Free plan. Please try again."));
+      return;
+    }
     next(error);
   }
 }
@@ -702,6 +810,12 @@ export async function verifySubscriptionUpgrade(req, res, next) {
       if (!verification.success) {
         throw httpError(402, "Payment was not completed. Your business has been saved, but it will only go live after payment.");
       }
+      if (Number(verification.amount || 0) < Number(payment.gross_amount || 0)) {
+        throw httpError(402, "Payment amount does not match the selected plan.");
+      }
+      if (String(verification.currency || "UGX").trim().toUpperCase() !== "UGX") {
+        throw httpError(402, "Payment currency does not match the selected plan.");
+      }
 
       await client.run(
         `UPDATE payment_transactions
@@ -746,19 +860,22 @@ export async function verifySubscriptionUpgrade(req, res, next) {
         `SELECT * FROM barber_subscriptions WHERE id = ?`,
         [payment.subscription_id]
       );
+      const publish = getPublishFields(barber);
 
       await client.run(
         `UPDATE barbers
          SET subscription_tier = ?,
              subscription_status = 'active',
              subscription_expires_at = ?,
-             business_status = 'active',
-             is_published = 1,
+             business_status = ?,
+             is_published = ?,
              featured_until = CASE WHEN ? IN ('PREMIUM', 'PLATINUM') THEN ? ELSE featured_until END
          WHERE id = ?`,
         [
           subscription.tier,
           subscription.expires_at,
+          publish.businessStatus,
+          publish.isPublished,
           subscription.tier,
           subscription.expires_at,
           barber.id,
@@ -780,12 +897,13 @@ export async function verifySubscriptionUpgrade(req, res, next) {
       return {
         barber: await getOwnedBarber(req.user.id, client),
         subscription,
+        verificationApproved: publish.verificationApproved,
       };
     });
 
     res.status(200).json({
       success: true,
-      message: "Payment successful. Your business is now active on Queless.",
+      message: getActivationMessage({ planName: result.subscription?.tier || "Plan", verificationApproved: result.verificationApproved }),
       subscription: mapSubscription(result.subscription, result.barber),
     });
   } catch (error) {

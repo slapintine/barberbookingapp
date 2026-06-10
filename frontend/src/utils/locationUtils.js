@@ -1,5 +1,8 @@
 function compactAddressParts(parts) {
-  return [...new Set(parts.map((part) => String(part || "").trim()).filter(Boolean))];
+  return [...new Set(parts.flatMap((part) => {
+    const value = String(part || "").trim();
+    return value ? [value] : [];
+  }))];
 }
 
 export async function reverseGeocodeCoordinates({ latitude, longitude }) {
@@ -33,7 +36,10 @@ export async function reverseGeocodeCoordinates({ latitude, longitude }) {
   const parts = compactAddressParts([localName, widerName]);
 
   if (parts.length) return parts.slice(0, 2).join(", ");
-  return String(data?.display_name || "").split(",").slice(0, 2).map((part) => part.trim()).filter(Boolean).join(", ");
+  return String(data?.display_name || "").split(",").slice(0, 2).flatMap((part) => {
+    const value = part.trim();
+    return value ? [value] : [];
+  }).join(", ");
 }
 
 export function getGeolocationErrorMessage(error) {

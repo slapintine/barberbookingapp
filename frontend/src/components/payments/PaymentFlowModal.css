@@ -1,4 +1,4 @@
-.payment-flow-shell-v1 {
+﻿.payment-flow-shell-v1 {
   position: fixed;
   inset: 0;
   z-index: 230;
@@ -63,7 +63,7 @@
   place-items: center;
   border-radius: 16px;
   color: #fff;
-  background: linear-gradient(135deg, #6b1f8f, #e24aa5);
+  background: linear-gradient(135deg, #2b124c, #522b5b);
   box-shadow: 0 16px 32px rgba(226, 74, 165, 0.22);
 }
 
@@ -105,7 +105,7 @@
   display: block;
   margin-top: 4px;
   color: rgba(255, 248, 244, 0.68);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .payment-flow-alert-v1.success {
@@ -229,7 +229,7 @@
   padding: 8px;
   border-radius: 12px;
   color: #fff;
-  background: linear-gradient(135deg, #6b1f8f, #e24aa5);
+  background: linear-gradient(135deg, #2b124c, #522b5b);
 }
 
 .payment-flow-methods-v1 span,
@@ -276,7 +276,7 @@
 .payment-flow-primary-v1 {
   border: 0;
   color: #fff;
-  background: linear-gradient(135deg, #6b1f8f, #e24aa5);
+  background: linear-gradient(135deg, #2b124c, #522b5b);
   box-shadow: 0 16px 34px rgba(91, 22, 122, 0.3);
 }
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isActiveCustomerPremium, mapCustomerSubscription } from "./customerSubscriptionService.js";
+import { getActiveCustomerPremiumSubscription, isActiveCustomerPremium, mapCustomerSubscription } from "./customerSubscriptionService.js";
 import { isActiveProviderPlatinum } from "./providerSubscriptionAccess.js";
 
 test("customer Premium requires active paid Premium subscription", () => {
@@ -19,6 +19,11 @@ test("free customer state does not unlock Smart Match", () => {
   const mapped = mapCustomerSubscription(null);
   assert.equal(mapped.tier, "FREE");
   assert.equal(mapped.features.smartMatch, false);
+});
+
+test("customer Premium lookup tolerates omitted database client", async () => {
+  const subscription = await getActiveCustomerPremiumSubscription(-1);
+  assert.equal(subscription, null);
 });
 
 test("provider Platinum check is separate from customer Premium", () => {

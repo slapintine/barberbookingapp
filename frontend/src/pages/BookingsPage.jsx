@@ -97,20 +97,20 @@ export default function BookingsPage({
                 <span className={`booking-badge-v4 status-${booking.status || "pending"}`}>{booking.status}</span>
                 {isBarberView && booking.status === "pending" && (
                   <>
-                    <button className="mini-action-btn-v4 success" onClick={() => approveBooking(booking.id)}>Approve</button>
-                    <button className="mini-action-btn-v4 danger" onClick={() => rejectBooking(booking.id)}>Reject</button>
+                    <button type="button" className="mini-action-btn-v4 success" onClick={() => approveBooking(booking.id)}>Approve</button>
+                    <button type="button" className="mini-action-btn-v4 danger" onClick={() => rejectBooking(booking.id)}>Reject</button>
                   </>
                 )}
                 {isBarberView && booking.status === "confirmed" && (
-                  <button className="mini-action-btn-v4 success" onClick={() => completeBooking(booking.id)}>Mark done</button>
+                  <button type="button" className="mini-action-btn-v4 success" onClick={() => completeBooking(booking.id)}>Mark done</button>
                 )}
                 {isBarberView && booking.paymentMethod === "cash" && booking.paymentStatus !== "paid" && (
-                  <button className="mini-action-btn-v4 success" onClick={() => confirmCashPayment(booking.id)}>Confirm cash</button>
+                  <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmCashPayment(booking.id)}>Confirm cash</button>
                 )}
                 {!isBarberView && (booking.status === "pending" || booking.status === "confirmed") && (
-                  <button className="mini-action-btn-v4 danger" onClick={() => cancelBooking(booking.id)}>Cancel</button>
+                  <button type="button" className="mini-action-btn-v4 danger" onClick={() => cancelBooking(booking.id)}>Cancel</button>
                 )}
-                <button className="mini-action-btn-v4" onClick={() => onReportBooking?.(booking, isBarberView ? "Report customer" : "Report provider")}>
+                <button type="button" className="mini-action-btn-v4" onClick={() => onReportBooking?.(booking, isBarberView ? "Report customer" : "Report provider")}>
                   {isBarberView ? "Report customer" : "Report provider"}
                 </button>
               </div>
@@ -157,6 +157,7 @@ export default function BookingsPage({
                         }
                       />
                       <button
+                        type="button"
                         className="secondary-btn-v4"
                         onClick={() => submitBookingReview(booking)}
                       >

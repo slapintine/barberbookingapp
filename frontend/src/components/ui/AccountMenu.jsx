@@ -1,4 +1,5 @@
-import { FiBookOpen, FiBriefcase, FiCalendar, FiCreditCard, FiFileText, FiHome, FiLifeBuoy, FiLogOut, FiSettings, FiShield, FiStar, FiUser, FiX, FiZap } from "react-icons/fi";
+import { FiBookOpen, FiBriefcase, FiCalendar, FiCreditCard, FiFileText, FiHome, FiLifeBuoy, FiLogOut, FiSettings, FiShield, FiStar, FiX, FiZap } from "react-icons/fi";
+import UserAvatar from "./UserAvatar.jsx";
 
 export default function AccountMenu({
   show,
@@ -6,6 +7,9 @@ export default function AccountMenu({
   isAdmin,
   accountName,
   accountType,
+  accountPhoto = "",
+  accountUsername = "",
+  accountEmail = "",
   onNavigate,
   onClose,
   onLogout,
@@ -24,7 +28,7 @@ export default function AccountMenu({
     ...(isBarber
       ? [
           { id: "dashboard", label: "Provider Dashboard", helper: "Services, bookings, quotes, and profile", icon: <FiBriefcase /> },
-          { id: "aiCoach", label: "AI Coach", helper: "Platinum business recommendations", icon: <FiZap /> },
+          { id: "aiCoach", label: "Provider Coach", helper: "Guided business recommendations", icon: <FiZap /> },
           { id: "reports", label: "Reviews and analytics", helper: "Ratings, performance, and customer feedback", icon: <FiStar /> },
         ]
       : []),
@@ -41,10 +45,18 @@ export default function AccountMenu({
 
   return (
     <>
-      <div className="account-menu-backdrop-v6" onClick={onClose} />
+      <button type="button" className="account-menu-backdrop-v6" onClick={onClose} aria-label="Close account menu" />
       <div className="account-menu-v6">
         <div className="account-menu-head-v6">
-          <div className="account-menu-avatar-v6"><FiUser /></div>
+          <div className="account-menu-avatar-v6">
+            <UserAvatar
+              profilePhoto={accountPhoto}
+              fullName={accountName}
+              username={accountUsername}
+              email={accountEmail}
+              size={42}
+            />
+          </div>
           <div>
           <strong>{accountName || "Queless account"}</strong>
             <span>{accountType === "admin" ? "Admin account" : accountType === "business" || accountType === "provider" || accountType === "barber" ? "Provider account" : "Customer account"}</span>

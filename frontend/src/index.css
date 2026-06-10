@@ -30,6 +30,51 @@ body {
   box-sizing: border-box;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+div,
+section,
+article,
+header,
+footer,
+main,
+aside,
+nav,
+button,
+label,
+span,
+p,
+li,
+strong,
+small {
+  min-width: 0;
+}
+
+p,
+/* Text nodes: allow breaking at word boundaries only (prevents letter-stacking). */
+span,
+strong,
+small,
+li,
+textarea {
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+}
+
+/* Interactive controls must NEVER break mid-word. */
+button,
+input,
+select {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
 button,
 input,
 textarea,
@@ -40,4 +85,31 @@ select {
 img {
   display: block;
   max-width: 100%;
+}
+
+body[data-theme="dark"] .customer-home-icon-bubble,
+body[data-theme="dark"] .queless-category-card span,
+body[data-theme="dark"] .queless-category-page-card span {
+  color: #ffffff;
+  background: linear-gradient(135deg, #522b5b, #854f6c);
+  border: 1px solid rgba(251, 228, 216, 0.28);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+body[data-theme="dark"] .customer-home-category-card strong,
+body[data-theme="dark"] .queless-category-card strong,
+body[data-theme="dark"] .queless-category-page-card strong {
+  color: #fff8f6;
+}
+
+body[data-theme="dark"] .customer-home-category-card small,
+body[data-theme="dark"] .queless-category-card small,
+body[data-theme="dark"] .queless-category-page-card small {
+  color: rgba(251, 228, 216, 0.78);
+}
+
+body[data-theme="dark"] .service-map-marker__bubble {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2b124c, #522b5b 55%, #854f6c);
+  border-color: rgba(251, 228, 216, 0.35);
 }

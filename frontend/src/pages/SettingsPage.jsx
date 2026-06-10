@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { FiEye, FiEyeOff, FiLock, FiSave, FiShield, FiUser } from "react-icons/fi";
-import PushNotificationSettings from "../features/notifications/PushNotificationSettings.jsx";
 
 function isStrongPassword(value) {
   const text = String(value || "");
@@ -15,7 +14,6 @@ export default function SettingsPage({
   accountLoading,
   accountMessage,
   sessionExpiresAt,
-  onNotificationToast,
 }) {
   const [username, setUsername] = useState(currentUser?.username || "");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -70,8 +68,6 @@ export default function SettingsPage({
         </div>
       </div>
 
-      <PushNotificationSettings currentUser={currentUser} onToast={onNotificationToast} />
-
       <div className="simple-card-v4 settings-card-v6">
         <div className="settings-section-head-v6">
           <FiUser />
@@ -83,7 +79,7 @@ export default function SettingsPage({
 
         {sessionExpiresAt ? (
           <div className="field-hint-v7">
-            Session expires {new Date(sessionExpiresAt).toLocaleString()}.
+            For your security, you may be asked to sign in again after {new Date(sessionExpiresAt).toLocaleString()}.
           </div>
         ) : null}
 

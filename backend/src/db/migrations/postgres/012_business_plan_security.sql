@@ -34,7 +34,7 @@ ALTER TABLE barbers
   CHECK (
     business_status NOT IN ('active', 'trialing')
     OR (
-      subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
+      subscription_tier IN ('FREE', 'PREMIUM', 'PLATINUM')
       AND subscription_status IN ('active', 'trialing')
     )
   );

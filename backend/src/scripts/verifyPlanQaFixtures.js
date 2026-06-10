@@ -8,8 +8,8 @@ if (process.env.NODE_ENV !== "development" || process.env.ALLOW_QA_SEED !== "tru
 
 const ACCOUNTS = [
   {
-    username: "qa_plus_provider",
-    tier: "PLUS",
+    username: "qa_free_provider",
+    tier: "FREE",
     serviceCount: 5,
     photoCount: 5,
     aiBusinessCoach: false,
@@ -74,7 +74,7 @@ async function verifyAccount(account) {
   assertEqual(subscription.tier, account.tier, `${account.username} tier`);
   assertEqual((barber.services || []).length, account.serviceCount, `${account.username} service count`);
   assertEqual((barber.portfolio || []).length, account.photoCount, `${account.username} photo count`);
-  assertEqual(Boolean(features.aiBusinessCoach), account.aiBusinessCoach, `${account.username} AI Business Coach`);
+  assertEqual(Boolean(features.aiBusinessCoach), account.aiBusinessCoach, `${account.username} Provider Coach`);
   assertEqual(Boolean(features.verifiedBadge), account.verifiedBadge, `${account.username} verified badge`);
   assertEqual(Boolean(features.homepageFeature), account.homepageFeature, `${account.username} homepage feature`);
 

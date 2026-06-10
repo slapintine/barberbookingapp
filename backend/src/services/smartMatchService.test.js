@@ -5,11 +5,19 @@ import {
   calculatePaymentScore,
   calculateSmartMatchScore,
   categoryMatches,
+  normalizeCategoryKey,
 } from "./smartMatchService.js";
 
 test("Smart Match category matching supports Tutor aliases", () => {
   assert.equal(categoryMatches({ business_type: "Education", service_name: "Mathematics tutoring" }, "Tutor / Lessons"), true);
   assert.equal(categoryMatches({ business_type: "Cleaning Services", service_name: "Deep cleaning" }, "Tutor / Lessons"), false);
+});
+
+test("Smart Match normalizes marketplace categories and legacy service keys", () => {
+  assert.equal(normalizeCategoryKey("Plumbing Services"), "plumbing-services");
+  assert.equal(normalizeCategoryKey("plumbing"), "plumbing-services");
+  assert.equal(categoryMatches({ business_type: "Home Services", service_name: "Pipe leak repair" }, "plumbing-services"), true);
+  assert.equal(categoryMatches({ business_type: "Cleaning Services", service_name: "Deep cleaning" }, "plumbing-services"), false);
 });
 
 test("Smart Match distance helper returns nearby distance", () => {

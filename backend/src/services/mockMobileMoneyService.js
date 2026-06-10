@@ -62,6 +62,7 @@ export const mockMobileMoneyService = {
       status: "successful",
       providerReference: providerReference || reference,
       amount: Number(amount || 0),
+      currency: "UGX",
       rawResponse: {
         mock: true,
         request: requestPayload,
@@ -105,6 +106,7 @@ export const mockMobileMoneyService = {
       status: "successful",
       providerReference: providerReference || reference,
       amount: Number(amount || 0),
+      currency: "UGX",
       rawResponse: {
         mock: true,
         request: requestPayload,

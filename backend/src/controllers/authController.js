@@ -329,7 +329,7 @@ export async function loginUser(req, res, next) {
     const user = await findUserByUsernameOrEmail(username);
 
     if (!user) {
-      return authError(res, 404, "USER_NOT_FOUND", "We couldn’t find an account with that username or email.");
+      return authError(res, 404, "USER_NOT_FOUND", "No account found with that username or email.");
     }
 
     const inactiveCode = getInactiveAccountCode(user);
@@ -340,7 +340,7 @@ export async function loginUser(req, res, next) {
     const passwordMatches = await bcrypt.compare(password, user.password_hash);
 
     if (!passwordMatches) {
-      return authError(res, 401, "INVALID_PASSWORD", "The password you entered is incorrect.");
+      return authError(res, 401, "INVALID_PASSWORD", "Incorrect username/email or password.");
     }
 
     const token = generateToken({
@@ -357,6 +357,7 @@ export async function loginUser(req, res, next) {
         id: user.id,
         username: user.username,
         role: user.role,
+        plan: user.plan || "free",
         email: user.email || "",
         emailVerified: Boolean(user.email_verified_at),
         email_verified: Boolean(user.email_verified_at),
@@ -364,6 +365,7 @@ export async function loginUser(req, res, next) {
       }
     });
   } catch (error) {
+    error.publicMessage = "Login failed. Please try again.";
     next(error);
   }
 }

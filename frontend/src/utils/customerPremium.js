@@ -15,11 +15,13 @@ export function isCustomerPremiumActive(subscription) {
   const tier = String(subscription?.tier || "").toUpperCase();
   const status = String(subscription?.status || "").toLowerCase();
   const paymentStatus = String(subscription?.paymentStatus || subscription?.payment_status || "").toLowerCase();
-  const smartMatch = Boolean(subscription?.features?.smartMatch);
   const expiresAt = subscription?.expires_at ? new Date(subscription.expires_at) : null;
   const notExpired = !expiresAt || (Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() > Date.now());
+  // Accept "" (not present) or "paid"/"successful" as valid payment statuses.
+  // Do NOT gate on features.smartMatch — that flag may not be populated by all
+  // backend code paths, causing the subscription to appear inactive after payment.
   const paid = paymentStatus === "" || paymentStatus === "paid" || paymentStatus === "successful";
-  return tier === "PREMIUM" && status === "active" && paid && smartMatch && notExpired;
+  return tier === "PREMIUM" && status === "active" && paid && notExpired;
 }
 
 export function formatCustomerPremiumPrice(plan, billingCycle = "monthly") {

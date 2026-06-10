@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FiAlertCircle, FiCheck, FiCheckCircle, FiLoader, FiRefreshCw, FiSmartphone, FiX } from "react-icons/fi";
 import "./PaymentFlowModal.css";
 
@@ -68,22 +68,37 @@ export default function PaymentFlowModal({
   airtelReady = false,
   airtelReadinessMessage = "",
   submitLabel = "Confirm payment",
+  promoEnabled = false,
+  promoLabel = "Promo code",
+  allowPromoOnly = false,
   onClose,
   onSubmit,
   onVerify,
 }) {
-  const [selectedMethod, setSelectedMethod] = useState("");
-  const [amountValue, setAmountValue] = useState(String(amount || 10000));
-  const [phoneNumber, setPhoneNumber] = useState(defaultPhone || "");
-  const [errors, setErrors] = useState({});
-
-  useEffect(() => {
-    if (!show) return;
-    setSelectedMethod("");
-    setAmountValue(String(amount || 10000));
-    setPhoneNumber(defaultPhone || "");
-    setErrors({});
-  }, [amount, defaultPhone, show]);
+  const formKey = `${show ? "open" : "closed"}|${amount || 10000}|${defaultPhone || ""}`;
+  const [selectedMethodEntry, setSelectedMethodEntry] = useState({ key: "", value: "" });
+  const [amountValueEntry, setAmountValueEntry] = useState({ key: "", value: "" });
+  const [phoneNumberEntry, setPhoneNumberEntry] = useState({ key: "", value: "" });
+  const [promoCodeEntry, setPromoCodeEntry] = useState({ key: "", value: "" });
+  const [errorsEntry, setErrorsEntry] = useState({ key: "", value: {} });
+  const selectedMethod = selectedMethodEntry.key === formKey ? selectedMethodEntry.value : "";
+  const amountValue = amountValueEntry.key === formKey ? amountValueEntry.value : String(amount || 10000);
+  const phoneNumber = phoneNumberEntry.key === formKey ? phoneNumberEntry.value : defaultPhone || "";
+  const promoCode = promoCodeEntry.key === formKey ? promoCodeEntry.value : "";
+  const errors = errorsEntry.key === formKey ? errorsEntry.value : {};
+  const setSelectedMethod = (value) => setSelectedMethodEntry({ key: formKey, value });
+  const setAmountValue = (value) => setAmountValueEntry({ key: formKey, value });
+  const setPhoneNumber = (value) => setPhoneNumberEntry({ key: formKey, value });
+  const setPromoCode = (value) => setPromoCodeEntry({ key: formKey, value });
+  const setErrors = (updater) => {
+    setErrorsEntry((prev) => {
+      const current = prev.key === formKey ? prev.value : {};
+      return {
+        key: formKey,
+        value: typeof updater === "function" ? updater(current) : updater,
+      };
+    });
+  };
 
   const numericAmount = useMemo(() => Number(amountValue), [amountValue]);
   const methodReady = selectedMethod ? selectedMethod === "mtn_mobile_money" ? mtnReady : airtelReady : false;
@@ -101,17 +116,21 @@ export default function PaymentFlowModal({
       nextErrors.amount = `Maximum amount is ${money(maxAmount)}.`;
     }
 
-    if (!selectedMethod) {
+    const promoOnlyAttempt = allowPromoOnly && promoEnabled && promoCode.trim() && !selectedMethod;
+
+    if (!selectedMethod && !promoOnlyAttempt) {
       nextErrors.method = "Choose MTN Mobile Money or Airtel Money before paying.";
-    } else if (!methodReady) {
+    } else if (selectedMethod && !methodReady) {
       nextErrors.method =
         selectedMethod === "mtn_mobile_money"
           ? mtnReadinessMessage || "MTN Mobile Money is not available right now."
           : airtelReadinessMessage || "Airtel Money is not available right now.";
     }
 
-    if (!phoneNumber.trim()) nextErrors.phoneNumber = "Enter your mobile money number.";
-    else if (!isValidUgandaPhoneNumber(phoneNumber)) nextErrors.phoneNumber = "Use a valid Uganda number, for example 0772123456.";
+    if (!promoOnlyAttempt) {
+      if (!phoneNumber.trim()) nextErrors.phoneNumber = "Enter your mobile money number.";
+      else if (!isValidUgandaPhoneNumber(phoneNumber)) nextErrors.phoneNumber = "Use a valid Uganda number, for example 0772123456.";
+    }
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -124,6 +143,7 @@ export default function PaymentFlowModal({
       method: selectedMethod,
       provider: selectedMethod,
       phoneNumber: normalizeUgandaPhoneNumber(phoneNumber),
+      promoCode: promoCode.trim(),
     });
   };
 
@@ -233,6 +253,21 @@ export default function PaymentFlowModal({
           />
           <small>{errors.phoneNumber || "Enter the phone number registered for mobile money."}</small>
         </label>
+
+        {promoEnabled ? (
+          <label className="payment-flow-field-v1">
+            <span>{promoLabel}</span>
+            <input
+              type="text"
+              value={promoCode}
+              placeholder="Enter promo code"
+              autoComplete="off"
+              onChange={(event) => setPromoCode(event.target.value)}
+              disabled={loading || Boolean(pendingPayment?.reference)}
+            />
+            <small>{allowPromoOnly ? "Optional. A full promo can unlock without mobile money." : "Optional. Discounts are validated before payment is created."}</small>
+          </label>
+        ) : null}
 
         <footer className="payment-flow-actions-v1">
           {pendingPayment?.reference ? (

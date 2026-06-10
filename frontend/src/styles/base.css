@@ -1,4 +1,4 @@
-html,
+﻿html,
 body,
 #root {
   margin: 0;
@@ -49,6 +49,27 @@ body[data-lineup-theme="light"] {
 
 * {
   box-sizing: border-box;
+  /* Prevent flex/grid children from overflowing their track,
+     which is what causes letter-by-letter text stacking.
+     Every element that needs a true min-width should set it explicitly. */
+  min-width: 0;
+}
+
+/* Buttons and interactive cards: never break words mid-character.
+   Use word-level wrapping or ellipsis overflow instead. */
+button,
+.option-card,
+.pricing-card,
+.plan-card,
+.chip-v4,
+.filter-btn,
+.slot-btn,
+.booking-badge-v4,
+.verify-pill-v4,
+.price-chip-v4 {
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
 }
 
 html,
@@ -201,6 +222,41 @@ img {
   line-height: 1.05;
   font-weight: 900;
   letter-spacing: -0.02em;
+}
+
+/* â”€â”€ Reusable initials avatar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.user-avatar-v1 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6f1d91 0%, #c74266 100%);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.user-avatar-v1 img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.light .user-avatar-v1 {
+  background: linear-gradient(135deg, #5b167a 0%, #b84699 100%);
+}
+
+/* Wallet card: prevent overflowing past bottom nav on small screens */
+.wallet-visual-card-v5 {
+  max-height: 200px;
+}
+
+.wallet-shell-v5 {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .auth-sub-v4 {
@@ -432,9 +488,9 @@ img {
 .slot-btn.active,
 .date-card-v4.active,
 .service-card-v4.active {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-  color: #2b124c;
-  box-shadow: 0 8px 18px rgba(223, 182, 178, 0.25);
+  background: #2b0038;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(43,0,56,0.18);
 }
 
 .primary-btn-v4,
@@ -444,8 +500,8 @@ img {
   padding: 13px 18px;
   border-radius: 18px;
   border: none;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-  color: #2b124c;
+  background: #2b0038;
+  color: #fff;
   font-size: 15px;
   font-weight: 900;
   cursor: pointer;
@@ -453,7 +509,7 @@ img {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 10px 20px rgba(223, 182, 178, 0.24);
+  box-shadow: 0 4px 14px rgba(43,0,56,0.2);
 }
 
 .secondary-btn-v4,
@@ -614,6 +670,7 @@ img {
 }
 
 .auth-error,
+.auth-info,
 .auth-success,
 .global-error-v4,
 .chat-error-v4 {
@@ -632,6 +689,10 @@ img {
 
 .auth-success {
   background: rgba(36, 163, 90, 0.18);
+}
+
+.auth-info {
+  background: rgba(45, 118, 181, 0.14);
 }
 
 .header-v4 {
@@ -878,7 +939,7 @@ img {
   line-height: 1.08;
   letter-spacing: -0.02em;
   word-break: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .barber-image-v4,
@@ -1051,6 +1112,18 @@ img {
   object-position: center;
   display: block;
 }
+
+/* When UserAvatar is rendered inside the avatar-v4 square container,
+   make it fill the full box instead of sitting as a small circle inside it. */
+.avatar-v4 .user-avatar-v1 {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border-radius: inherit !important;
+  font-size: 24px !important;
+  flex-shrink: 1;
+}
 .profile-avatar-v4 {
   width: 72px;
   height: 72px;
@@ -1060,6 +1133,15 @@ img {
   justify-content: center;
   color: #fff;
   font-size: 26px;
+  overflow: hidden;
+}
+
+.profile-avatar-v4 .user-avatar-v1 {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  border-radius: inherit !important;
+  font-size: 26px !important;
 }
 
 .profile-main-copy-v4 {
@@ -1283,6 +1365,8 @@ img {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
+  border: 0;
+  padding: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
@@ -1490,6 +1574,130 @@ img {
   .compact-btn-v4 {
     width: 100%;
   }
+}
+
+/* â”€â”€â”€ Verification badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.verification-badge-v1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  border-radius: 20px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.verification-badge-v1.xs {
+  font-size: 0.65rem;
+  padding: 2px 7px;
+}
+.verification-badge-v1.sm {
+  font-size: 0.72rem;
+  padding: 3px 9px;
+}
+.verification-badge-v1.md {
+  font-size: 0.8rem;
+  padding: 5px 12px;
+}
+
+.verification-badge-v1 svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* Verified â€” green */
+.verification-badge-v1.verified {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.dark .verification-badge-v1.verified {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.25);
+}
+
+/* Unverified / pending â€” soft neutral */
+.verification-badge-v1.unverified {
+  background: rgba(156, 112, 52, 0.1);
+  color: #92400e;
+  border: 1px solid rgba(156, 112, 52, 0.2);
+}
+.dark .verification-badge-v1.unverified {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+/* Changes requested â€” amber */
+.verification-badge-v1.changes {
+  background: rgba(234, 88, 12, 0.1);
+  color: #c2410c;
+  border: 1px solid rgba(234, 88, 12, 0.2);
+}
+.dark .verification-badge-v1.changes {
+  background: rgba(251, 146, 60, 0.12);
+  color: #fb923c;
+  border-color: rgba(251, 146, 60, 0.2);
+}
+
+/* â”€â”€â”€ Provider status notices (suspended / banned / changes) â”€â”€â”€ */
+.provider-status-notice-v1 {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.provider-status-notice-v1 svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.provider-status-notice-v1.banned {
+  background: rgba(220, 38, 38, 0.08);
+  border: 1.5px solid rgba(220, 38, 38, 0.22);
+  color: #991b1b;
+}
+.dark .provider-status-notice-v1.banned {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.provider-status-notice-v1.suspended {
+  background: rgba(234, 88, 12, 0.08);
+  border: 1.5px solid rgba(234, 88, 12, 0.22);
+  color: #9a3412;
+}
+.dark .provider-status-notice-v1.suspended {
+  background: rgba(251, 146, 60, 0.1);
+  border-color: rgba(251, 146, 60, 0.25);
+  color: #fdba74;
+}
+
+.provider-status-notice-v1.changes {
+  background: rgba(161, 98, 7, 0.08);
+  border: 1.5px solid rgba(161, 98, 7, 0.22);
+  color: #78350f;
+}
+.dark .provider-status-notice-v1.changes {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.25);
+  color: #fde68a;
+}
+
+.provider-status-notice-v1 strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.92rem;
 }
 
 

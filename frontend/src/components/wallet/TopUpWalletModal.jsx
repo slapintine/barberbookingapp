@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import PaymentFlowModal from "../payments/PaymentFlowModal.jsx";
 import { getCustomerWalletTopupStatus, initiateCustomerWalletTopup } from "../../api/walletApi.js";
 import "./TopUpWalletModal.css";
@@ -30,16 +30,24 @@ export default function TopUpWalletModal({
   defaultPhone = "",
   onWalletUpdated,
 }) {
-  const [pendingTopup, setPendingTopup] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    if (!show) return;
-    setPendingTopup(null);
-    setLoading(false);
-    setMessage("");
-  }, [show]);
+  const topupKey = show ? "open" : "closed";
+  const [pendingTopupEntry, setPendingTopupEntry] = useState({ key: "", value: null });
+  const [loadingEntry, setLoadingEntry] = useState({ key: "", value: false });
+  const [messageEntry, setMessageEntry] = useState({ key: "", value: "" });
+  const pendingTopup = pendingTopupEntry.key === topupKey ? pendingTopupEntry.value : null;
+  const loading = loadingEntry.key === topupKey ? loadingEntry.value : false;
+  const message = messageEntry.key === topupKey ? messageEntry.value : "";
+  const setPendingTopup = (updater) => {
+    setPendingTopupEntry((prev) => {
+      const current = prev.key === topupKey ? prev.value : null;
+      return {
+        key: topupKey,
+        value: typeof updater === "function" ? updater(current) : updater,
+      };
+    });
+  };
+  const setLoading = (value) => setLoadingEntry({ key: topupKey, value });
+  const setMessage = (value) => setMessageEntry({ key: topupKey, value });
 
   const submitTopup = async ({ amount, method, phoneNumber }) => {
     setMessage("");

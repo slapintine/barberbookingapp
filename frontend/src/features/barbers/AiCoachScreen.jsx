@@ -3,6 +3,7 @@ import {
   FiAlertCircle,
   FiArrowRight,
   FiBarChart2,
+  FiBriefcase,
   FiCheckCircle,
   FiClock,
   FiDollarSign,
@@ -14,29 +15,31 @@ import {
   FiUserCheck,
   FiZap,
 } from "react-icons/fi";
-import { getAiCoachInsights } from "../../api/aiCoachApi.js";
+import { getAiCoachInsights, getProviderCoachQuestions, requestProviderCoachAdvice } from "../../api/aiCoachApi.js";
 import "./AiCoachScreen.css";
 
-function isFutureOrUnset(value) {
-  if (!value) return true;
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) && timestamp > Date.now();
+// Derive the stand's readiness level from the barber prop fields.
+// This is the source of truth for gating coach access — never rely solely on the API response.
+function getStandStatus(barber) {
+  if (!barber) return "none";
+  const publishedVal = barber.is_published ?? barber.isPublished ?? barber.published;
+  const isPublished = [true, 1, "1", "true", "yes"].includes(publishedVal);
+  if (!isPublished) return "draft";
+  // Published stands are live — visibility is not gated on verification or subscription status.
+  return "live";
 }
 
-function isActivePlatinum(subscription = {}, barber = {}) {
-  const tier = String(subscription.tier || barber.subscription?.tier || barber.subscription_tier || barber.selected_plan || "").toUpperCase();
-  if (tier !== "PLATINUM") return false;
-
-  const status = String(subscription.status || barber.subscription?.status || barber.subscription_status || "").toLowerCase();
-  const trialStatus = String(subscription.trial_status || barber.subscription?.trial_status || barber.trial_status || "").toLowerCase();
-  const isActive = status === "active" || status === "trialing" || Number(subscription.is_active || barber.subscription?.is_active || 0) === 1;
-  const isTrial = trialStatus === "active" || trialStatus === "trialing" || status === "trialing" || subscription.is_trial;
-  const expiry = subscription.expires_at || barber.subscription?.expires_at || barber.subscription_expires_at;
-  const trialExpiry = subscription.trial_ends_at || barber.subscription?.trial_ends_at || barber.trial_ends_at;
-
-  if (isTrial) return isFutureOrUnset(trialExpiry || expiry);
-  if (isActive) return isFutureOrUnset(expiry);
-  return false;
+function StandBlockedState({ icon, title, description, buttonLabel, onAction }) {
+  return (
+    <div className="ai-coach-stand-blocked-v1">
+      <div className="ai-coach-stand-blocked-icon-v1">{icon}</div>
+      <strong>{title}</strong>
+      <span>{description}</span>
+      <button type="button" className="ai-coach-cta-btn-v1" onClick={onAction}>
+        {buttonLabel}
+      </button>
+    </div>
+  );
 }
 
 function RecommendationCard({ title, icon, item, actionHandler }) {
@@ -86,40 +89,164 @@ function RecommendationList({ title, icon, items = [], emptyText, actionHandler 
   );
 }
 
-function getPlanLabel(subscription = {}, barber = {}) {
-  const tier = String(subscription.tier || barber.subscription?.tier || barber.subscription_tier || barber.selected_plan || "No active plan").toUpperCase();
-  const status = String(subscription.status || barber.subscription?.status || barber.subscription_status || "inactive").replace(/_/g, " ");
-  return `${tier} - ${status}`;
+function getUsageText(usage) {
+  if (!usage) return "";
+  if (usage.unlimited) return "";
+  if (usage.plan === "premium") return `${usage.remainingThisMonth} of ${usage.limit} tips remaining this month`;
+  return "Upgrade to use coach advice";
 }
 
-function UpgradeLock({ barber, subscription, onUpgradePlan }) {
+function UpgradeLock({ usage, onUpgradePlan }) {
+  const limitReached = usage?.plan === "premium" && Number(usage.remainingThisMonth || 0) <= 0;
   return (
-    <div className="content-v4 app-page-v4 ai-coach-page-v1">
-      <section className="ai-coach-lock-v1">
-        <div className="ai-coach-lock-icon-v1"><FiLock /></div>
+    <section className="ai-coach-lock-v1">
+      <div className="ai-coach-lock-icon-v1"><FiLock /></div>
+      <div>
+        <div className="ai-coach-eyebrow-v1">{limitReached ? "Monthly tips used" : "Platinum feature"}</div>
+        <h1>{limitReached ? "Upgrade to Platinum for unlimited guidance" : "Grow faster with Queless Provider Coach"}</h1>
+        <p>
+          {limitReached
+            ? "You've used your monthly coach tips. Upgrade to Platinum for unlimited guidance."
+            : "Get smart tips on improving your stand, pricing, reviews, services, and bookings."}
+        </p>
+      </div>
+      <div className="ai-coach-lock-grid-v1">
+        <span><FiTrendingUp /> Improve bookings</span>
+        <span><FiStar /> Strengthen reviews</span>
+        <span><FiUserCheck /> Build trust</span>
+        <span><FiDollarSign /> Clarify pricing</span>
+      </div>
+      <button type="button" className="ai-coach-cta-btn-v1" onClick={() => onUpgradePlan?.("PLATINUM")}>
+        Upgrade to Platinum
+      </button>
+    </section>
+  );
+}
+
+function CoachQuestionPanel({ questionsState, selectedAdvice, loadingAdvice, adviceError, onSelectQuestion, onAction, onUpgradePlan }) {
+  const categories = questionsState.data?.categories || [];
+  const questions = questionsState.data?.questions || [];
+  const usage = selectedAdvice?.usage || questionsState.data?.usage;
+  const upgradeRequired = adviceError?.code === "UPGRADE_REQUIRED" || questionsState.data?.access?.upgradeRequired;
+  const monthlyLimitReached =
+    adviceError?.code === "MONTHLY_LIMIT_REACHED" ||
+    adviceError?.code === "DAILY_LIMIT_REACHED" ||
+    (usage?.plan === "premium" && Number(usage.remainingThisMonth || 0) <= 0);
+  const canUseAdvice = !upgradeRequired && !monthlyLimitReached;
+  const categoriesToRender = categories.length ? categories : [{ id: "all", label: "Ask the coach", questions }];
+
+  return (
+    <section className="ai-coach-chat-v1" aria-labelledby="coach-questions-title">
+      <div className="ai-coach-chat-head-v1">
         <div>
-          <div className="ai-coach-eyebrow-v1">Platinum feature</div>
-          <h1>Unlock AI Business Coach with Platinum</h1>
-          <p>AI Coach is included only with an active Platinum provider plan. Your current provider access is {getPlanLabel(subscription, barber)}.</p>
+          <div className="ai-coach-section-title-v1" id="coach-questions-title">
+            <FiMessageCircle /> Choose a question
+          </div>
+          <p>Select a topic and get practical guidance based on your Queless stand.</p>
         </div>
-        <div className="ai-coach-lock-grid-v1">
-          <span><FiTrendingUp /> Increase bookings</span>
-          <span><FiStar /> Improve ratings</span>
-          <span><FiUserCheck /> Understand customers</span>
-          <span><FiDollarSign /> Improve pricing</span>
+        {usage && !usage.unlimited ? (
+          <span className="ai-coach-usage-pill-v1">{getUsageText(usage)}</span>
+        ) : null}
+      </div>
+
+      {questionsState.loading ? (
+        <div className="ai-coach-loading-v1 compact">
+          <FiRefreshCw className="ai-coach-spin-icon-v1" />
+          <strong>Loading questions...</strong>
         </div>
-        <button type="button" className="primary-btn-v4" onClick={() => onUpgradePlan?.("PLATINUM")}>
-          Upgrade to Platinum
-        </button>
-        <small className="ai-coach-lock-note-v1">After payment or trial activation, this page unlocks automatically and the backend verifies your business ownership.</small>
-      </section>
-    </div>
+      ) : questionsState.error ? (
+        <div className="ai-coach-chat-error-v1" role="alert">
+          <FiAlertCircle /> {questionsState.error}
+        </div>
+      ) : (
+        <div className="ai-coach-category-list-v1">
+          {categoriesToRender.map((category) => (
+            <section className="ai-coach-category-v1" key={category.id}>
+              {categoriesToRender.length > 1 ? <h3>{category.label}</h3> : null}
+              <div className="ai-coach-question-grid-v1">
+                {(category.questions || []).map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={selectedAdvice?.question === item.question ? "active" : ""}
+                    onClick={() => onSelectQuestion(item.id)}
+                    disabled={!canUseAdvice || loadingAdvice}
+                  >
+                    {item.question}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+
+      {upgradeRequired || monthlyLimitReached ? (
+        <UpgradeLock usage={monthlyLimitReached ? usage : { plan: "free" }} onUpgradePlan={onUpgradePlan} />
+      ) : null}
+
+      {loadingAdvice ? (
+        <div className="ai-coach-loading-v1 compact">
+          <FiRefreshCw className="ai-coach-spin-icon-v1" />
+          <strong>Reading your stand signals...</strong>
+          <span>Checking profile, reviews, bookings, services, and visibility.</span>
+        </div>
+      ) : null}
+
+      {adviceError && !upgradeRequired && !monthlyLimitReached ? (
+        <div className="ai-coach-chat-error-v1" role="alert">
+          <FiAlertCircle /> {adviceError.message || "Could not answer that question. Please try again."}
+        </div>
+      ) : null}
+
+      {selectedAdvice ? (
+        <article className="ai-coach-answer-v1">
+          <div className="ai-coach-card-head-v1">
+            <span><FiZap /></span>
+            <small>Coach answer</small>
+          </div>
+          <div className="ai-coach-answer-title-row-v1">
+            <h3>{selectedAdvice.title || selectedAdvice.question}</h3>
+            {selectedAdvice.priority ? (
+              <span className={`ai-coach-priority-v1 ${String(selectedAdvice.priority).toLowerCase()}`}>
+                {selectedAdvice.priority} priority
+              </span>
+            ) : null}
+          </div>
+          <p>{selectedAdvice.summary || selectedAdvice.advice}</p>
+          {selectedAdvice.insights?.length ? (
+            <div className="ai-coach-answer-list-v1">
+              <strong>Insights</strong>
+              {selectedAdvice.insights.map((item) => (
+                <span key={item}><FiCheckCircle /> {item}</span>
+              ))}
+            </div>
+          ) : null}
+          {(selectedAdvice.actionSteps || selectedAdvice.recommendedActions)?.length ? (
+            <div className="ai-coach-answer-list-v1">
+              <strong>Do this next</strong>
+              {(selectedAdvice.actionSteps || selectedAdvice.recommendedActions).map((item) => (
+                <span key={item}><FiArrowRight /> {item}</span>
+              ))}
+            </div>
+          ) : null}
+          {(selectedAdvice.recommendedNextAction?.label || selectedAdvice.actionLabel) ? (
+            <button
+              type="button"
+              className="ai-coach-link-btn-v1"
+              onClick={() => onAction(selectedAdvice.recommendedNextAction?.target || selectedAdvice.actionTarget)}
+            >
+              {selectedAdvice.recommendedNextAction?.label || selectedAdvice.actionLabel} <FiArrowRight />
+            </button>
+          ) : null}
+        </article>
+      ) : null}
+    </section>
   );
 }
 
 export default function AiCoachScreen({
   barber,
-  subscription,
   onUpgradePlan,
   onEditProfile,
   onOpenReports,
@@ -127,194 +254,373 @@ export default function AiCoachScreen({
   onOpenDashboard,
   onShowActionHint,
 }) {
-  const [state, setState] = useState({ loading: true, error: "", data: null, locked: false });
+  const [insightsState, setInsightsState] = useState({ loading: true, error: "", data: null });
+  const [questionsState, setQuestionsState] = useState({ loading: false, error: "", data: null });
+  const [selectedAdvice, setSelectedAdvice] = useState(null);
+  const [adviceError, setAdviceError] = useState(null);
+  const [loadingAdvice, setLoadingAdvice] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const platinumReady = isActivePlatinum(subscription, barber);
+
+  // Source of truth: derive from barber prop, not API response
+  const standStatus = useMemo(() => getStandStatus(barber), [barber]);
+
+  const currentPlan = String(
+    barber?.subscription_tier || barber?.selected_plan || barber?.current_plan || ""
+  ).toUpperCase();
+  const isPlatinum = currentPlan === "PLATINUM";
+  const isPremium = currentPlan === "PREMIUM";
+  const isCoachEnabled = isPlatinum || isPremium;
 
   useEffect(() => {
+    if (standStatus !== "live") return; // don't fetch if stand isn't live
+
     let cancelled = false;
 
     async function loadInsights() {
-      if (!barber?.id) {
-        setState({ loading: false, error: "", data: null, locked: false });
-        return;
-      }
-      if (!platinumReady) {
-        setState({ loading: false, error: "", data: null, locked: true });
-        return;
-      }
-
-      setState((prev) => ({ ...prev, loading: true, error: "", locked: false }));
+      setInsightsState((prev) => ({ ...prev, loading: true, error: "" }));
       try {
-        const response = await getAiCoachInsights(barber.id);
-        if (!cancelled) setState({ loading: false, error: "", data: response.insights, locked: false });
-      } catch (error) {
+        const val = await getAiCoachInsights();
         if (cancelled) return;
-        setState({
-          loading: false,
-          error: error?.status === 403 ? "" : error.message || "AI Coach could not load right now.",
-          data: null,
-          locked: error?.status === 403,
-        });
+        if (val?.businessFound === false) {
+          // API can't find business by owner — show data-unavailable state, not "create stand"
+          setInsightsState({ loading: false, error: "", data: null, apiNotFound: true });
+        } else {
+          setInsightsState({
+            loading: false,
+            error: "",
+            data: {
+              ...(val.insights || {}),
+              weeklyGrowthFocus: val.weeklyGrowthFocus,
+              plan: val.plan,
+              access: val.access,
+            },
+            apiNotFound: false,
+          });
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setInsightsState({ loading: false, error: err?.message || "Insights could not load.", data: null });
       }
     }
 
     loadInsights();
-    return () => {
-      cancelled = true;
-    };
-  }, [barber?.id, platinumReady, reloadKey]);
+    return () => { cancelled = true; };
+  }, [standStatus, reloadKey]);
 
-  const checklist = state.data?.setupChecklist || [];
-  const dataQuality = state.data?.dataQuality || {};
-  const needsSetup = state.data && !dataQuality.enoughData;
+  // Load questions only when user clicks "Open Coach"
+  useEffect(() => {
+    if (!coachOpen || standStatus !== "live") return;
+
+    let cancelled = false;
+
+    async function loadQuestions() {
+      setQuestionsState((prev) => ({ ...prev, loading: true, error: "" }));
+      try {
+        const val = await getProviderCoachQuestions();
+        if (cancelled) return;
+        setQuestionsState({ loading: false, error: "", data: val?.businessFound === false ? null : val });
+      } catch (err) {
+        if (cancelled) return;
+        setQuestionsState({ loading: false, error: err?.message || "Questions could not load.", data: null });
+      }
+    }
+
+    loadQuestions();
+    return () => { cancelled = true; };
+  }, [coachOpen, standStatus, reloadKey]);
+
+  const checklist = insightsState.data?.setupChecklist || [];
+  const dataQuality = insightsState.data?.dataQuality || {};
+  const weeklyGrowthFocus =
+    insightsState.data?.weeklyGrowthFocus || insightsState.data?.weeklyInsight?.recommendation || "";
+  const usage = questionsState.data?.usage;
+  const coachStatusLabel =
+    isPlatinum || usage?.unlimited ? "Platinum" :
+    isPremium || usage?.plan === "premium" ? "Premium — 5 tips/month" :
+    "Platinum feature";
   const completion = useMemo(() => {
     if (!checklist.length) return 0;
     return Math.round((checklist.filter((item) => item.complete).length / checklist.length) * 100);
   }, [checklist]);
+  const needsSetup = insightsState.data && !dataQuality.enoughData;
 
   const handleAction = (target) => {
     const normalized = String(target || "profile").toLowerCase();
-    const actionMessages = {
-      schedule: "Opening your business editor. Update the hours section so customers can book your best times.",
-      services: "Opening your business editor. Go to services to update the listing the coach highlighted.",
-      prices: "Opening your business editor. Review service pricing and save clear fixed, range, starting, or quote pricing.",
-      profile: "Opening your business editor. Complete the profile fields the coach marked as missing.",
-      photos: "Opening your business editor. Add service or portfolio photos for stronger customer trust.",
-      bookings: "Opening bookings so you can confirm, follow up, and message customers.",
-      customers: "Opening bookings so you can find recent customers and follow up.",
-      offers: "Opening reports. Use the promotion suggestion there to shape your next customer offer.",
-      reports: "Opening reports so you can compare this insight with booking and revenue trends.",
-      reviews: "Opening reports so you can review rating patterns and feedback.",
+    const msgs = {
+      schedule: "Opening your business editor — update your hours.",
+      services: "Opening your business editor — update your service listing.",
+      prices: "Opening your business editor — review your service pricing.",
+      pricing: "Opening your business editor — review your service pricing.",
+      profile: "Opening your business editor — complete missing fields.",
+      photos: "Opening your business editor — add service or portfolio photos.",
+      bookings: "Opening bookings — confirm, follow up, and message customers.",
+      retention: "Opening bookings — find recent customers and follow up.",
+      customers: "Opening bookings — find recent customers and follow up.",
+      offers: "Opening reports — use the promotion suggestion to shape your next offer.",
+      reports: "Opening reports — compare this insight with booking and revenue trends.",
+      reviews: "Opening reports — review rating patterns and feedback.",
     };
-    onShowActionHint?.(actionMessages[normalized] || "Opening the best place to act on this insight.");
-
+    onShowActionHint?.(msgs[normalized] || "Opening the best place to act on this insight.");
     if (["reports", "reviews", "offers"].includes(normalized)) onOpenReports?.();
-    else if (["bookings", "customers"].includes(normalized)) onOpenBookings?.();
+    else if (["bookings", "customers", "retention"].includes(normalized)) onOpenBookings?.();
     else if (normalized === "dashboard") onOpenDashboard?.();
     else onEditProfile?.(normalized);
   };
 
-  if (!barber) {
+  async function handleQuestion(questionId) {
+    if (loadingAdvice) return;
+    setLoadingAdvice(true);
+    setAdviceError(null);
+    try {
+      const response = await requestProviderCoachAdvice(questionId, barber?.id || null);
+      setSelectedAdvice(response);
+      setQuestionsState((prev) =>
+        prev.data ? { ...prev, data: { ...prev.data, usage: response.usage } } : prev
+      );
+    } catch (error) {
+      setAdviceError({
+        code: error?.code || error?.payload?.code || "",
+        message: error?.userMessage || error?.message || "Provider Coach could not answer that question.",
+        usage: error?.payload?.usage,
+      });
+      if (error?.payload?.usage) {
+        setQuestionsState((prev) =>
+          prev.data ? { ...prev, data: { ...prev.data, usage: error.payload.usage } } : prev
+        );
+      }
+    } finally {
+      setLoadingAdvice(false);
+    }
+  }
+
+  // ─── Render: stand not ready ──────────────────────────────────────────────────
+  if (standStatus === "none") {
     return (
       <div className="content-v4 app-page-v4 ai-coach-page-v1">
-        <div className="empty-state-v7">
-          <FiZap />
-          <strong>No business profile found</strong>
-          <span>Create your business profile before using AI Coach.</span>
-        </div>
+        <CoachHeader coachStatusLabel={null} onRefresh={null} />
+        <StandBlockedState
+          icon={<FiBriefcase />}
+          title="Create your business stand first"
+          description="Provider Coach unlocks automatically once your business stand is set up on Queless."
+          buttonLabel="Create business stand"
+          onAction={() => onEditProfile?.("profile")}
+        />
       </div>
     );
   }
 
-  if (state.locked || !platinumReady) {
-    return <UpgradeLock barber={barber} subscription={subscription} onUpgradePlan={onUpgradePlan} />;
+  if (standStatus === "draft") {
+    return (
+      <div className="content-v4 app-page-v4 ai-coach-page-v1">
+        <CoachHeader coachStatusLabel={null} onRefresh={null} />
+        <StandBlockedState
+          icon={<FiClock />}
+          title="Your business stand is not live yet"
+          description="Finish your stand setup and publish it before the coach can give useful advice."
+          buttonLabel="Continue stand setup"
+          onAction={() => onEditProfile?.("profile")}
+        />
+      </div>
+    );
   }
 
+  if (standStatus === "pending") {
+    return (
+      <div className="content-v4 app-page-v4 ai-coach-page-v1">
+        <CoachHeader coachStatusLabel={null} onRefresh={null} />
+        <StandBlockedState
+          icon={<FiCheckCircle />}
+          title="Publish your stand to start coaching"
+          description="Publish your stand from the dashboard to unlock coaching insights and recommendations."
+          buttonLabel="Go to dashboard"
+          onAction={() => onOpenDashboard?.()}
+        />
+      </div>
+    );
+  }
+
+  // ─── Render: stand is live ────────────────────────────────────────────────────
   return (
     <div className="content-v4 app-page-v4 ai-coach-page-v1">
-      <header className="ai-coach-hero-v1">
-        <div>
-          <div className="ai-coach-eyebrow-v1"><FiZap /> Platinum AI feature</div>
-          <h1>Queless AI Coach</h1>
-          <p>Business recommendations based on your real bookings, services, reviews, prices, and profile setup.</p>
-        </div>
-        <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={() => setReloadKey((value) => value + 1)}>
-          <FiRefreshCw /> Refresh
-        </button>
-      </header>
+      <CoachHeader
+        coachStatusLabel={coachStatusLabel}
+        plan={currentPlan.toLowerCase()}
+        onRefresh={() => setReloadKey((v) => v + 1)}
+      />
 
-      {state.loading ? (
-        <div className="ai-coach-loading-v1">
-          <FiRefreshCw />
-          <strong>Reading your business signals...</strong>
-          <span>Checking bookings, prices, reviews, and profile completeness.</span>
-        </div>
-      ) : state.error ? (
-        <div className="ai-coach-error-v1">
-          <FiAlertCircle />
-          <strong>AI Coach could not load</strong>
-          <span>{state.error}</span>
-        </div>
-      ) : state.data ? (
+      {weeklyGrowthFocus ? (
+        <section className="ai-coach-weekly-focus-v1">
+          <div>
+            <small>This week's focus</small>
+            <p>{weeklyGrowthFocus}</p>
+          </div>
+          <button type="button" className="ai-coach-link-btn-v1 muted" onClick={() => handleAction("profile")}>
+            Improve stand <FiArrowRight />
+          </button>
+        </section>
+      ) : null}
+
+      {/* Subscription gate for Free providers */}
+      {!isCoachEnabled ? (
+        <UpgradeLock usage={{ plan: "free" }} onUpgradePlan={onUpgradePlan} />
+      ) : (
         <>
-          <section className="ai-coach-summary-v1">
-            <RecommendationCard
-              title="This Week's Insight"
-              icon={<FiTrendingUp />}
-              item={state.data.weeklyInsight}
-              actionHandler={handleAction}
-            />
-            <div className="ai-coach-readiness-v1">
-              <div>
-                <small>Profile readiness</small>
-                <strong>{completion}%</strong>
-              </div>
-              <div className="ai-coach-progress-v1"><span style={{ width: `${completion}%` }} /></div>
-              <div className="ai-coach-metrics-v1">
-                <span><FiClock /> {dataQuality.bookingsCount || 0} bookings</span>
-                <span><FiStar /> {dataQuality.reviewsCount || 0} reviews</span>
-                <span><FiBarChart2 /> {dataQuality.servicesCount || 0} services</span>
-              </div>
+          {/* Insights summary */}
+          {insightsState.loading ? (
+            <div className="ai-coach-loading-v1">
+              <FiRefreshCw className="ai-coach-spin-icon-v1" />
+              <strong>Reading your business signals...</strong>
+              <span>Checking bookings, prices, reviews, and profile completeness.</span>
             </div>
-          </section>
-
-          {needsSetup ? (
-            <section className="ai-coach-setup-v1">
-              <div>
-                <div className="ai-coach-section-title-v1"><FiCheckCircle /> Setup advice</div>
-                <p>Your AI Coach is active, but it has limited booking history to learn from. Complete the setup items below, then use bookings and reports to build stronger signals.</p>
-                <div className="ai-coach-setup-actions-v1">
-                  <button type="button" className="ai-coach-link-btn-v1" onClick={() => handleAction("profile")}>Improve profile <FiArrowRight /></button>
-                  <button type="button" className="ai-coach-link-btn-v1 muted" onClick={() => handleAction("bookings")}>Review bookings <FiArrowRight /></button>
+          ) : insightsState.error ? (
+            <div className="ai-coach-error-v1">
+              <FiAlertCircle />
+              <strong>Insights could not load</strong>
+              <span>{insightsState.error}</span>
+              <button type="button" className="ai-coach-secondary-btn-v1" onClick={() => setReloadKey((v) => v + 1)}>
+                <FiRefreshCw /> Retry
+              </button>
+            </div>
+          ) : insightsState.data ? (
+            <>
+              <section className="ai-coach-summary-v1">
+                <RecommendationCard
+                  title="This Week's Insight"
+                  icon={<FiTrendingUp />}
+                  item={insightsState.data.weeklyInsight}
+                  actionHandler={handleAction}
+                />
+                <div className="ai-coach-readiness-v1">
+                  <div>
+                    <small>Profile readiness</small>
+                    <strong>{completion}%</strong>
+                  </div>
+                  <div className="ai-coach-progress-v1">
+                    <span style={{ width: `${completion}%` }} />
+                  </div>
+                  <div className="ai-coach-metrics-v1">
+                    <span><FiClock /> {dataQuality.bookingsCount || 0} bookings</span>
+                    <span><FiStar /> {dataQuality.reviewsCount || 0} reviews</span>
+                    <span><FiBarChart2 /> {dataQuality.servicesCount || 0} services</span>
+                  </div>
                 </div>
-              </div>
-              <div className="ai-coach-checklist-v1">
-                {checklist.map((item) => (
-                  <span key={item.label} className={item.complete ? "complete" : ""}>
-                    <FiCheckCircle /> {item.label}
-                  </span>
-                ))}
-              </div>
-            </section>
+              </section>
+
+              {needsSetup ? (
+                <section className="ai-coach-setup-v1">
+                  <div>
+                    <div className="ai-coach-section-title-v1"><FiCheckCircle /> Setup checklist</div>
+                    <p>Complete these items so the coach can give you better, data-driven advice.</p>
+                    <div className="ai-coach-setup-actions-v1">
+                      <button type="button" className="ai-coach-link-btn-v1" onClick={() => handleAction("profile")}>
+                        Improve profile <FiArrowRight />
+                      </button>
+                      <button type="button" className="ai-coach-link-btn-v1 muted" onClick={() => handleAction("bookings")}>
+                        Review bookings <FiArrowRight />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="ai-coach-checklist-v1">
+                    {checklist.map((item) => (
+                      <span key={item.label} className={item.complete ? "complete" : ""}>
+                        <FiCheckCircle /> {item.label}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <RecommendationList
+                title="Booking Opportunities"
+                icon={<FiBarChart2 />}
+                items={insightsState.data.bookingOpportunities}
+                emptyText="More booking opportunities will appear after customers start booking your services."
+                actionHandler={handleAction}
+              />
+              <RecommendationList
+                title="Pricing Suggestions"
+                icon={<FiDollarSign />}
+                items={insightsState.data.pricingSuggestions}
+                emptyText="Add service prices or ranges to unlock pricing suggestions."
+                actionHandler={handleAction}
+              />
+              <RecommendationCard
+                title="Review Summary"
+                icon={<FiMessageCircle />}
+                item={insightsState.data.reviewSummary}
+                actionHandler={handleAction}
+              />
+              <RecommendationList
+                title="Profile Fixes"
+                icon={<FiUserCheck />}
+                items={insightsState.data.profileFixes}
+                emptyText="Your core profile fields look complete. Keep photos and hours fresh."
+                actionHandler={handleAction}
+              />
+              <RecommendationList
+                title="Customer Retention"
+                icon={<FiStar />}
+                items={insightsState.data.customerRetentionIdeas}
+                emptyText="Retention ideas appear after completed customer bookings."
+                actionHandler={handleAction}
+              />
+            </>
+          ) : insightsState.apiNotFound ? (
+            <div className="ai-coach-error-v1">
+              <FiAlertCircle />
+              <strong>Business data not yet available</strong>
+              <span>The coach could not read your business profile. Make sure your stand is fully saved.</span>
+              <button type="button" className="ai-coach-secondary-btn-v1" onClick={() => setReloadKey((v) => v + 1)}>
+                <FiRefreshCw /> Retry
+              </button>
+            </div>
           ) : null}
 
-          <RecommendationList
-            title="Booking Opportunities"
-            icon={<FiBarChart2 />}
-            items={state.data.bookingOpportunities}
-            emptyText="More booking opportunities will appear after customers start booking your services."
-            actionHandler={handleAction}
-          />
-          <RecommendationList
-            title="Pricing Suggestions"
-            icon={<FiDollarSign />}
-            items={state.data.pricingSuggestions}
-            emptyText="Add service prices or ranges to unlock pricing suggestions."
-            actionHandler={handleAction}
-          />
-          <RecommendationCard
-            title="Review Summary"
-            icon={<FiMessageCircle />}
-            item={state.data.reviewSummary}
-            actionHandler={handleAction}
-          />
-          <RecommendationList
-            title="Profile Fixes"
-            icon={<FiUserCheck />}
-            items={state.data.profileFixes}
-            emptyText="Your core profile fields look complete. Keep photos and hours fresh."
-            actionHandler={handleAction}
-          />
-          <RecommendationList
-            title="Customer Retention Ideas"
-            icon={<FiStar />}
-            items={state.data.customerRetentionIdeas}
-            emptyText="Retention ideas appear after completed customer bookings."
-            actionHandler={handleAction}
-          />
+          {/* Coach question panel — gated behind "Open Coach" click */}
+          {!coachOpen ? (
+            <div className="ai-coach-open-cta-v1">
+              <div className="ai-coach-section-title-v1"><FiMessageCircle /> Ask the Coach</div>
+              <p>Get answers to practical questions about your bookings, stand quality, reviews, and growth.</p>
+              <button type="button" className="ai-coach-cta-btn-v1" onClick={() => setCoachOpen(true)}>
+                Open Coach <FiArrowRight />
+              </button>
+            </div>
+          ) : (
+            <CoachQuestionPanel
+              questionsState={questionsState}
+              selectedAdvice={selectedAdvice}
+              loadingAdvice={loadingAdvice}
+              adviceError={adviceError}
+              onSelectQuestion={handleQuestion}
+              onAction={handleAction}
+              onUpgradePlan={onUpgradePlan}
+            />
+          )}
         </>
-      ) : null}
+      )}
     </div>
+  );
+}
+
+function CoachHeader({ coachStatusLabel, plan, onRefresh }) {
+  return (
+    <header className="ai-coach-hero-v1">
+      <div>
+        <div className="ai-coach-eyebrow-v1"><FiZap /> Provider Coach</div>
+        <h1>Queless Provider Coach</h1>
+        <p>Practical tips to improve your stand, attract customers, and grow bookings.</p>
+      </div>
+      <div className="ai-coach-hero-actions-v1">
+        {coachStatusLabel ? (
+          <span className={`ai-coach-status-pill-v1 ${plan || "free"}`}>{coachStatusLabel}</span>
+        ) : null}
+        {onRefresh ? (
+          <button type="button" className="ai-coach-secondary-btn-v1" onClick={onRefresh}>
+            <FiRefreshCw /> Refresh
+          </button>
+        ) : null}
+      </div>
+    </header>
   );
 }

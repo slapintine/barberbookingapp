@@ -825,6 +825,16 @@ export async function createBooking(req, res, next) {
       if (!barber) {
         throw httpError(404, "Barber not found.");
       }
+      // Prevent self-booking: a provider cannot book their own stand
+      if (barber.owner_user_id && Number(barber.owner_user_id) === Number(req.user.id)) {
+        throw httpError(400, "You cannot book your own stand.");
+      }
+      if (Number(barber.is_banned || 0) === 1) {
+        throw httpError(403, "This business is not available for bookings.");
+      }
+      if (Number(barber.is_suspended || 0) === 1) {
+        throw httpError(403, "This business is currently suspended and cannot accept new bookings.");
+      }
       const paymentMethod = normalizePaymentMethod(req.body.payment_method, barber);
       if (paymentMethod === "wallet" && !barber.owner_user_id) {
         throw httpError(400, "This barber cannot receive wallet payments yet.");

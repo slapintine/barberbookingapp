@@ -1,7 +1,7 @@
 import { all } from "../db/query.js";
 import { isBusinessPubliclyVisible, isDemoLikeBusiness } from "./businessVisibility.js";
 
-const VALID_PLANS = new Set(["PLUS", "PREMIUM", "PLATINUM"]);
+const VALID_PLANS = new Set(["FREE", "PREMIUM", "PLATINUM"]);
 const PUBLIC_STATUSES = new Set(["active", "approved", "live"]);
 
 function normalize(value) {
@@ -44,17 +44,14 @@ function analyzeBusiness(row, latestSubscription, now) {
   const published = Number(row.is_published || 0) === 1;
   const plan = normalizeUpper(latestSubscription?.tier || row.subscription_tier);
   const subscriptionStatus = normalizeLower(latestSubscription?.status || row.subscription_status);
-  const trialStatus = normalizeLower(row.trial_status);
   const serviceCount = Number(row.service_count || 0);
   const adminApproved = Number(row.admin_approved || 0) === 1;
   const demoLike = isDemoLikeBusiness(row);
   const hasActiveSubscription =
-    subscriptionStatus === "active" &&
-    isFutureDate(latestSubscription?.expires_at || row.subscription_expires_at, now);
-  const hasActiveTrial =
-    subscriptionStatus === "trialing" &&
-    trialStatus === "active" &&
-    isFutureDate(row.trial_ends_at, now);
+    plan === "FREE" && subscriptionStatus === "active"
+      ? true
+      : subscriptionStatus === "active" &&
+        isFutureDate(latestSubscription?.expires_at || row.subscription_expires_at, now);
   const missingFields = missingRequiredFields(row);
   const missingServicesOrCategories = serviceCount === 0 || !normalize(row.business_type);
   const publicVisible = isBusinessPubliclyVisible(row, latestSubscription, now);
@@ -65,7 +62,7 @@ function analyzeBusiness(row, latestSubscription, now) {
   if (!PUBLIC_STATUSES.has(businessStatus)) blockers.push("inactive_or_non_public_status");
   if (!published) blockers.push("not_published");
   if (!VALID_PLANS.has(plan)) blockers.push("missing_or_invalid_plan");
-  if (!hasActiveSubscription && !hasActiveTrial && !adminApproved) blockers.push("missing_subscription_trial_or_admin_approval");
+  if (!hasActiveSubscription && !adminApproved) blockers.push("missing_subscription_or_admin_approval");
   if (missingFields.length) blockers.push("missing_required_business_fields");
   if (missingServicesOrCategories) blockers.push("missing_services_or_category");
 
@@ -81,8 +78,8 @@ function analyzeBusiness(row, latestSubscription, now) {
     plan: plan || "NONE",
     subscriptionStatus: subscriptionStatus || "none",
     subscriptionExpiresAt: latestSubscription?.expires_at || row.subscription_expires_at || null,
-    trialStatus: trialStatus || "none",
-    trialEndsAt: row.trial_ends_at || null,
+    trialStatus: "none",
+    trialEndsAt: null,
     adminApproved,
     serviceCount,
     businessType: row.business_type || "",
@@ -154,10 +151,10 @@ export async function getProviderPublicationReadiness({ limit = 100 } = {}) {
   const unpublished = businessesReadiness.filter((item) => item.blockers.includes("not_published"));
   const missingSubscriptionOrPlan = businessesReadiness.filter((item) =>
     item.blockers.includes("missing_or_invalid_plan") ||
-    item.blockers.includes("missing_subscription_trial_or_admin_approval")
+    item.blockers.includes("missing_subscription_or_admin_approval")
   );
   const missingApproval = businessesReadiness.filter((item) =>
-    item.blockers.includes("missing_subscription_trial_or_admin_approval") && !item.adminApproved
+    item.blockers.includes("missing_subscription_or_admin_approval") && !item.adminApproved
   );
   const missingServicesOrCategories = businessesReadiness.filter((item) =>
     item.blockers.includes("missing_services_or_category")

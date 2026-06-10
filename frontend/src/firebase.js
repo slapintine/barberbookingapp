@@ -14,6 +14,22 @@ const firebaseConfig = {
 
 export const firebaseVapidKey = String(import.meta.env.VITE_FIREBASE_VAPID_KEY || "").trim();
 
+function decodeBase64Url(value) {
+  try {
+    const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    return atob(padded);
+  } catch {
+    return "";
+  }
+}
+
+export function isValidFirebaseVapidKey(value = firebaseVapidKey) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  return decodeBase64Url(text).length === 65;
+}
+
 function hasRequiredClientConfig() {
   return Boolean(
     firebaseConfig.apiKey &&
@@ -72,4 +88,13 @@ export function getMissingFirebaseClientEnv() {
   return Object.entries(required)
     .filter(([, value]) => !value)
     .map(([name]) => name);
+}
+
+export function getFirebaseClientConfigIssues() {
+  const missing = getMissingFirebaseClientEnv();
+  const issues = [...missing];
+  if (!missing.includes("VITE_FIREBASE_VAPID_KEY") && !isValidFirebaseVapidKey()) {
+    issues.push("VITE_FIREBASE_VAPID_KEY_INVALID");
+  }
+  return issues;
 }

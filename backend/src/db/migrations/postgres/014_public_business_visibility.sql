@@ -2,7 +2,7 @@ UPDATE barbers
 SET business_status = 'active'
 WHERE business_status = 'trialing'
   AND COALESCE(is_published, false) = true
-  AND subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
+  AND subscription_tier IN ('FREE', 'PREMIUM', 'PLATINUM')
   AND LOWER(COALESCE(trial_status, '')) = 'active'
   AND trial_ends_at IS NOT NULL
   AND trial_ends_at > NOW();
@@ -13,7 +13,7 @@ SET business_status = 'pending_payment',
 WHERE COALESCE(b.is_published, false) = true
   AND (
     b.business_status <> 'active'
-    OR b.subscription_tier NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')
+    OR b.subscription_tier NOT IN ('FREE', 'PREMIUM', 'PLATINUM')
     OR LOWER(COALESCE(b.subscription_status, '')) IN (
       'cancelled',
       'draft',
@@ -33,7 +33,7 @@ WHERE COALESCE(b.is_published, false) = true
         SELECT 1
         FROM barber_subscriptions bs
         WHERE bs.barber_id = b.id
-          AND bs.tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
+          AND bs.tier IN ('FREE', 'PREMIUM', 'PLATINUM')
           AND LOWER(COALESCE(bs.status, '')) = 'active'
           AND bs.expires_at IS NOT NULL
           AND bs.expires_at > NOW()
@@ -56,7 +56,7 @@ RETURNS trigger AS $$
 BEGIN
   IF NEW.business_status = 'active'
      AND (
-       NEW.subscription_tier NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')
+       NEW.subscription_tier NOT IN ('FREE', 'PREMIUM', 'PLATINUM')
        OR NOT (
          (
            NEW.subscription_status = 'active'

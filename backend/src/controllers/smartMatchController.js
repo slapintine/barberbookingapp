@@ -1,45 +1,46 @@
-import { findSmartMatches } from "../services/smartMatchService.js";
+import { findSmartMatches, normalizeCategoryKey } from "../services/smartMatchService.js";
 
-const VALID_PREFERENCES = new Set(["best_match", "affordable", "best_rated"]);
+const VALID_WHEN = new Set(["now", "today", "this_week"]);
+const VALID_LOCATION_TYPES = new Set(["use_current_location", "enter_address"]);
 
-function isValidDate(value) {
-  return !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function isValidTime(value) {
-  return !value || /^\d{2}:\d{2}$/.test(value);
+function normalizeCoordinates(value = {}) {
+  if (!value || typeof value !== "object") return null;
+  const lat = value.lat ?? value.latitude;
+  const lng = value.lng ?? value.longitude;
+  if (lat === undefined || lng === undefined || lat === "" || lng === "") return null;
+  const parsed = { lat: Number(lat), lng: Number(lng) };
+  return Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng) ? parsed : null;
 }
 
 function validateSmartMatchBody(body = {}) {
-  const category = String(body.category || body.service || "").trim();
-  const location = body.location && typeof body.location === "object" ? body.location : {};
-  const locationLabel = String(location.label || "").trim();
-  const budgetMin = body.budgetMin === "" || body.budget_min === "" ? 0 : Number(body.budgetMin ?? body.budget_min ?? 0);
-  const budgetMax = body.budgetMax === "" || body.budget_max === "" ? 0 : Number(body.budgetMax ?? body.budget_max ?? 0);
-  const date = String(body.date || "").slice(0, 10);
-  const time = String(body.time || "").slice(0, 5);
-  const preference = String(body.preference || "best_match").toLowerCase();
-  const lat = location.lat === "" || location.lat === undefined ? "" : Number(location.lat);
-  const lng = location.lng === "" || location.lng === undefined ? "" : Number(location.lng);
+  const legacyLocation = body.location && typeof body.location === "object" ? body.location : {};
+  const serviceKey = normalizeCategoryKey(body.serviceKey || body.category || body.service || "");
+  const serviceLabel = String(body.serviceLabel || body.service_label || "").trim();
+  const when = String(body.when || body.dateMode || (body.date ? "today" : "") || "").trim().toLowerCase();
+  const locationType = String(body.locationType || body.location_type || (legacyLocation.label ? "enter_address" : "") || "").trim().toLowerCase();
+  const address = String(body.address || legacyLocation.label || "").trim();
+  const coordinates = normalizeCoordinates(body.coordinates || legacyLocation);
 
-  if (!category) return { error: "Service category is required." };
-  if (!locationLabel) return { error: "Location is required." };
-  if ((lat !== "" && !Number.isFinite(lat)) || (lng !== "" && !Number.isFinite(lng))) return { error: "Location coordinates are invalid." };
-  if (![budgetMin, budgetMax].every((value) => Number.isFinite(value) && value >= 0)) return { error: "Budget values must be positive numbers." };
-  if (budgetMax > 0 && budgetMin > budgetMax) return { error: "Budget maximum must be greater than minimum." };
-  if (!isValidDate(date)) return { error: "Date must use YYYY-MM-DD format." };
-  if (!isValidTime(time)) return { error: "Time must use HH:mm format." };
-  if (!VALID_PREFERENCES.has(preference)) return { error: "Preference must be best_match, affordable, or best_rated." };
+  if (!serviceKey || serviceKey === "other" && !String(body.serviceKey || body.category || body.service || "").trim()) {
+    return { error: "Service category is required." };
+  }
+  if (!VALID_WHEN.has(when)) return { error: "Timing must be now, today, or this_week." };
+  if (!VALID_LOCATION_TYPES.has(locationType)) return { error: "Location type must be use_current_location or enter_address." };
+  if (locationType === "use_current_location" && !coordinates && !address) {
+    return { error: "Current location or address is required." };
+  }
+  if (locationType === "enter_address" && !address) {
+    return { error: "Address is required." };
+  }
 
   return {
     value: {
-      category,
-      location: { label: locationLabel, lat, lng },
-      budgetMin,
-      budgetMax,
-      date,
-      time,
-      preference,
+      serviceKey,
+      serviceLabel,
+      when,
+      locationType,
+      coordinates,
+      address,
     },
   };
 }

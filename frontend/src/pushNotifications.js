@@ -3,9 +3,9 @@ import { apiFetch } from "./config/api.js";
 import {
   firebaseClientConfigured,
   firebaseVapidKey,
+  getFirebaseClientConfigIssues,
   getFirebaseClientConfigForWorker,
   getFirebaseMessagingIfSupported,
-  getMissingFirebaseClientEnv,
 } from "./firebase.js";
 
 function browserLabel() {
@@ -28,7 +28,7 @@ function workerUrl() {
 
 export function getNotificationSupportState() {
   if (typeof window === "undefined" || typeof navigator === "undefined") return "unsupported";
-  if (getMissingFirebaseClientEnv().length || !firebaseClientConfigured() || !firebaseVapidKey) {
+  if (getFirebaseClientConfigIssues().length || !firebaseClientConfigured() || !firebaseVapidKey) {
     return "missing_config";
   }
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return "unsupported";

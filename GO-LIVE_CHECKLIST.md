@@ -112,7 +112,7 @@ A real provider is public only when:
 - the business is not soft-deleted and is not demo/test data
 - `business_status` is `active`, `approved`, or `live`
 - `is_published=1`
-- plan is `PRO`, `PREMIUM`, or `PLATINUM`
+- plan is `FREE`, `PREMIUM`, or `PLATINUM`
 - there is an active unexpired subscription, an active unexpired trial, or explicit admin approval
 - required business fields are present
 - at least one service/category is configured

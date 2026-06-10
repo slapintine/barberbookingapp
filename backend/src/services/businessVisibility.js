@@ -1,20 +1,18 @@
 import { normalizeProviderPlan } from "./paymentService.js";
 
 const VALID_PUBLIC_STATUSES = new Set(["active", "approved", "live"]);
+// Only truly terminal billing states prevent public visibility.
+// Transient states (pending_subscription, draft, almost_ready) are NOT terminal —
+// free-plan providers often sit in these states and should still appear publicly.
 const BLOCKED_SUBSCRIPTION_STATUSES = new Set([
   "cancelled",
-  "draft",
   "expired",
-  "inactive",
-  "pending_subscription",
-  "pending_payment",
   "payment_failed",
   "plan_required",
   "rejected",
   "suspended",
   "trial_expired",
   "subscription_expired",
-  "almost_ready",
 ]);
 
 function normalizedText(value) {
@@ -25,6 +23,11 @@ function isFutureDate(value, now = new Date()) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) && timestamp > now.getTime();
+}
+
+function isVerificationApproved(value) {
+  const status = normalizedText(value);
+  return ["approved", "verified", "complete", "completed"].includes(status);
 }
 
 export function isDemoLikeBusiness(business = {}) {
@@ -44,32 +47,24 @@ export function isDemoLikeBusiness(business = {}) {
 }
 
 export function isBusinessPubliclyVisible(business = {}, latestSubscription = null, now = new Date()) {
-  const plan = normalizeProviderPlan(latestSubscription?.tier || business.subscription_tier || business.plan);
+  // Hard blocks — banned or suspended businesses never show publicly
+  if (Number(business.is_banned ?? 0) === 1 || business.is_banned === true) return false;
+  if (Number(business.is_suspended ?? 0) === 1 || business.is_suspended === true) return false;
+
+  const plan = normalizeProviderPlan(latestSubscription?.tier || business.subscription_tier || business.plan || "FREE");
   const businessStatus = String(business.business_status || business.status || "").trim().toLowerCase();
   const subscriptionStatus = String(latestSubscription?.status || business.subscription_status || "").trim().toLowerCase();
-  const trialStatus = String(business.trial_status || "").trim().toLowerCase();
   const isPublished = Number(business.is_published ?? business.isPublished ?? 0) === 1 || business.isPublished === true;
-  const manuallyApproved =
-    Number(business.admin_approved ?? 0) === 1 ||
-    business.admin_approved === true ||
-    ["approved", "manual_approved", "admin_approved"].includes(subscriptionStatus);
 
-  const hasActiveSubscription =
-    subscriptionStatus === "active" &&
-    isFutureDate(latestSubscription?.expires_at || business.subscription_expires_at || business.subscriptionEndDate, now);
-
-  const hasActiveTrial =
-    subscriptionStatus === "trialing" &&
-    trialStatus === "active" &&
-    isFutureDate(business.trial_ends_at || business.trialEndDate, now);
-
+  // A published, live/active stand is publicly visible.
+  // Subscription tier controls features (badges, analytics, coach) — NOT public visibility.
+  // Only hard-blocked subscription states hide a stand.
   return (
     Boolean(plan) &&
     VALID_PUBLIC_STATUSES.has(businessStatus) &&
     isPublished &&
     !isDemoLikeBusiness(business) &&
-    !BLOCKED_SUBSCRIPTION_STATUSES.has(subscriptionStatus) &&
-    (hasActiveSubscription || hasActiveTrial || manuallyApproved)
+    !BLOCKED_SUBSCRIPTION_STATUSES.has(subscriptionStatus)
   );
 }
 
@@ -95,61 +90,34 @@ function publicDemoNameExclusion(column) {
 
 export function publicBusinessWhere(alias = "b") {
   const prefix = alias ? `${alias}.` : "";
-  const barberId = alias ? `${alias}.id` : "id";
+  // A stand is publicly visible when it is published, live/active, and not banned/suspended/demo.
+  // Subscription tier controls premium features — it does NOT gate public map/search visibility.
+  // Blocked subscription states (cancelled, expired, suspended…) still hide the stand to prevent
+  // misuse, but simply having no sub row is fine for FREE-tier providers.
   return `
-    ${prefix}business_status IN ('active', 'approved', 'live')
+    COALESCE(${prefix}is_banned, 0) = 0
+    AND COALESCE(${prefix}is_suspended, 0) = 0
+    AND ${prefix}business_status IN ('active', 'approved', 'live')
     AND COALESCE(${prefix}is_published, 0) = 1
     AND COALESCE(${prefix}is_demo, 0) = 0
     ${publicDemoNameExclusion(`${prefix}business_name`)}
     AND LOWER(COALESCE(${prefix}image, '')) NOT LIKE '%placeholder%'
     AND LOWER(COALESCE(${prefix}location, '')) NOT IN ('test location', 'demo location', 'sample location')
-    AND ${prefix}subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
-    AND LOWER(COALESCE(${prefix}subscription_status, '')) NOT IN (
+    AND COALESCE(${prefix}subscription_tier, 'FREE') IN ('FREE', 'PREMIUM', 'PLATINUM')
+    AND LOWER(COALESCE(${prefix}subscription_status, 'active')) NOT IN (
       'cancelled',
-      'draft',
       'expired',
-      'inactive',
-      'pending_subscription',
-      'pending_payment',
       'payment_failed',
       'plan_required',
       'rejected',
       'suspended',
       'trial_expired',
-      'subscription_expired',
-      'almost_ready'
-    )
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM barber_subscriptions public_bs
-        WHERE public_bs.barber_id = ${barberId}
-          AND public_bs.tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
-          AND LOWER(COALESCE(public_bs.status, '')) = 'active'
-          AND public_bs.expires_at IS NOT NULL
-          AND public_bs.expires_at > ?
-      )
-      OR (
-        LOWER(COALESCE(${prefix}subscription_status, '')) IN ('approved', 'manual_approved', 'admin_approved')
-        OR COALESCE(${prefix}admin_approved, 0) = 1
-      )
-      OR (
-        LOWER(COALESCE(${prefix}subscription_status, '')) = 'active'
-        AND ${prefix}subscription_expires_at IS NOT NULL
-        AND ${prefix}subscription_expires_at > ?
-      )
-      OR (
-        LOWER(COALESCE(${prefix}subscription_status, '')) = 'trialing'
-        AND
-        LOWER(COALESCE(${prefix}trial_status, '')) = 'active'
-        AND ${prefix}trial_ends_at IS NOT NULL
-        AND ${prefix}trial_ends_at > ?
-      )
+      'subscription_expired'
     )
   `;
 }
 
-export function publicBusinessParams(now = new Date()) {
-  const value = now.toISOString();
-  return [value, value, value];
+export function publicBusinessParams(_now = new Date()) {
+  // No date params needed now that the subscription subquery is removed.
+  return [];
 }

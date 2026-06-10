@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { FiBell, FiBellOff, FiCheckCircle, FiSend } from "react-icons/fi";
+import { useMemo, useState } from "react";
+import { FiBell, FiBellOff, FiCheckCircle } from "react-icons/fi";
 import {
   enableFirebaseNotifications,
   getNotificationSupportState,
-  sendFirebaseTestNotification,
 } from "../../pushNotifications.js";
 
 const STATE_COPY = {
   granted: {
-    label: "Notifications enabled",
-    text: "Booking, payment, wallet, and announcement updates can arrive instantly on this device.",
+    label: "Notifications",
+    text: "Booking, payment, wallet, and account alerts are active on this device.",
   },
   denied: {
     label: "Notifications blocked",
@@ -20,28 +19,34 @@ const STATE_COPY = {
     text: "This browser or device does not support web push notifications.",
   },
   missing_config: {
-    label: "Firebase setup needed",
-    text: "Firebase web push keys are not configured for this frontend build yet.",
+    label: "Notifications unavailable",
+    text: "Notifications need a valid push key before this browser can ask for permission.",
   },
   service_worker: {
     label: "Notifications unavailable",
-    text: "The browser could not start the notification service worker for this app.",
+    text: "Notifications could not start in this browser. Try again later or use another browser.",
   },
   default: {
-    label: "Enable notifications",
-    text: "Enable notifications to receive booking updates instantly.",
+    label: "Notifications",
+    text: "Enable booking, payment, wallet, and account alerts on this device.",
   },
 };
+
+function getFriendlyNotificationMessage(error) {
+  const message = String(error?.message || error || "");
+  if (/applicationServerKey|PushManager|subscribe|vapid/i.test(message)) {
+    return "Notifications need a valid push key before this browser can ask for permission.";
+  }
+  if (/permission|blocked|denied/i.test(message)) {
+    return "Notifications are blocked in this browser. You can enable them in site settings.";
+  }
+  return "Notifications could not be enabled right now. Please try again later.";
+}
 
 export default function PushNotificationSettings({ currentUser, onToast }) {
   const [state, setState] = useState(() => getNotificationSupportState());
   const [loading, setLoading] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    setState(getNotificationSupportState());
-  }, [currentUser?.id, currentUser?.username]);
 
   const copy = useMemo(() => STATE_COPY[state] || STATE_COPY.default, [state]);
   const canEnable = currentUser?.id && ["default", "granted"].includes(state);
@@ -61,29 +66,16 @@ export default function PushNotificationSettings({ currentUser, onToast }) {
       setState(nextState);
       if (result.success) {
         setMessage(result.result?.firebaseReady === false
-          ? "Device saved. Firebase Admin is not configured on the backend yet."
+    ? "Notifications are saved for this device. Alerts may appear once push delivery is fully available."
           : "Notifications enabled on this device.");
         onToast?.("Notifications enabled", "This device is registered for Queless alerts.", "system");
       } else {
         setMessage(STATE_COPY[result.reason]?.text || "Notifications could not be enabled.");
       }
     } catch (error) {
-      setMessage(error.message || "Could not enable notifications.");
+      setMessage(getFriendlyNotificationMessage(error));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const sendTest = async () => {
-    setTesting(true);
-    setMessage("");
-    try {
-      const result = await sendFirebaseTestNotification();
-      setMessage(result.message || "Test notification sent.");
-    } catch (error) {
-      setMessage(error.message || "Could not send test notification.");
-    } finally {
-      setTesting(false);
     }
   };
 
@@ -104,15 +96,7 @@ export default function PushNotificationSettings({ currentUser, onToast }) {
           onClick={enableNotifications}
           disabled={!canEnable || loading}
         >
-          <FiBell /> {loading ? "Processing..." : enabled ? "Refresh device token" : "Enable notifications"}
-        </button>
-        <button
-          type="button"
-          className="mini-action-btn-v4"
-          onClick={sendTest}
-          disabled={!enabled || testing}
-        >
-          <FiSend /> {testing ? "Sending..." : "Send test notification"}
+          <FiBell /> {loading ? "Processing..." : enabled ? "Update notifications" : "Enable notifications"}
         </button>
       </div>
 

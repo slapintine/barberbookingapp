@@ -17,7 +17,7 @@ export function protect(req, res, next) {
     const decoded = jwt.verify(token, env.jwtSecret);
 
     db.get(
-      `SELECT id, username, role, created_at
+      `SELECT id, username, role, account_status, disabled_at, blocked_at, created_at
        FROM users
        WHERE id = ?`,
       [decoded.userId],
@@ -30,6 +30,18 @@ export function protect(req, res, next) {
           return res.status(401).json({
             success: false,
             message: "Not authorized. User not found."
+          });
+        }
+
+        const accountStatus = String(user.account_status || "active").trim().toLowerCase();
+        if (
+          ["inactive", "blocked", "disabled", "suspended"].includes(accountStatus) ||
+          user.disabled_at ||
+          user.blocked_at
+        ) {
+          return res.status(403).json({
+            success: false,
+            message: "This account is not active. Please contact support."
           });
         }
 

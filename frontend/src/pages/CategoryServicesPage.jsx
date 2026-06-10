@@ -1,5 +1,5 @@
 import { FiArrowLeft, FiCompass, FiMap, FiSearch, FiStar, FiZap } from "react-icons/fi";
-import fallbackStandIcon from "../assets/queless-logo-icon.png";
+import { buildInitialsAvatar, NEUTRAL_PLACEHOLDER } from "../utils/providerImage.js";
 import { buildCategoryServices } from "../utils/marketplaceServices.js";
 
 export default function CategoryServicesPage({
@@ -11,6 +11,7 @@ export default function CategoryServicesPage({
   onOpenSmartMatch,
   onSearchSubmit,
   smartMatchPremiumActive = false,
+  smartMatchUpsellVisible = false,
 }) {
   const services = buildCategoryServices(providers, category);
   const smartMatchLabel = smartMatchPremiumActive ? "Find My Best Match" : "Try Smart Match with Premium";
@@ -38,13 +39,15 @@ export default function CategoryServicesPage({
 
       {services.length ? (
         <>
-          <button type="button" className="queless-smart-card-v18 compact" onClick={() => onOpenSmartMatch?.({ category })}>
-            <span><FiZap /></span>
-            <div>
-              <strong>{smartMatchPremiumActive ? "Smart Match this category" : smartMatchLabel}</strong>
-              <small>Get matched by location, budget, rating and availability.</small>
-            </div>
-          </button>
+          {smartMatchPremiumActive || smartMatchUpsellVisible ? (
+            <button type="button" className="queless-smart-card-v18 compact" onClick={() => onOpenSmartMatch?.({ category })}>
+              <span><FiZap /></span>
+              <div>
+                <strong>{smartMatchPremiumActive ? "Smart Match this category" : smartMatchLabel}</strong>
+                <small>Get matched by location, budget, rating and availability.</small>
+              </div>
+            </button>
+          ) : null}
 
           <div className="queless-services-grid">
             {services.map((item) => (
@@ -52,8 +55,12 @@ export default function CategoryServicesPage({
                 <img
                   src={item.image}
                   alt={item.title}
+                  loading="lazy"
+                  decoding="async"
                   onError={(event) => {
-                    event.currentTarget.src = fallbackStandIcon;
+                    event.currentTarget.src = item.providerName
+                      ? buildInitialsAvatar(item.providerName)
+                      : NEUTRAL_PLACEHOLDER;
                   }}
                 />
                 <div>
@@ -74,8 +81,8 @@ export default function CategoryServicesPage({
           <span className="queless-empty-icon-v18">
             <FiCompass />
           </span>
-          <strong>No providers available yet</strong>
-          <p>Try another category, adjust your search, or check the map for nearby providers.</p>
+          <strong>No providers in this category yet.</strong>
+          <p>Try another category, search a nearby area, or open the map to see all providers.</p>
           <div className="queless-empty-actions-v18">
             <button type="button" className="primary" onClick={() => onSearchSubmit?.(category || "Services", "")}>
               <FiSearch /> Search Manually
@@ -84,13 +91,15 @@ export default function CategoryServicesPage({
               <FiMap /> View Map
             </button>
           </div>
-          <button type="button" className="queless-smart-card-v18" onClick={() => onOpenSmartMatch?.({ category })}>
-            <span><FiZap /></span>
-            <div>
-              <strong>{smartMatchPremiumActive ? "Smart Match this category" : smartMatchLabel}</strong>
-              <small>Get matched by location, budget, rating and availability.</small>
-            </div>
-          </button>
+          {smartMatchPremiumActive || smartMatchUpsellVisible ? (
+            <button type="button" className={smartMatchPremiumActive ? "queless-smart-card-v18 compact" : "queless-smart-card-v18"} onClick={() => onOpenSmartMatch?.({ category })}>
+              <span><FiZap /></span>
+              <div>
+                <strong>{smartMatchPremiumActive ? "Smart Match this category" : smartMatchLabel}</strong>
+                <small>Get matched by location, budget, rating and availability.</small>
+              </div>
+            </button>
+          ) : null}
         </div>
       )}
     </div>

@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
+import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import L from "leaflet";
 import {
   FiArrowLeft,
   FiCalendar,
   FiCheck,
+  FiChevronDown,
   FiClock,
+  FiCreditCard,
   FiMapPin,
+  FiMessageCircle,
   FiNavigation,
   FiScissors,
   FiSmartphone,
+  FiStar,
   FiUsers,
   FiX,
 } from "react-icons/fi";
@@ -70,9 +76,9 @@ function isValidUgandaPhone(value) {
 function getServiceLocationOptions(service, barber) {
   const serviceType = String(service?.location_type || service?.locationType || "provider_location").toLowerCase();
   const homeEnabled = Number(barber?.home_service_enabled || barber?.homeServiceEnabled || 0) === 1;
-  const options = [{ value: "provider_location", label: "Provider location", meta: barber?.location || "Provider address" }];
+  const options = [{ value: "provider_location", label: "At Provider", meta: barber?.location || "Provider address" }];
   if (homeEnabled || serviceType === "customer_location") {
-    options.push({ value: "customer_location", label: "Customer location", meta: "Home service or on-site visit" });
+    options.push({ value: "customer_location", label: "At Your Location", meta: "Provider comes to you" });
   }
   return serviceType === "customer_location" && !homeEnabled ? options.slice(1) : options;
 }
@@ -85,6 +91,120 @@ function getServicePriceState(service) {
     label,
     quoteOnly: pricingType === "quote" || label === "Price unavailable" || (!hasDirectPrice && label !== "Price on consultation"),
   };
+}
+
+function getPriceCardParts(service) {
+  const pricingType = String(service?.pricing_type || service?.pricingType || "fixed").toLowerCase();
+  const state = getServicePriceState(service);
+  if (pricingType === "quote" || state.quoteOnly) {
+    return { top: "Quote", bottom: "required", quote: true };
+  }
+  if (pricingType === "range") {
+    return { top: "UGX", bottom: formatServicePrice(service).replace(/UGX\s?/g, ""), small: true };
+  }
+  if (pricingType === "starting_from") {
+    return { top: "From", bottom: formatServicePrice(service).replace(/From\s?/i, ""), small: true };
+  }
+  const amount = getServiceBookingAmount(service);
+  return { top: "UGX", bottom: Number(amount || 0).toLocaleString() };
+}
+
+function getProviderCoords(barber) {
+  const lat = Number(barber?.latitude);
+  const lng = Number(barber?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
+}
+
+function buildDirectionsUrl(barber) {
+  const coords = getProviderCoords(barber);
+  if (coords) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`;
+  }
+  const query = encodeURIComponent(String(barber?.location || barber?.business_name || "").trim());
+  return query ? `https://www.google.com/maps/search/?api=1&query=${query}` : "";
+}
+
+function getPortfolioImages(barber) {
+  const raw = Array.isArray(barber?.portfolio) ? barber.portfolio : [];
+  const urls = raw
+    .map((item) => (typeof item === "string" ? item : item?.url || item?.image || item?.src || ""))
+    .filter(Boolean);
+  if (urls.length) return urls;
+  return Array.isArray(barber?.gallery) ? barber.gallery.filter(Boolean) : [];
+}
+
+function getDateParts(value, fallbackLabel) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return { weekday: fallbackLabel || "", day: "" };
+  }
+  return {
+    weekday: date.toLocaleDateString("en-US", { weekday: "short" }),
+    day: date.getDate(),
+  };
+}
+
+function getMonthLabel(value) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function getLocationChipLabel(service, barber) {
+  const type = String(service?.location_type || service?.locationType || "provider_location").toLowerCase();
+  if (type === "customer_location") return "Home";
+  if (type === "online") return "Online";
+  const standType = String(barber?.stand_type || barber?.standType || "").toLowerCase();
+  return standType === "shop" ? "At Studio" : "Provider";
+}
+
+const miniPinIcon = new L.DivIcon({
+  className: "bk-mini-pin-wrap",
+  html: `<span class="bk-mini-pin"></span>`,
+  iconSize: [30, 38],
+  iconAnchor: [15, 36],
+});
+
+function MiniMapResizer() {
+  const map = useMap();
+  useEffect(() => {
+    const timer = window.setTimeout(() => map.invalidateSize(), 120);
+    return () => window.clearTimeout(timer);
+  }, [map]);
+  return null;
+}
+
+function LocationMiniMap({ coords }) {
+  if (!coords) {
+    return (
+      <div className="bk-map-placeholder" aria-hidden="true">
+        <FiMapPin />
+      </div>
+    );
+  }
+  return (
+    <div className="bk-map-frame">
+      <MapContainer
+        center={[coords.lat, coords.lng]}
+        zoom={15}
+        zoomControl={false}
+        dragging={false}
+        scrollWheelZoom={false}
+        doubleClickZoom={false}
+        touchZoom={false}
+        keyboard={false}
+        attributionControl={false}
+        className="bk-map-leaflet"
+      >
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <Marker position={[coords.lat, coords.lng]} icon={miniPinIcon} />
+        <MiniMapResizer />
+      </MapContainer>
+    </div>
+  );
 }
 
 export default function BookingModal({
@@ -112,6 +232,7 @@ export default function BookingModal({
   locationDetecting,
   onUseCurrentLocation,
   onRequestQuote,
+  onMessageProvider,
   pendingPayment,
   onVerifyPayment,
   onlinePaymentsReady = false,
@@ -124,7 +245,22 @@ export default function BookingModal({
   bookingCooldownInfo,
   walletBalance = 0,
 }) {
-  const [step, setStep] = useState(0);
+  const modalKey = `${show ? "open" : "closed"}|${barber?.id || ""}`;
+  const [stepEntry, setStepEntry] = useState({ key: "", value: 0 });
+  const step = stepEntry.key === modalKey ? stepEntry.value : 0;
+  const setStep = (updater) => {
+    setStepEntry((prev) => {
+      const current = prev.key === modalKey ? prev.value : 0;
+      return {
+        key: modalKey,
+        value: typeof updater === "function" ? updater(current) : updater,
+      };
+    });
+  };
+  const [showAllTimes, setShowAllTimes] = useState(false);
+  const [showAllWork, setShowAllWork] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState("");
+  const [showServicePicker, setShowServicePicker] = useState(false);
   const [tutorDetails, setTutorDetails] = useState({
     subject: "",
     studentLevel: "",
@@ -132,9 +268,6 @@ export default function BookingModal({
     duration: "",
     notes: "",
   });
-  useEffect(() => {
-    if (show) setStep(0);
-  }, [show, barber?.id]);
   if (!show || !barber) return null;
 
   const services = getBarberServices(barber);
@@ -143,21 +276,24 @@ export default function BookingModal({
   if (!services.length) {
     return (
       <>
-        <div className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"} onClick={onClose} />
+        <button
+          type="button"
+          className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"}
+          onClick={onClose}
+          aria-label="Close booking modal"
+        />
         <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
           <div className="booking-modal-card-v4 booking-modal-clean-v5">
             <div className="booking-modal-shell-v5">
-              <div className="booking-header-v5">
-                <button type="button" className="profile-back-btn-v4" onClick={onClose}>
-                  <FiArrowLeft />
-                </button>
-                <div className="booking-header-copy-v5">
-                  <div className="booking-header-title-v5">No bookable services</div>
-                  <div className="booking-header-subtitle-v5">This provider has not added services yet.</div>
-                </div>
-                <button type="button" className="profile-back-btn-v4" onClick={onClose}>
+              <div className="bk-topbar">
+                <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
                   <FiX />
                 </button>
+                <div className="bk-topbar-copy">
+                  <strong>No bookable services</strong>
+                  <span>This provider has not added services yet.</span>
+                </div>
+                <span className="bk-icon-btn bk-icon-btn-ghost" aria-hidden="true" />
               </div>
             </div>
           </div>
@@ -165,13 +301,15 @@ export default function BookingModal({
       </>
     );
   }
+
   const total = Number(barber.price_from || 0) + getServiceBookingAmount(serviceObj);
   const isTutorService = [serviceObj?.category, barber?.business_type, barber?.category_name]
     .filter(Boolean)
     .some((value) => /tutor|lesson|education|academic/i.test(String(value)));
   const priceState = getServicePriceState(serviceObj);
   const isQuoteService = priceState.quoteOnly || String(serviceObj?.pricing_type || "").toLowerCase() === "quote";
-  const totalLabel = isQuoteService ? priceState.label || "Request quote" : formatMoney(total);
+  const totalLabel = isQuoteService ? "Quote required" : formatMoney(total);
+  const priceCard = getPriceCardParts(serviceObj);
   const teamMembers = Array.isArray(barber.team_members || barber.teamMembers)
     ? (barber.team_members || barber.teamMembers).filter((item) => Number(item?.is_active ?? item?.isActive ?? 1) === 1)
     : [];
@@ -191,36 +329,40 @@ export default function BookingModal({
   const phoneIsValid = !requiresPhone || isValidUgandaPhone(paymentPhone);
   const locationOptions = getServiceLocationOptions(serviceObj, barber);
   const selectedLocationType = bookingLocationType || locationOptions[0]?.value || "";
-  const locationLabel =
-    selectedLocationType === "customer_location"
-      ? String(bookingAddress || "").trim()
-      : barber.location || "Provider location";
+  const isHomeService = selectedLocationType === "customer_location";
   const locationValid =
     Boolean(selectedLocationType) &&
-    (selectedLocationType !== "customer_location" || String(bookingAddress || "").trim().length >= 3);
+    (!isHomeService || String(bookingAddress || "").trim().length >= 3);
   const selectedTimeLabel =
     timeSlots.find((item) => item.value === selectedTime)?.label ||
     (selectedTime ? formatTimeLabel(selectedTime) : "Pick a time");
-  const availabilityTitle = availabilityStatus?.loading
-    ? "Checking availability..."
-    : availabilityStatus?.error
-    ? "Availability unavailable"
-    : availabilityStatus?.hasAvailable
-    ? availabilityStatus.selectedDateLabel === "Today"
-      ? `Available today from ${availabilityStatus.nextAvailableLabel}`
-      : `Next available ${availabilityStatus.selectedDateLabel} at ${availabilityStatus.nextAvailableLabel}`
-    : availabilityStatus?.isClosed
-    ? `${availabilityStatus.selectedDateLabel} is closed`
-    : `No slots left ${availabilityStatus?.selectedDateLabel || "for this day"}`;
-  const availabilityMeta = availabilityStatus?.loading
-    ? "Loading provider schedule and existing bookings."
-    : availabilityStatus?.error
-    ? availabilityStatus.error
-    : availabilityStatus?.hasAvailable
-    ? `${availabilityStatus.availableCount} slot${availabilityStatus.availableCount === 1 ? "" : "s"} available.`
-    : availabilityStatus?.workingWindow
-    ? `Working hours: ${availabilityStatus.workingWindow.start || "--:--"} - ${availabilityStatus.workingWindow.end || "--:--"}`
-    : "Pick another day to find an open slot.";
+  const selectedDateLabel = (() => {
+    const opt = dateOptions.find((item) => item.value === selectedDate);
+    if (!opt) return "Pick a date";
+    const date = new Date(`${selectedDate}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return opt.label;
+    return date.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  })();
+
+  const coords = getProviderCoords(barber);
+  const directionsUrl = buildDirectionsUrl(barber);
+  const workImages = getPortfolioImages(barber);
+  const visibleWork = showAllWork ? workImages : workImages.slice(0, 3);
+  const rating = Number(barber.rating || 0);
+  const ratingLabel = rating > 0 ? rating.toFixed(1) : "New";
+  const reviewCount = Number(barber.reviewCount || 0);
+  const isVerified = Boolean(
+    barber.is_verified === 1 || barber.is_verified === true || barber.isVerified || String(barber.verified || "").toLowerCase() === "verified"
+  );
+
+  const bookReady =
+    Boolean(selectedService) &&
+    Boolean(selectedDate) &&
+    Boolean(selectedTime) &&
+    locationValid &&
+    (!requiresTeamMember || Boolean(selectedTeamMember));
+  const paymentReady = paymentAllowed && phoneIsValid;
+
   const isBlocked =
     creatingBooking ||
     bookingCooldownInfo?.blocked ||
@@ -236,67 +378,54 @@ export default function BookingModal({
   if (pendingPayment?.bookingId) {
     return (
       <>
-        <div className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"} onClick={onClose} />
+        <button
+          type="button"
+          className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"}
+          onClick={onClose}
+          aria-label="Close booking modal"
+        />
         <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
           <div className="booking-modal-card-v4 booking-modal-clean-v5">
             <div className="booking-sheet-handle-v5" />
             <div className="booking-modal-shell-v5">
               <div className="booking-modal-scroll-v5">
-                <div className="booking-header-v5">
-                  <button type="button" className="profile-back-btn-v4" onClick={onClose}>
+                <div className="bk-topbar">
+                  <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
                     <FiArrowLeft />
                   </button>
-                  <div className="booking-header-copy-v5">
-                    <div className="booking-header-title-v5">Confirm payment</div>
-                    <div className="booking-header-subtitle-v5">Your slot will lock in after mobile money approval</div>
+                  <div className="bk-topbar-copy">
+                    <strong>Confirm payment</strong>
+                    <span>Your slot locks in after approval</span>
                   </div>
-                  <button type="button" className="profile-back-btn-v4" onClick={onClose}>
+                  <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
                     <FiX />
                   </button>
                 </div>
 
-                <div className="booking-summary-v5">
-                  <div className="booking-summary-top-v5">
+                <div className="bk-summary-card">
+                  <div className="bk-summary-head">
                     <div>
-                      <div className="booking-summary-title-v5">{barber.business_name}</div>
-                      <div className="booking-summary-subtitle-v5">{pendingPayment.instructions || "Approve the prompt on your phone."}</div>
+                      <strong>{barber.business_name}</strong>
+                      <span>{pendingPayment.instructions || "Approve the prompt on your phone."}</span>
                     </div>
-                    <div className="booking-summary-total-v5">{formatMoney(pendingPayment.grossAmount || total)}</div>
+                    <div className="bk-summary-total">{formatMoney(pendingPayment.grossAmount || total)}</div>
                   </div>
-                  <div className="booking-summary-grid-v5">
-                    <div className="booking-summary-row-v5">
-                      <span>Provider</span>
-                      <strong>{pendingPayment.provider === "airtel_money" ? "Airtel Money" : "MTN Mobile Money"}</strong>
-                    </div>
-                    <div className="booking-summary-row-v5">
-                      <span>Customer pays</span>
-                      <strong>{formatMoney(pendingPayment.grossAmount || total)}</strong>
-                    </div>
-                    <div className="booking-summary-row-v5">
-                      <span>Platform commission</span>
-                      <strong>{formatMoney(pendingPayment.commissionAmount || 0)}</strong>
-                    </div>
-                    <div className="booking-summary-row-v5">
-                      <span>Provider payout</span>
-                      <strong>{formatMoney(pendingPayment.barberAmount || 0)}</strong>
-                    </div>
-                    <div className="booking-summary-row-v5">
-                      <span>Reference</span>
-                      <strong>{pendingPayment.reference}</strong>
-                    </div>
-                    <div className="booking-summary-row-v5">
-                      <span>Phone</span>
-                      <strong>{pendingPayment.phoneNumber || "Saved profile phone"}</strong>
-                    </div>
+                  <div className="bk-summary-rows">
+                    <div className="bk-summary-row"><span>Provider</span><strong>{pendingPayment.provider === "airtel_money" ? "Airtel Money" : "MTN Mobile Money"}</strong></div>
+                    <div className="bk-summary-row"><span>Customer pays</span><strong>{formatMoney(pendingPayment.grossAmount || total)}</strong></div>
+                    <div className="bk-summary-row"><span>Platform commission</span><strong>{formatMoney(pendingPayment.commissionAmount || 0)}</strong></div>
+                    <div className="bk-summary-row"><span>Provider payout</span><strong>{formatMoney(pendingPayment.barberAmount || 0)}</strong></div>
+                    <div className="bk-summary-row"><span>Reference</span><strong>{pendingPayment.reference}</strong></div>
+                    <div className="bk-summary-row"><span>Phone</span><strong>{pendingPayment.phoneNumber || "Saved profile phone"}</strong></div>
                   </div>
                 </div>
               </div>
 
-              <div className="booking-footer-v5">
-                <button className="primary-btn-v4 booking-cta-v5" onClick={() => onVerifyPayment?.(pendingPayment.bookingId)} disabled={creatingBooking}>
+              <div className="bk-footer">
+                <button type="button" className="bk-cta-primary" onClick={() => onVerifyPayment?.(pendingPayment.bookingId)} disabled={creatingBooking}>
                   {creatingBooking ? "Checking payment..." : "I approved the payment"}
                 </button>
-                <div className="booking-note-v5">The platform keeps 10% and automatically sends 90% to the provider after confirmation.</div>
+                <div className="bk-footer-note">The platform keeps 10% and sends 90% to the provider after confirmation.</div>
               </div>
             </div>
           </div>
@@ -305,453 +434,467 @@ export default function BookingModal({
     );
   }
 
-  const steps = [
-    { key: "service", label: "Service", ready: Boolean(selectedService) && !isQuoteService },
-    { key: "time", label: "Time", ready: Boolean(selectedDate && selectedTime) },
-    { key: "location", label: "Location", ready: locationValid },
-    { key: "payment", label: "Payment", ready: paymentAllowed && phoneIsValid },
-    { key: "summary", label: "Summary", ready: !isBlocked },
-  ];
-  const canContinue = step === 0
-    ? steps[0].ready
-    : step === 1
-    ? steps[1].ready
-    : step === 2
-    ? steps[2].ready
-    : step === 3
-    ? steps[3].ready
-    : true;
-  const nextStep = () => setStep((value) => Math.min(value + 1, steps.length - 1));
-  const previousStep = () => setStep((value) => Math.max(value - 1, 0));
-
-  const footerLabel =
-    step < steps.length - 1
-      ? "Continue"
-      : creatingBooking
+  const onPaymentStep = step === 1;
+  const footerLabel = onPaymentStep
+    ? creatingBooking
       ? "Booking..."
-      : isQuoteService
-      ? "Request quote"
-      : "Confirm Booking";
+      : "Confirm Booking"
+    : isQuoteService
+    ? "Request Quote"
+    : "Continue Booking";
+  const footerDisabled = onPaymentStep ? isBlocked : isQuoteService ? !selectedService : !bookReady;
+
+  const handlePrimary = () => {
+    if (!onPaymentStep) {
+      if (isQuoteService) {
+        onRequestQuote?.();
+        return;
+      }
+      setStep(1);
+      return;
+    }
+    onConfirm?.({
+      bookingDetails: isTutorService ? { type: "tutor_lesson", ...tutorDetails } : null,
+    });
+  };
 
   return (
     <>
-      <div className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"} onClick={onClose} />
+      <button
+        type="button"
+        className={show ? "booking-overlay-v4 open" : "booking-overlay-v4"}
+        onClick={onClose}
+        aria-label="Close booking modal"
+      />
       <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
-        <div className="booking-modal-card-v4 booking-modal-clean-v5">
+        <div className="booking-modal-card-v4 booking-modal-clean-v5 bk-shell">
           <div className="booking-sheet-handle-v5" />
           <div className="booking-modal-shell-v5">
-            <div className="booking-modal-scroll-v5">
-              <div className="booking-header-v5">
-                <button type="button" className="profile-back-btn-v4" onClick={step > 0 ? previousStep : onClose}>
-                  {step > 0 ? <FiArrowLeft /> : <FiX />}
+            <div className="booking-modal-scroll-v5 bk-scroll">
+              <div className="bk-topbar">
+                <button type="button" className="bk-icon-btn" onClick={onPaymentStep ? () => setStep(0) : onClose} aria-label={onPaymentStep ? "Back" : "Close"}>
+                  {onPaymentStep ? <FiArrowLeft /> : <FiX />}
                 </button>
-                <div className="booking-header-copy-v5">
-                  <div className="booking-header-title-v5">Book service</div>
-                  <div className="booking-header-subtitle-v5">{steps[step]?.label}: {barber.business_name}</div>
+                <div className="bk-topbar-copy">
+                  <strong>{onPaymentStep ? "Payment" : "Book service"}</strong>
+                  <span>{barber.business_name}</span>
                 </div>
-                <button type="button" className="profile-back-btn-v4" onClick={onClose}>
+                <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
                   <FiX />
                 </button>
               </div>
-              <div className="booking-progress-v6">
-                {steps.map((item, index) => (
-                  <button
-                    type="button"
-                    key={item.key}
-                    className={index === step ? "booking-step-dot-v6 active" : item.ready ? "booking-step-dot-v6 done" : "booking-step-dot-v6"}
-                    onClick={() => index <= step && setStep(index)}
-                    aria-label={item.label}
-                  >
-                    {index + 1}
-                  </button>
-                ))}
-              </div>
 
-              <div className="booking-barber-card-v5">
-                <div className="booking-barber-top-v5">
-                  <div className="booking-barber-copy-v5">
-                    <div className="booking-title-v5">{barber.business_name}</div>
-                    <div className="booking-location-row-v5">
-                      <FiMapPin />
-                      <span>{barber.location}</span>
+              {onPaymentStep ? (
+                <>
+                  <div className="bk-section">
+                    <div className="bk-section-head">
+                      <h3><FiSmartphone /> Payment method</h3>
+                      <span>Required to confirm</span>
                     </div>
-                    <div className="booking-hours-chip-v5">
-                      <FiClock />
-                      <span>{barber.availability?.start || "08:00"} - {barber.availability?.end || "20:00"}</span>
+                    <div className="bk-payment-list">
+                      {paymentOptions.map((option) => (
+                        <button
+                          type="button"
+                          key={option.value}
+                          className={selectedPaymentMethod === option.value ? "bk-payment-option active" : "bk-payment-option"}
+                          disabled={option.disabled}
+                          onClick={() => setSelectedPaymentMethod(option.value)}
+                        >
+                          <span className="bk-payment-icon"><FiSmartphone /></span>
+                          <span className="bk-payment-copy">
+                            <strong>{option.label}</strong>
+                            <small>{option.meta}</small>
+                          </span>
+                          <span className="bk-payment-pill">{option.pill}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {!onlinePaymentsReady && paymentReadinessMessage ? (
+                      <div className="bk-warning">{paymentReadinessMessage}</div>
+                    ) : null}
+                    {requiresPhone ? (
+                      <label className="bk-field">
+                        <span>{selectedPaymentLabel} number</span>
+                        <input
+                          type="tel"
+                          value={paymentPhone || ""}
+                          onChange={(event) => setPaymentPhone?.(event.target.value)}
+                          placeholder="0772123456"
+                          inputMode="tel"
+                          autoComplete="tel"
+                        />
+                        <small>
+                          {phoneIsValid
+                            ? "We will send an approval prompt to this number."
+                            : "Use a Uganda number such as 0772123456 or +256772123456."}
+                        </small>
+                      </label>
+                    ) : null}
+                  </div>
+
+                  <div className="bk-summary-card">
+                    <div className="bk-summary-head">
+                      <div>
+                        <strong>Booking summary</strong>
+                        <span>Review before you confirm</span>
+                      </div>
+                      <div className="bk-summary-total">{totalLabel}</div>
+                    </div>
+                    <div className="bk-summary-rows">
+                      <div className="bk-summary-row"><span>Service</span><strong>{serviceObj?.service_name || "Service"}</strong></div>
+                      {isShopStand ? <div className="bk-summary-row"><span>Provider</span><strong>{selectedTeamMember?.name || "Any available"}</strong></div> : null}
+                      <div className="bk-summary-row"><span>When</span><strong>{selectedDateLabel} • {selectedTimeLabel}</strong></div>
+                      <div className="bk-summary-row"><span>Location</span><strong>{isHomeService ? (bookingAddress || "Your location") : barber.location}</strong></div>
+                      <div className="bk-summary-row"><span>Payment</span><strong>{paymentAllowed ? selectedPaymentLabel : "Choose payment"}</strong></div>
+                      {showsPlatformSplit ? (
+                        <>
+                          <div className="bk-summary-row"><span>Platform commission</span><strong>{formatMoney(total * 0.1)}</strong></div>
+                          <div className="bk-summary-row"><span>Provider receives</span><strong>{formatMoney(total * 0.9)}</strong></div>
+                        </>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="booking-hero-badge-v5">{Number(barber.price_from || 0) > 0 ? `From ${formatMoney(barber.price_from)}` : "Book a service"}</div>
-                </div>
-              </div>
 
-              {isShopStand ? (
-                <div className={step === 0 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
-                  <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5"><FiUsers /> Choose provider</div>
-                    <div className="booking-section-hint-v5">{teamMembers.length || 1} available</div>
+                  {bookingCooldownInfo?.blocked ? <div className="bk-warning">{bookingCooldownInfo.reason}</div> : null}
+                </>
+              ) : (
+                <>
+                  {/* Provider / service hero */}
+                  <div className="bk-hero">
+                    <div className="bk-hero-avatar">
+                      <img
+                        src={barber.image}
+                        alt={barber.business_name}
+                        loading="lazy"
+                        onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
+                      />
+                      <span className="bk-hero-dot" />
+                    </div>
+                    <div className="bk-hero-copy">
+                      <div className="bk-hero-name-row">
+                        <strong className="bk-hero-name">{barber.business_name}</strong>
+                        {isVerified ? <span className="bk-verified" title="Verified"><FiCheck /></span> : null}
+                      </div>
+                      <span className="bk-rating-pill"><FiStar /> {ratingLabel}{reviewCount ? ` (${reviewCount} review${reviewCount === 1 ? "" : "s"})` : ""}</span>
+                      <div className="bk-service-line">
+                        <h2 className="bk-service-title">{serviceObj?.service_name || "Service"}</h2>
+                        {serviceObj?.description ? <p className="bk-service-desc">{serviceObj.description}</p> : null}
+                      </div>
+                    </div>
+                    <div className={priceCard.quote ? "bk-price-card is-quote" : "bk-price-card"}>
+                      <span className="bk-price-top">{priceCard.top}</span>
+                      <strong className={priceCard.small ? "bk-price-amt bk-price-amt-sm" : "bk-price-amt"}>{priceCard.bottom}</strong>
+                    </div>
                   </div>
-                  {teamMembers.length ? (
-                    <div className="booking-service-list-v5">
-                      {teamMembers.map((member) => {
-                        const active = String(selectedTeamMemberId) === String(member.id);
+
+                  {services.length > 1 ? (
+                    <div className="bk-service-switch">
+                      <button type="button" className="bk-service-switch-btn" onClick={() => setShowServicePicker((value) => !value)}>
+                        <FiScissors /> {showServicePicker ? "Hide services" : "Change service"} <FiChevronDown className={showServicePicker ? "bk-rot" : ""} />
+                      </button>
+                      {showServicePicker ? (
+                        <div className="bk-service-options">
+                          {services.map((item) => {
+                            const active = String(selectedService) === String(item.id);
+                            const itemPrice = getServicePriceState(item);
+                            return (
+                              <button
+                                type="button"
+                                key={item.id}
+                                className={active ? "bk-service-option active" : "bk-service-option"}
+                                onClick={() => { setSelectedService(item.id); setShowServicePicker(false); }}
+                              >
+                                <span className="bk-service-option-copy">
+                                  <strong>{item.service_name}</strong>
+                                  <small>{item.duration_minutes} min</small>
+                                </span>
+                                <span className="bk-service-option-price">{itemPrice.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {/* Recent work */}
+                  {workImages.length ? (
+                    <div className="bk-section bk-section-flat">
+                      <div className="bk-section-head">
+                        <h3>Recent work</h3>
+                        {workImages.length > 3 ? (
+                          <button type="button" className="bk-link" onClick={() => setShowAllWork((value) => !value)}>
+                            {showAllWork ? "Show less" : "View all"}
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="bk-work-grid">
+                        {visibleWork.map((src, index) => (
+                          <button type="button" key={`${src}-${index}`} className="bk-work-thumb" onClick={() => setLightboxImage(src)}>
+                            <img src={src} alt="Recent work" loading="lazy" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Quick info chips */}
+                  <div className="bk-chips">
+                    <div className="bk-chip">
+                      <span className="bk-chip-icon"><FiClock /></span>
+                      <div><strong>{serviceObj?.duration_minutes || 30} min</strong><small>Duration</small></div>
+                    </div>
+                    <div className="bk-chip">
+                      <span className="bk-chip-icon"><FiMapPin /></span>
+                      <div><strong>{getLocationChipLabel(serviceObj, barber)}</strong><small>Location</small></div>
+                    </div>
+                    <div className="bk-chip">
+                      <span className="bk-chip-icon"><FiStar /></span>
+                      <div><strong>{ratingLabel}</strong><small>Rating</small></div>
+                    </div>
+                    <div className="bk-chip">
+                      <span className="bk-chip-icon"><FiUsers /></span>
+                      <div><strong>{reviewCount ? `${reviewCount}+` : "New"}</strong><small>Bookings</small></div>
+                    </div>
+                  </div>
+
+                  {/* Team picker */}
+                  {requiresTeamMember ? (
+                    <div className="bk-section">
+                      <div className="bk-section-head">
+                        <h3><FiUsers /> Choose provider</h3>
+                        <span>{teamMembers.length} available</span>
+                      </div>
+                      <div className="bk-team-row">
+                        {teamMembers.map((member) => {
+                          const active = String(selectedTeamMemberId) === String(member.id);
+                          return (
+                            <button
+                              type="button"
+                              key={member.id}
+                              className={active ? "bk-team-card active" : "bk-team-card"}
+                              onClick={() => setSelectedTeamMemberId(String(member.id))}
+                            >
+                              <strong>{member.name}</strong>
+                              <small>{member.title || "Provider"}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Tutor details */}
+                  {isTutorService ? (
+                    <div className="bk-section">
+                      <div className="bk-section-head">
+                        <h3>Lesson details</h3>
+                        <span>Optional</span>
+                      </div>
+                      <div className="booking-tutor-grid-v7">
+                        <label><span>Subject</span><input value={tutorDetails.subject} onChange={(event) => setTutorDetails((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Mathematics" /></label>
+                        <label><span>Student level</span>
+                          <select value={tutorDetails.studentLevel} onChange={(event) => setTutorDetails((prev) => ({ ...prev, studentLevel: event.target.value }))}>
+                            <option value="">Choose level</option>
+                            {["Nursery", "Primary", "Lower Secondary", "Upper Secondary", "Cambridge", "University", "Adult learning"].map((item) => <option key={item} value={item}>{item}</option>)}
+                          </select>
+                        </label>
+                        <label><span>Lesson mode</span>
+                          <select value={tutorDetails.lessonMode} onChange={(event) => setTutorDetails((prev) => ({ ...prev, lessonMode: event.target.value }))}>
+                            <option value="">Choose mode</option>
+                            {["In-person", "Online", "Home visit", "Student comes to tutor", "Hybrid"].map((item) => <option key={item} value={item}>{item}</option>)}
+                          </select>
+                        </label>
+                        <label><span>Duration</span><input value={tutorDetails.duration} onChange={(event) => setTutorDetails((prev) => ({ ...prev, duration: event.target.value }))} placeholder="1 hour" /></label>
+                        <label className="booking-tutor-notes-v7"><span>Notes for tutor</span><textarea value={tutorDetails.notes} onChange={(event) => setTutorDetails((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Needs help with algebra." /></label>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Select date */}
+                  <div className="bk-section bk-section-flat">
+                    <div className="bk-section-head">
+                      <h3>Select date</h3>
+                      <span className="bk-month">{getMonthLabel(selectedDate || dateOptions[0]?.value)} <FiChevronDown /></span>
+                    </div>
+                    <div className="bk-date-row">
+                      {dateOptions.map((item) => {
+                        const parts = getDateParts(item.value, item.label);
+                        const active = selectedDate === item.value;
                         return (
                           <button
                             type="button"
-                            key={member.id}
-                            className={active ? "booking-card-service-v5 active" : "booking-card-service-v5"}
-                            onClick={() => setSelectedTeamMemberId(String(member.id))}
+                            key={item.value}
+                            className={active ? "bk-date-pill active" : "bk-date-pill"}
+                            onClick={() => setSelectedDate(item.value)}
                           >
-                            <div className="booking-card-service-copy-v5">
-                              <div className="booking-card-service-title-v5">{member.name}</div>
-                              <div className="booking-card-service-meta-v5">{member.title || "Provider"}</div>
-                            </div>
-                            {active ? <span className="booking-card-service-check-v5"><FiCheck /></span> : null}
+                            <small>{parts.weekday}</small>
+                            <strong>{parts.day}</strong>
                           </button>
                         );
                       })}
                     </div>
-                  ) : (
-                    <div className="auth-error">This business has no active service agents yet.</div>
-                  )}
-                </div>
-              ) : null}
-
-              <div className={step === 0 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
-                <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5"><FiScissors /> Choose service</div>
-                  <div className="booking-section-hint-v5">{services.length} options</div>
-                </div>
-                <div className="booking-service-list-v5">
-                  {services.map((item) => {
-                    const active = String(selectedService) === String(item.id);
-                    const itemPrice = getServicePriceState(item);
-                    return (
-                      <button
-                        type="button"
-                        key={item.id}
-                        className={active ? "booking-card-service-v5 active" : "booking-card-service-v5"}
-                        onClick={() => setSelectedService(item.id)}
-                      >
-                        <div className="booking-card-service-copy-v5">
-                          <div className="booking-card-service-title-v5">{item.service_name}</div>
-                          {item.description ? <div className="booking-card-service-description-v6">{item.description}</div> : null}
-                          <div className="booking-card-service-meta-v5">
-                            {item.duration_minutes} mins - {String(item.location_type || "").toLowerCase() === "customer_location" ? "Home service" : "Provider location"}
-                          </div>
-                        </div>
-                        <div className="booking-card-service-side-v5">
-                          <div className="booking-card-service-price-v5">{itemPrice.label}</div>
-                          {active ? <span className="booking-card-service-check-v5"><FiCheck /></span> : null}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                {isQuoteService ? (
-                  <div className="booking-warning-v6">
-                    This service needs a quote before booking. Ask the provider for a price and scope first.
                   </div>
-                ) : null}
-                <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={() => onOpenSmartMatch?.()}>
-                  {smartMatchPremiumActive ? "Not sure? Find My Best Match" : "Not sure? Unlock Smart Match"}
-                </button>
-              </div>
 
-              <div className={step === 0 && isTutorService ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
-                <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5">Tutor lesson details</div>
-                  <div className="booking-section-hint-v5">Optional</div>
-                </div>
-                <div className="booking-tutor-grid-v7">
-                  <label>
-                    <span>Subject</span>
-                    <input value={tutorDetails.subject} onChange={(event) => setTutorDetails((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Mathematics" />
-                  </label>
-                  <label>
-                    <span>Student level</span>
-                    <select value={tutorDetails.studentLevel} onChange={(event) => setTutorDetails((prev) => ({ ...prev, studentLevel: event.target.value }))}>
-                      <option value="">Choose level</option>
-                      {["Nursery", "Primary", "Lower Secondary", "Upper Secondary", "Cambridge", "University", "Adult learning"].map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Lesson mode</span>
-                    <select value={tutorDetails.lessonMode} onChange={(event) => setTutorDetails((prev) => ({ ...prev, lessonMode: event.target.value }))}>
-                      <option value="">Choose mode</option>
-                      {["In-person", "Online", "Home visit", "Student comes to tutor", "Hybrid"].map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Duration</span>
-                    <input value={tutorDetails.duration} onChange={(event) => setTutorDetails((prev) => ({ ...prev, duration: event.target.value }))} placeholder="1 hour" />
-                  </label>
-                  <label className="booking-tutor-notes-v7">
-                    <span>Notes for tutor</span>
-                    <textarea value={tutorDetails.notes} onChange={(event) => setTutorDetails((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Needs help with algebra." />
-                  </label>
-                </div>
-              </div>
-
-              <div className={step === 1 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
-                <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5"><FiCalendar /> Pick date</div>
-                  <div className="booking-section-hint-v5">{availabilityStatus?.hasAvailable ? `${availabilityStatus.availableCount} open` : `${dateOptions.length} days`}</div>
-                </div>
-                <div className={
-                  availabilityStatus?.hasAvailable
-                    ? "booking-availability-banner-v6"
-                    : "booking-availability-banner-v6 is-empty"
-                }>
-                  <strong>{availabilityTitle}</strong>
-                  <span>{availabilityMeta}</span>
-                </div>
-                <div className="booking-date-list-v5">
-                  {dateOptions.map((item) => (
-                    <button
-                      type="button"
-                      key={item.value}
-                      className={selectedDate === item.value ? "booking-date-chip-v5 active" : "booking-date-chip-v5"}
-                      onClick={() => setSelectedDate(item.value)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className={step === 1 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
-                <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5"><FiClock /> Pick time</div>
-                  <div className="booking-section-hint-v5">{availabilityStatus?.loading ? "Checking..." : "Live slots"}</div>
-                </div>
-                <div className="booking-time-grid-v5">
-                  {timeSlots.map((item) => (
-                    <button
-                      type="button"
-                      key={item.value}
-                      className={
-                        selectedTime === item.value
-                          ? "booking-time-btn-v5 active"
-                          : item.disabled
-                          ? "booking-time-btn-v5 is-disabled"
-                          : "booking-time-btn-v5"
-                      }
-                      onClick={() => !item.disabled && setSelectedTime(item.value)}
-                      disabled={item.disabled}
-                    >
-                      <span>{item.label}</span>
-                      {item.disabled && item.disabledReason ? <small>{item.disabledReason}</small> : null}
-                    </button>
-                  ))}
-                </div>
-                {!timeSlots.some((item) => !item.disabled) ? (
-                  <div className="auth-error">
-                    {availabilityStatus?.isClosed
-                      ? "This provider is closed on the selected day. Pick another date."
-                      : "No open times left for this date. Pick another day."}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className={step === 2 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
-                <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5"><FiMapPin /> Booking location</div>
-                  <div className="booking-section-hint-v5">{locationOptions.length} option{locationOptions.length === 1 ? "" : "s"}</div>
-                </div>
-                <div className="booking-payment-list-v5">
-                  {locationOptions.map((option) => (
-                    <button
-                      type="button"
-                      key={option.value}
-                      className={selectedLocationType === option.value ? "booking-payment-option-v5 active" : "booking-payment-option-v5"}
-                      onClick={() => setBookingLocationType?.(option.value)}
-                    >
-                      <span className="booking-payment-icon-v5"><FiMapPin /></span>
-                      <span className="booking-payment-copy-v5">
-                        <span className="booking-payment-title-v5">{option.label}</span>
-                        <span className="booking-payment-meta-v5">{option.meta}</span>
-                      </span>
-                      {selectedLocationType === option.value ? <span className="booking-payment-pill-v5">Selected</span> : null}
-                    </button>
-                  ))}
-                </div>
-                {selectedLocationType === "customer_location" ? (
-                  <label className="booking-phone-field-v5">
-                    <span>Customer address</span>
-                    <div className="booking-address-row-v6">
-                      <input
-                        type="text"
-                        value={bookingAddress || ""}
-                        onChange={(event) => setBookingAddress?.(event.target.value)}
-                        placeholder="Gayaza, Nakwero"
-                        autoComplete="street-address"
-                      />
-                      <button type="button" onClick={onUseCurrentLocation} disabled={locationDetecting}>
-                        <FiNavigation /> {locationDetecting ? "Finding..." : "Use location"}
-                      </button>
+                  {/* Select time */}
+                  <div className="bk-section bk-section-flat">
+                    <div className="bk-section-head">
+                      <h3>Select time</h3>
+                      <span>{availabilityStatus?.loading ? "Checking..." : "Live slots"}</span>
                     </div>
-                    <small>Add a readable area and any details the provider needs.</small>
-                  </label>
-                ) : null}
-              </div>
-
-              <div className={step === 3 ? "booking-section-v5" : "booking-section-v5 booking-section-hidden-v6"}>
-                <div className="booking-section-row-v5">
-                  <div className="booking-section-title-v5"><FiSmartphone /> Payment</div>
-                  <div className="booking-section-hint-v5">Required to confirm booking</div>
-                </div>
-                <div className="booking-payment-list-v5">
-                  {paymentOptions.map((option) => (
-                    <button
-                      type="button"
-                      key={option.value}
-                      className={
-                        selectedPaymentMethod === option.value
-                          ? "booking-payment-option-v5 booking-payment-option-v5-early active"
-                          : "booking-payment-option-v5 booking-payment-option-v5-early"
-                      }
-                      disabled={option.disabled}
-                      onClick={() => setSelectedPaymentMethod(option.value)}
-                    >
-                      <span className="booking-payment-icon-v5"><FiSmartphone /></span>
-                      <span className="booking-payment-copy-v5">
-                        <span className="booking-payment-title-v5">{option.label}</span>
-                        <span className="booking-payment-meta-v5">{option.meta}</span>
-                      </span>
-                      <span className="booking-payment-pill-v5">{option.pill}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="booking-note-v5">
-                  Bookings are confirmed only after backend-confirmed mobile money or wallet payment.
-                </div>
-                {!onlinePaymentsReady && paymentReadinessMessage ? (
-                  <div className="booking-warning-v6">{paymentReadinessMessage}</div>
-                ) : null}
-                {requiresPhone ? (
-                  <label className="booking-phone-field-v5">
-                    <span>{selectedPaymentLabel} number</span>
-                    <input
-                      type="tel"
-                      value={paymentPhone || ""}
-                      onChange={(event) => setPaymentPhone?.(event.target.value)}
-                      placeholder="0772123456"
-                      inputMode="tel"
-                      autoComplete="tel"
-                    />
-                    <small>
-                      {phoneIsValid
-                        ? "Payment request sent. Please approve the prompt on your phone."
-                        : "Use a Uganda number such as 0772123456 or +256772123456."}
-                    </small>
-                  </label>
-                ) : null}
-              </div>
-
-              <div className={step === 4 ? "booking-summary-v5" : "booking-summary-v5 booking-section-hidden-v6"}>
-                <div className="booking-summary-top-v5">
-                  <div>
-                    <div className="booking-summary-title-v5">Your booking</div>
-                    <div className="booking-summary-subtitle-v5">Review before you confirm</div>
-                  </div>
-                  <div className="booking-summary-total-v5">{totalLabel}</div>
-                </div>
-                <div className="booking-summary-grid-v5">
-                  <div className="booking-summary-row-v5">
-                    <span>Provider</span>
-                    <strong>{barber.business_name}</strong>
-                  </div>
-                  <div className="booking-summary-row-v5">
-                    <span>Service</span>
-                    <strong>{serviceObj?.service_name || "Service"}</strong>
-                  </div>
-                  {isShopStand ? (
-                    <div className="booking-summary-row-v5">
-                      <span>Provider</span>
-                      <strong>{selectedTeamMember?.name || "Choose provider"}</strong>
-                    </div>
-                  ) : null}
-                  <div className="booking-summary-row-v5">
-                    <span>Duration</span>
-                    <strong>{serviceObj?.duration_minutes || 30} mins</strong>
-                  </div>
-                  <div className="booking-summary-row-v5">
-                    <span>Date</span>
-                    <strong>{selectedDate || "Choose a date"}</strong>
-                  </div>
-                  <div className="booking-summary-row-v5">
-                    <span>Time</span>
-                    <strong>{selectedTimeLabel}</strong>
-                  </div>
-                  <div className="booking-summary-row-v5">
-                    <span>Location</span>
-                    <strong>{locationLabel || "Choose location"}</strong>
-                  </div>
-                  <div className="booking-summary-row-v5">
-                    <span>Payment</span>
-                    <strong>{paymentAllowed ? selectedPaymentLabel : "Choose payment"}</strong>
-                  </div>
-                  {showsPlatformSplit ? (
-                    <>
-                      <div className="booking-summary-row-v5">
-                        <span>Platform commission</span>
-                        <strong>{formatMoney(total * 0.1)}</strong>
+                    {timeSlots.some((item) => !item.disabled) ? (
+                      <div className="bk-time-grid">
+                        {(showAllTimes ? timeSlots : timeSlots.slice(0, 7)).map((item) => (
+                          <button
+                            type="button"
+                            key={item.value}
+                            className={
+                              selectedTime === item.value ? "bk-time-btn active" : item.disabled ? "bk-time-btn is-disabled" : "bk-time-btn"
+                            }
+                            onClick={() => !item.disabled && setSelectedTime(item.value)}
+                            disabled={item.disabled}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                        {timeSlots.length > 7 ? (
+                          <button type="button" className="bk-time-btn bk-time-more" onClick={() => setShowAllTimes((value) => !value)}>
+                            <FiClock /> {showAllTimes ? "Less" : "More times"}
+                          </button>
+                        ) : null}
                       </div>
-                      <div className="booking-summary-row-v5">
-                        <span>Provider receives</span>
-                        <strong>{formatMoney(total * 0.9)}</strong>
+                    ) : (
+                      <div className="bk-warning">
+                        {availabilityStatus?.isClosed
+                          ? "This provider is closed on the selected day. Pick another date."
+                          : "No open times left for this date. Pick another day."}
                       </div>
-                    </>
-                  ) : null}
-                  {isTutorService && Object.values(tutorDetails).some(Boolean) ? (
-                    <div className="booking-summary-row-v5">
-                      <span>Lesson details</span>
-                      <strong>{[tutorDetails.subject, tutorDetails.studentLevel, tutorDetails.lessonMode, tutorDetails.duration].filter(Boolean).join(" • ") || "Added"}</strong>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
+                    )}
+                  </div>
 
-              {bookingCooldownInfo?.blocked ? (
-                <div className="auth-error">{bookingCooldownInfo.reason}</div>
-              ) : null}
+                  {/* Location */}
+                  <div className="bk-section">
+                    <div className="bk-section-head">
+                      <h3>Location</h3>
+                      {locationOptions.length > 1 ? <span>{locationOptions.length} options</span> : null}
+                    </div>
+
+                    {locationOptions.length > 1 ? (
+                      <div className="bk-loc-switch">
+                        {locationOptions.map((option) => (
+                          <button
+                            type="button"
+                            key={option.value}
+                            className={selectedLocationType === option.value ? "bk-loc-tab active" : "bk-loc-tab"}
+                            onClick={() => setBookingLocationType?.(option.value)}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {isHomeService ? (
+                      <label className="bk-field">
+                        <span>Your address</span>
+                        <div className="bk-address-row">
+                          <input
+                            type="text"
+                            value={bookingAddress || ""}
+                            onChange={(event) => setBookingAddress?.(event.target.value)}
+                            placeholder="Gayaza, Nakwero"
+                            autoComplete="street-address"
+                          />
+                          <button type="button" onClick={onUseCurrentLocation} disabled={locationDetecting}>
+                            <FiNavigation /> {locationDetecting ? "..." : "Locate"}
+                          </button>
+                        </div>
+                        <small>The provider will come to this location.</small>
+                      </label>
+                    ) : (
+                      <div className="bk-loc-card">
+                        <LocationMiniMap coords={coords} />
+                        <div className="bk-loc-info">
+                          <strong>At {barber.business_name}</strong>
+                          <span>{barber.location || "Provider location"}</span>
+                        </div>
+                        {directionsUrl ? (
+                          <a className="bk-directions" href={directionsUrl} target="_blank" rel="noopener noreferrer">
+                            <FiNavigation /> Directions
+                          </a>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Booking summary */}
+                  <div className="bk-summary-card">
+                    <div className="bk-summary-head">
+                      <div>
+                        <strong>Booking summary</strong>
+                      </div>
+                      {services.length > 1 ? (
+                        <button type="button" className="bk-link" onClick={() => setShowServicePicker(true)}>Edit</button>
+                      ) : null}
+                    </div>
+                    <div className="bk-summary-line">
+                      <img className="bk-summary-thumb" src={serviceObj?.image || barber.image} alt="" onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} />
+                      <div className="bk-summary-line-copy">
+                        <strong>{serviceObj?.service_name || "Service"}</strong>
+                        <span>{selectedDateLabel} • {selectedTimeLabel}</span>
+                      </div>
+                      <div className="bk-summary-amount">{isQuoteService ? "Quote" : formatMoney(total)}</div>
+                    </div>
+                    <div className="bk-summary-divider" />
+                    <div className="bk-summary-total-row">
+                      <span>Total</span>
+                      <strong>{totalLabel}</strong>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            <div className="booking-footer-v5">
-              <button
-                className={
-                  isBlocked
-                    ? "primary-btn-v4 booking-cta-v5 booking-cta-disabled-v5"
-                    : "primary-btn-v4 booking-cta-v5"
-                }
-                onClick={() => {
-                  if (step < steps.length - 1) {
-                    nextStep();
-                    return;
-                  }
-                  if (isQuoteService) {
-                    onRequestQuote?.();
-                    return;
-                  }
-                  onConfirm?.({
-                    bookingDetails: isTutorService ? { type: "tutor_lesson", ...tutorDetails } : null,
-                  });
-                }}
-                disabled={step < steps.length - 1 ? !canContinue : isBlocked}
-              >
-                {footerLabel}
-              </button>
-              <div className="booking-note-v5">
-                {isQuoteService
-                  ? "A quote is required before this service can be booked directly."
-                  : step < steps.length - 1
-                  ? "Complete each step to review and confirm with confidence."
-                  : "The booking becomes confirmed only after successful mobile money or wallet payment."}
-              </div>
+            <div className="bk-footer">
+              {onPaymentStep ? (
+                <button
+                  type="button"
+                  className={footerDisabled ? "bk-cta-primary is-disabled" : "bk-cta-primary"}
+                  onClick={handlePrimary}
+                  disabled={footerDisabled}
+                >
+                  {footerLabel}
+                </button>
+              ) : (
+                <div className="bk-footer-actions">
+                  <button type="button" className="bk-cta-secondary" onClick={() => onMessageProvider?.()}>
+                    <FiMessageCircle /> Message
+                  </button>
+                  <button
+                    type="button"
+                    className={footerDisabled ? "bk-cta-primary is-disabled" : "bk-cta-primary"}
+                    onClick={handlePrimary}
+                    disabled={footerDisabled}
+                  >
+                    {footerLabel}
+                  </button>
+                </div>
+              )}
+              {!onPaymentStep && services.length > 1 && !isQuoteService ? (
+                <button type="button" className="bk-smartmatch-link" onClick={() => onOpenSmartMatch?.()}>
+                  {smartMatchPremiumActive ? "Not sure? Find my best match" : "Not sure? Unlock Smart Match"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
+
+      {lightboxImage ? (
+        <button type="button" className="bk-lightbox" onClick={() => setLightboxImage("")} aria-label="Close image">
+          <img src={lightboxImage} alt="Recent work" />
+        </button>
+      ) : null}
     </>
   );
 }

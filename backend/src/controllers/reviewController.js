@@ -71,7 +71,7 @@ async function assertCanManageProviderReviews(user, barberId) {
 
   const subscription = await getLatestProviderSubscription(barberId);
   if (!isAdmin && !isActiveProviderPlatinum(business, subscription)) {
-    throw httpError(403, "Review blocking is available to Platinum providers only.");
+    throw httpError(403, "Review blocking is available on the Platinum plan.");
   }
 
   return { business, isAdmin };

@@ -11,7 +11,7 @@ import { paymentRateLimiter } from "../middleware/securityMiddleware.js";
 const router = express.Router();
 
 router.get("/me", protect, requireRole("customer"), getMyCustomerSubscription);
-router.post("/upgrade", protect, requireRole("customer"), paymentRateLimiter, startCustomerSubscriptionUpgrade);
+router.post("/upgrade", protect, paymentRateLimiter, startCustomerSubscriptionUpgrade);
 router.post("/verify", protect, requireRole("customer"), paymentRateLimiter, verifyCustomerSubscriptionUpgrade);
 
 export default router;

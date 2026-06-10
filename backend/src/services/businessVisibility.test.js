@@ -12,7 +12,7 @@ test("hides draft or unpublished businesses even when a plan exists", () => {
       {
         business_status: "draft",
         is_published: 1,
-        subscription_tier: "PLUS",
+        subscription_tier: "FREE",
         subscription_status: "active",
         subscription_expires_at: future,
       },
@@ -27,7 +27,7 @@ test("hides draft or unpublished businesses even when a plan exists", () => {
       {
         business_status: "active",
         is_published: 0,
-        subscription_tier: "PLUS",
+        subscription_tier: "FREE",
         subscription_status: "active",
         subscription_expires_at: future,
       },
@@ -38,7 +38,7 @@ test("hides draft or unpublished businesses even when a plan exists", () => {
   );
 });
 
-test("hides active businesses when subscription or trial access is expired", () => {
+test("hides active businesses when subscription access is expired", () => {
   assert.equal(
     isBusinessPubliclyVisible(
       {
@@ -59,7 +59,7 @@ test("hides active businesses when subscription or trial access is expired", () 
       {
         business_status: "active",
         is_published: 1,
-        subscription_tier: "PLUS",
+        subscription_tier: "FREE",
         subscription_status: "trialing",
         trial_status: "active",
         trial_ends_at: past,
@@ -71,7 +71,24 @@ test("hides active businesses when subscription or trial access is expired", () 
   );
 });
 
-test("allows only published active businesses with unexpired paid or trial access", () => {
+test("allows published active Free businesses without payment expiry", () => {
+  assert.equal(
+    isBusinessPubliclyVisible(
+      {
+        business_status: "active",
+        is_published: 1,
+        subscription_tier: "FREE",
+        subscription_status: "active",
+        subscription_expires_at: null,
+      },
+      null,
+      now
+    ),
+    true
+  );
+});
+
+test("allows only published active businesses with free or unexpired paid access", () => {
   assert.equal(
     isBusinessPubliclyVisible(
       {
@@ -92,7 +109,7 @@ test("allows only published active businesses with unexpired paid or trial acces
       {
         business_status: "active",
         is_published: 1,
-        subscription_tier: "PLUS",
+        subscription_tier: "FREE",
         subscription_status: "trialing",
         trial_status: "active",
         trial_ends_at: future,
@@ -100,7 +117,7 @@ test("allows only published active businesses with unexpired paid or trial acces
       null,
       now
     ),
-    true
+    false
   );
 });
 
@@ -110,7 +127,7 @@ test("allows manually approved live businesses without a paid subscription", () 
       {
         business_status: "approved",
         is_published: 1,
-        subscription_tier: "PLUS",
+        subscription_tier: "FREE",
         subscription_status: "manual_approved",
       },
       null,
@@ -127,7 +144,7 @@ test("hides demo-like active businesses even when flags are missing", () => {
         business_name: "Demo Cuts",
         business_status: "active",
         is_published: 1,
-        subscription_tier: "PLUS",
+        subscription_tier: "FREE",
         subscription_status: "active",
         subscription_expires_at: future,
       },

@@ -104,6 +104,7 @@ export const airtelService = {
       status: success ? "successful" : status || "pending",
       providerReference: data?.provider_reference || providerReference || reference,
       amount: paidAmount,
+      currency: data?.currency || "UGX",
       rawResponse: data,
     };
   },
@@ -151,6 +152,7 @@ export const airtelService = {
       status: success ? "successful" : ["failed", "rejected", "expired"].includes(status) ? "failed" : status || "pending",
       providerReference: data?.provider_reference || providerReference || reference,
       amount: paidAmount,
+      currency: data?.currency || "UGX",
       rawResponse: data,
     };
   },

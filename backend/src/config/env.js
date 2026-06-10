@@ -1,6 +1,18 @@
+import fs from "fs";
+import path from "path";
 import dotenv from "dotenv";
 
-dotenv.config();
+const explicitEnvPath = process.env.DOTENV_CONFIG_PATH || process.env.ENV_FILE || "";
+const productionEnvPath = path.resolve(process.cwd(), ".env.production");
+const defaultEnvPath = path.resolve(process.cwd(), ".env");
+const resolvedExplicitEnvPath = explicitEnvPath ? path.resolve(process.cwd(), explicitEnvPath) : "";
+const envPath =
+  (resolvedExplicitEnvPath && fs.existsSync(resolvedExplicitEnvPath) ? resolvedExplicitEnvPath : "") ||
+  (process.env.NODE_ENV === "production" && fs.existsSync(productionEnvPath)
+    ? productionEnvPath
+    : defaultEnvPath);
+
+dotenv.config({ path: envPath });
 
 function parseList(value) {
   return String(value || "")
@@ -72,10 +84,12 @@ export const env = {
   providerPromoFreeCode: (process.env.PROVIDER_PROMO_FREE_CODE || "").trim(),
   providerPromoPercentCode: (process.env.PROVIDER_PROMO_20_CODE || process.env.PROVIDER_PROMO_PERCENT_CODE || "").trim(),
   providerPromoExpiresAt: (process.env.PROVIDER_PROMO_EXPIRES_AT || "").trim(),
+  customerPremiumPromoFreeCode: (process.env.CUSTOMER_PREMIUM_PROMO_FREE_CODE || "").trim(),
+  customerPremiumPromoPercentCode: (process.env.CUSTOMER_PREMIUM_PROMO_20_CODE || process.env.CUSTOMER_PREMIUM_PROMO_PERCENT_CODE || "").trim(),
+  customerPremiumPromoExpiresAt: (process.env.CUSTOMER_PREMIUM_PROMO_EXPIRES_AT || "").trim(),
   customerPremiumMonthlyPrice: Number(process.env.CUSTOMER_PREMIUM_MONTHLY_PRICE || 10000),
   customerPremiumAnnualPrice: Number(process.env.CUSTOMER_PREMIUM_ANNUAL_PRICE || 120000),
   customerPremiumCurrency: (process.env.CUSTOMER_PREMIUM_CURRENCY || "UGX").trim().toUpperCase(),
-  aiCoachMode: (process.env.AI_COACH_MODE || "rules").trim().toLowerCase(),
   mobileMoneyDefaultProvider: (process.env.MOBILE_MONEY_DEFAULT_PROVIDER || "mtn").trim().toLowerCase(),
   mobileMoneyCurrency: (process.env.MOBILE_MONEY_CURRENCY || process.env.MTN_CURRENCY || "").trim().toUpperCase(),
   mobileMoneyApiKey: (process.env.MOBILE_MONEY_API_KEY || "").trim(),
@@ -153,11 +167,27 @@ export const env = {
     process.env.MOBILE_MONEY_DISBURSEMENT_URL ||
     `${(process.env.MTN_BASE_URL || process.env.MOBILE_MONEY_BASE_URL || (process.env.MTN_CONSUMER_KEY && process.env.MTN_CONSUMER_SECRET ? "https://api.mtn.com" : "https://sandbox.momodeveloper.mtn.com")).trim().replace(/\/$/, "")}/disbursement/v1_0/transfer`
   ).trim(),
-  airtelApiKey: (process.env.AIRTEL_API_KEY || process.env.MOBILE_MONEY_API_KEY || "").trim(),
-  airtelApiSecret: (process.env.AIRTEL_API_SECRET || process.env.MOBILE_MONEY_API_SECRET || "").trim(),
-  airtelCollectionUrl: (process.env.AIRTEL_COLLECTION_URL || process.env.MOBILE_MONEY_COLLECTION_URL || "").trim(),
-  airtelVerificationUrl: (process.env.AIRTEL_VERIFICATION_URL || process.env.MOBILE_MONEY_VERIFICATION_URL || "").trim(),
-  airtelDisbursementUrl: (process.env.AIRTEL_DISBURSEMENT_URL || process.env.MOBILE_MONEY_DISBURSEMENT_URL || "").trim(),
+  airtelApiKey: (process.env.AIRTEL_API_KEY || process.env.AIRTEL_CLIENT_ID || process.env.MOBILE_MONEY_API_KEY || "").trim(),
+  airtelApiSecret: (process.env.AIRTEL_API_SECRET || process.env.AIRTEL_CLIENT_SECRET || process.env.MOBILE_MONEY_API_SECRET || "").trim(),
+  airtelBaseUrl: (process.env.AIRTEL_BASE_URL || "").trim().replace(/\/$/, ""),
+  airtelCollectionUrl: (
+    process.env.AIRTEL_COLLECTION_URL ||
+    (process.env.AIRTEL_BASE_URL ? `${process.env.AIRTEL_BASE_URL.replace(/\/$/, "")}/merchant/v1/payments/` : "") ||
+    process.env.MOBILE_MONEY_COLLECTION_URL ||
+    ""
+  ).trim(),
+  airtelVerificationUrl: (
+    process.env.AIRTEL_VERIFICATION_URL ||
+    (process.env.AIRTEL_BASE_URL ? `${process.env.AIRTEL_BASE_URL.replace(/\/$/, "")}/standard/v1/payments/` : "") ||
+    process.env.MOBILE_MONEY_VERIFICATION_URL ||
+    ""
+  ).trim(),
+  airtelDisbursementUrl: (
+    process.env.AIRTEL_DISBURSEMENT_URL ||
+    (process.env.AIRTEL_BASE_URL ? `${process.env.AIRTEL_BASE_URL.replace(/\/$/, "")}/standard/v1/disbursements/` : "") ||
+    process.env.MOBILE_MONEY_DISBURSEMENT_URL ||
+    ""
+  ).trim(),
   airtelCallbackUrl: (process.env.AIRTEL_CALLBACK_URL || process.env.AIRTEL_WEBHOOK_URL || (configuredPublicUrl ? `${configuredPublicUrl}/api/payments/airtel/callback` : "")).trim(),
   airtelWebhookUrl: (process.env.AIRTEL_WEBHOOK_URL || (configuredPublicUrl ? `${configuredPublicUrl}/api/payments/webhooks/airtel` : "")).trim(),
   airtelEnabled: String(process.env.AIRTEL_ENABLED || "false").trim().toLowerCase() === "true",
@@ -239,6 +269,13 @@ export function validateEnv() {
           missing.push("MTN_SUBSCRIPTION_KEY, MTN_COLLECTION_PRIMARY_KEY, or MTN_COLLECTION_SECONDARY_KEY");
         }
       }
+    }
+    if (env.airtelEnabled) {
+      if (!env.airtelApiKey) missing.push("AIRTEL_CLIENT_ID or AIRTEL_API_KEY");
+      if (!env.airtelApiSecret) missing.push("AIRTEL_CLIENT_SECRET or AIRTEL_API_SECRET");
+      if (!env.airtelCollectionUrl) missing.push("AIRTEL_BASE_URL or AIRTEL_COLLECTION_URL");
+      if (!env.airtelVerificationUrl) missing.push("AIRTEL_BASE_URL or AIRTEL_VERIFICATION_URL");
+      if (!env.airtelCallbackUrl) missing.push("AIRTEL_CALLBACK_URL");
     }
   }
 

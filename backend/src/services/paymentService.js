@@ -3,14 +3,14 @@ export const FREE_TRIAL_DAYS = 30;
 export const VALID_BILLING_CYCLES = ["monthly", "annual"];
 
 export const SUBSCRIPTION_TIERS = {
-  PLUS: {
-    code: "PLUS",
-    id: "plus",
-    name: "Plus",
-    price: 6000,
-    monthlyPrice: 6000,
-    annualPrice: 60000,
-    annualSavings: 12000,
+  FREE: {
+    code: "FREE",
+    id: "free",
+    name: "Free",
+    price: 0,
+    monthlyPrice: 0,
+    annualPrice: 0,
+    annualSavings: 0,
     currency: "UGX",
     trialAvailable: false,
     trialDurationDays: FREE_TRIAL_DAYS,
@@ -26,9 +26,10 @@ export const SUBSCRIPTION_TIERS = {
     homeServiceEnabled: false,
     profileCustomizationLevel: "enhanced",
     visibilityLabel: "Basic visibility",
-    supportLevel: "Plus support",
+    supportLevel: "Normal support",
     serviceLimit: 5,
-    photoLimit: 5,
+    photoLimit: 2,
+    imageUploadLimitMb: 20,
     videoLimit: 0,
     reviewsEnabled: true,
     earningsTracking: true,
@@ -58,7 +59,7 @@ export const SUBSCRIPTION_TIERS = {
     trialAvailable: false,
     trialDurationDays: FREE_TRIAL_DAYS,
     rankingWeight: 2,
-    analyticsLevel: "advanced",
+    analyticsLevel: "growth",
     homepageFeatured: false,
     searchPriority: 2,
     topBarberBadge: false,
@@ -68,10 +69,11 @@ export const SUBSCRIPTION_TIERS = {
     marketingPushEnabled: true,
     homeServiceEnabled: true,
     profileCustomizationLevel: "full",
-    visibilityLabel: "Better ranking",
+    visibilityLabel: "Priority visibility",
     supportLevel: "Priority support",
     serviceLimit: 20,
-    photoLimit: 20,
+    photoLimit: 5,
+    imageUploadLimitMb: 50,
     videoLimit: 0,
     reviewsEnabled: true,
     earningsTracking: true,
@@ -80,7 +82,7 @@ export const SUBSCRIPTION_TIERS = {
     portfolioEnabled: true,
     beforeAfterGalleryEnabled: true,
     advancedAnalytics: true,
-    aiBusinessCoach: false,
+    aiBusinessCoach: true,
     reviewInsights: true,
     videoUploads: false,
     homepageFeature: false,
@@ -113,7 +115,8 @@ export const SUBSCRIPTION_TIERS = {
     visibilityLabel: "Homepage feature",
     supportLevel: "Dedicated support",
     serviceLimit: -1,
-    photoLimit: -1,
+    photoLimit: 10,
+    imageUploadLimitMb: 100,
     videoLimit: -1,
     reviewsEnabled: true,
     earningsTracking: true,
@@ -133,12 +136,12 @@ export const SUBSCRIPTION_TIERS = {
 };
 
 export function getSubscriptionTierConfig(tier) {
-  const normalized = String(tier || "PLUS").trim().toUpperCase();
-  return SUBSCRIPTION_TIERS[normalized] || SUBSCRIPTION_TIERS.PLUS;
+  const normalized = String(tier || "FREE").trim().toUpperCase();
+  return SUBSCRIPTION_TIERS[normalized] || SUBSCRIPTION_TIERS.FREE;
 }
 
 export function getSubscriptionPlans() {
-  return ["PLUS", "PREMIUM", "PLATINUM"].map((tier) => getSubscriptionTierConfig(tier));
+  return ["FREE", "PREMIUM", "PLATINUM"].map((tier) => getSubscriptionTierConfig(tier));
 }
 
 export function normalizeBillingCycle(value) {
@@ -185,7 +188,7 @@ export function normalizeMoneyAmount(amount, fieldName = "amount", { minimum = 1
 
 export function normalizeProviderPlan(tier) {
   const normalized = String(tier || "").trim().toUpperCase();
-  return ["PLUS", "PREMIUM", "PLATINUM"].includes(normalized) ? normalized : "";
+  return ["FREE", "PREMIUM", "PLATINUM"].includes(normalized) ? normalized : "";
 }
 
 export function isValidProviderPlan(tier) {

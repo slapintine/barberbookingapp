@@ -98,6 +98,106 @@ function mapDemoBusinessSuspect(item, customerFacingIds = new Set()) {
   };
 }
 
+function isFutureDate(value, now = new Date()) {
+  if (!value) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.getTime() > now.getTime();
+}
+
+function getCustomerPremiumUnsafeReasons(row = {}, now = new Date()) {
+  const reasons = [];
+  if (!row.expires_at) reasons.push("Premium subscription has no expiry date.");
+  else if (!isFutureDate(row.expires_at, now)) reasons.push("Premium subscription is expired.");
+  if (String(row.status || "").toLowerCase() === "active" && !["paid", "successful"].includes(String(row.payment_status || "").toLowerCase())) {
+    reasons.push("Active Premium subscription is not backed by a paid/successful payment status.");
+  }
+  if (String(row.status || "").toLowerCase() === "trialing") {
+    reasons.push("Customer Premium trialing rows do not unlock paid Smart Match unless the trial is valid and unexpired.");
+  }
+  return reasons.length ? reasons : ["Premium subscription does not satisfy the paid-feature entitlement guard."];
+}
+
+function mapCustomerPremiumUnsafeRow(row = {}, now = new Date()) {
+  const willExpire = !isFutureDate(row.expires_at, now);
+  const nextStatus = willExpire ? "expired" : "pending";
+  const nextPaymentStatus = willExpire ? "expired" : row.payment_status || "pending";
+  return {
+    ...row,
+    unsafeReasons: getCustomerPremiumUnsafeReasons(row, now),
+    remediation: {
+      target: `customer_subscriptions#${row.id}`,
+      action: willExpire ? "expire_customer_premium" : "downgrade_customer_premium_to_pending",
+      summary: willExpire
+        ? "This row will be expired so Smart Match stays locked until a new paid Premium period exists."
+        : "This row will be downgraded to pending so Smart Match stays locked until payment succeeds.",
+      nextValues: {
+        status: nextStatus,
+        payment_status: nextPaymentStatus,
+      },
+    },
+  };
+}
+
+function getProviderPlatinumUnsafeReasons(row = {}, now = new Date()) {
+  const reasons = [];
+  const latestStatus = String(row.latest_status || "").toLowerCase();
+  const latestPaymentStatus = String(row.latest_payment_status || "").toLowerCase();
+  const latestTrialStatus = String(row.latest_trial_status || row.latest_payment_status || "").toLowerCase();
+  const businessTier = String(row.subscription_tier || "").toUpperCase();
+  const businessStatus = String(row.subscription_status || "").toLowerCase();
+
+  if (!row.latest_subscription_id) reasons.push("Business fallback says Platinum, but there is no latest Platinum subscription row.");
+  if (row.latest_subscription_id && String(row.latest_tier || "").toUpperCase() !== "PLATINUM") reasons.push("Latest provider subscription is not Platinum.");
+  if (row.latest_subscription_id && !["active", "trialing"].includes(latestStatus)) reasons.push("Latest Platinum subscription is not active or trialing.");
+  if (row.latest_subscription_id && !row.latest_expires_at) reasons.push("Latest Platinum subscription has no expiry date.");
+  else if (row.latest_subscription_id && !isFutureDate(row.latest_expires_at, now)) reasons.push("Latest Platinum subscription is expired.");
+  if (latestStatus === "active" && !["paid", "successful"].includes(latestPaymentStatus)) {
+    reasons.push("Active Platinum subscription is not backed by a paid/successful payment status.");
+  }
+  if (latestStatus === "trialing" && !["active", "trialing", "trial", "free_trial"].includes(latestTrialStatus)) {
+    reasons.push("Trialing Platinum subscription does not have a valid trial status.");
+  }
+  if (businessTier === "PLATINUM" && ["active", "trialing"].includes(businessStatus)) {
+    reasons.push("Business fallback currently exposes Platinum access without a current valid Platinum subscription.");
+  }
+  return reasons.length ? reasons : ["Provider Platinum state does not satisfy the Provider Coach entitlement guard."];
+}
+
+function mapProviderPlatinumUnsafeRow(row = {}, now = new Date()) {
+  const latestWillExpire = !isFutureDate(row.latest_expires_at, now);
+  const latestAction = row.latest_subscription_id
+    ? latestWillExpire
+      ? "expire_provider_platinum_subscription"
+      : "downgrade_provider_platinum_subscription_to_pending"
+    : "";
+  return {
+    ...row,
+    unsafeReasons: getProviderPlatinumUnsafeReasons(row, now),
+    remediation: {
+      target: `barbers#${row.id}`,
+      latestSubscriptionTarget: row.latest_subscription_id ? `barber_subscriptions#${row.latest_subscription_id}` : null,
+      action: "expire_business_platinum_fallback",
+      latestSubscriptionAction: latestAction,
+      summary: row.latest_subscription_id
+        ? "The invalid Platinum subscription will be deactivated, and the business fallback will be expired/unpublished unless a current valid Platinum subscription exists."
+        : "The business Platinum fallback will be expired and unpublished because no current valid Platinum subscription exists.",
+      nextValues: {
+        business: {
+          subscription_status: "subscription_expired",
+          is_published: 0,
+        },
+        latestSubscription: row.latest_subscription_id
+          ? {
+              status: latestWillExpire ? "expired" : "pending",
+              payment_status: latestWillExpire ? "expired" : row.latest_payment_status || "pending",
+              is_active: 0,
+            }
+          : null,
+      },
+    },
+  };
+}
+
 function hasMtnCredentials() {
   return Boolean(
     (present(env.mtnConsumerKey) && present(env.mtnConsumerSecret)) ||
@@ -215,7 +315,7 @@ export async function getEnvironmentReadinessChecks() {
       "Set backend FIREBASE_SERVICE_ACCOUNT_JSON to a valid Firebase Admin service account JSON before launch push testing."
     ),
     status("firebase_routes", "Firebase notification routes", true, "register-token, unregister-token, and test routes are protected and mounted", "info"),
-    status("paid_feature_routes", "Paid feature route guards", true, "Smart Match uses customer Premium middleware; AI Coach uses provider Platinum middleware", "info"),
+    status("paid_feature_routes", "Paid feature route guards", true, "Smart Match uses customer Premium middleware; Provider Coach uses provider-only plan checks", "info"),
   ];
 
   if (shouldVerifyMtn) {
@@ -357,9 +457,10 @@ export async function getPaidFeatureSafety() {
     ),
   ]);
 
+  const now = new Date();
   return {
-    customerUnsafeRows,
-    providerUnsafeRows,
+    customerUnsafeRows: customerUnsafeRows.map((row) => mapCustomerPremiumUnsafeRow(row, now)),
+    providerUnsafeRows: providerUnsafeRows.map((row) => mapProviderPlatinumUnsafeRow(row, now)),
   };
 }
 

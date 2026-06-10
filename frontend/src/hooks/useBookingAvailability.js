@@ -2,43 +2,44 @@ import { useEffect, useState } from "react";
 import { getBookingAvailability } from "../api/bookingsApi.js";
 
 export default function useBookingAvailability({ barberId, bookingDate, teamMemberId, enabled }) {
-  const [availability, setAvailability] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const requestKey = enabled && barberId && bookingDate ? `${barberId}|${bookingDate}|${teamMemberId || ""}` : "";
+  const [availabilityEntry, setAvailabilityEntry] = useState({ key: "", value: null });
+  const [loadingEntry, setLoadingEntry] = useState({ key: "", value: false });
+  const [errorEntry, setErrorEntry] = useState({ key: "", value: "" });
+  const availability = requestKey && availabilityEntry.key === requestKey ? availabilityEntry.value : null;
+  const loading = requestKey && loadingEntry.key === requestKey ? loadingEntry.value : false;
+  const error = requestKey && errorEntry.key === requestKey ? errorEntry.value : "";
 
   useEffect(() => {
     let cancelled = false;
 
     if (!enabled || !barberId || !bookingDate) {
-      setAvailability(null);
-      setLoading(false);
-      setError("");
       return undefined;
     }
 
-    setLoading(true);
-    setError("");
+    setLoadingEntry({ key: requestKey, value: true });
+    setErrorEntry({ key: requestKey, value: "" });
     getBookingAvailability({ barberId, bookingDate, teamMemberId })
       .then((data) => {
         if (!cancelled) {
-          setAvailability(data?.availability || null);
-          setError("");
+          setAvailabilityEntry({ key: requestKey, value: data?.availability || null });
+          setErrorEntry({ key: requestKey, value: "" });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setAvailability(null);
-          setError("Availability could not be loaded. Try another day.");
+          setAvailabilityEntry({ key: requestKey, value: null });
+          setErrorEntry({ key: requestKey, value: "Availability could not be loaded. Try another day." });
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadingEntry({ key: requestKey, value: false });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [barberId, bookingDate, teamMemberId, enabled]);
+  }, [barberId, bookingDate, teamMemberId, enabled, requestKey]);
 
   return { availability, loading, error };
 }

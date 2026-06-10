@@ -4,9 +4,10 @@ import { io } from "socket.io-client";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 import logo from "./assets/queless-logo-icon.png";
-import fallbackStandIcon from "./assets/queless-logo-icon.png";
+import { resolveProviderImage, NEUTRAL_PLACEHOLDER } from "./utils/providerImage.js";
+import { sanitizeErrorMessage } from "./utils/errorMessages.js";
 import { confirmPasswordReset, loginUser, registerUser, requestPasswordReset, updateAccount } from "./api/authApi.js";
-import { deleteMyBarberStand, getBarbers, getMyBarberStand, registerBarberStand, updateMyBarberStand } from "./api/barbersApi.js";
+import { deleteMyBarberStand, getBarbers, getMyBarberStand, publishMyBarberStand, registerBarberStand, updateMyBarberStand } from "./api/barbersApi.js";
 import {
   confirmCashPaymentRequest,
   createBookingRequest,
@@ -86,7 +87,7 @@ const QuoteRequestModal = lazy(() => import("./features/bookings/QuoteRequestMod
 const ChatSheet = lazy(() => import("./features/chat/ChatSheet.jsx"));
 const ReportsScreen = lazy(() => import("./features/barbers/ReportsScreen.jsx"));
 const AiCoachScreen = lazy(() => import("./features/barbers/AiCoachScreen.jsx"));
-const SmartMatchModal = lazy(() => import("./features/smart-match/SmartMatchModal.jsx"));
+const SmartMatchPage = lazy(() => import("./features/smart-match/SmartMatchPage.jsx"));
 const TrialUpgradeScreen = lazy(() => import("./features/barbers/TrialUpgradeScreen.jsx"));
 const RegisterBarberModal = lazy(() =>
   import("./features/barbers/BarberStandModals.jsx").then((module) => ({ default: module.RegisterBarberModal }))
@@ -145,8 +146,15 @@ function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const IMAGE_UPLOAD_LIMIT_MB = 20;
+const IMAGE_UPLOAD_LIMIT_BYTES = IMAGE_UPLOAD_LIMIT_MB * 1024 * 1024;
+
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
+    if (file?.size > IMAGE_UPLOAD_LIMIT_BYTES) {
+      reject(new Error("This image is too large. Please upload a smaller image."));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(new Error("Could not read file."));
@@ -274,6 +282,7 @@ const DEFAULT_SUBSCRIPTION_STATE = {
     supportLevel: "self-serve",
     serviceLimit: 0,
     photoLimit: 0,
+    imageUploadLimitMb: 0,
     videoLimit: 0,
     reviewsEnabled: false,
     earningsTracking: false,
@@ -292,7 +301,7 @@ const DEFAULT_SUBSCRIPTION_STATE = {
   },
 };
 
-const VALID_PROVIDER_PLANS = ["PLUS", "PREMIUM", "PLATINUM"];
+const VALID_PROVIDER_PLANS = ["FREE", "PREMIUM", "PLATINUM"];
 
 function normalizeProviderPlan(plan) {
   const normalized = String(plan || "").trim().toUpperCase();
@@ -302,7 +311,7 @@ function normalizeProviderPlan(plan) {
 function hasProviderAccess(subscription) {
   const plan = normalizeProviderPlan(subscription?.tier);
   const status = String(subscription?.status || "").toLowerCase();
-  return Boolean(plan) && (status === "active" || status === "trialing" || subscription?.is_trial);
+  return Boolean(plan) && status === "active";
 }
 
 function isPublicProvider(barber) {
@@ -314,7 +323,6 @@ const FILTERS = ["All", "Top Rated", "Nearby", "Open Now", "Customer Location", 
 const SERVICE_TYPES = DEFAULT_SERVICE_TYPES;
 
 const DEFAULT_CENTER = [0.3136, 32.5811];
-const DEFAULT_IMAGE_SET = [logo, logo, logo];
 const LOCATION_STORAGE_KEY = "queless-location";
 const APP_BASE_PATH = normalizeAppBasePath(import.meta.env.VITE_BASE_PATH || import.meta.env.BASE_URL);
 const APP_PATH = "/";
@@ -337,6 +345,7 @@ const UPGRADE_PATH = "/upgrade";
 const LEGACY_UPGRADE_PATH = "/upgrade-plan";
 const SERVICES_PATH = "/services";
 const MAP_PATH = "/map";
+const SMART_MATCH_PATH = "/smart-match";
 const HELP_PATH = "/help";
 const POLICIES_PATH = "/policies";
 const SUPPORT_PATH = "/support";
@@ -422,6 +431,7 @@ function getTabFromPath(pathname, user) {
   if (normalized === ADMIN_PATH || normalized === LEGACY_ADMIN_PATH) return userIsAdmin(user) ? "admin" : "home";
   if (normalized === UPGRADE_PATH || normalized === LEGACY_UPGRADE_PATH) return "upgrade";
   if (normalized === MAP_PATH) return "home";
+  if (normalized === SMART_MATCH_PATH) return "smartMatch";
   if (normalized === BOOKING_CONFIRMATION_PATH || normalized.startsWith(`${BOOKING_CONFIRMATION_PATH}/`)) return "bookingConfirmation";
   if (normalized === SERVICES_PATH) return "searchResults";
   if (normalized === HELP_PATH) return "help";
@@ -487,10 +497,15 @@ function getRetryAfterMs(error) {
 }
 
 function readSearchRouteParams() {
-  const params = new URLSearchParams(window.location.search || "");
+  let params = null;
+  try {
+    params = new URLSearchParams(window?.location?.search || "");
+  } catch (error) {
+    console.error("Could not read search route params", error);
+  }
   return {
-    query: params.get("query") || "",
-    location: params.get("location") || "",
+    query: params?.get?.("query") || "",
+    location: params?.get?.("location") || "",
   };
 }
 
@@ -675,8 +690,10 @@ function normalizeTeamMembers(input = []) {
 function parseTeamMembers(value) {
   return String(value || "")
     .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
+    .flatMap((item) => {
+      const name = item.trim();
+      return name ? [name] : [];
+    })
     .map((name) => ({
       name,
       title: "Barber",
@@ -790,6 +807,12 @@ function normalizeBarber(barber, index) {
     intro_text: String(barber.intro_text || barber.introText || "").trim(),
     verified: barber.verified || barber.verified_status || barber.badge || fallback.verified,
     verified_status: barber.verified_status || barber.verified || fallback.verified,
+    review_status: barber.review_status || "pending_review",
+    is_verified: Boolean(barber.is_verified),
+    is_suspended: Boolean(barber.is_suspended),
+    is_banned: Boolean(barber.is_banned),
+    verification_change_reason: barber.verification_change_reason || "",
+    moderation_note: barber.moderation_note || "",
     document_name: barber.document_name || barber.verification_document_name || "",
     verification_document_name: barber.verification_document_name || barber.document_name || "",
     verification_notes: barber.verification_notes || "",
@@ -824,14 +847,14 @@ function normalizeBarber(barber, index) {
         end: barber.availability_end || fallback.availability?.end || "20:00",
       },
     phone: barber.phone || fallback.phone || "",
-    image: barber.image || fallback.image || logo,
+    image: barber.image || fallback.image || "",
     portfolio: Array.isArray(normalizedPortfolio) ? normalizedPortfolio : [],
     gallery:
       Array.isArray(normalizedPortfolio) && normalizedPortfolio.length
         ? normalizedPortfolio
             .flatMap((item) => [item.afterImage, item.beforeImage].filter(Boolean))
             .slice(0, 6)
-        : [barber.image || fallback.image || logo].filter(Boolean).slice(0, 3),
+        : [barber.image || fallback.image].filter(Boolean).slice(0, 3),
     team_members: normalizeTeamMembers(barber.team_members || barber.teamMembers || fallback.team_members || []),
     teamMembers: normalizeTeamMembers(barber.team_members || barber.teamMembers || fallback.team_members || []),
   };
@@ -925,16 +948,23 @@ function readSessionExpiry(token) {
 }
 
 const LOGIN_ERROR_MESSAGES = {
-  USER_NOT_FOUND: "We couldn’t find an account with that username or email.",
-  INVALID_PASSWORD: "The password you entered is incorrect.",
+  USER_NOT_FOUND: "No account found with that username or email.",
+  INVALID_PASSWORD: "Incorrect username/email or password.",
   ACCOUNT_INACTIVE: "This account is not active. Please contact support or verify your account.",
   ACCOUNT_UNVERIFIED: "This account is not active. Please contact support or verify your account.",
   VALIDATION_ERROR: "",
 };
 
 function getLoginErrorMessage(error) {
+  if (error?.serverUnavailable || [502, 503, 504].includes(Number(error?.status))) {
+    return "We're having trouble connecting to the server. Please try again in a moment.";
+  }
   const code = error?.code || error?.payload?.code || "";
-  return LOGIN_ERROR_MESSAGES[code] || error?.userMessage || error?.message || "Could not log in. Please check your connection and try again.";
+  const fallback = "Could not log in. Please check your connection and try again.";
+  return sanitizeErrorMessage(
+    LOGIN_ERROR_MESSAGES[code] || error?.userMessage || error?.message || fallback,
+    fallback
+  );
 }
 
 function saveAuthSession(token, user, { rememberMe = true } = {}) {
@@ -1000,6 +1030,7 @@ function App() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [barbers, setBarbers] = useState([]);
   const [barbersLoading, setBarbersLoading] = useState(false);
+  const [barbersError, setBarbersError] = useState("");
   const [favorites, setFavorites] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
@@ -1034,7 +1065,6 @@ function App() {
 
   const [selectedBarber, setSelectedBarber] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [showSmartMatch, setShowSmartMatch] = useState(false);
   const [smartMatchInitial, setSmartMatchInitial] = useState({});
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showBarberProfile, setShowBarberProfile] = useState(false);
@@ -1163,6 +1193,7 @@ function App() {
   const [creatingBooking, setCreatingBooking] = useState(false);
   const [typingState, setTypingState] = useState({ active: false, name: "" });
   const [reviewSuccess, setReviewSuccess] = useState("");
+  const [reviewNotice, setReviewNotice] = useState({ message: "", tone: "info" });
   const [reviewedBookings, setReviewedBookings] = useReviewedBookings(currentUser?.username);
   const [reviewBlockUsageByBarber, setReviewBlockUsageByBarber] = useState({});
 
@@ -1308,6 +1339,8 @@ function App() {
           ? `${BOOKING_CONFIRMATION_PATH}${activeConfirmationBooking?.id ? `/${encodeURIComponent(activeConfirmationBooking.id)}` : ""}`
           : activeTab === "searchResults"
           ? `${SERVICES_PATH}${window.location.search || ""}`
+          : activeTab === "smartMatch"
+          ? SMART_MATCH_PATH
           : activeTab === "home"
           ? HOME_PATH
           : activeTab === "categories" || activeTab === "categoryServices"
@@ -1531,7 +1564,7 @@ function App() {
 
   useEffect(() => {
     fetchBarbers();
-  }, []);
+  }, [currentUser?.username, currentUser?.role]);
 
   useEffect(() => {
     if (!currentUser?.username) return;
@@ -1678,7 +1711,10 @@ function App() {
   }, [selectedBarber, profile.phone]);
 
   useEffect(() => {
-    const ids = [...new Set((barbers || []).map((item) => Number(item?.id)).filter(Boolean))];
+    const ids = [...new Set((barbers || []).flatMap((item) => {
+      const id = Number(item?.id);
+      return id ? [id] : [];
+    }))];
     if (!ids.length) return;
     ids.forEach((id) => {
       if (!reviewsByBarber[id]) {
@@ -1873,6 +1909,7 @@ function App() {
 const fetchBarbers = async () => {
   try {
     setBarbersLoading(true);
+    setBarbersError("");
     setGlobalError("");
 
     const [res, mineResult] = await Promise.all([
@@ -1899,6 +1936,7 @@ const fetchBarbers = async () => {
     setBarbers([]);
     saveStoredBarbers([]);
     setGlobalError("");
+    setBarbersError("We could not load providers.");
   } finally {
     setBarbersLoading(false);
   }
@@ -1918,14 +1956,18 @@ const fetchBarbers = async () => {
 
   const fetchFavorites = async (username) => {
     try {
-      const data = await getFavoriteRows(username);
+      const data = await getFavoriteRows();
       const ids = Array.isArray(data)
-        ? data.map((item) => Number(item.barber_id ?? item.barberId ?? item.id)).filter(Boolean)
+        ? data.flatMap((item) => {
+            const id = Number(item.barber_id ?? item.barberId ?? item.id);
+            return id ? [id] : [];
+          })
         : [];
       setFavorites(ids);
       writeStored("favorites", username, ids);
-    } catch {
-      setFavorites(readStored("favorites", username, []));
+    } catch (error) {
+      setFavorites([]);
+      setGlobalError(error?.userMessage || "We couldn't load your favorites. Please try again.");
     }
   };
 
@@ -2018,7 +2060,10 @@ const fetchBarbers = async () => {
         setReviewBlockUsageByBarber((prev) => ({ ...prev, [barberId]: data.reviewBlockUsage }));
       }
     } catch (error) {
-      setReviewSuccess(error.message || "Could not load provider review controls.");
+      setReviewNotice({
+        message: error.message || "Could not load provider review controls.",
+        tone: "error",
+      });
     }
   };
 
@@ -2056,6 +2101,24 @@ const fetchBarbers = async () => {
       setNotifications(readStored("notifications", currentUser.username, []));
     }
   };
+
+  useEffect(() => {
+    if (!currentUser?.username || screen !== "app") return undefined;
+
+    fetchNotifications();
+    const interval = window.setInterval(fetchNotifications, 20000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") fetchNotifications();
+    };
+    window.addEventListener("focus", fetchNotifications);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", fetchNotifications);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [currentUser?.username, screen]);
 
   const fetchWallet = async () => {
     if (!currentUser?.username) return;
@@ -2637,36 +2700,33 @@ const fetchBarbers = async () => {
 
     try {
       if (isFav) {
-        await removeFavorite({ username: currentUser.username, barberId });
+        await removeFavorite({ barberId });
         const next = favorites.filter((item) => Number(item) !== id);
         setFavorites(next);
         writeStored("favorites", currentUser.username, next);
         vibrate(6);
         vibrate(6);
       } else {
-        await addFavorite({ username: currentUser.username, barberId: id });
+        await addFavorite({ barberId: id });
         const next = [...new Set([...favorites, id])];
         setFavorites(next);
         writeStored("favorites", currentUser.username, next);
       }
     } catch (error) {
-      const next = isFav
-        ? favorites.filter((item) => Number(item) !== id)
-        : [...new Set([...favorites, id])];
-      setFavorites(next);
-      writeStored("favorites", currentUser.username, next);
-      setGlobalError("");
+      setGlobalError(error?.userMessage || "We couldn't update that favorite. Please try again.");
     }
   };
 
 const registerBarber = async (payload) => {
-    if (!currentUser?.username) return;
+    if (!currentUser?.username) return false;
     const selectedServices = Array.isArray(payload.services)
       ? payload.services.map(normalizeServiceForBooking)
       : String(payload.services || "")
           .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean)
+          .flatMap((item) => {
+            const service = item.trim();
+            return service ? [service] : [];
+          })
           .map(normalizeServiceForBooking);
 
     const alreadyHasBarberStand =
@@ -2676,23 +2736,24 @@ const registerBarber = async (payload) => {
     if (alreadyHasBarberStand) {
       setShowRegisterBarber(false);
       setGlobalError("This account already has a business profile.");
-      return;
+      return false;
     }
 
     const selectedPlan = normalizeProviderPlan(payload.selectedPlan || payload.plan);
     const startsTrial = false;
 
     const normalizedName = String(payload.businessName || "").trim().toLowerCase().replace(/\s+/g, " ");
-    const duplicateBusiness = getStoredBarbers().some(
+    const duplicateBusiness = normalizedName && getStoredBarbers().some(
       (item) => String(item.business_name || "").trim().toLowerCase().replace(/\s+/g, " ") === normalizedName
     );
     if (duplicateBusiness) {
       setGlobalError("A business with this name already exists. If this is your business, report it for review.");
-      return;
+      return false;
     }
 
+    let data = null;
     try {
-      const data = await registerBarberStand({
+      data = await registerBarberStand({
         business_name: payload.businessName,
         location: payload.location,
         latitude: Number(payload.latitude || DEFAULT_CENTER[0]),
@@ -2703,7 +2764,7 @@ const registerBarber = async (payload) => {
         categories: Array.isArray(payload.categories) ? payload.categories : [],
         primary_category: payload.primaryCategory || null,
         stand_type: payload.standType || "individual",
-        business_type: payload.businessType || "barber",
+        business_type: payload.businessType || "Services",
         map_icon_type: payload.mapIconType || payload.iconCategory || "",
         home_service_enabled: Boolean(payload.homeServiceEnabled),
         intro_text: payload.introText || "",
@@ -2734,8 +2795,10 @@ const registerBarber = async (payload) => {
         });
       }
       await fetchBarbers();
-      if (data?.next_step === "upgrade" || !startsTrial) {
-        setSubscriptionMessage(data?.message || "Business saved as draft. Complete payment later to activate it.");
+      if (data?.next_step === "active") {
+        setSubscriptionMessage(data?.message || "Business active. Your business is visible to customers on the Free plan.");
+      } else if (data?.next_step === "payment_pending" || data?.next_step === "upgrade" || !startsTrial) {
+        setSubscriptionMessage(data?.message || "Business stand draft saved successfully.");
       }
     } catch (error) {
       setGlobalError(
@@ -2743,7 +2806,7 @@ const registerBarber = async (payload) => {
           ? "A business with this name already exists. If this is your business, you can report or claim it."
           : error.message || "Payment was not completed. Your business has been saved, but it will only go live after payment."
       );
-      return;
+      return false;
     }
 
     const upgradedUser = {
@@ -2761,10 +2824,10 @@ const registerBarber = async (payload) => {
     );
 
     setShowRegisterBarber(false);
-    if (startsTrial) {
+    if (startsTrial || data?.next_step === "active") {
       setActiveTab("dashboard");
     } else if (payload.submitIntent === "payment") {
-      openUpgradePlan(selectedPlan || "PLUS");
+      openUpgradePlan(selectedPlan || "FREE");
     } else {
       setActiveTab("dashboard");
     }
@@ -2773,28 +2836,52 @@ const registerBarber = async (payload) => {
       id: makeId("ntf"),
       user: upgradedUser.username,
       type: "system",
-      title: startsTrial ? "Business profile uploaded" : "Business draft saved",
-      message: startsTrial
+      title: startsTrial || data?.next_step === "active" ? "Business profile activated" : "Business draft saved",
+      message: startsTrial || data?.next_step === "active"
         ? "Your business page was uploaded successfully."
         : payload.submitIntent === "payment"
-        ? "Payment was started. Your business will only go live after payment."
-        : "Business saved as draft. Complete payment later to activate it.",
+        ? data?.message || "Payment pending. Your paid plan will activate after payment confirmation."
+        : data?.message || "Business stand draft saved successfully.",
       createdAt: new Date().toISOString(),
       read: false,
     };
     appendStored("notifications", upgradedUser.username, uploadNotification);
     fetchNotifications();
     setGlobalError("");
+    return true;
+  };
+
+  const publishBarberStand = async () => {
+    if (!currentUser?.username || !myBarberProfile) return false;
+    try {
+      const data = await publishMyBarberStand();
+      if (!data?.success) {
+        showSystemToast("Could not publish", data?.message || "Check your stand details and try again.", "error");
+        return false;
+      }
+      const updatedBarber = data?.barber ? normalizeBarber(data.barber, 0) : null;
+      if (updatedBarber) {
+        setBarbers((prev) => mergeBarberListsPreservingLocal([updatedBarber], prev));
+      }
+      await fetchBarbers();
+      showSystemToast("Stand published", "Your stand is now live and visible to customers.", "success");
+      return true;
+    } catch (error) {
+      showSystemToast("Could not publish", error?.message || "Something went wrong. Please try again.", "error");
+      return false;
+    }
   };
 
 const updateBarberStand = async (payload) => {
-    if (!currentUser?.username || !myBarberProfile) return;
+    if (!currentUser?.username || !myBarberProfile) return false;
     const selectedServices = Array.isArray(payload.services)
       ? payload.services.map(normalizeServiceForBooking)
       : String(payload.services || "")
           .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean)
+          .flatMap((item) => {
+            const service = item.trim();
+            return service ? [service] : [];
+          })
           .map(normalizeServiceForBooking);
     const nextDocumentName = String(payload.documentName || "").trim();
     const existingDocumentName = String(myBarberProfile.verification_document_name || myBarberProfile.document_name || "").trim();
@@ -2821,7 +2908,7 @@ const updateBarberStand = async (payload) => {
         accepts_wallet: payload.acceptsWallet ? 1 : 0,
         accepts_cash: 1,
         stand_type: payload.standType || "individual",
-        business_type: payload.businessType || myBarberProfile.business_type || "barber",
+        business_type: payload.businessType || myBarberProfile.business_type || "Services",
         map_icon_type: payload.mapIconType || myBarberProfile.map_icon_type || myBarberProfile.mapIconType || "",
         home_service_enabled: payload.homeServiceEnabled ? 1 : 0,
         intro_text: payload.introText || "",
@@ -2848,7 +2935,7 @@ const updateBarberStand = async (payload) => {
         categories: Array.isArray(payload.categories) ? payload.categories : [],
         primary_category: payload.primaryCategory || null,
         stand_type: nextBarber.stand_type || "individual",
-        business_type: nextBarber.business_type || "barber",
+        business_type: nextBarber.business_type || "Services",
         map_icon_type: nextBarber.map_icon_type || payload.mapIconType || "",
         home_service_enabled: Boolean(nextBarber.home_service_enabled),
         intro_text: nextBarber.intro_text || "",
@@ -2869,7 +2956,7 @@ const updateBarberStand = async (payload) => {
       await fetchBarbers();
     } catch (error) {
       setGlobalError(error.message || "Could not update your business profile. Please check your connection and try again.");
-      return;
+      return false;
     }
 
     setShowEditBarber(false);
@@ -2886,6 +2973,7 @@ const updateBarberStand = async (payload) => {
     appendStored("notifications", currentUser.username, updateNotification);
     showSystemToast("Business updated", "Your business changes were saved.", "system");
     fetchNotifications();
+    return true;
   };
 
   const deleteBarberStand = async () => {
@@ -3171,7 +3259,7 @@ const updateBarberStand = async (payload) => {
 
   const getFriendlyPaymentError = (error) => {
     if (error?.status === 401) return "Your session has expired. Please log in again.";
-    if (error?.status === 403) return "You do not have permission to complete this action.";
+    if (error?.status === 403) return error?.message || "This action is not available for your account type.";
     return error?.message || "Payment failed. Please try again.";
   };
 
@@ -3201,29 +3289,43 @@ const updateBarberStand = async (payload) => {
         idempotencyKey
       );
 
-      setPendingSubscriptionPayment({
-        reference: data?.payment?.reference || "",
+      const nextSubscription = {
+        ...DEFAULT_SUBSCRIPTION_STATE,
+        ...(data?.subscription || {}),
+        features: {
+          ...DEFAULT_SUBSCRIPTION_STATE.features,
+          ...(data?.subscription?.features || {}),
+        },
+      };
+      const activatedImmediately = hasProviderAccess(nextSubscription);
+      const providerActiveMessage =
+        tier === "PLATINUM"
+          ? "Platinum is active. Advanced provider tools are unlocked."
+          : tier === "PREMIUM"
+            ? "Premium is active. Your provider features have been updated."
+            : "Free plan is active. Your provider features have been updated.";
+
+      setPendingSubscriptionPayment(data?.payment?.reference ? {
+        reference: data.payment.reference,
         tier,
         provider,
-      });
-      const activatedImmediately = ["active", "trialing"].includes(String(data?.subscription?.status || "").toLowerCase());
+      } : null);
       if ((provider === "trial" || activatedImmediately) && data?.subscription) {
-        setSubscriptionState({
-          ...DEFAULT_SUBSCRIPTION_STATE,
-          ...data.subscription,
-          features: {
-            ...DEFAULT_SUBSCRIPTION_STATE.features,
-            ...(data.subscription.features || {}),
-          },
-        });
+        setSubscriptionState(nextSubscription);
         setPendingSubscriptionPayment(null);
         if (activatedImmediately && provider !== "trial") {
-          showSystemToast("Payment successful", data?.message || "Your business is now active on Queless.", "system");
+          const isFreeActivation = tier === "FREE" || provider === "free";
+          showSystemToast(
+            isFreeActivation ? "Free plan activated" : "Payment successful",
+            data?.message || providerActiveMessage,
+            "system"
+          );
         }
+        await fetchSubscription();
         fetchBarbers();
         setActiveTab(effectiveIsBarber ? "dashboard" : "profile");
       }
-      setSubscriptionMessage(data?.message || `Approve the ${provider} payment prompt.`);
+      setSubscriptionMessage(activatedImmediately ? providerActiveMessage : data?.message || "Plan selected. Complete payment to activate your business.");
       return true;
     } catch (error) {
       setSubscriptionMessage(getFriendlyPaymentError(error));
@@ -3239,17 +3341,26 @@ const updateBarberStand = async (payload) => {
     try {
       setSubscriptionLoading(true);
       const data = await verifySubscriptionUpgrade(reference);
-      setSubscriptionState({
+      const nextSubscription = {
         ...DEFAULT_SUBSCRIPTION_STATE,
         ...(data?.subscription || {}),
         features: {
           ...DEFAULT_SUBSCRIPTION_STATE.features,
           ...(data?.subscription?.features || {}),
         },
-      });
+      };
+      const tier = normalizeProviderPlan(nextSubscription.tier);
+      const providerActiveMessage =
+        tier === "PLATINUM"
+          ? "Platinum is active. Advanced provider tools are unlocked."
+          : tier === "PREMIUM"
+            ? "Premium is active. Your provider features have been updated."
+            : "Your plan is active.";
+      setSubscriptionState(nextSubscription);
       setPendingSubscriptionPayment(null);
-      setSubscriptionMessage(data?.message || "Subscription upgraded successfully.");
-      showSystemToast("Subscription upgraded", data?.message || "Your plan is now active.", "system");
+      setSubscriptionMessage(data?.message || providerActiveMessage);
+      showSystemToast("Subscription upgraded", data?.message || providerActiveMessage, "system");
+      await fetchSubscription();
       fetchBarbers();
       setActiveTab(effectiveIsBarber ? "dashboard" : "profile");
       return true;
@@ -3264,6 +3375,11 @@ const updateBarberStand = async (payload) => {
   };
 
   const openCustomerPremiumPayment = () => {
+    if (customerPremiumActive) {
+      setCustomerSubscriptionMessage("Customer Premium is active. Smart Match is unlocked.");
+      setCustomerPremiumPaymentOpen(false);
+      return;
+    }
     setCustomerSubscriptionMessage("");
     setCustomerPremiumPaymentOpen(true);
   };
@@ -3280,26 +3396,36 @@ const updateBarberStand = async (payload) => {
           method: request.provider || "mtn_mobile_money",
           phoneNumber: request.phoneNumber || profile.phone,
           payment_phone: request.phoneNumber || profile.phone,
+          promoCode: request.promoCode || request.promo_code || "",
         },
         idempotencyKey
       );
-      setCustomerSubscriptionPlan(data?.plan || customerSubscriptionPlan);
-      setCustomerSubscriptionState({
+      const nextSubscription = {
         ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE,
         ...(data?.subscription || {}),
         features: {
           ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE.features,
           ...(data?.subscription?.features || {}),
         },
-      });
-      setPendingCustomerSubscriptionPayment(data?.payment?.reference ? {
+      };
+      const premiumActivated = isCustomerPremiumActive(nextSubscription);
+      setCustomerSubscriptionPlan(data?.plan || customerSubscriptionPlan);
+      setCustomerSubscriptionState(nextSubscription);
+      setPendingCustomerSubscriptionPayment(!premiumActivated && data?.payment?.reference ? {
         reference: data.payment.reference,
         provider: data.payment.provider || request.provider || "mtn_mobile_money",
         status: data.payment.status || "pending",
         amount: data.payment.amount || 0,
         billingCycle: data.payment.billingCycle || request.billingCycle || "monthly",
       } : null);
-      setCustomerSubscriptionMessage(data?.message || "Approve the Mobile Money prompt to activate Customer Premium.");
+      if (premiumActivated) {
+        setCustomerPremiumPaymentOpen(false);
+        setCustomerSubscriptionMessage("Customer Premium is active. Smart Match is unlocked.");
+        showSystemToast("Customer Premium active", data?.message || "Smart Match is unlocked.", "system");
+        await fetchCustomerSubscription();
+      } else {
+        setCustomerSubscriptionMessage(data?.message || "Approve the Mobile Money prompt to activate Customer Premium.");
+      }
       return true;
     } catch (error) {
       setCustomerSubscriptionMessage(getFriendlyPaymentError(error));
@@ -3314,17 +3440,20 @@ const updateBarberStand = async (payload) => {
     try {
       setCustomerSubscriptionLoading(true);
       const data = await verifyCustomerSubscriptionUpgrade(reference);
-      setCustomerSubscriptionState({
+      const nextSubscription = {
         ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE,
         ...(data?.subscription || {}),
         features: {
           ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE.features,
           ...(data?.subscription?.features || {}),
         },
-      });
+      };
+      setCustomerSubscriptionState(nextSubscription);
       setPendingCustomerSubscriptionPayment(null);
+      setCustomerPremiumPaymentOpen(false);
       setCustomerSubscriptionMessage(data?.message || "Customer Premium is active. Smart Match is unlocked.");
       showSystemToast("Customer Premium active", data?.message || "Smart Match is unlocked.", "system");
+      await fetchCustomerSubscription();
       return true;
     } catch (error) {
       if (!silent) {
@@ -3803,8 +3932,12 @@ const updateBarberStand = async (payload) => {
           rating,
           reviews,
           reviewCount: reviews.length,
-          image: normalized.image || fallbackStandIcon,
-          gallery: [normalized.image || fallbackStandIcon, ...DEFAULT_IMAGE_SET].slice(0, 3),
+          image: normalized.image || resolveProviderImage(normalized),
+          gallery: (Array.isArray(normalized.gallery) ? normalized.gallery : [])
+            .filter(Boolean)
+            .concat(normalized.image ? [normalized.image] : [resolveProviderImage(normalized)])
+            .filter((value, index, list) => list.indexOf(value) === index)
+            .slice(0, 3),
           distance,
           isFavorite: favorites.includes(Number(normalized.id)),
         };
@@ -3819,7 +3952,16 @@ const updateBarberStand = async (payload) => {
 
   const filteredBarbers = useMemo(() => {
     let items = enrichedBarbers.filter((barber) => {
-      if (!isPublicProvider(barber)) return false;
+      // A provider must always see their own published stand in public discovery
+      // so they can verify it's live and how customers see it.
+      // The ownership check bypasses subscription-status transient issues.
+      const isOwnPublishedStand =
+        currentUser?.username &&
+        String(barber.ownerUsername || "") === String(currentUser.username || "") &&
+        (barber.is_published === 1 ||
+          barber.is_published === true ||
+          String(barber.is_published) === "1");
+      if (!isOwnPublishedStand && !isPublicProvider(barber)) return false;
       const q = query.toLowerCase();
       return (
         barber.business_name.toLowerCase().includes(q) ||
@@ -3844,7 +3986,7 @@ const updateBarberStand = async (payload) => {
     }
 
     if (selectedFilter === "Nearby" && userLocation) {
-      items = [...items].sort((a, b) => {
+      items = items.toSorted((a, b) => {
         const aKm = haversineDistance(
           userLocation.latitude,
           userLocation.longitude,
@@ -3883,7 +4025,7 @@ const updateBarberStand = async (payload) => {
       items = items.filter((item) => item.featured || item.subscription?.features?.homepageFeatured);
     }
 
-    return [...items].sort((a, b) => {
+    return items.toSorted((a, b) => {
       const tierDiff =
         Number(b.subscription?.features?.rankingWeight || 0) -
         Number(a.subscription?.features?.rankingWeight || 0);
@@ -4003,7 +4145,7 @@ const updateBarberStand = async (payload) => {
     const openSlots = availableTimeSlots.filter((item) => !item.disabled);
     const nextSlot = openSlots[0] || null;
     const workingWindow = barberDayAvailability?.workingWindow || selectedBarber?.availability || null;
-    const allReasons = new Set(availableTimeSlots.map((item) => item.disabledReason).filter(Boolean));
+    const allReasons = new Set(availableTimeSlots.flatMap((item) => (item.disabledReason ? [item.disabledReason] : [])));
     return {
       loading: barberDayAvailabilityLoading,
       error: barberDayAvailabilityError,
@@ -4164,9 +4306,16 @@ const updateBarberStand = async (payload) => {
         [selectedBarber.id]: result.reviewBlockUsage || prev[selectedBarber.id],
       }));
       await fetchManagedReviewsForBarber(selectedBarber.id);
-      setReviewSuccess(result.message || (blocked ? "Review hidden from public stand." : "Review restored to public stand."));
+      setReviewNotice({
+        message: result.message || (blocked ? "Review hidden from public stand." : "Review restored to public stand."),
+        tone: "success",
+      });
     } catch (error) {
-      setReviewSuccess(error.message || "Could not update review visibility.");
+      const isPlanRestriction = error?.status === 403 || /review blocking/i.test(error?.message || "");
+      setReviewNotice({
+        message: isPlanRestriction ? "Review blocking is available on the Platinum plan." : error.message || "Could not update review visibility.",
+        tone: isPlanRestriction ? "upgrade" : "error",
+      });
     }
   };
 
@@ -4195,15 +4344,21 @@ const updateBarberStand = async (payload) => {
 
   const subscriptionTier = String(subscriptionState?.tier || "").toUpperCase();
   const customerPremiumActive = isCustomerPremiumActive(customerSubscriptionState);
-  const canUseSmartMatch = String(currentUser?.role || "").toLowerCase() === "customer" && customerPremiumActive;
+  const isCustomerAccount = String(currentUser?.role || "").toLowerCase() === "customer";
+  const canUseSmartMatch = isCustomerAccount && customerPremiumActive;
+  const smartMatchUpsellVisible = isCustomerAccount && !customerPremiumActive;
+  useEffect(() => {
+    if (customerPremiumActive && customerPremiumPaymentOpen) {
+      setCustomerPremiumPaymentOpen(false);
+    }
+  }, [customerPremiumActive, customerPremiumPaymentOpen]);
   const trialAccessExpired =
     effectiveIsBarber &&
     !isAdmin &&
     screen === "app" &&
     subscriptionReady &&
     !subscriptionLoading &&
-    !subscriptionState?.is_trial &&
-    (subscriptionTier === "LOCKED" || subscriptionState?.status === "trial_expired");
+    (subscriptionTier === "LOCKED" || subscriptionState?.status === "expired");
   const showTrialUpgradeScreen = trialAccessExpired && !trialUpgradeDismissed;
   const openUpgradePlan = (tier = "") => {
     const normalized = normalizeProviderPlan(tier);
@@ -4259,6 +4414,7 @@ const updateBarberStand = async (payload) => {
       setSelectedBarber(null);
       return;
     }
+    setReviewNotice({ message: "", tone: "info" });
     setSelectedBarber(provider);
     setShowBarberProfile(true);
     setShowBookingModal(false);
@@ -4294,12 +4450,14 @@ const updateBarberStand = async (payload) => {
 
   const openSmartMatch = (initial = {}) => {
     setSmartMatchInitial(initial || {});
-    setShowSmartMatch(true);
+    setPreviousMobileView(activeTab || "home");
     setShowBarberProfile(false);
     setShowBookingModal(false);
     setShowQuoteModal(false);
     setShowChat(false);
     setMapState((prev) => ({ ...prev, show: false }));
+    window.history.pushState({}, "", appPath(SMART_MATCH_PATH));
+    setActiveTab("smartMatch");
   };
 
   const openCategoryServices = (category) => {
@@ -4324,11 +4482,33 @@ const updateBarberStand = async (payload) => {
     setActiveTab(returnTab);
   };
 
+  // Sidebar navigation from the desktop map dashboard. Maps dashboard nav keys
+  // to real app tabs and closes the map. "favorites" has no dedicated tab yet,
+  // so it routes to the profile screen where saved providers live.
+  const navigateFromMap = (target) => {
+    const tabByKey = {
+      home: "home",
+      discover: "home",
+      map: "map",
+      bookings: "bookings",
+      inbox: "inbox",
+      messages: "inbox",
+      favorites: "profile",
+      profile: "profile",
+      dashboard: "dashboard",
+      upgrade: "upgrade",
+    };
+    const nextTab = tabByKey[target] || "home";
+    if (nextTab === "map") return;
+    setMapState((prev) => ({ ...prev, show: false }));
+    setActiveTab(nextTab);
+  };
+
   const isAdminActive = isAdmin && (activeTab === "admin" || activeTab === "adminReports" || activeTab === "adminSms");
 
   const content = (
     <>
-      {activeTab !== "bookingConfirmation" && !isAdminActive && (
+      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && !isAdminActive && (
       <AppHeader
         theme={theme}
         setTheme={setTheme}
@@ -4358,13 +4538,16 @@ const updateBarberStand = async (payload) => {
       />
       )}
 
-      {activeTab !== "bookingConfirmation" && !isAdminActive && (
+      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && !isAdminActive && (
       <AccountMenu
         show={showAccountMenu}
         isBarber={effectiveIsBarber}
         isAdmin={isAdmin}
         accountName={profile.fullName || currentUser?.username}
-          accountType={isAdmin ? "admin" : effectiveIsBarber ? "provider" : "customer"}
+        accountType={isAdmin ? "admin" : effectiveIsBarber ? "provider" : "customer"}
+        accountPhoto={profileImage}
+        accountUsername={currentUser?.username || profile.username || ""}
+        accountEmail={profile.email || currentUser?.email || ""}
         onNavigate={handleAccountMenuNavigate}
         onClose={() => setShowAccountMenu(false)}
         onLogout={logout}
@@ -4385,7 +4568,6 @@ const updateBarberStand = async (payload) => {
       />
 
       {globalError && <div className="global-error-v4">{globalError}</div>}
-      {reviewSuccess && <div className="auth-success">{reviewSuccess}</div>}
 
       {activeTab === "bookingConfirmation" && (
         <BookingConfirmationScreen
@@ -4437,6 +4619,7 @@ const updateBarberStand = async (payload) => {
               onSearchSubmit={openSearchResults}
               onOpenSmartMatch={openSmartMatch}
               smartMatchPremiumActive={canUseSmartMatch}
+              smartMatchUpsellVisible={smartMatchUpsellVisible}
               onBecomeProvider={() => {
                 if (effectiveIsBarber) {
                   setActiveTab("dashboard");
@@ -4471,6 +4654,7 @@ const updateBarberStand = async (payload) => {
             onOpenSmartMatch={openSmartMatch}
             onSearchSubmit={openSearchResults}
             smartMatchPremiumActive={canUseSmartMatch}
+            smartMatchUpsellVisible={smartMatchUpsellVisible}
           />
         </div>
       )}
@@ -4487,6 +4671,7 @@ const updateBarberStand = async (payload) => {
             onOpenMap={openMarketplaceMap}
             onOpenSmartMatch={openSmartMatch}
             smartMatchPremiumActive={canUseSmartMatch}
+            smartMatchUpsellVisible={smartMatchUpsellVisible}
           />
         </div>
       )}
@@ -4572,7 +4757,32 @@ const updateBarberStand = async (payload) => {
           fileToDataUrl={fileToDataUrl}
           theme={theme}
           setTheme={setTheme}
+          onNotificationToast={showSystemToast}
         />
+        </div>
+      )}
+
+      {effectiveIsBarber && activeTab === "dashboard" && myBarberProfile?.is_banned && (
+        <div className="provider-status-notice-v1 banned">
+          <strong>Your business has been banned.</strong>
+          <p>Your stand is no longer visible to customers and cannot accept bookings. If you believe this is a mistake, please contact Queless support.</p>
+          {myBarberProfile.moderation_note && <p className="notice-reason">Admin note: {myBarberProfile.moderation_note}</p>}
+        </div>
+      )}
+
+      {effectiveIsBarber && activeTab === "dashboard" && !myBarberProfile?.is_banned && myBarberProfile?.is_suspended && (
+        <div className="provider-status-notice-v1 suspended">
+          <strong>Your business is currently suspended.</strong>
+          <p>Your stand is hidden from listings and cannot accept new bookings. Please contact Queless support to resolve this.</p>
+          {myBarberProfile.moderation_note && <p className="notice-reason">Admin note: {myBarberProfile.moderation_note}</p>}
+        </div>
+      )}
+
+      {effectiveIsBarber && activeTab === "dashboard" && !myBarberProfile?.is_banned && !myBarberProfile?.is_suspended && myBarberProfile?.review_status === "changes_requested" && (
+        <div className="provider-status-notice-v1 changes">
+          <strong>Action required: Changes requested for your business.</strong>
+          <p>Your stand is currently unverified. Please review the feedback below and update your business profile.</p>
+          {myBarberProfile.verification_change_reason && <p className="notice-reason">Reason: {myBarberProfile.verification_change_reason}</p>}
         </div>
       )}
 
@@ -4600,6 +4810,16 @@ const updateBarberStand = async (payload) => {
           onOpenReports={() => setActiveTab("reports")}
           onOpenAiCoach={() => setActiveTab("aiCoach")}
           onOpenUpgradePlan={openUpgradePlan}
+          onPublishStand={publishBarberStand}
+          onViewPublicStand={() => {
+            if (myBarberProfile) {
+              setSelectedBarber(myBarberProfile);
+              setShowBarberProfile(true);
+            }
+          }}
+          onViewOnMap={() => {
+            openMarketplaceMap(myBarberProfile?.business_type || "All");
+          }}
           getBookingsForCalendar={getBookingsForCalendar}
           dateValueToDate={dateValueToDate}
           formatMoney={formatMoney}
@@ -4627,7 +4847,7 @@ const updateBarberStand = async (payload) => {
           <AiCoachScreen
             barber={myBarberProfile}
             subscription={subscriptionState}
-            onUpgradePlan={() => openUpgradePlan("PLATINUM")}
+            onUpgradePlan={(plan = "PREMIUM") => openUpgradePlan(plan)}
             onEditProfile={() => {
               setSelectedBarber(myBarberProfile);
               setShowEditBarber(true);
@@ -4635,9 +4855,29 @@ const updateBarberStand = async (payload) => {
             onOpenReports={() => setActiveTab("reports")}
             onOpenBookings={() => setActiveTab("bookings")}
             onOpenDashboard={() => setActiveTab("dashboard")}
-            onShowActionHint={(message) => showSystemToast("AI Coach action", message, "system")}
+            onShowActionHint={(message) => showSystemToast("Provider Coach action", message, "system")}
           />
         </div>
+      )}
+
+      {activeTab === "smartMatch" && (
+        <SmartMatchPage
+          initial={smartMatchInitial}
+          providers={enrichedBarbers.filter(isPublicProvider)}
+          locationLabel={locationLabel}
+          customerSubscription={customerSubscriptionState}
+          customerSubscriptionLoading={customerSubscriptionLoading}
+          customerSubscriptionMessage={customerSubscriptionMessage}
+          pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
+          onBack={() => setActiveTab(previousMobileView === "smartMatch" ? "home" : previousMobileView || "home")}
+          onUpgradePremium={openCustomerPremiumPayment}
+          onVerifyPremium={(reference) => verifyCurrentCustomerPremium(reference)}
+          onContinueManualSearch={() => setActiveTab("searchResults")}
+          onOpenProvider={(provider) => {
+            setActiveTab(previousMobileView === "smartMatch" ? "home" : previousMobileView || "home");
+            openProviderProfile(provider);
+          }}
+        />
       )}
 
       {isAdmin && (activeTab === "admin" || activeTab === "adminReports" || activeTab === "adminSms") && (
@@ -4692,7 +4932,7 @@ const updateBarberStand = async (payload) => {
         </div>
       )}
 
-      {activeTab !== "bookingConfirmation" && !isAdminActive && (
+      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && !isAdminActive && (
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -4707,49 +4947,74 @@ const updateBarberStand = async (payload) => {
           setShowAccountMenu(false);
           fetchNotifications();
         }}
-        isOverlayOpen={activeTab === "upgrade" || showTrialUpgradeScreen || mapState.show || showBarberProfile || showBookingModal || showSmartMatch || showQuoteModal || showChat || showRegisterBarber || showEditBarber || showNotifications || showAccountMenu}
+        isOverlayOpen={activeTab === "upgrade" || showTrialUpgradeScreen || mapState.show || showBarberProfile || showBookingModal || showQuoteModal || showChat || showRegisterBarber || showEditBarber || showNotifications || showAccountMenu}
       />
       )}
 
       <MarketplaceMapOverlay
         show={mapState.show}
         theme={theme}
+        currentUser={currentUser}
         category={mapState.category}
         providers={mapState.category && mapState.category !== "All" ? enrichedBarbers.filter(isPublicProvider) : filteredBarbers.length ? filteredBarbers : enrichedBarbers.filter(isPublicProvider)}
         userLocation={userLocation}
         locationLabel={locationLabel}
         locationMessage={locationMessage}
         locationLoading={locationLoading}
+        providersLoading={barbersLoading}
+        providersError={barbersError}
+        isBarber={effectiveIsBarber}
+        myStand={myBarberProfile}
+        favorites={favorites}
+        unreadCount={unreadNotifications.length}
         onClose={closeMarketplaceMap}
         onOpenMenu={() => {
           setShowAccountMenu(true);
           setShowNotifications(false);
         }}
+        onNavigate={navigateFromMap}
         onUseCurrentLocation={requestLocation}
         onManualLocation={changeLocation}
         onRefreshProviders={fetchBarbers}
         onOpenProvider={openProviderProfile}
+        onMessageProvider={(provider) =>
+          openConversation({
+            barber: provider,
+            customerUsername: currentUser?.username,
+            targetName: provider?.business_name,
+          })
+        }
+        onToggleFavorite={toggleFavorite}
+        onOpenNotifications={() => {
+          setShowNotifications((value) => !value);
+          setShowAccountMenu(false);
+          fetchNotifications();
+        }}
       />
 
       <BarberProfileSheet
         show={showBarberProfile}
         barber={selectedBarber ? { ...selectedBarber, reviews: reviewsByBarber[selectedBarber.id] || [], reviewCount: (reviewsByBarber[selectedBarber.id] || []).length, rating: getAverageRating(reviewsByBarber[selectedBarber.id] || []) } : selectedBarber}
         reviewBlockUsage={selectedBarber ? reviewBlockUsageByBarber[selectedBarber.id] : null}
+        reviewNotice={reviewNotice}
         currentUser={currentUser}
         currentUserIsBarber={effectiveIsBarber}
-        fallbackImage={fallbackStandIcon}
-        onClose={() => setShowBarberProfile(false)}
+        fallbackImage={selectedBarber ? resolveProviderImage(selectedBarber) : NEUTRAL_PLACEHOLDER}
+        onClose={() => {
+          setReviewNotice({ message: "", tone: "info" });
+          setShowBarberProfile(false);
+        }}
         onToggleFavorite={toggleFavorite}
-        onBook={() => {
+        onBook={(service) => {
           const services = getBarberServices(selectedBarber);
-          const firstService = services[0];
-          if (firstService?.id) {
-            setSelectedService(firstService.id);
-            const firstLocationType = String(firstService.location_type || "provider_location").toLowerCase();
+          const targetService = service || services[0];
+          if (targetService?.id) {
+            setSelectedService(targetService.id);
+            const locationType = String(targetService.location_type || "provider_location").toLowerCase();
             const supportsHome =
               Number(selectedBarber?.home_service_enabled || selectedBarber?.homeServiceEnabled || 0) === 1 ||
-              firstLocationType === "customer_location";
-            setBookingLocationType(firstLocationType === "customer_location" && supportsHome ? "customer_location" : "provider_location");
+              locationType === "customer_location";
+            setBookingLocationType(locationType === "customer_location" && supportsHome ? "customer_location" : "provider_location");
             setBookingAddress("");
           }
           setShowBookingModal(true);
@@ -4768,6 +5033,19 @@ const updateBarberStand = async (payload) => {
         })}
         onReportProvider={() => openSupportFlow("Report provider")}
         onToggleReviewBlock={toggleReviewPublicBlock}
+        onEditStand={() => {
+          setShowBarberProfile(false);
+          setSelectedBarber(myBarberProfile);
+          setShowEditBarber(true);
+        }}
+        onOpenDashboard={() => {
+          setShowBarberProfile(false);
+          setActiveTab("dashboard");
+        }}
+        onViewOnMap={() => {
+          setShowBarberProfile(false);
+          openMarketplaceMap(myBarberProfile?.business_type || "All");
+        }}
       />
 
       <BookingModal
@@ -4805,6 +5083,14 @@ const updateBarberStand = async (payload) => {
         onClose={() => setShowBookingModal(false)}
         onOpenSmartMatch={() => openSmartMatch({ category: selectedBarber?.business_type || selectedBarber?.category_name || "" })}
         smartMatchPremiumActive={canUseSmartMatch}
+        onMessageProvider={() => {
+          openConversation({
+            barber: selectedBarber,
+            customerUsername: currentUser?.username || "",
+            targetName: selectedBarber?.business_name || "Provider",
+          });
+          setShowBookingModal(false);
+        }}
         onConfirm={createBooking}
         creatingBooking={creatingBooking}
         bookingCooldownInfo={bookingCooldownInfo}
@@ -4854,6 +5140,7 @@ const updateBarberStand = async (payload) => {
       <EditBarberModal
         show={showEditBarber}
         barber={myBarberProfile}
+        profile={profile}
         onClose={() => setShowEditBarber(false)}
         onSubmit={updateBarberStand}
       />
@@ -4865,30 +5152,8 @@ const updateBarberStand = async (payload) => {
         onSubmit={registerBarber}
       />
 
-      <SmartMatchModal
-        show={showSmartMatch}
-        initial={smartMatchInitial}
-        providers={enrichedBarbers.filter(isPublicProvider)}
-        locationLabel={locationLabel}
-        customerSubscription={customerSubscriptionState}
-        customerSubscriptionLoading={customerSubscriptionLoading}
-        customerSubscriptionMessage={customerSubscriptionMessage}
-        pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
-        onClose={() => setShowSmartMatch(false)}
-        onUpgradePremium={openCustomerPremiumPayment}
-        onVerifyPremium={(reference) => verifyCurrentCustomerPremium(reference)}
-        onContinueManualSearch={() => {
-          setShowSmartMatch(false);
-          setActiveTab("searchResults");
-        }}
-        onOpenProvider={(provider) => {
-          setShowSmartMatch(false);
-          openProviderProfile(provider);
-        }}
-      />
-
       <PaymentFlowModal
-        show={customerPremiumPaymentOpen}
+        show={customerPremiumPaymentOpen && !customerPremiumActive}
         title="Customer Premium"
         subtitle="Choose how you want to pay for Smart Match access."
         amountLabel="Premium: UGX 10,000/month"
@@ -4901,8 +5166,11 @@ const updateBarberStand = async (payload) => {
         mtnReadinessMessage={walletTopupReadinessMessage}
         airtelReady={false}
         submitLabel="Confirm Premium Payment"
+        promoEnabled
+        allowPromoOnly
+        promoLabel="Customer Premium promo code"
         onClose={() => setCustomerPremiumPaymentOpen(false)}
-        onSubmit={({ method, phoneNumber }) => startCurrentCustomerPremiumUpgrade({ billingCycle: "monthly", provider: method, phoneNumber })}
+        onSubmit={({ method, phoneNumber, promoCode }) => startCurrentCustomerPremiumUpgrade({ billingCycle: "monthly", provider: method, phoneNumber, promoCode })}
         onVerify={async (reference) => {
           const ok = await verifyCurrentCustomerPremium(reference);
           if (ok) window.setTimeout(() => setCustomerPremiumPaymentOpen(false), 900);
@@ -4921,7 +5189,7 @@ const updateBarberStand = async (payload) => {
           message={subscriptionMessage}
           onUpgrade={startCurrentSubscriptionUpgrade}
           onVerify={verifyCurrentSubscription}
-          initialSelectedTier={showTrialUpgradeScreen ? (normalizeProviderPlan(myBarberProfile?.selected_plan || subscriptionState?.tier) || "PLUS") : upgradeSelectedTier}
+          initialSelectedTier={showTrialUpgradeScreen ? (normalizeProviderPlan(myBarberProfile?.selected_plan || subscriptionState?.tier) || "FREE") : upgradeSelectedTier}
           currentUser={currentUser}
           isAdmin={isAdmin}
           onClose={() => {
@@ -4943,7 +5211,13 @@ const updateBarberStand = async (payload) => {
 
       {deleteStandConfirmOpen ? (
         <>
-          <div className="booking-overlay-v4 open" onClick={() => !deleteStandLoading && setDeleteStandConfirmOpen(false)} />
+          <button
+            type="button"
+            className="booking-overlay-v4 open"
+            onClick={() => setDeleteStandConfirmOpen(false)}
+            disabled={deleteStandLoading}
+            aria-label="Close delete confirmation"
+          />
           <section className="delete-stand-confirm-v16" role="dialog" aria-modal="true" aria-labelledby="delete-stand-title">
             <div className="delete-stand-icon-v16"><FiAlertTriangle /></div>
             <div>

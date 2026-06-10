@@ -132,7 +132,7 @@ function normalizeStandType(value) {
 
 function normalizeBusinessType(value) {
   const normalized = String(value || "").trim();
-  return normalized || "Beauty & Grooming";
+  return normalized || "Services";
 }
 
 function normalizeMapIconType(value, fallback = "") {
@@ -152,11 +152,6 @@ function validateImageReference(value, fieldName = "image") {
   if (!image) return "";
 
   if (/^data:image\/(png|jpe?g|webp);base64,/i.test(image)) {
-    const base64 = image.split(",", 2)[1] || "";
-    const approxBytes = Math.ceil((base64.length * 3) / 4);
-    if (approxBytes > 2 * 1024 * 1024) {
-      throw validationError(`${fieldName} must be 2MB or smaller.`);
-    }
     return image;
   }
 
@@ -168,6 +163,82 @@ function validateImageReference(value, fieldName = "image") {
   }
 
   throw validationError(`${fieldName} must be a PNG, JPG, WebP data image, or a safe image URL.`);
+}
+
+function getImageReferenceBytes(value = "") {
+  const image = String(value || "").trim();
+  if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(image)) return 0;
+  const base64 = image.split(",", 2)[1] || "";
+  return Math.ceil((base64.length * 3) / 4);
+}
+
+function addImageUsage(stats, value, fieldName) {
+  const image = validateImageReference(value, fieldName);
+  if (!image) return stats;
+  stats.count += 1;
+  stats.bytes += getImageReferenceBytes(image);
+  return stats;
+}
+
+function getPlanImageLimitCopy(planConfig, reason = "count") {
+  const name = planConfig.name || "Your plan";
+  const maxImages = Number(planConfig.photoLimit || 0);
+  const totalMb = Number(planConfig.imageUploadLimitMb || maxImages * 10 || 0);
+  if (reason === "logo_count" || reason === "logo_size") return "Business logo: 1 image, up to 10MB.";
+  if (reason === "service_size") return "Service image must be 10MB or less.";
+  if (reason === "portfolio_size") return `${name} plan allows portfolio photos up to ${totalMb}MB total.`;
+  if (reason === "service_count") return "Each service can have one image.";
+  return `${name} plan allows up to ${maxImages} portfolio photos.`;
+}
+
+function assertProviderImageLimits({ planConfig, businessImage = "", services = [], portfolio = [], teamMembers = [] }) {
+  const stats = {
+    logo: { count: 0, bytes: 0 },
+    service: { count: 0, bytes: 0 },
+    portfolio: { count: 0, bytes: 0 },
+  };
+  addImageUsage(stats.logo, businessImage, "Business image");
+  for (const service of Array.isArray(services) ? services : []) {
+    const serviceImageRefs = [
+      service?.image || service?.service_image || "",
+      ...(Array.isArray(service?.images) ? service.images : []),
+    ]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+    const uniqueServiceImages = [...new Set(serviceImageRefs)];
+    if (uniqueServiceImages.length > 1) {
+      throw validationError("Each service can have one image.");
+    }
+    const beforeBytes = stats.service.bytes;
+    addImageUsage(stats.service, uniqueServiceImages[0] || "", "Service image");
+    if (stats.service.bytes - beforeBytes > 10 * 1024 * 1024) {
+      throw validationError(getPlanImageLimitCopy(planConfig, "service_size"));
+    }
+  }
+  for (const item of Array.isArray(portfolio) ? portfolio : []) {
+    addImageUsage(stats.portfolio, item?.beforeImage || item?.before_image || "", "Portfolio before image");
+    addImageUsage(stats.portfolio, item?.afterImage || item?.after_image || item?.image || "", "Portfolio image");
+  }
+  for (const member of Array.isArray(teamMembers) ? teamMembers : []) {
+    addImageUsage(stats.service, member?.image || "", "Team member image");
+  }
+
+  const maxImages = Number(planConfig.photoLimit || 0);
+  const maxBytes = Number(planConfig.imageUploadLimitMb || maxImages * 10) * 1024 * 1024;
+  const logoMaxBytes = 10 * 1024 * 1024;
+  if (stats.logo.count > 1) {
+    throw validationError(getPlanImageLimitCopy(planConfig, "logo_count"));
+  }
+  if (stats.logo.bytes > logoMaxBytes) {
+    throw validationError(getPlanImageLimitCopy(planConfig, "logo_size"));
+  }
+  if (maxImages > -1 && stats.portfolio.count > maxImages) {
+    throw validationError(getPlanImageLimitCopy(planConfig, "portfolio_count"));
+  }
+  if (maxBytes > 0 && stats.portfolio.bytes > maxBytes) {
+    throw validationError(getPlanImageLimitCopy(planConfig, "portfolio_size"));
+  }
+  return stats;
 }
 
 function normalizeVerificationDocumentName(value) {
@@ -282,6 +353,24 @@ function validationError(message) {
   const error = new Error(message);
   error.statusCode = 400;
   return error;
+}
+
+function isVerificationApprovedStatus(value) {
+  return ["approved", "verified", "complete", "completed"].includes(String(value || "").trim().toLowerCase());
+}
+
+function getDraftSavedMessage({ verificationRequired = false, planRequired = false, paymentPending = false } = {}) {
+  if (paymentPending) return "Your business stand draft has been saved. Your paid plan will activate after payment confirmation.";
+  if (verificationRequired && planRequired) {
+    return "Your business stand draft has been saved. Verification and plan activation are still required before it becomes visible to customers.";
+  }
+  if (verificationRequired) {
+    return "Your business stand draft has been saved. Verification is still required before it becomes visible to customers.";
+  }
+  if (planRequired) {
+    return "Your business stand draft has been saved. Choose a plan to make it visible to customers.";
+  }
+  return "Business stand draft saved successfully.";
 }
 
 function normalizeOptionalMoneyAmount(value, fieldName) {
@@ -446,6 +535,7 @@ function buildSubscriptionMetadata(barber, latestSubscription) {
         supportLevel: "Choose a provider plan to activate your business.",
         serviceLimit: 0,
         photoLimit: 0,
+        imageUploadLimitMb: 0,
         videoLimit: 0,
         reviewsEnabled: false,
         earningsTracking: false,
@@ -493,6 +583,7 @@ function buildSubscriptionMetadata(barber, latestSubscription) {
       supportLevel: tierConfig.supportLevel,
       serviceLimit: tierConfig.serviceLimit,
       photoLimit: tierConfig.photoLimit,
+      imageUploadLimitMb: tierConfig.imageUploadLimitMb,
       videoLimit: tierConfig.videoLimit,
       reviewsEnabled: tierConfig.reviewsEnabled,
       earningsTracking: tierConfig.earningsTracking,
@@ -526,7 +617,7 @@ export async function registerBarber(req, res, next) {
       services = [],
       stand_type = "individual",
       team_members = [],
-      business_type = "Beauty & Grooming",
+      business_type = "Services",
       map_icon_type = "",
       home_service_enabled = false,
       intro_text = "",
@@ -542,18 +633,27 @@ export async function registerBarber(req, res, next) {
     const normalizedBusinessType = normalizeBusinessType(business_type);
     const normalizedMapIconType = normalizeMapIconType(map_icon_type, normalizedBusinessType);
     const normalizedPortfolio = normalizePortfolioItems(portfolio);
+    const normalizedTeamMembers = normalizedStandType === "shop" ? normalizeTeamMembers(team_members) : [];
     const normalizedVerificationDocumentName = normalizeVerificationDocumentName(
       verification_document_name || document_name || documentName
     );
     const verificationStatus = normalizedVerificationDocumentName ? "Pending verification" : "New";
+    const verificationApproved = isVerificationApprovedStatus(verificationStatus);
     const verificationSubmittedAt = normalizedVerificationDocumentName ? new Date().toISOString() : null;
-    const planConfig = getSubscriptionTierConfig(selected_plan || plan || "PLUS");
-    if (Number(planConfig.photoLimit) > -1 && normalizedPortfolio.length > Number(planConfig.photoLimit)) {
-      throw validationError(`You have reached the ${planConfig.name} limit of ${planConfig.photoLimit} photos. Upgrade to add more.`);
-    }
-    const normalizedName = normalizeBusinessName(business_name);
+    const planConfig = getSubscriptionTierConfig(selected_plan || plan || "FREE");
+    assertProviderImageLimits({
+      planConfig,
+      businessImage: image || "",
+      services: Array.isArray(services) ? services : [],
+      portfolio: normalizedPortfolio,
+      teamMembers: normalizedTeamMembers,
+    });
+    const wantsPayment = String(submit_intent || "").trim().toLowerCase() === "payment";
+    const safeBusinessName = String(business_name || "").trim() || `Business stand draft ${req.user.id}`;
+    const safeLocation = String(location || "").trim() || "Location not set";
+    const normalizedName = normalizeBusinessName(safeBusinessName);
 
-    if (!business_name || !location) {
+    if (wantsPayment && (!business_name || !location)) {
       return res.status(400).json({
         success: false,
         message: "Business name and location are required."
@@ -563,22 +663,29 @@ export async function registerBarber(req, res, next) {
     const existing = await getBarberByOwnerUserId(req.user.id);
     if (existing) {
       const existingDeleted = String(existing.business_status || "").toLowerCase() === "deleted";
-      return res.status(409).json({
-        success: false,
-        code: existingDeleted ? "BUSINESS_REACTIVATION_REQUIRED" : "PROVIDER_PROFILE_EXISTS",
-        message: existingDeleted
-          ? "This business has already used a trial. Please subscribe to reactivate it."
-          : "You already have a provider profile."
-      });
+      if (!existingDeleted) {
+        return res.status(409).json({
+          success: false,
+          code: "PROVIDER_PROFILE_EXISTS",
+          message: "You already have a provider profile."
+        });
+      }
+      await run(`DELETE FROM barber_services WHERE barber_id = ?`, [existing.id]).catch(() => {});
+      await run(`DELETE FROM barber_schedule WHERE barber_id = ?`, [existing.id]).catch(() => {});
+      await run(`DELETE FROM barber_team_members WHERE barber_id = ?`, [existing.id]).catch(() => {});
+      await run(`DELETE FROM barbers WHERE id = ? AND owner_user_id = ? AND LOWER(COALESCE(business_status, '')) = 'deleted'`, [existing.id, req.user.id]);
     }
 
-    const duplicateBusiness = await get(
+    const duplicateBusiness = business_name ? await get(
       `SELECT id FROM barbers
-       WHERE normalized_business_name = ?
-          OR LOWER(TRIM(REPLACE(REPLACE(REPLACE(business_name, '  ', ' '), '  ', ' '), '  ', ' '))) = ?
+       WHERE (
+            normalized_business_name = ?
+            OR LOWER(TRIM(REPLACE(REPLACE(REPLACE(business_name, '  ', ' '), '  ', ' '), '  ', ' '))) = ?
+          )
+         AND LOWER(COALESCE(business_status, '')) <> 'deleted'
        LIMIT 1`,
       [normalizedName, normalizedName]
-    );
+    ) : null;
     if (duplicateBusiness) {
       return res.status(409).json({
         success: false,
@@ -587,8 +694,8 @@ export async function registerBarber(req, res, next) {
       });
     }
 
-    const wantsPayment = String(submit_intent || "").trim().toLowerCase() === "payment";
     const selectedPlan = wantsPayment ? normalizeProviderPlan(selected_plan || plan) : "";
+    const freeActivation = wantsPayment && selectedPlan === "FREE";
     if (selected_plan || plan) {
       if (!isValidProviderPlan(selectedPlan)) {
         return res.status(402).json({
@@ -597,10 +704,14 @@ export async function registerBarber(req, res, next) {
         });
       }
     }
-    const selectedPlanConfig = getSubscriptionTierConfig(selectedPlan || "PLUS");
-    if (Number(selectedPlanConfig.photoLimit) > -1 && normalizedPortfolio.length > Number(selectedPlanConfig.photoLimit)) {
-      throw validationError(`You have reached the ${selectedPlanConfig.name} limit of ${selectedPlanConfig.photoLimit} photos. Upgrade to add more.`);
-    }
+    const selectedPlanConfig = getSubscriptionTierConfig(selectedPlan || "FREE");
+    assertProviderImageLimits({
+      planConfig: selectedPlanConfig,
+      businessImage: image || "",
+      services: Array.isArray(services) ? services : [],
+      portfolio: normalizedPortfolio,
+      teamMembers: normalizedTeamMembers,
+    });
 
     const ownerProfile = await get(
       `SELECT id, email, phone, normalized_email, normalized_phone, trial_used, subscription_status
@@ -619,12 +730,12 @@ export async function registerBarber(req, res, next) {
       [profileEmail, profilePhone, wantsPayment ? selectedPlan || null : null, req.user.id]
     ).catch(() => {});
 
-    const draftStatus = wantsPayment ? "pending_payment" : "draft";
-    const subscriptionStatus = wantsPayment ? "pending_payment" : "none";
+    const draftStatus = freeActivation ? "active" : wantsPayment ? "pending_payment" : "draft";
+    const subscriptionStatus = freeActivation ? "active" : wantsPayment ? "pending_payment" : "none";
     const insertResult = await run(
       `INSERT INTO barbers
-       (owner_user_id, business_name, normalized_business_name, location, latitude, longitude, price_from, image, accepts_wallet, accepts_cash, stand_type, business_type, map_icon_type, home_service_enabled, intro_text, portfolio_json, verified_status, verification_document_name, verification_submitted_at, subscription_tier, selected_plan, subscription_status, subscription_expires_at, business_status, is_published, trial_plan, trial_started_at, trial_ends_at, trial_status, used_trials)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (owner_user_id, business_name, normalized_business_name, location, latitude, longitude, price_from, image, accepts_wallet, accepts_cash, stand_type, business_type, map_icon_type, home_service_enabled, intro_text, portfolio_json, verified_status, verification_document_name, verification_submitted_at, subscription_tier, selected_plan, subscription_status, subscription_expires_at, business_status, is_published, trial_plan, trial_started_at, trial_ends_at, trial_status, used_trials, review_status, is_verified, is_suspended, is_banned)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         business_name,
@@ -650,21 +761,34 @@ export async function registerBarber(req, res, next) {
         subscriptionStatus,
         null,
         draftStatus,
-        0,
+        freeActivation ? 1 : 0,
         null,
         null,
         null,
         null,
         JSON.stringify([]),
+        "pending_review",
+        0,
+        0,
+        0,
       ]
     );
 
     const barberId = insertResult.lastID;
 
+    if (freeActivation) {
+      await run(
+        `INSERT INTO barber_subscriptions
+         (barber_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, is_active, payment_reference, provider, started_at, expires_at, activated_at)
+         VALUES (?, 'FREE', 0, 'active', 'monthly', 0, 'UGX', 'free', 1, ?, 'free', CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP)`,
+        [barberId, `free-${barberId}-${Date.now()}`]
+      );
+    }
+
     if (Array.isArray(services) && services.length) {
       await replaceBarberServices(barberId, services, selectedPlanConfig.serviceLimit);
     }
-    await replaceTeamMembers(barberId, normalizedStandType === "shop" ? team_members : []);
+    await replaceTeamMembers(barberId, normalizedTeamMembers);
 
     await seedDefaultWeeklySchedule(barberId);
     await updateUserRole(req.user.id, "provider");
@@ -678,10 +802,14 @@ export async function registerBarber(req, res, next) {
 
     return res.status(201).json({
       success: true,
-      message: wantsPayment
-        ? "Payment was not completed. Your business has been saved, but it will only go live after payment."
-        : "Business saved as draft. Complete payment later to activate it.",
-      next_step: wantsPayment ? "upgrade" : "draft",
+      message: freeActivation
+        ? "Business active. Your stand is now live and visible to customers on the Free plan."
+        : getDraftSavedMessage({
+          verificationRequired: false,
+          planRequired: !freeActivation && !wantsPayment,
+          paymentPending: wantsPayment,
+        }),
+      next_step: freeActivation ? "active" : wantsPayment ? "payment_pending" : "draft",
       barber: {
         ...barber,
         image: barber.image || null,
@@ -706,84 +834,56 @@ export async function registerBarber(req, res, next) {
 export async function getAllBarbers(req, res, next) {
   try {
     const now = new Date();
+    // Fill in missing subscription_tier / subscription_status defaults for new free accounts.
+    // Do NOT touch is_published or business_status — those are controlled by the provider.
     await run(
       `UPDATE barbers
-       SET business_status = 'pending_subscription',
-           is_published = 0,
-           subscription_tier = 'PLUS',
-           subscription_status = 'pending_subscription'
-       WHERE subscription_tier IS NULL
-          OR TRIM(subscription_tier) = ''
-          OR UPPER(subscription_tier) = 'UNKNOWN'
-          OR subscription_status IS NULL
-          OR TRIM(subscription_status) = ''
-          OR UPPER(subscription_status) = 'UNKNOWN'`
+       SET subscription_tier = 'FREE',
+           subscription_status = 'active'
+       WHERE (subscription_tier IS NULL OR TRIM(subscription_tier) = '' OR UPPER(subscription_tier) = 'UNKNOWN')
+          OR (subscription_status IS NULL OR TRIM(subscription_status) = '' OR UPPER(subscription_status) = 'UNKNOWN')`
     );
+    // Recover FREE providers that were incorrectly force-unpublished by the old logic.
+    // If a FREE provider's stand has a publishable status, restore is_published.
+    // This is a one-time healing pass; once stands are stable it becomes a no-op.
+    await run(
+      `UPDATE barbers
+       SET subscription_status = 'active',
+           subscription_tier = 'FREE'
+       WHERE COALESCE(subscription_tier, 'FREE') = 'FREE'
+         AND LOWER(COALESCE(subscription_status, '')) IN ('pending_subscription', 'draft', 'almost_ready', 'inactive')
+         AND business_status IN ('active', 'approved', 'live')`
+    );
+    // Promote active trials to active status when the trial is still running.
     await run(
       `UPDATE barbers
        SET business_status = 'active'
        WHERE business_status = 'trialing'
          AND COALESCE(is_published, 0) = 1
-         AND subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
+         AND subscription_tier IN ('FREE', 'PREMIUM', 'PLATINUM')
          AND LOWER(COALESCE(subscription_status, '')) = 'trialing'
          AND LOWER(COALESCE(trial_status, '')) = 'active'
          AND trial_ends_at IS NOT NULL
          AND trial_ends_at > ?`,
       [now.toISOString()]
     );
+    // Only un-publish paid-tier stands whose subscription has truly expired.
+    // FREE-tier published stands are NEVER auto-unpublished.
     await run(
       `UPDATE barbers
        SET business_status = 'pending_subscription',
            is_published = 0
        WHERE COALESCE(is_published, 0) = 1
-         AND (
-           business_status NOT IN ('active', 'approved', 'live')
-           OR COALESCE(is_demo, 0) = 1
-           OR subscription_tier NOT IN ('PLUS', 'PREMIUM', 'PLATINUM')
-           OR LOWER(COALESCE(subscription_status, '')) IN (
-             'cancelled',
-             'draft',
-             'expired',
-             'inactive',
-             'pending_subscription',
-             'pending_payment',
-             'payment_failed',
-             'plan_required',
-             'rejected',
-             'suspended',
-             'trial_expired',
-             'subscription_expired',
-             'almost_ready'
-           )
-           OR NOT (
-             EXISTS (
-               SELECT 1
-               FROM barber_subscriptions public_bs
-               WHERE public_bs.barber_id = barbers.id
-                 AND public_bs.tier IN ('PLUS', 'PREMIUM', 'PLATINUM')
-                 AND LOWER(COALESCE(public_bs.status, '')) = 'active'
-                 AND public_bs.expires_at IS NOT NULL
-                 AND public_bs.expires_at > ?
-             )
-             OR (
-               LOWER(COALESCE(subscription_status, '')) IN ('approved', 'manual_approved', 'admin_approved')
-               OR COALESCE(admin_approved, 0) = 1
-             )
-             OR (
-               LOWER(COALESCE(subscription_status, '')) = 'active'
-               AND subscription_expires_at IS NOT NULL
-               AND subscription_expires_at > ?
-             )
-             OR (
-               LOWER(COALESCE(subscription_status, '')) = 'trialing'
-               AND
-               LOWER(COALESCE(trial_status, '')) = 'active'
-               AND trial_ends_at IS NOT NULL
-               AND trial_ends_at > ?
-             )
-           )
-         )`,
-      publicBusinessParams(now)
+         AND COALESCE(subscription_tier, 'FREE') NOT IN ('FREE')
+         AND LOWER(COALESCE(subscription_status, '')) IN (
+           'cancelled',
+           'expired',
+           'payment_failed',
+           'rejected',
+           'suspended',
+           'trial_expired',
+           'subscription_expired'
+         )`
     );
 
     const rows = await all(
@@ -892,8 +992,8 @@ export async function getAllBarbers(req, res, next) {
         image: barber.image || null,
         avg_rating: Number(barber.avg_rating || 0).toFixed(1),
         total_reviews: Number(barber.total_reviews || 0),
-        business_type: barber.business_type || "Beauty & Grooming",
-        map_icon_type: barber.map_icon_type || normalizeMapIconType(barber.business_type, "Beauty & Grooming"),
+        business_type: barber.business_type || "Services",
+        map_icon_type: barber.map_icon_type || normalizeMapIconType(barber.business_type, "Services"),
         home_service_enabled: Number(barber.home_service_enabled || 0),
         intro_text: barber.intro_text || "",
         portfolio: parseJsonArray(barber.portfolio_json, []),
@@ -941,7 +1041,7 @@ export async function getMyBarberProfile(req, res, next) {
         `UPDATE barbers
          SET business_status = 'pending_subscription',
              is_published = 0,
-             subscription_tier = 'PLUS',
+             subscription_tier = 'FREE',
              subscription_status = 'pending_subscription'
          WHERE id = ?`,
         [barber.id]
@@ -960,8 +1060,8 @@ export async function getMyBarberProfile(req, res, next) {
         ...barber,
         image: barber.image || null,
         document_name: barber.verification_document_name || "",
-        business_type: barber.business_type || "Beauty & Grooming",
-        map_icon_type: barber.map_icon_type || normalizeMapIconType(barber.business_type, "Beauty & Grooming"),
+        business_type: barber.business_type || "Services",
+        map_icon_type: barber.map_icon_type || normalizeMapIconType(barber.business_type, "Services"),
         home_service_enabled: Number(barber.home_service_enabled || 0),
         intro_text: barber.intro_text || "",
         portfolio: parseJsonArray(barber.portfolio_json, []),
@@ -969,7 +1069,14 @@ export async function getMyBarberProfile(req, res, next) {
         services,
         team_members: teamMembers,
         teamMembers,
-        schedule
+        schedule,
+        // Verification / moderation fields
+        review_status: barber.review_status || "pending_review",
+        is_verified: Number(barber.is_verified || 0) === 1,
+        is_suspended: Number(barber.is_suspended || 0) === 1,
+        is_banned: Number(barber.is_banned || 0) === 1,
+        verification_change_reason: barber.verification_change_reason || "",
+        moderation_note: barber.moderation_note || "",
       }
     });
   } catch (error) {
@@ -999,7 +1106,7 @@ export async function updateMyBarberProfile(req, res, next) {
       services = [],
       stand_type = barber.stand_type || "individual",
       team_members = [],
-      business_type = barber.business_type || "Beauty & Grooming",
+      business_type = barber.business_type || "Services",
       map_icon_type = barber.map_icon_type || "",
       home_service_enabled = barber.home_service_enabled || false,
       intro_text = barber.intro_text || "",
@@ -1013,6 +1120,7 @@ export async function updateMyBarberProfile(req, res, next) {
     const normalizedBusinessType = normalizeBusinessType(business_type);
     const normalizedMapIconType = normalizeMapIconType(map_icon_type, normalizedBusinessType);
     const normalizedPortfolio = normalizePortfolioItems(portfolio);
+    const normalizedTeamMembers = normalizedStandType === "shop" ? normalizeTeamMembers(team_members) : [];
     const existingVerificationDocumentName = barber.verification_document_name || "";
     const nextVerificationDocumentName = hasVerificationDocumentUpdate
       ? normalizeVerificationDocumentName(
@@ -1047,7 +1155,9 @@ export async function updateMyBarberProfile(req, res, next) {
       });
     }
 
-    const normalizedName = normalizeBusinessName(business_name);
+    const safeBusinessName = String(business_name || "").trim();
+    const safeLocation = String(location || "").trim();
+    const normalizedName = normalizeBusinessName(safeBusinessName);
     const duplicateBusiness = await get(
       `SELECT id FROM barbers
        WHERE id <> ?
@@ -1069,8 +1179,15 @@ export async function updateMyBarberProfile(req, res, next) {
     const latestSubscriptionForLimit = await getLatestSubscription(barber.id);
     const tierForLimit =
       normalizeProviderPlan(latestSubscriptionForLimit?.tier || barber.subscription_tier || barber.selected_plan) ||
-      "PLUS";
+      "FREE";
     const planConfig = getSubscriptionTierConfig(tierForLimit);
+    assertProviderImageLimits({
+      planConfig,
+      businessImage: finalImage || "",
+      services: Array.isArray(services) ? services : [],
+      portfolio: normalizedPortfolio,
+      teamMembers: normalizedTeamMembers,
+    });
 
     await run(
       `UPDATE barbers
@@ -1097,9 +1214,9 @@ export async function updateMyBarberProfile(req, res, next) {
            verification_notes = ?
        WHERE owner_user_id = ?`,
       [
-        business_name,
+        safeBusinessName,
         normalizedName,
-        location,
+        safeLocation,
         latitude,
         longitude,
         normalizeOptionalMoneyAmount(price_from, "Base service price"),
@@ -1126,7 +1243,7 @@ export async function updateMyBarberProfile(req, res, next) {
       await replaceBarberServices(barber.id, services, planConfig.serviceLimit);
     }
     if (Array.isArray(team_members)) {
-      await replaceTeamMembers(barber.id, normalizedStandType === "shop" ? team_members : []);
+      await replaceTeamMembers(barber.id, normalizedTeamMembers);
     }
 
     await logAudit(req.user.id, `Updated provider profile #${barber.id}`);
@@ -1155,6 +1272,70 @@ export async function updateMyBarberProfile(req, res, next) {
         teamMembers,
         schedule
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function publishMyBarberStand(req, res, next) {
+  try {
+    const barber = await getBarberByOwnerUserId(req.user.id);
+    if (!barber) {
+      return res.status(404).json({ success: false, message: "Provider profile not found." });
+    }
+    if (!String(barber.business_name || "").trim() || !String(barber.location || "").trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Your stand needs a business name and location before it can be published.",
+      });
+    }
+    const currentStatus = String(barber.business_status || "").toLowerCase();
+    const nextStatus = ["draft", "pending_payment", "pending_subscription", "almost_ready"].includes(currentStatus)
+      ? "active"
+      : currentStatus || "active";
+
+    // Ensure subscription fields are set to valid free-plan values so the stand
+    // passes public visibility checks immediately after publishing.
+    const currentTier = String(barber.subscription_tier || "").trim().toUpperCase();
+    const currentSubStatus = String(barber.subscription_status || "").trim().toLowerCase();
+    const needsTierFix = !currentTier || currentTier === "UNKNOWN";
+    const needsSubStatusFix = !currentSubStatus || ["unknown", "pending_subscription", "draft", "almost_ready"].includes(currentSubStatus);
+
+    await run(
+      `UPDATE barbers
+       SET is_published = 1,
+           business_status = ?,
+           deleted_at = NULL,
+           subscription_tier = CASE WHEN (subscription_tier IS NULL OR TRIM(subscription_tier) = '' OR UPPER(subscription_tier) = 'UNKNOWN') THEN 'FREE' ELSE subscription_tier END,
+           subscription_status = CASE WHEN (subscription_status IS NULL OR TRIM(subscription_status) = '' OR UPPER(subscription_status) = 'UNKNOWN' OR LOWER(subscription_status) IN ('pending_subscription', 'draft', 'almost_ready')) THEN 'active' ELSE subscription_status END
+       WHERE owner_user_id = ?`,
+      [nextStatus, req.user.id]
+    );
+    await logAudit(req.user.id, `Published provider stand #${barber.id}`);
+    const updatedBarber = await getBarberByOwnerUserId(req.user.id);
+    const updatedServices = await getServicesForBarber(updatedBarber.id);
+    const schedule = await getScheduleForBarber(updatedBarber.id);
+    const teamMembers = await getTeamMembersForBarber(updatedBarber.id);
+    const latestSubscription = await getLatestSubscription(updatedBarber.id);
+    return res.status(200).json({
+      success: true,
+      message: "Your stand is now published and visible to customers.",
+      barber: {
+        ...updatedBarber,
+        image: updatedBarber.image || null,
+        document_name: updatedBarber.verification_document_name || "",
+        business_type: updatedBarber.business_type || barber.business_type || "",
+        map_icon_type: updatedBarber.map_icon_type || barber.map_icon_type || "",
+        home_service_enabled: Number(updatedBarber.home_service_enabled || 0),
+        intro_text: updatedBarber.intro_text || "",
+        portfolio: JSON.parse(updatedBarber.portfolio_json || "[]"),
+        subscription: buildSubscriptionMetadata(updatedBarber, latestSubscription),
+        services: updatedServices,
+        team_members: teamMembers,
+        teamMembers,
+        schedule,
+      },
     });
   } catch (error) {
     next(error);
@@ -1190,7 +1371,7 @@ export async function deleteMyBarberProfile(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      message: "Provider profile hidden successfully. Your trial history is safely preserved."
+      message: "Provider profile hidden successfully. You can create another Free plan stand when you are ready."
     });
   } catch (error) {
     next(error);

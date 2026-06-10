@@ -36,7 +36,7 @@ export async function requireProviderPlatinum(req, res, next) {
       return res.status(403).json({
         success: false,
         code: "PLATINUM_REQUIRED",
-        message: "Unlock AI Business Coach with Platinum.",
+        message: "Upgrade to Platinum for unlimited Provider Coach.",
       });
     }
 

@@ -27,3 +27,9 @@ export function deleteMyBarberStand() {
     method: "DELETE",
   });
 }
+
+export function publishMyBarberStand() {
+  return apiFetch("/api/barbers/me/publish", {
+    method: "POST",
+  });
+}

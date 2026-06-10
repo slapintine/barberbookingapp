@@ -64,11 +64,12 @@ import {
 } from "../api/adminApi.js";
 
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin", "super-admin"]);
-const PROVIDER_PLANS = ["PLUS", "PREMIUM", "PLATINUM"];
-const PLAN_FILTERS = ["All", "Trial", "PLUS", "PREMIUM", "PLATINUM", "Expired", "Unpaid"];
+const PROVIDER_PLANS = ["FREE", "PREMIUM", "PLATINUM"];
+const PLAN_FILTERS = ["All", "Trial", "FREE", "PREMIUM", "PLATINUM", "Expired", "Unpaid"];
+const VERIFICATION_TABS = ["Pending Review", "Verified", "Changes Requested", "Suspended", "Banned"];
 const SUBSCRIPTION_TABS = ["Customers", "Providers", "Trials", "Expired", "Pending Payments", "Failed Payments", "Access Testing"];
 const USER_ROLE_FILTERS = ["All", "customer", "provider", "admin"];
-const SUBSCRIPTION_FILTERS = ["All", "FREE", "PREMIUM", "PLUS", "PLATINUM", "TRIAL", "EXPIRED"];
+const SUBSCRIPTION_FILTERS = ["All", "FREE", "PREMIUM", "PLATINUM", "TRIAL", "EXPIRED"];
 const PAYMENT_FILTERS = ["All", "Successful", "Pending", "Failed", "Cancelled", "Today", "This week", "This month"];
 const BOOKING_FILTERS = ["All", "Pending", "Confirmed", "Completed", "Cancelled"];
 const SUPPORT_REQUEST_STATUSES = ["open", "in_progress", "waiting_on_customer", "resolved", "closed"];
@@ -79,7 +80,7 @@ const FEATURE_TEST_OPTIONS = [
   ["customer_wallet_topup", "Wallet top-up"],
   ["checkout_payment", "Checkout/payment"],
   ["booking_management", "Provider booking management"],
-  ["ai_coach", "AI Business Coach"],
+  ["ai_coach", "Provider Coach"],
   ["subscription_upgrade", "Subscription upgrade"],
   ["subscription_expiry_lock", "Subscription expiry lock"],
 ];
@@ -92,7 +93,7 @@ const DEFAULT_FEATURE_MATRIX = [
   { key: "provider_listing", label: "Provider listing", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
   { key: "booking_management", label: "Booking management", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
   { key: "business_wallet", label: "Business wallet/earnings", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
-  { key: "ai_coach", label: "AI Business Coach", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: false, platinumProvider: true },
+  { key: "ai_coach", label: "Provider Coach", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: true, platinumProvider: true },
   { key: "analytics", label: "Analytics", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: true, platinumProvider: true },
   { key: "priority_placement", label: "Priority placement", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: true, platinumProvider: true },
   { key: "premium_visibility", label: "Premium visibility", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: true, platinumProvider: true },
@@ -119,7 +120,13 @@ function badgeClass(value) {
 }
 
 function planLabel(value) {
-  return String(value || "").toUpperCase() === "PLUS" ? "Plus" : cleanStatus(value);
+  const normalized = String(value || "").toUpperCase();
+  if (normalized === "FREE") return "Free";
+  if (normalized === "PREMIUM") return "Premium";
+  if (normalized === "PLATINUM") return "Platinum";
+  if (normalized === "TRIAL") return "Trial";
+  if (normalized === "EXPIRED") return "Expired";
+  return cleanStatus(value);
 }
 
 function isMtnPayment(payment) {
@@ -251,7 +258,12 @@ function AdminTable({ columns, rows, getKey, emptyTitle, emptyText }) {
 }
 
 function ConfirmModal({ confirmState, onCancel }) {
+  const confirmKey = `${confirmState?.requiredText || ""}|${confirmState?.title || ""}`;
+  const [typedConfirmationEntry, setTypedConfirmationEntry] = useState({ key: "", value: "" });
+  const typedConfirmation = typedConfirmationEntry.key === confirmKey ? typedConfirmationEntry.value : "";
   if (!confirmState) return null;
+  const requiredText = confirmState.requiredText || "";
+  const confirmationMatches = !requiredText || typedConfirmation.trim() === requiredText;
   return (
     <div className="admin-confirm-backdrop-v17" role="presentation" onClick={onCancel}>
       <section className="admin-confirm-modal-v17" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
@@ -262,9 +274,20 @@ function ConfirmModal({ confirmState, onCancel }) {
           <strong>{confirmState.title}</strong>
           <p>{confirmState.body}</p>
         </div>
+        {requiredText ? (
+          <label className="admin-confirm-typed-v23">
+            <span>Type {requiredText} to continue</span>
+            <input
+              type="text"
+              value={typedConfirmation}
+              onChange={(event) => setTypedConfirmationEntry({ key: confirmKey, value: event.target.value })}
+              autoFocus
+            />
+          </label>
+        ) : null}
         <div className="admin-confirm-actions-v17">
           <button type="button" onClick={onCancel}>Cancel</button>
-          <button type="button" className="danger" onClick={confirmState.onConfirm}>
+          <button type="button" className="danger" onClick={confirmState.onConfirm} disabled={!confirmationMatches}>
             {confirmState.confirmLabel || "Confirm"}
           </button>
         </div>
@@ -276,9 +299,21 @@ function ConfirmModal({ confirmState, onCancel }) {
 export default function AdminPanel({ currentUser, initialSection = "dashboard", onBackToApp, onGoDashboard }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
+  const [message, setMessageText] = useState("");
+  const [messageTone, setMessageTone] = useState("success");
+  // Default any plain message to the success/info tone; errors go through
+  // setErrorMessage so a failed request is never styled as a green success.
+  const setMessage = (text) => {
+    setMessageText(text);
+    setMessageTone("success");
+  };
+  const setErrorMessage = (text) => {
+    setMessageText(text);
+    setMessageTone("error");
+  };
   const [query, setQuery] = useState("");
   const [planFilter, setPlanFilter] = useState("All");
+  const [verificationTab, setVerificationTab] = useState("Pending Review");
   const [roleFilter, setRoleFilter] = useState("All");
   const [subscriptionFilter, setSubscriptionFilter] = useState("All");
   const [paymentFilter, setPaymentFilter] = useState("All");
@@ -326,7 +361,9 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
     try {
       setLoading(true);
       const result = await getAdminOverview().catch(() => ({ overview: {}, businesses: [], bookings: [], services: [] }));
-      const summary = await getAdminSummary().catch(() => getAdminSubscriptionSummary());
+      const summary = await getAdminSummary()
+        .catch(() => getAdminSubscriptionSummary())
+        .catch(() => ({ summary: null }));
       const users = await getAdminUsers().catch(() => ({ users: [] }));
       const businessesResult = await getAdminBusinesses().catch(() => ({ businesses: [] }));
       const bookingsResult = await getAdminBookings().catch(() => ({ bookings: [] }));
@@ -360,7 +397,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
       });
       setMessage("");
     } catch (error) {
-      setMessage(error.message || "Could not load admin data.");
+      setErrorMessage(error.message || "Could not load admin data.");
     } finally {
       setLoading(false);
     }
@@ -475,9 +512,18 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
         (planFilter === "Expired" && business.trial_status === "expired") ||
         (planFilter === "Unpaid" && plan === "UNPAID") ||
         plan === planFilter;
-      return matchesTerm && matchesPlan;
+      const rs = String(business.review_status || "pending_review").toLowerCase();
+      const isBanned = Boolean(business.is_banned);
+      const isSuspended = Boolean(business.is_suspended);
+      const matchesVerification =
+        (verificationTab === "Pending Review" && !isBanned && !isSuspended && ["pending_review", "pending"].includes(rs)) ||
+        (verificationTab === "Verified" && !isBanned && !isSuspended && (Boolean(business.is_verified) || rs === "verified")) ||
+        (verificationTab === "Changes Requested" && !isBanned && !isSuspended && rs === "changes_requested") ||
+        (verificationTab === "Suspended" && isSuspended && !isBanned) ||
+        (verificationTab === "Banned" && isBanned);
+      return matchesTerm && matchesPlan && matchesVerification;
     });
-  }, [businesses, planFilter, query]);
+  }, [businesses, planFilter, verificationTab, query]);
 
   const combinedUsers = useMemo(() => {
     if (allUsers.length) return allUsers;
@@ -587,7 +633,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
     sms: "SMS Monitor",
     notifications: "Announcements",
     smartMatch: "Smart Match",
-    aiCoach: "AI Coach",
+    aiCoach: "Provider Coach",
     categories: "Categories",
     reports: "Reports",
     audit: "Audit Log",
@@ -609,18 +655,19 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
     ["sms", "SMS", FiMessageSquare],
     ["notifications", "Announcements", FiBell],
     ["smartMatch", "Smart Match", FiZap],
-    ["aiCoach", "AI Coach", FiStar],
+    ["aiCoach", "Provider Coach", FiStar],
     ["categories", "Categories", FiLayers],
     ["reports", "Reports", FiBarChart2],
     ["audit", "Audit Log", FiDatabase],
     ["settings", "Settings", FiSettings],
   ];
 
-  const openConfirm = ({ title, body, confirmLabel, action }) => {
+  const openConfirm = ({ title, body, confirmLabel, requiredText = "", action }) => {
     setConfirmState({
       title,
       body,
       confirmLabel,
+      requiredText,
       onConfirm: async () => {
         setConfirmState(null);
         await action();
@@ -633,16 +680,31 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
       verify: "Admin approved provider verification.",
       mark_verification_pending: "Admin marked provider verification pending.",
       reject_verification: "Admin rejected provider verification.",
+      request_changes: "Admin requested changes to provider business.",
       suspend: "Admin suspended business from the control center.",
+      ban: "Admin banned business from the platform.",
+      restore: "Admin restored business to pending review.",
+      unpublish: "Admin unpublished business listing.",
       activate: "Admin activated business from the control center.",
     };
-    const actionPayload = {
-      ...payload,
-      reason: payload.reason || reasonByAction[payload.action] || "Admin business action.",
-    };
+
+    const needsReason = ["request_changes", "ban", "suspend"].includes(payload.action);
+    let reason = payload.reason || reasonByAction[payload.action] || "Admin business action.";
+
+    if (needsReason) {
+      // eslint-disable-next-line no-alert
+      const input = window.prompt(
+        `Enter a reason for "${payload.action}" on ${business.business_name} (shown to provider):`,
+        reason,
+      );
+      if (input === null) return; // cancelled
+      if (input.trim()) reason = input.trim();
+    }
+
+    const actionPayload = { ...payload, reason };
     openConfirm({
       title: `Update ${business.business_name}`,
-      body: `This admin action changes the business state. Selected plan: ${business.current_plan}. Action: ${actionPayload.action}${actionPayload.plan ? ` ${actionPayload.plan}` : ""}.`,
+      body: `Action: ${actionPayload.action}. Reason: ${reason}`,
       confirmLabel: "Apply change",
       action: async () => {
         try {
@@ -651,7 +713,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
           await loadAdminData();
           setMessage(`${business.business_name} updated.`);
         } catch (error) {
-          setMessage(error.message || "Could not update business.");
+          setErrorMessage(error.message || "Could not update business.");
         }
       },
     });
@@ -701,7 +763,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
           });
           setMessage(`Support request #${row.id} updated.`);
         } catch (error) {
-          setMessage(error.message || "Could not update support request.");
+          setErrorMessage(error.message || "Could not update support request.");
         }
       },
     });
@@ -727,7 +789,40 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
           await refreshReadinessFromResult(result);
           setMessage(result.message || "Demo cleanup completed.");
         } catch (error) {
-          setMessage(error.message || "Demo cleanup failed.");
+          setErrorMessage(error.message || "Demo cleanup failed.");
+        }
+      },
+    });
+  };
+
+  const handlePaidFeatureRemediation = () => {
+    const customerCount = unsafeCustomerPremiumRows.length;
+    const providerCount = unsafeProviderPlatinumRows.length;
+    const total = customerCount + providerCount;
+    if (!total) {
+      setMessage("No unsafe Customer Premium or Provider Platinum rows were found.");
+      return;
+    }
+
+    openConfirm({
+      title: "Remediate paid-feature entitlements?",
+      body: `This will downgrade or expire ${customerCount} Customer Premium row(s) and ${providerCount} Provider Platinum row(s) listed in the readiness table. It does not grant access, create payment records, or weaken Smart Match and Provider Coach route guards.`,
+      confirmLabel: "Remediate",
+      requiredText: "REMEDIATE PAID FEATURE ENTITLEMENTS",
+      action: async () => {
+        try {
+          setMessage("Remediating paid-feature entitlements...");
+          const result = await remediateAdminDeploymentReadiness({
+            action: "remediate_paid_feature_entitlements",
+            confirmation: "REMEDIATE PAID FEATURE ENTITLEMENTS",
+            expectedCustomerRows: customerCount,
+            expectedProviderRows: providerCount,
+            reason: "Admin Panel paid-feature entitlement remediation",
+          });
+          await refreshReadinessFromResult(result);
+          setMessage(result.message || "Paid-feature entitlement remediation completed.");
+        } catch (error) {
+          setErrorMessage(error.message || "Could not remediate paid-feature entitlements.");
         }
       },
     });
@@ -754,13 +849,13 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
         label: "Publish",
       },
       start_provider_trial: {
-        title: `Start launch trial for ${row.businessName}?`,
-        body: "This creates an audited Plus trial, activates the provider, and publishes the business for launch.",
-        label: "Start trial",
+        title: `Activate Free plan for ${row.businessName}?`,
+        body: "This creates an audited Free plan activation, activates the provider, and publishes the business for launch.",
+        label: "Activate Free",
       },
       admin_approve_provider: {
         title: `Admin-approve ${row.businessName}?`,
-        body: "This applies an audited manual approval, keeps or assigns a Plus launch tier, and publishes the provider.",
+        body: "This applies an audited manual approval, keeps or assigns a Free launch tier, and publishes the provider.",
         label: "Approve",
       },
       hold_incomplete_provider: {
@@ -785,7 +880,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
           await refreshReadinessFromResult(result);
           setMessage(result.message || "Readiness fix applied.");
         } catch (error) {
-          setMessage(error.message || "Could not apply readiness fix.");
+          setErrorMessage(error.message || "Could not apply readiness fix.");
         }
       },
     });
@@ -813,7 +908,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
       await refreshSmsMessages();
       setMessage("SMS sent.");
     } catch (error) {
-      setMessage(error.message || "Could not send SMS.");
+      setErrorMessage(error.message || "Could not send SMS.");
     }
   };
 
@@ -830,7 +925,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
           await loadAdminData();
           setMessage("Customer subscription updated.");
         } catch (error) {
-          setMessage(error.message || "Could not update customer subscription.");
+          setErrorMessage(error.message || "Could not update customer subscription.");
         }
       },
     });
@@ -839,8 +934,8 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
   const handleProviderSubscriptionAction = async (provider, payload) => {
     const unlocks = payload.plan === "PLATINUM";
     openConfirm({
-      title: `${unlocks ? "Unlock" : "Update"} AI Business Coach`,
-      body: `You are changing ${provider.businessName}. Active Platinum unlocks AI Business Coach; Plus, Premium, expired, or locked states block it.`,
+      title: `${unlocks ? "Unlock" : "Update"} Provider Coach`,
+      body: `You are changing ${provider.businessName}. Premium unlocks 5 tips per month, Platinum unlocks unlimited Provider Coach guidance, and Free or inactive states remain locked.`,
       confirmLabel: "Update provider",
       action: async () => {
         try {
@@ -849,7 +944,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
           await loadAdminData();
           setMessage("Provider subscription updated.");
         } catch (error) {
-          setMessage(error.message || "Could not update provider subscription.");
+          setErrorMessage(error.message || "Could not update provider subscription.");
         }
       },
     });
@@ -865,7 +960,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
       setMessage("Access test completed.");
     } catch (error) {
       setAccessResult(null);
-      setMessage(error.message || "Could not run access test.");
+      setErrorMessage(error.message || "Could not run access test.");
     }
   };
 
@@ -951,7 +1046,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
         <AdminStatCard label="Premium customers" value={summary.premiumCustomers ?? summary.totalPremiumCustomers} icon={FiZap} tone="success" onClick={() => { setSubscriptionFilter("PREMIUM"); setActiveSection("users"); }} />
         <AdminStatCard label="Free customers" value={summary.freeCustomers ?? summary.totalFreeCustomers} icon={FiUsers} onClick={() => { setSubscriptionFilter("FREE"); setActiveSection("users"); }} />
         <AdminStatCard label="Providers" value={summary.totalProviders || providers.length} icon={FiBriefcase} onClick={() => setActiveSection("providers")} />
-        <AdminStatCard label="Plus providers" value={summary.plusProviders ?? summary.proProviders ?? summary.totalProProviders} icon={FiBriefcase} onClick={() => { setPlanFilter("PLUS"); setActiveSection("businesses"); }} />
+        <AdminStatCard label="Free providers" value={summary.freeProviders ?? summary.totalFreeProviders ?? summary.proProviders ?? summary.totalProProviders} icon={FiBriefcase} onClick={() => { setPlanFilter("FREE"); setActiveSection("businesses"); }} />
         <AdminStatCard label="Premium providers" value={summary.premiumProviders ?? summary.totalPremiumProviders} icon={FiTrendingUp} onClick={() => { setPlanFilter("PREMIUM"); setActiveSection("businesses"); }} />
         <AdminStatCard label="Platinum providers" value={summary.platinumProviders ?? summary.totalPlatinumProviders} icon={FiStar} tone="premium" onClick={() => { setPlanFilter("PLATINUM"); setActiveSection("businesses"); }} />
         <AdminStatCard label="Pending approvals" value={summary.pendingProviderApprovals || 0} icon={FiAlertTriangle} tone="warning" onClick={() => setActiveSection("businesses")} />
@@ -1041,7 +1136,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
 
   const renderProviders = () => (
     <div className="admin-view-v17">
-      <PageIntro icon={FiBriefcase} title="Provider and Business Management" text="Control provider plans, business visibility, AI Coach access, earnings, and operational status." />
+      <PageIntro icon={FiBriefcase} title="Provider and Business Management" text="Control provider plans, business visibility, Provider Coach access, earnings, and operational status." />
       <AdminTable
         rows={providers}
         getKey={(row) => row.businessId}
@@ -1050,7 +1145,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
           { key: "business", label: "Business", render: (row) => <AccountCell title={row.businessName} subtitle={`${row.providerName} - ${row.email || "No email"} - ${row.phone || "No phone"}`} /> },
           { key: "plan", label: "Plan", render: (row) => <span className={badgeClass(row.plan)}>{planLabel(row.plan)}</span> },
           { key: "status", label: "Status", render: (row) => <span className={badgeClass(row.status)}>{cleanStatus(row.status)}</span> },
-          { key: "ai", label: "AI Coach", render: (row) => row.aiCoachAccess ? "Yes" : "No" },
+          { key: "ai", label: "Provider Coach", render: (row) => row.aiCoachAccess ? "Yes" : "No" },
           { key: "businessStatus", label: "Business", render: (row) => `${row.businessStatus} / ${row.isPublished ? "public" : "hidden"}` },
           { key: "wallet", label: "Earnings", render: (row) => formatMoney(row.walletAvailable) },
           { key: "bookings", label: "Bookings", render: (row) => row.bookingCount || 0 },
@@ -1070,43 +1165,124 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
     </div>
   );
 
+  const renderBusinessActionsByTab = (row) => {
+    const tab = verificationTab;
+    return (
+      <ActionCluster>
+        <button type="button" onClick={() => setDetailState({ type: "business", item: row })}>Details</button>
+        {tab === "Pending Review" && (
+          <>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "verify" })}>Verify</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "request_changes" })}>Request Changes</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "unpublish" })}>Unpublish</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "suspend" })}>Suspend</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "ban" })}>Ban</button>
+          </>
+        )}
+        {tab === "Verified" && (
+          <>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "unpublish" })}>Unpublish</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "suspend" })}>Suspend</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "ban" })}>Ban</button>
+          </>
+        )}
+        {tab === "Changes Requested" && (
+          <>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "verify" })}>Verify</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "request_changes" })}>Update Reason</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "suspend" })}>Suspend</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "ban" })}>Ban</button>
+          </>
+        )}
+        {tab === "Suspended" && (
+          <>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "restore" })}>Restore</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "verify" })}>Verify</button>
+            <button type="button" onClick={() => handleBusinessAction(row, { action: "ban" })}>Ban</button>
+          </>
+        )}
+        {tab === "Banned" && (
+          <button type="button" onClick={() => handleBusinessAction(row, { action: "restore" })}>Restore</button>
+        )}
+        <button type="button" onClick={() => submitAccessTest({ feature: "ai_coach", businessId: row.id })}>Test</button>
+      </ActionCluster>
+    );
+  };
+
+  const verificationTabCounts = useMemo(() => {
+    const counts = {};
+    for (const tab of VERIFICATION_TABS) {
+      const rs = (b) => String(b.review_status || "pending_review").toLowerCase();
+      counts[tab] = businesses.filter((b) => {
+        const isBanned = Boolean(b.is_banned);
+        const isSuspended = Boolean(b.is_suspended);
+        if (tab === "Pending Review") return !isBanned && !isSuspended && ["pending_review", "pending"].includes(rs(b));
+        if (tab === "Verified") return !isBanned && !isSuspended && (Boolean(b.is_verified) || rs(b) === "verified");
+        if (tab === "Changes Requested") return !isBanned && !isSuspended && rs(b) === "changes_requested";
+        if (tab === "Suspended") return isSuspended && !isBanned;
+        if (tab === "Banned") return isBanned;
+        return false;
+      }).length;
+    }
+    return counts;
+  }, [businesses]);
+
   const renderBusinesses = () => (
     <div className="admin-view-v17">
       <PageIntro icon={FiGrid} title="Business Registry" text="Search and manage public visibility, verification, trial status, services, reviews, and plan assignments." />
+
       <div className="admin-toolbar-v13">
-        <div className="admin-filter-row-v13">
+        <div className="admin-filter-row-v13" style={{ gap: "6px", flexWrap: "wrap" }}>
+          <FiShield style={{ marginRight: 4 }} />
+          {VERIFICATION_TABS.map((tab) => (
+            <button
+              type="button"
+              key={tab}
+              className={verificationTab === tab ? "active" : ""}
+              onClick={() => setVerificationTab(tab)}
+              style={{ position: "relative" }}
+            >
+              {tab}
+              {verificationTabCounts[tab] > 0 && (
+                <span style={{ marginLeft: 6, background: tab === "Banned" ? "#dc2626" : tab === "Suspended" ? "#ea580c" : "#6d28d9", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>
+                  {verificationTabCounts[tab]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="admin-filter-row-v13" style={{ marginTop: 8 }}>
           <FiFilter />
           {PLAN_FILTERS.map((filter) => (
             <button type="button" key={filter} className={planFilter === filter ? "active" : ""} onClick={() => setPlanFilter(filter)}>{planLabel(filter)}</button>
           ))}
         </div>
       </div>
+
+      {verificationTab === "Changes Requested" && (
+        <div style={{ background: "var(--color-warning-bg, #fef9c3)", border: "1px solid var(--color-warning-border, #fde68a)", borderRadius: 10, padding: "10px 16px", marginBottom: 12, fontSize: 13, color: "#78350f" }}>
+          These businesses are unverified. The provider can see the reason you provided and is expected to update their profile before re-review.
+        </div>
+      )}
+
+      {verificationTab === "Banned" && (
+        <div style={{ background: "var(--color-danger-bg, #fee2e2)", border: "1px solid var(--color-danger-border, #fecaca)", borderRadius: 10, padding: "10px 16px", marginBottom: 12, fontSize: 13, color: "#7f1d1d" }}>
+          Banned businesses are completely hidden from all public listings, search, maps, and Smart Match. The provider cannot accept bookings.
+        </div>
+      )}
+
       <AdminTable
         rows={filteredBusinesses}
         getKey={(row) => row.id}
-        emptyTitle="No businesses found"
+        emptyTitle={`No businesses in "${verificationTab}"`}
         columns={[
-          { key: "business", label: "Business", render: (row) => <AccountCell title={row.business_name} subtitle={`${row.business_type} - ${row.owner_name}`} /> },
+          { key: "business", label: "Business", render: (row) => <AccountCell title={row.business_name} subtitle={`${row.business_type} — ${row.owner_name}`} /> },
           { key: "plan", label: "Plan", render: (row) => <span className={badgeClass(row.current_plan)}>{planLabel(row.current_plan)}</span> },
-          { key: "trial", label: "Trial", render: (row) => `${row.trial_status} (${row.trial_days_left}d)` },
-          { key: "verification", label: "Verification", render: (row) => <span className={badgeClass(row.verification_status)}>{row.verification_status}</span> },
+          { key: "status", label: "Status", render: (row) => <span className={badgeClass(row.review_status || "pending_review")}>{cleanStatus(row.review_status || "pending_review")}</span> },
+          { key: "reason", label: "Reason / Note", render: (row) => row.verification_change_reason || row.moderation_note || "—" },
           { key: "services", label: "Services", render: (row) => row.service_count || 0 },
           { key: "bookings", label: "Bookings", render: (row) => row.booking_count || 0 },
-          {
-            key: "actions",
-            label: "Actions",
-            render: (row) => (
-              <ActionCluster>
-                <button type="button" onClick={() => setDetailState({ type: "business", item: row })}>Details</button>
-                <button type="button" onClick={() => handleBusinessAction(row, { action: "mark_verification_pending" })}>Pending</button>
-                <button type="button" onClick={() => handleBusinessAction(row, { action: "verify" })}>Verify</button>
-                <button type="button" onClick={() => handleBusinessAction(row, { action: "reject_verification" })}>Reject</button>
-                <button type="button" onClick={() => handleBusinessAction(row, { action: "suspend" })}>Suspend</button>
-                <button type="button" onClick={() => handleBusinessAction(row, { action: "activate" })}>Activate</button>
-                <button type="button" onClick={() => submitAccessTest({ feature: "ai_coach", businessId: row.id })}>Test</button>
-              </ActionCluster>
-            ),
-          },
+          { key: "actions", label: "Actions", render: renderBusinessActionsByTab },
         ]}
       />
     </div>
@@ -1152,11 +1328,11 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
     const failedPayments = payments.filter((row) => isFailed(row.status));
     return (
       <div className="admin-view-v17">
-        <PageIntro icon={FiShield} title="Subscription Control Center" text="Customer Premium and provider plans are separated. Customer Premium unlocks Smart Match. Provider Platinum unlocks AI Business Coach." />
+        <PageIntro icon={FiShield} title="Subscription Control Center" text="Customer Premium and provider plans are separated. Customer Premium unlocks Smart Match. Provider Premium unlocks limited Provider Coach tips and Platinum unlocks unlimited guidance." />
         <section className="admin-overview-grid-v13">
           <AdminStatCard label="Free customers" value={summary.totalFreeCustomers} icon={FiUsers} />
           <AdminStatCard label="Premium customers" value={summary.totalPremiumCustomers} icon={FiZap} tone="success" />
-          <AdminStatCard label="Plus providers" value={summary.totalPlusProviders ?? summary.totalProProviders} icon={FiBriefcase} />
+          <AdminStatCard label="Free providers" value={summary.totalFreeProviders ?? summary.totalProProviders} icon={FiBriefcase} />
           <AdminStatCard label="Premium providers" value={summary.totalPremiumProviders} icon={FiTrendingUp} />
           <AdminStatCard label="Platinum providers" value={summary.totalPlatinumProviders} icon={FiStar} tone="premium" />
           <AdminStatCard label="Active trials" value={summary.activeTrials} icon={FiClock} />
@@ -1408,7 +1584,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
       setAnnouncementDraft((prev) => ({ ...prev, title: "", body: "" }));
       await loadAdminData();
     } catch (error) {
-      setMessage(error.message || "Could not send announcement.");
+      setErrorMessage(error.message || "Could not send announcement.");
     } finally {
       setAnnouncementSending(false);
     }
@@ -1494,25 +1670,27 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
 
   const renderAiCoach = () => (
     <div className="admin-view-v17">
-      <PageIntro icon={FiStar} title="AI Coach Monitor" text="AI Business Coach is a Platinum provider feature. Backend access tests verify owner and active Platinum entitlement." />
+      <PageIntro icon={FiStar} title="Provider Coach Monitor" text="Queless Provider Coach is rule-based. Backend access tests verify owner, Premium monthly limits, and active Platinum unlimited access." />
       <section className="admin-overview-grid-v13">
-        <AdminStatCard label="AI Coach live" value={summary.totalAiCoachProviders ?? providers.filter((row) => row.aiCoachAccess).length} icon={FiStar} tone="premium" />
+        <AdminStatCard label="Provider Coach live" value={summary.totalAiCoachProviders ?? providers.filter((row) => row.aiCoachAccess).length} icon={FiStar} tone="premium" />
         <AdminStatCard label="Blocked providers" value={providers.filter((row) => !row.aiCoachAccess).length} icon={FiLock} />
-        <AdminStatCard label="AI mode" value="rules" icon={FiActivity} />
+        <AdminStatCard label="Coach mode" value="rules" icon={FiActivity} />
         <AdminStatCard label="Businesses testable" value={providers.length} icon={FiBriefcase} />
       </section>
       <ChecklistCard
         title="Launch rules"
         items={[
-          "Only active Platinum provider plans can call /api/ai-coach/insights/:businessId",
-          "Expired, Plus, Premium, and inactive providers should see the Platinum upgrade path",
+          "Provider Coach advice is generated from app data and predefined rules, not paid AI APIs",
+          "Free providers should see the Platinum upgrade path without fake answers",
+          "Premium providers should receive 5 Provider Coach tips per month",
+          "Platinum providers should receive unlimited Provider Coach guidance",
           "Low-data providers should receive setup guidance instead of blank reports",
           "Insight buttons should route to profile, bookings, reports, or customer follow-up work",
         ]}
       />
       <div className="admin-grid-2-v17">
         <div>
-          <div className="admin-section-head-v17"><div><strong>Live AI Coach access</strong><span>Providers currently allowed through entitlement checks</span></div></div>
+          <div className="admin-section-head-v17"><div><strong>Live Provider Coach access</strong><span>Providers currently allowed through entitlement checks</span></div></div>
           <ProviderCards rows={providers.filter((row) => row.aiCoachAccess)} onAction={handleProviderSubscriptionAction} />
         </div>
         <div>
@@ -1660,6 +1838,22 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
   const providerPublicationSummary = providerPublicationReadiness.summary || {};
   const providerPublicationRows = providerPublicationReadiness.businesses || [];
 
+  const formatCustomerRemediation = (row) => {
+    const next = row.remediation?.nextValues || {};
+    return `${row.remediation?.target || `customer_subscriptions#${row.id}`} -> status ${cleanStatus(next.status)}, payment ${cleanStatus(next.payment_status)}`;
+  };
+
+  const formatProviderRemediation = (row) => {
+    const next = row.remediation?.nextValues || {};
+    const business = next.business || {};
+    const latest = next.latestSubscription || null;
+    const businessChange = `${row.remediation?.target || `barbers#${row.id}`} -> status ${cleanStatus(business.subscription_status)}, published ${Number(business.is_published || 0)}`;
+    const latestChange = latest
+      ? `${row.remediation?.latestSubscriptionTarget || `barber_subscriptions#${row.latest_subscription_id}`} -> status ${cleanStatus(latest.status)}, payment ${cleanStatus(latest.payment_status)}, active ${Number(latest.is_active || 0)}`
+      : "No subscription row to deactivate";
+    return `${businessChange}; ${latestChange}`;
+  };
+
   const renderReadinessActions = (row) => {
     const actions = [];
     const incomplete = hasBlocker(row, "missing_required_business_fields") || hasBlocker(row, "missing_services_or_category");
@@ -1792,6 +1986,11 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
               <strong>{unsafeCustomerPremiumRows.length ? `${unsafeCustomerPremiumRows.length} unsafe row(s)` : "Premium rows are safe"}</strong>
             </div>
           </header>
+          {unsafeCustomerPremiumRows.length ? (
+            <p className="admin-remediation-note-v23">
+              These rows currently look like Premium but fail the paid Smart Match guard. Remediation will set each row to pending or expired exactly as shown.
+            </p>
+          ) : null}
           <AdminTable
             rows={unsafeCustomerPremiumRows}
             getKey={(row) => row.id}
@@ -1801,6 +2000,8 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
               { key: "user", label: "User", render: (row) => `User #${row.user_id}` },
               { key: "status", label: "Status", render: (row) => `${cleanStatus(row.status)} / ${cleanStatus(row.payment_status)}` },
               { key: "expires", label: "Expires", render: (row) => formatDate(row.expires_at) },
+              { key: "reason", label: "Why unsafe", render: (row) => (row.unsafeReasons || []).join(" ") },
+              { key: "remediation", label: "Will change", render: formatCustomerRemediation },
             ]}
           />
         </div>
@@ -1811,17 +2012,56 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
               <strong>{unsafeProviderPlatinumRows.length ? `${unsafeProviderPlatinumRows.length} unsafe row(s)` : "Platinum rows are safe"}</strong>
             </div>
           </header>
+          {unsafeProviderPlatinumRows.length ? (
+            <p className="admin-remediation-note-v23">
+              These rows can expose Platinum fallback state without a current valid Platinum subscription. Remediation will deactivate the invalid subscription and expire/unpublish the fallback access shown here.
+            </p>
+          ) : null}
           <AdminTable
             rows={unsafeProviderPlatinumRows}
             getKey={(row) => row.id}
             emptyTitle="No unsafe Provider Platinum rows"
-            emptyText="AI Coach only unlocks for a current Platinum business subscription."
+            emptyText="Provider Coach unlocks limited tips for Premium and unlimited guidance for Platinum."
             columns={[
               { key: "business", label: "Business", render: (row) => row.business_name || `Business #${row.id}` },
               { key: "businessStatus", label: "Business status", render: (row) => `${cleanStatus(row.subscription_tier)} / ${cleanStatus(row.subscription_status)}` },
               { key: "latest", label: "Latest subscription", render: (row) => row.latest_subscription_id ? `${cleanStatus(row.latest_tier)} / ${cleanStatus(row.latest_status)}` : "Missing" },
+              { key: "reason", label: "Why unsafe", render: (row) => (row.unsafeReasons || []).join(" ") },
+              { key: "remediation", label: "Will change", render: formatProviderRemediation },
             ]}
           />
+        </div>
+      </section>
+      <section className="admin-card-v17 admin-launch-gate-v21">
+        <header>
+          <div>
+            <span>Paid-feature entitlement remediation</span>
+            <strong>{unsafeCustomerPremiumRows.length + unsafeProviderPlatinumRows.length ? `${unsafeCustomerPremiumRows.length + unsafeProviderPlatinumRows.length} row(s) require cleanup` : "No cleanup needed"}</strong>
+          </div>
+          <button
+            type="button"
+            className="admin-primary-v17"
+            onClick={handlePaidFeatureRemediation}
+            disabled={!unsafeCustomerPremiumRows.length && !unsafeProviderPlatinumRows.length}
+          >
+            <FiShield /> Remediate entitlements
+          </button>
+        </header>
+        <div className="admin-launch-checks-v21">
+          <article className="admin-launch-check-v21 warning">
+            <span><FiLock /></span>
+            <div>
+              <strong>Cleanup only removes unsafe access</strong>
+              <small>Customer Premium rows become pending/expired; Provider paid rows are deactivated or expired/unpublished. The Smart Match and Provider Coach backend guards continue to require paid, unexpired entitlements.</small>
+            </div>
+          </article>
+          <article className="admin-launch-check-v21 ok">
+            <span><FiDatabase /></span>
+            <div>
+              <strong>Audit log is retained</strong>
+              <small>The backend writes a paid_feature_entitlement_cleanup admin audit entry with before/after row snapshots, then refreshes deployment readiness.</small>
+            </div>
+          </article>
         </div>
       </section>
       <section className="admin-card-v17 admin-launch-gate-v21">
@@ -1885,7 +2125,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
         </section>
       ) : null}
       <section className="admin-grid-2-v17">
-        <ChecklistCard title="Paid feature rules" items={["Customer Premium = Smart Match", "Provider Platinum = AI Business Coach", "Backend route checks are required", "Manual search and normal booking stay free"]} />
+        <ChecklistCard title="Paid feature rules" items={["Customer Premium = Smart Match", "Provider Premium = limited Provider Coach", "Provider Platinum = unlimited Provider Coach", "Backend route checks are required", "Manual search and normal booking stay free"]} />
         <ChecklistCard title="Payment rules" items={["Do not fake MTN success", "Wallet credits after confirmed success only", "Subscription activation needs payment or audited admin override", "Cash remains available for normal bookings"]} />
         <ChecklistCard title="Admin security" items={["Admin APIs require auth and admin role", "Write actions use confirmation modals", "Subscription writes are audited", "Normal users cannot access admin panel"]} />
         <ChecklistCard title="Data safety" items={["No fake providers in admin tables", "Categories are counted from real businesses", "Payments show real backend rows", "Wallet page separates customer and provider wallets"]} />
@@ -1950,7 +2190,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
         {mobileMenuOpen ? <div className="admin-sidebar-scrim-v17" onClick={() => setMobileMenuOpen(false)} role="presentation" /> : null}
         <main className="admin-main-v17">
           {renderTopbar()}
-          {message ? <div className={message.toLowerCase().includes("could not") ? "auth-error" : "auth-success"}>{message}</div> : null}
+          {message ? <div className={messageTone === "error" ? "auth-error" : "auth-success"}>{message}</div> : null}
           {renderActiveSection()}
         </main>
         <nav className="admin-mobile-taskbar-v19" aria-label="Admin quick navigation">
@@ -2049,7 +2289,7 @@ function ExpiredPanel({ customers, providers }) {
         {customers.length ? customers.map((row) => <div className="admin-feed-row-v17" key={row.userId}><FiUser /><div><strong>{row.fullName || row.username}</strong><span>{formatDate(row.expiresAt)}</span></div></div>) : <AdminEmptyState title="No expired customers" />}
       </div>
       <div className="admin-card-v17">
-        <div className="admin-section-head-v17"><div><strong>Expired providers</strong><span>Providers whose AI Coach should be locked</span></div></div>
+        <div className="admin-section-head-v17"><div><strong>Expired providers</strong><span>Providers whose Provider Coach should be locked</span></div></div>
         {providers.length ? providers.map((row) => <div className="admin-feed-row-v17" key={row.businessId}><FiBriefcase /><div><strong>{row.businessName}</strong><span>{formatDate(row.expiresAt)}</span></div></div>) : <AdminEmptyState title="No expired providers" />}
       </div>
     </div>
@@ -2138,7 +2378,7 @@ function FeatureMatrix({ rows }) {
             <th>Feature</th>
             <th>Free Customer</th>
             <th>Premium Customer</th>
-            <th>Plus Provider</th>
+            <th>Free Provider</th>
             <th>Premium Provider</th>
             <th>Platinum Provider</th>
           </tr>
@@ -2226,7 +2466,7 @@ function DetailPanel({ detailState, onClose, onCustomerAction, onProviderAction,
             "Verification reviewed": item.verification_reviewed_at ? formatDate(item.verification_reviewed_at) : undefined,
             "Payment status": item.paymentStatus || item.lastPaymentStatus || item.payment_status,
             "Smart Match": item.smartMatchAccess === undefined ? undefined : item.smartMatchAccess ? "Yes" : "No",
-            "AI Coach": item.aiCoachAccess === undefined ? undefined : item.aiCoachAccess ? "Yes" : "No",
+            "Provider Coach": item.aiCoachAccess === undefined ? undefined : item.aiCoachAccess ? "Yes" : "No",
             Wallet: item.walletBalance !== undefined ? formatMoney(item.walletBalance) : item.walletAvailable !== undefined ? formatMoney(item.walletAvailable) : undefined,
             Bookings: item.bookingCount || item.booking_count,
             Phone: item.phone || item.payer_phone,
@@ -2251,7 +2491,7 @@ function DetailPanel({ detailState, onClose, onCustomerAction, onProviderAction,
         {isBusiness ? (
           <div className="admin-actions-v13">
             {PROVIDER_PLANS.map((plan) => <button type="button" key={plan} onClick={() => onProviderAction({ ...item, businessId: item.businessId || item.id, businessName: item.businessName || item.business_name }, { action: "set_plan", plan })}>{planLabel(plan)}</button>)}
-            <button type="button" onClick={() => onTest({ feature: "ai_coach", businessId: item.businessId || item.id })}>Test AI Coach</button>
+            <button type="button" onClick={() => onTest({ feature: "ai_coach", businessId: item.businessId || item.id })}>Test Provider Coach</button>
           </div>
         ) : null}
         {isPayment || isSms ? (

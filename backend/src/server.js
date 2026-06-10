@@ -1,4 +1,3 @@
-import dotenv from "dotenv";
 import http from "http";
 import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
@@ -7,8 +6,6 @@ import { env, validateEnv } from "./config/env.js";
 import { initDb } from "./db/initDb.js";
 import db from "./config/db.js";
 import { logger } from "./config/logger.js";
-
-dotenv.config();
 
 validateEnv();
 

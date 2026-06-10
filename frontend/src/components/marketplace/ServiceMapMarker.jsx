@@ -15,8 +15,7 @@ import {
 } from "lucide-react";
 
 const ICONS = {
-  "beauty-grooming": Scissors,
-  beauty: Scissors,
+  beauty: Sparkles,
   salon: Scissors,
   barber: Scissors,
   grooming: Sparkles,
@@ -80,20 +79,35 @@ export function getCategoryIconComponent(iconType = "default") {
   return ICONS[iconType] || ICONS.default;
 }
 
-export function ServiceMapMarker({ iconType = "default", selected = false }) {
+export function ServiceMapMarker({
+  iconType = "default",
+  selected = false,
+  tier = "FREE",
+  verified = false,
+  closed = false,
+  own = false,
+}) {
   const Icon = getCategoryIconComponent(iconType);
+  const tierKey = String(tier || "FREE").toLowerCase();
+  const className = [
+    "service-map-marker",
+    `service-map-marker--tier-${tierKey}`,
+    selected ? "service-map-marker--selected" : "",
+    closed ? "service-map-marker--closed" : "",
+    own ? "service-map-marker--own" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div
-      className={selected ? "service-map-marker service-map-marker--selected" : "service-map-marker"}
-      data-icon-type={iconType}
-      aria-hidden="true"
-    >
+    <div className={className} data-icon-type={iconType} data-tier={tierKey} aria-hidden="true">
       <span className="service-map-marker__shadow" />
       <span className="service-map-marker__tail" />
       <span className="service-map-marker__bubble">
         <Icon className="service-map-marker__icon" />
+        {tierKey === "platinum" ? <span className="service-map-marker__crown">★</span> : null}
       </span>
+      {verified ? <span className="service-map-marker__verified" aria-hidden="true">✓</span> : null}
     </div>
   );
 }
@@ -117,8 +131,17 @@ export function ServiceMapCluster({ count = 0 }) {
   );
 }
 
-export function renderServiceMarkerHtml(iconType, selected = false) {
-  return renderToStaticMarkup(<ServiceMapMarker iconType={iconType || "default"} selected={selected} />);
+export function renderServiceMarkerHtml(iconType, selected = false, status = {}) {
+  return renderToStaticMarkup(
+    <ServiceMapMarker
+      iconType={iconType || "default"}
+      selected={selected}
+      tier={status.tier}
+      verified={status.verified}
+      closed={status.closed}
+      own={status.own}
+    />
+  );
 }
 
 export function renderServicePopupIconHtml(iconType) {

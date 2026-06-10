@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import crypto from "node:crypto";
 import { transaction } from "../db/query.js";
 import { getMobileMoneyService } from "../services/mobileMoneyService.js";
 import {
@@ -35,6 +36,66 @@ function isFutureDate(value) {
   return Number.isFinite(date.getTime()) && date.getTime() > Date.now();
 }
 
+function normalizePromoCode(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s\u200B-\u200D\uFEFF]+/g, "");
+}
+
+function hashPromoCode(value) {
+  return crypto.createHash("sha256").update(normalizePromoCode(value)).digest("hex");
+}
+
+async function resolveCustomerPremiumPromo({ client, userId, rawCode, price }) {
+  const code = normalizePromoCode(rawCode);
+  if (!code) return { finalAmount: price, discountAmount: 0, promo: null };
+
+  const expiresAt = env.customerPremiumPromoExpiresAt ? new Date(env.customerPremiumPromoExpiresAt) : null;
+  if (env.customerPremiumPromoExpiresAt && (!expiresAt || !Number.isFinite(expiresAt.getTime()))) {
+    throw httpError(400, "This promo code has expired.");
+  }
+  if (expiresAt && expiresAt.getTime() <= Date.now()) {
+    throw httpError(400, "This promo code has expired.");
+  }
+
+  const options = [
+    env.customerPremiumPromoFreeCode ? { type: "free_customer_premium", code: normalizePromoCode(env.customerPremiumPromoFreeCode), discountPercent: 100 } : null,
+    env.customerPremiumPromoPercentCode ? { type: "customer_premium_twenty_percent_off", code: normalizePromoCode(env.customerPremiumPromoPercentCode), discountPercent: 20 } : null,
+  ].filter(Boolean);
+
+  const matched = options.find((item) => item.code && item.code === code);
+  if (!matched) {
+    const providerCodes = [
+      normalizePromoCode(env.providerPromoFreeCode),
+      normalizePromoCode(env.providerPromoPercentCode),
+    ].filter(Boolean);
+    throw httpError(400, providerCodes.includes(code) ? "This promo code is not valid for this plan." : "Invalid promo code.");
+  }
+
+  const promoHash = hashPromoCode(code);
+  const priorUse = await client.get(
+    `SELECT id FROM customer_subscriptions
+     WHERE user_id = ?
+       AND CAST(metadata AS TEXT) LIKE ?
+     LIMIT 1`,
+    [userId, `%"promoHash":"${promoHash}"%`]
+  ).catch(() => null);
+  if (priorUse) throw httpError(409, "This promo code has already been used.");
+
+  const discountAmount = Math.min(price, Math.round((price * matched.discountPercent) / 100));
+  return {
+    finalAmount: Math.max(0, price - discountAmount),
+    discountAmount,
+    promo: {
+      type: matched.type,
+      discountPercent: matched.discountPercent,
+      promoHash,
+    },
+  };
+}
+
 export async function getMyCustomerSubscription(req, res, next) {
   try {
     const activeSubscription = await getActiveCustomerPremiumSubscription(req.user.id);
@@ -60,25 +121,65 @@ export async function getMyCustomerSubscription(req, res, next) {
 
 export async function startCustomerSubscriptionUpgrade(req, res, next) {
   try {
+    if (req.user?.role && String(req.user.role).trim().toLowerCase() !== "customer") {
+      throw httpError(403, "Customer Premium is only available for customer accounts. Please switch to a customer account to continue.");
+    }
     const billingCycle = normalizeBillingCycle(req.body.billingCycle || req.body.billing_cycle || "monthly") || "monthly";
     const provider = normalizeProvider(req.body.provider || req.body.method);
     const price = getCustomerPremiumPrice(billingCycle);
     const plan = getCustomerPremiumPlan();
+    const rawPromoCode = req.body.promoCode || req.body.promo_code || "";
 
-    if (!provider) throw httpError(400, "Choose MTN Mobile Money or Airtel Money.");
-    if (provider === "airtel_money" && !env.airtelEnabled) throw httpError(503, "Airtel Money for Customer Premium is coming soon.");
     if (!price || price <= 0) throw httpError(400, "Customer Premium price is not configured.");
-
-    const phoneNumber = normalizeUgandaPhoneNumber(req.body.payment_phone || req.body.phoneNumber || "");
-    if (!phoneNumber) {
-      throw httpError(400, "Enter a valid Uganda phone number before upgrading to Premium.");
-    }
 
     const idempotencyKey = String(req.get("Idempotency-Key") || req.body.idempotencyKey || "").trim();
     const result = await transaction(async (client) => {
       const activeSubscription = await getActiveCustomerPremiumSubscription(req.user.id, client);
       if (activeSubscription) {
         return { payment: null, subscription: activeSubscription, active: true };
+      }
+      const promoResult = await resolveCustomerPremiumPromo({
+        client,
+        userId: req.user.id,
+        rawCode: rawPromoCode,
+        price,
+      });
+      const payableAmount = promoResult.finalAmount;
+      const promoMetadata = {
+        ...(promoResult.promo ? { promo: promoResult.promo } : {}),
+        originalAmount: price,
+        discountAmount: promoResult.discountAmount,
+      };
+
+      if (payableAmount === 0) {
+        const startedAt = new Date();
+        const expiresAt = getCustomerSubscriptionEndDate(startedAt, billingCycle);
+        const insertResult = await client.run(
+          `INSERT INTO customer_subscriptions
+           (user_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, payment_reference, provider, started_at, expires_at, activated_at, metadata)
+           VALUES (?, 'PREMIUM', ?, 'active', ?, 0, ?, 'paid', ?, 'promo', ?, ?, ?, ?)`,
+          [
+            req.user.id,
+            price,
+            billingCycle,
+            plan.currency || env.customerPremiumCurrency || "UGX",
+            createReference("customer-premium-promo", req.user.id),
+            startedAt.toISOString(),
+            expiresAt,
+            startedAt.toISOString(),
+            JSON.stringify(promoMetadata),
+          ]
+        );
+        const subscription = await client.get(`SELECT * FROM customer_subscriptions WHERE id = ?`, [insertResult.lastID]);
+        return { payment: null, subscription, promoActivated: true };
+      }
+
+      if (!provider) throw httpError(400, "Choose MTN Mobile Money or Airtel Money.");
+      if (provider === "airtel_money" && !env.airtelEnabled) throw httpError(503, "Airtel Money for Customer Premium is coming soon.");
+
+      const phoneNumber = normalizeUgandaPhoneNumber(req.body.payment_phone || req.body.phoneNumber || "");
+      if (!phoneNumber) {
+        throw httpError(400, "Enter a valid Uganda phone number before upgrading to Premium.");
       }
 
       if (idempotencyKey) {
@@ -106,7 +207,7 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
       const reference = createReference("customer-premium", req.user.id);
       const collection = await getMobileMoneyService(provider).initiateCollection({
         provider,
-        amount: price,
+        amount: payableAmount,
         phoneNumber,
         reference,
         description: `${plan.name} ${billingCycle} plan`,
@@ -116,9 +217,9 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
       const expiresAt = getCustomerSubscriptionEndDate(startedAt, billingCycle);
       const insertResult = await client.run(
         `INSERT INTO customer_subscriptions
-         (user_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, payment_reference, provider, expires_at)
-         VALUES (?, 'PREMIUM', ?, 'pending', ?, ?, ?, 'pending', ?, ?, ?)`,
-        [req.user.id, price, billingCycle, price, plan.currency || env.customerPremiumCurrency || "UGX", reference, provider, expiresAt]
+         (user_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, payment_reference, provider, expires_at, metadata)
+         VALUES (?, 'PREMIUM', ?, 'pending', ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+        [req.user.id, price, billingCycle, payableAmount, plan.currency || env.customerPremiumCurrency || "UGX", reference, provider, expiresAt, JSON.stringify(promoMetadata)]
       );
 
       await client.run(
@@ -133,10 +234,10 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
           collection.providerReference || "",
           idempotencyKey,
           phoneNumber || "",
-          price,
+          payableAmount,
           plan.currency || "UGX",
           collection.status || "pending",
-          JSON.stringify(collection.rawResponse || {}),
+          JSON.stringify({ ...(collection.rawResponse || {}), ...promoMetadata }),
         ]
       );
 
@@ -155,9 +256,12 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
       success: true,
       message: result.active
         ? "Customer Premium is already active. Smart Match is unlocked."
+        : result.promoActivated
+        ? "Customer Premium is active. Smart Match is unlocked."
         : result.pending
         ? `You already have a pending Customer Premium payment. Approve the ${getMobileMoneyProviderLabel(result.payment.provider)} prompt or verify it from your profile.`
         : `Approve the ${getMobileMoneyProviderLabel(result.payment.provider)} prompt to activate Customer Premium.`,
+      plan,
       subscription: mapCustomerSubscription(result.subscription),
       payment: result.payment ? {
         reference: result.payment.internal_reference,

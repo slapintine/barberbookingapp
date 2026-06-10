@@ -5,6 +5,14 @@ function toAmount(value) {
   return normalizeMoneyAmount(value, "Wallet amount");
 }
 
+function toSnapshotAmount(value) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) {
+    throw Object.assign(new Error("Wallet amount must be a non-negative whole UGX amount."), { statusCode: 400 });
+  }
+  return amount;
+}
+
 function toLegacyDirection(entryType) {
   const normalized = String(entryType || "").toLowerCase();
   if (normalized.includes("debit") || normalized.includes("lock")) return "debit";
@@ -280,11 +288,11 @@ export async function getBarberWalletSnapshot(barberId, client) {
   return {
     wallet: {
       ...wallet,
-      pending_balance: toAmount(wallet.pending_balance),
-      available_balance: toAmount(wallet.available_balance),
-      locked_balance: toAmount(wallet.locked_balance),
-      total_earned: toAmount(wallet.total_earned),
-      withdrawn_total: toAmount(wallet.withdrawn_total),
+      pending_balance: toSnapshotAmount(wallet.pending_balance),
+      available_balance: toSnapshotAmount(wallet.available_balance),
+      locked_balance: toSnapshotAmount(wallet.locked_balance),
+      total_earned: toSnapshotAmount(wallet.total_earned),
+      withdrawn_total: toSnapshotAmount(wallet.withdrawn_total),
     },
     transactions: transactions.map((item) => ({
       ...item,

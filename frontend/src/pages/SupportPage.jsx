@@ -12,9 +12,30 @@ const DEFAULT_FORM = {
 };
 
 export default function SupportPage({ initialTopic = "Contact Support", profile = {}, currentUser = {}, onBackHome }) {
-  const [form, setForm] = useState(DEFAULT_FORM);
-  const [status, setStatus] = useState("");
-  const [error, setError] = useState("");
+  const formKey = `${initialTopic}|${currentUser.email || ""}|${currentUser.username || ""}|${profile.email || ""}|${profile.fullName || ""}|${profile.phone || ""}`;
+  const initialForm = {
+    ...DEFAULT_FORM,
+    topic: initialTopic || "Contact Support",
+    name: profile.fullName || currentUser.username || "",
+    contact: profile.phone || profile.email || currentUser.email || "",
+  };
+  const [formEntry, setFormEntry] = useState({ key: "", value: DEFAULT_FORM });
+  const [statusEntry, setStatusEntry] = useState({ key: "", value: "" });
+  const [errorEntry, setErrorEntry] = useState({ key: "", value: "" });
+  const form = formEntry.key === formKey ? formEntry.value : initialForm;
+  const status = statusEntry.key === formKey ? statusEntry.value : "";
+  const error = errorEntry.key === formKey ? errorEntry.value : "";
+  const setForm = (updater) => {
+    setFormEntry((prev) => {
+      const current = prev.key === formKey ? prev.value : initialForm;
+      return {
+        key: formKey,
+        value: typeof updater === "function" ? updater(current) : updater,
+      };
+    });
+  };
+  const setStatus = (value) => setStatusEntry({ key: formKey, value });
+  const setError = (value) => setErrorEntry({ key: formKey, value });
   const [submitting, setSubmitting] = useState(false);
   const [recentRequests, setRecentRequests] = useState([]);
 
@@ -26,17 +47,6 @@ export default function SupportPage({ initialTopic = "Contact Support", profile 
       setRecentRequests([]);
     }
   };
-
-  useEffect(() => {
-    setForm((prev) => ({
-      ...prev,
-      topic: initialTopic || "Contact Support",
-      name: profile.fullName || currentUser.username || prev.name,
-      contact: profile.phone || profile.email || currentUser.email || prev.contact,
-    }));
-    setStatus("");
-    setError("");
-  }, [currentUser.email, currentUser.username, initialTopic, profile.email, profile.fullName, profile.phone]);
 
   useEffect(() => {
     loadRecentSupportRequests();

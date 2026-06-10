@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { FiArrowDownLeft, FiArrowLeft, FiArrowUpRight, FiBriefcase, FiCamera, FiCheckCircle, FiCreditCard, FiEdit2, FiHeart, FiLogOut, FiMoon, FiShield, FiSmartphone, FiSun, FiUser, FiX } from "react-icons/fi";
+import { useRef, useState } from "react";
+import { FiArrowDownLeft, FiArrowLeft, FiArrowUpRight, FiBriefcase, FiCamera, FiCheckCircle, FiCreditCard, FiEdit2, FiHeart, FiLogOut, FiMail, FiMapPin, FiMoon, FiShield, FiSmartphone, FiSun, FiUser, FiX } from "react-icons/fi";
 import { sendEmailVerification, sendPhoneOtp, verifyOtp } from "../api/authApi.js";
 import TopUpWalletModal from "../components/wallet/TopUpWalletModal.jsx";
+import UserAvatar from "../components/ui/UserAvatar.jsx";
+import PushNotificationSettings from "../features/notifications/PushNotificationSettings.jsx";
 import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
 import { formatPlanName, formatSubscriptionPrice, PROVIDER_PLANS } from "../utils/subscriptionPlans.js";
 import { formatCustomerPremiumPrice, isCustomerPremiumActive } from "../utils/customerPremium.js";
@@ -19,6 +21,14 @@ function EmptyState({ icon, title, text }) {
     </div>
   );
 }
+
+const PROFILE_TABS = [
+  { id: "account", label: "Account", icon: FiUser },
+  { id: "bookings", label: "Bookings", icon: FiHeart },
+  { id: "wallet", label: "Wallet", icon: FiCreditCard },
+  { id: "subscription", label: "Subscription", icon: FiCreditCard },
+  { id: "security", label: "Security", icon: FiShield },
+];
 
 export default function ProfilePage({
   theme = "dark",
@@ -51,7 +61,7 @@ export default function ProfilePage({
   onWalletUpdated,
   walletTopupReady = false,
   walletTopupMessage = "",
-  favoriteBarbers,
+  favoriteBarbers = [],
   myBarberProfile,
   onOpenBarber,
   onRegisterBarber,
@@ -64,10 +74,14 @@ export default function ProfilePage({
   buildPhoneNumber,
   isValidPhoneNumber,
   fileToDataUrl,
+  onNotificationToast,
 }) {
   const [editing, setEditing] = useState(false);
-  const [emailCode, setEmailCode] = useState("");
-  const [phoneCode, setPhoneCode] = useState("");
+  const emailProfileKey = profile.email || "";
+  const phoneProfileKey = profile.phone || "";
+  const resendProfileKey = `${emailProfileKey}|${phoneProfileKey}`;
+  const [emailCodeEntry, setEmailCodeEntry] = useState({ key: "", value: "" });
+  const [phoneCodeEntry, setPhoneCodeEntry] = useState({ key: "", value: "" });
   const [sendingEmailCode, setSendingEmailCode] = useState(false);
   const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
@@ -75,46 +89,77 @@ export default function ProfilePage({
   const [verifyError, setVerifyError] = useState("");
   const [verifyStatus, setVerifyStatus] = useState("");
   const [verificationPage, setVerificationPage] = useState("email");
-  const [emailCodeSent, setEmailCodeSent] = useState(false);
-  const [emailDraft, setEmailDraft] = useState(profile.email || "");
-  const [changingEmail, setChangingEmail] = useState(false);
-  const [verifiedChannels, setVerifiedChannels] = useState({
-    email: Boolean(profile.emailVerified || profile.email_verified),
-    phone: Boolean(profile.phoneVerified || profile.phone_verified),
+  const [emailCodeSentEntry, setEmailCodeSentEntry] = useState({ key: "", value: false });
+  const [emailDraftEntry, setEmailDraftEntry] = useState({ key: "", value: "" });
+  const [changingEmailEntry, setChangingEmailEntry] = useState({ key: "", value: false });
+  const [verifiedChannelsOverride, setVerifiedChannelsOverride] = useState({
+    emailKey: "",
+    phoneKey: "",
+    email: null,
+    phone: null,
   });
-  const [resendCooldowns, setResendCooldowns] = useState({ email: 0, phone: 0 });
+  const [resendCooldownsEntry, setResendCooldownsEntry] = useState({ key: "", value: { email: 0, phone: 0 } });
   const [withdrawAmount, setWithdrawAmount] = useState("10000");
   const [planDetailsTier, setPlanDetailsTier] = useState("");
   const [topupOpen, setTopupOpen] = useState(false);
+  const [activeProfileTab, setActiveProfileTab] = useState("account");
+  const [phoneCodeSentEntry, setPhoneCodeSentEntry] = useState({ key: "", value: false });
   const initialPhone = splitPhoneNumber(profile.phone);
-  const [phoneCountryCode, setPhoneCountryCode] = useState(initialPhone.countryCode);
-  const [phoneLocalNumber, setPhoneLocalNumber] = useState(initialPhone.localNumber);
+  const [phoneDraftEntry, setPhoneDraftEntry] = useState({ key: "", countryCode: "", localNumber: "" });
   const profilePhotoInputRef = useRef(null);
   const paymentHistoryRef = useRef(null);
   const isLightTheme = theme === "light";
   const nextTheme = isLightTheme ? "dark" : "light";
   const isProviderAccount = ["barber", "provider", "business"].includes(String(accountType || "").toLowerCase());
 
-  useEffect(() => {
-    const next = splitPhoneNumber(profile.phone);
-    setPhoneCountryCode(next.countryCode);
-    setPhoneLocalNumber(next.localNumber);
-  }, [profile.phone]);
-
-  useEffect(() => {
-    setVerifiedChannels({
-      email: Boolean(profile.emailVerified || profile.email_verified),
-      phone: Boolean(profile.phoneVerified || profile.phone_verified),
+  const currentPhoneDraft = phoneDraftEntry.key === phoneProfileKey ? phoneDraftEntry : initialPhone;
+  const phoneCountryCode = currentPhoneDraft.countryCode;
+  const phoneLocalNumber = currentPhoneDraft.localNumber;
+  const setPhoneCountryCode = (countryCode) => {
+    setPhoneDraftEntry({ key: phoneProfileKey, countryCode, localNumber: phoneLocalNumber });
+  };
+  const setPhoneLocalNumber = (localNumber) => {
+    setPhoneDraftEntry({ key: phoneProfileKey, countryCode: phoneCountryCode, localNumber });
+  };
+  const emailCode = emailCodeEntry.key === emailProfileKey ? emailCodeEntry.value : "";
+  const phoneCode = phoneCodeEntry.key === phoneProfileKey ? phoneCodeEntry.value : "";
+  const emailCodeSent = emailCodeSentEntry.key === emailProfileKey ? emailCodeSentEntry.value : false;
+  const phoneCodeSent = phoneCodeSentEntry.key === phoneProfileKey ? phoneCodeSentEntry.value : false;
+  const emailDraft = emailDraftEntry.key === emailProfileKey ? emailDraftEntry.value : profile.email || "";
+  const changingEmail = changingEmailEntry.key === emailProfileKey ? changingEmailEntry.value : false;
+  const resendCooldowns = resendCooldownsEntry.key === resendProfileKey ? resendCooldownsEntry.value : { email: 0, phone: 0 };
+  const verifiedChannels = {
+    email: verifiedChannelsOverride.emailKey === emailProfileKey && verifiedChannelsOverride.email !== null
+      ? verifiedChannelsOverride.email
+      : Boolean(profile.emailVerified || profile.email_verified),
+    phone: verifiedChannelsOverride.phoneKey === phoneProfileKey && verifiedChannelsOverride.phone !== null
+      ? verifiedChannelsOverride.phone
+      : Boolean(profile.phoneVerified || profile.phone_verified),
+  };
+  const setEmailCode = (value) => setEmailCodeEntry({ key: emailProfileKey, value });
+  const setPhoneCode = (value) => setPhoneCodeEntry({ key: phoneProfileKey, value });
+  const setEmailCodeSent = (value) => setEmailCodeSentEntry({ key: emailProfileKey, value });
+  const setPhoneCodeSent = (value) => setPhoneCodeSentEntry({ key: phoneProfileKey, value });
+  const setEmailDraft = (value) => setEmailDraftEntry({ key: emailProfileKey, value });
+  const setChangingEmail = (value) => setChangingEmailEntry({ key: emailProfileKey, value });
+  const setResendCooldowns = (updater) => {
+    setResendCooldownsEntry((prev) => {
+      const current = prev.key === resendProfileKey ? prev.value : { email: 0, phone: 0 };
+      return {
+        key: resendProfileKey,
+        value: typeof updater === "function" ? updater(current) : updater,
+      };
     });
-  }, [profile.emailVerified, profile.email_verified, profile.phoneVerified, profile.phone_verified]);
-
-  useEffect(() => {
-    setEmailDraft(profile.email || "");
-    setEmailCode("");
-    setEmailCodeSent(false);
-    setChangingEmail(false);
-    setResendCooldowns((prev) => ({ ...prev, email: 0 }));
-  }, [profile.email]);
+  };
+  const setVerifiedChannels = (updater) => {
+    const next = typeof updater === "function" ? updater(verifiedChannels) : updater;
+    setVerifiedChannelsOverride({
+      emailKey: emailProfileKey,
+      phoneKey: phoneProfileKey,
+      email: next.email,
+      phone: next.phone,
+    });
+  };
 
   const resetEmailVerificationCodeState = () => {
     setEmailCode("");
@@ -194,6 +239,8 @@ export default function ProfilePage({
     try {
       setSendingPhoneCode(true);
       await sendPhoneOtp(profile.phone.trim());
+      setPhoneCode("");
+      setPhoneCodeSent(true);
       setVerifyStatus("Phone code sent.");
       startResendCooldown("phone");
     } catch (error) {
@@ -275,11 +322,39 @@ export default function ProfilePage({
     })
     .filter((item) => item.paymentMethod || item.payment_method || item.payment_status || item.status)
     .slice(0, 5);
+  const profileBookings = (bookings || [])
+    .filter((item) => {
+      const customer = String(item.customerUsername || item.customer_username || item.customer || "");
+      const provider = String(item.barberUsername || item.barber_username || item.ownerUsername || item.owner_username || "");
+      const username = String(currentUser?.username || "");
+      return !username || !customer || customer === username || provider === username || isProviderAccount;
+    })
+    .slice(0, 6);
   const subscriptionFeatures = subscriptionState?.features || {};
   const subscriptionPlans = PROVIDER_PLANS;
   const currentPlan = String(subscriptionState?.tier || "").toUpperCase();
   const currentPlanLabel = formatPlanName(currentPlan, "No active plan");
-  const hasActivePlan = ["PLUS", "PREMIUM", "PLATINUM"].includes(currentPlan);
+  const hasActivePlan = ["FREE", "PREMIUM", "PLATINUM"].includes(currentPlan);
+  const pendingProviderTier = formatPlanName(pendingSubscriptionPayment?.tier, pendingSubscriptionPayment?.tier || "Selected plan");
+  const businessStatus = String(myBarberProfile?.business_status || myBarberProfile?.active_status || "").toLowerCase();
+  const businessSubscriptionStatus = String(myBarberProfile?.subscription_status || subscriptionState?.status || "").toLowerCase();
+  const businessVerificationStatus = String(myBarberProfile?.verified_status || myBarberProfile?.verification_status || "").toLowerCase();
+  const businessVerificationApproved = ["approved", "verified", "complete", "completed"].includes(businessVerificationStatus);
+  const businessIsActive =
+    ["active", "approved", "live"].includes(businessStatus) &&
+    businessSubscriptionStatus === "active" &&
+    businessVerificationApproved;
+  const businessStatusText = pendingSubscriptionPayment?.reference
+    ? "Payment pending. Your paid plan will activate after payment confirmation."
+    : businessIsActive
+    ? `Business active. Your business is visible to customers on the ${currentPlanLabel} plan.`
+    : !businessVerificationApproved && businessSubscriptionStatus === "active"
+    ? currentPlan === "FREE"
+      ? "Your Free plan is active. Verification is still required before your business becomes visible to customers."
+      : "Verification required. Your plan is active, but your business is not visible to customers yet."
+    : businessSubscriptionStatus !== "active"
+    ? "Plan required. Choose Free, Premium, or Platinum to make your business visible after verification."
+    : "Draft saved. Finish verification and plan activation before customers can see this business.";
   const customerPremiumActive = isCustomerPremiumActive(customerSubscriptionState);
   const profileCompletionItems = [
     { label: "Add your name", done: Boolean(profile.fullName) },
@@ -288,6 +363,16 @@ export default function ProfilePage({
     { label: "Choose first service category", done: Boolean(favoriteBarbers.length || bookings.length) },
   ];
   const profileCompletionCount = profileCompletionItems.filter((item) => item.done).length;
+  const joinedDate = profile.created_at || profile.createdAt || currentUser?.created_at || currentUser?.createdAt || "";
+  const accountDetailRows = [
+    { label: "Username", value: currentUser?.username || profile.username || "Not set", icon: FiUser, cta: !currentUser?.username && !profile.username ? "Edit profile" : "" },
+    { label: "Email", value: profile.email || currentUser?.email || "Email not added", icon: FiMail, cta: profile.email ? (verifiedChannels.email ? "Verified" : "Update email") : "Update email" },
+    { label: "Phone", value: profile.phone || "Phone not added", icon: FiSmartphone, cta: profile.phone ? (verifiedChannels.phone ? "Verified" : "Verify phone") : "Add phone number" },
+    { label: "Address", value: profile.address || profile.location || currentUser?.location || "Address not added", icon: FiMapPin, cta: profile.address || profile.location || currentUser?.location ? "" : "Add address" },
+    { label: "Account type", value: isProviderAccount ? "Service provider" : "Customer", icon: FiShield, cta: isProviderAccount ? "Provider account" : "Customer account" },
+    { label: "Joined", value: joinedDate ? new Date(joinedDate).toLocaleDateString() : "Date unavailable", icon: FiCheckCircle, cta: "" },
+    ...(isProviderAccount ? [{ label: "Business", value: myBarberProfile?.business_name || myBarberProfile?.businessName || "Business profile not completed", icon: FiBriefcase, cta: myBarberProfile ? "Provider profile" : "Create business profile" }] : []),
+  ];
   const customerPremiumExpiry = customerSubscriptionState?.expires_at
     ? new Date(customerSubscriptionState.expires_at).toLocaleDateString()
     : "";
@@ -335,7 +420,13 @@ export default function ProfilePage({
               title="Upload profile photo"
               style={{ border: "none", cursor: "pointer" }}
             >
-              {profile.profilePhoto ? <img src={profile.profilePhoto} alt="profile" /> : <FiUser />}
+              <UserAvatar
+                profilePhoto={profile.profilePhoto}
+                fullName={profile.fullName}
+                username={currentUser?.username || profile.username}
+                email={profile.email || currentUser?.email}
+                size={64}
+              />
               <span className="avatar-upload-badge-v4">
                 <FiCamera />
               </span>
@@ -450,7 +541,13 @@ export default function ProfilePage({
             title={editing ? "Upload profile photo" : "Profile photo"}
             style={{ border: "none", cursor: editing ? "pointer" : "default" }}
           >
-            {profile.profilePhoto ? <img src={profile.profilePhoto} alt="profile" /> : <FiUser />}
+            <UserAvatar
+              profilePhoto={profile.profilePhoto}
+              fullName={profile.fullName}
+              username={currentUser?.username || profile.username}
+              email={profile.email || currentUser?.email}
+              size={64}
+            />
             {editing ? (
               <span className="avatar-upload-badge-v4">
                 <FiCamera />
@@ -474,6 +571,24 @@ export default function ProfilePage({
         </div>
       </div>
 
+      <div className="profile-tabs-shell-v16" role="tablist" aria-label="Profile sections">
+        {PROFILE_TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            type="button"
+            key={id}
+            role="tab"
+            aria-selected={activeProfileTab === id}
+            className={activeProfileTab === id ? "profile-tab-v16 active" : "profile-tab-v16"}
+            onClick={() => setActiveProfileTab(id)}
+          >
+            <Icon />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {activeProfileTab === "account" ? (
+        <>
       <div className="simple-card-v4 queless-appearance-card">
         <div>
           <div className="panel-title-v4">Appearance</div>
@@ -495,6 +610,8 @@ export default function ProfilePage({
         </button>
       </div>
 
+      <PushNotificationSettings currentUser={currentUser} onToast={onNotificationToast} />
+
       {!isProviderAccount ? (
         <div className="simple-card-v4">
           <div className="panel-title-v4">Get ready for your first booking</div>
@@ -512,12 +629,42 @@ export default function ProfilePage({
           <div className="profile-sub-v4">{profileCompletionCount} of {profileCompletionItems.length} steps complete.</div>
           <div className="inline-actions-v4 space-top">
             <button type="button" className="mini-action-btn-v4 success" onClick={() => setEditing(true)}>Complete profile</button>
-            <button type="button" className="mini-action-btn-v4" onClick={openPaymentHistory}>View payments</button>
+            <button type="button" className="mini-action-btn-v4" onClick={() => setTopupOpen(true)}>Top up wallet</button>
           </div>
         </div>
       ) : null}
+        </>
+      ) : null}
 
-      {isProviderAccount ? (
+      {activeProfileTab === "bookings" ? (
+        <div className="simple-card-v4 profile-booking-card-v16">
+          <div className="panel-title-v4">Booking activity</div>
+          <div className="profile-sub-v4">Recent bookings, saved places, and payment movement live here so the profile no longer feels endless.</div>
+          {profileBookings.length === 0 ? (
+            <EmptyState
+              icon={<FiCreditCard />}
+              title="No bookings yet"
+              text="Browse categories, open the map, or create your business profile to start building activity."
+            />
+          ) : (
+            <div className="profile-review-list-v4">
+              {profileBookings.map((booking) => (
+                <div className="profile-review-card-v4" key={booking.id || `${booking.date}-${booking.time}-${booking.service}`}>
+                  <div className="profile-review-head-v4">
+                    <strong>{booking.service || booking.serviceName || booking.business_name || "Booking"}</strong>
+                    <span className="profile-review-rating-v4">{String(booking.status || "pending").replaceAll("_", " ")}</span>
+                  </div>
+                  <div className="profile-review-text-v4">
+                    {[booking.date, booking.time, booking.location || booking.businessLocation].filter(Boolean).join(" - ") || "Booking details will appear here."}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {activeProfileTab === "wallet" && isProviderAccount ? (
         <div className="wallet-shell-v5">
           <div className="wallet-visual-card-v5">
             <div className="wallet-layer-stack-v5" aria-hidden="true">
@@ -528,7 +675,7 @@ export default function ProfilePage({
             <div className="wallet-visual-top-v5">
               <div>
                 <div className="wallet-eyebrow-v5">Queless Business Wallet</div>
-                <div className="wallet-status-chip-v5">Ledger active</div>
+                <div className="wallet-status-chip-v5">Wallet active</div>
               </div>
               <div className="wallet-chip-v5" aria-hidden="true" />
             </div>
@@ -541,7 +688,7 @@ export default function ProfilePage({
           </div>
 
           <div className="wallet-action-panel-v5">
-            <div className="wallet-panel-title-v5">Ledger balances</div>
+            <div className="wallet-panel-title-v5">Wallet balances</div>
             <div className="wallet-action-grid-v5">
               <div className="wallet-field-v5">
                 <strong>Pending</strong>
@@ -574,6 +721,7 @@ export default function ProfilePage({
                 />
               </label>
               <button
+                type="button"
                 className="wallet-action-btn-v5 debit"
                 onClick={() => {
                   setVerifyError("");
@@ -654,7 +802,9 @@ export default function ProfilePage({
             ))}
           </div>
         </div>
-      ) : (
+      ) : null}
+
+      {activeProfileTab === "wallet" && !isProviderAccount ? (
         <div className="wallet-shell-v5 customer-pay-shell-v15">
           <div className="customer-pay-card-v15">
             <div className="customer-pay-glow-v15" aria-hidden="true" />
@@ -797,49 +947,77 @@ export default function ProfilePage({
             )}
           </div>
         </div>
-      )}
+      ) : null}
 
-      {isProviderAccount ? (
+      {activeProfileTab === "subscription" && isProviderAccount ? (
         <div className="simple-card-v4">
           <div className="panel-title-v4">Subscription</div>
           <div className="profile-sub-v4">
-            {hasActivePlan ? `Selected plan: ${currentPlanLabel}` : "Choose a provider plan to activate your business."}
-            {subscriptionState?.is_trial
-              ? ` - ${currentPlanLabel} trial ends in ${subscriptionState?.trial_days_left || 0} day${Number(subscriptionState?.trial_days_left || 0) === 1 ? "" : "s"}`
-              : subscriptionState?.expires_at
+            {pendingSubscriptionPayment?.reference
+              ? `Plan selected: ${pendingProviderTier}. Complete payment to activate your business.`
+              : hasActivePlan
+              ? `Active plan: ${currentPlanLabel}`
+              : "Choose a provider plan to activate your business."}
+            {subscriptionState?.expires_at
               ? ` - Active until ${new Date(subscriptionState.expires_at).toLocaleDateString()}`
               : ""}
           </div>
-          {!hasActivePlan ? <div className="profile-sub-v4">Choose a plan to activate your business.</div> : null}
+          {pendingSubscriptionPayment?.reference ? (
+            <div className="profile-plan-status-v16 pending">
+              <FiCreditCard />
+              <span>Plan selected. Complete payment to activate your business.</span>
+            </div>
+          ) : !hasActivePlan ? <div className="profile-sub-v4">Choose a plan to activate your business.</div> : null}
+          {!hasActivePlan ? (
+            <div className="profile-plan-status-v16">
+              <FiCreditCard />
+              <span>Your business goes live only after backend payment confirmation.</span>
+            </div>
+          ) : null}
           <div className="profile-review-list-v4">
             {subscriptionPlans.map((plan) => {
               const tier = plan.tier;
-              const detail = plan.features.join(", ");
+              const selected = pendingSubscriptionPayment?.tier === tier || currentPlan === tier;
+              const isActive = hasActivePlan && currentPlan === tier;
+              const isPending = pendingSubscriptionPayment?.tier === tier && !isActive;
               return (
-              <div key={tier} className="profile-review-card-v4">
+              <div key={tier} className={selected ? "profile-review-card-v4 profile-plan-card-v16 selected" : "profile-review-card-v4 profile-plan-card-v16"}>
                 <div className="profile-review-head-v4">
                   <strong>{plan.name}</strong>
                   <span className="profile-review-rating-v4">{formatSubscriptionPrice(plan, "monthly")}</span>
                 </div>
-                <div className="profile-review-text-v4">{plan.summary}. {detail}.</div>
+                <div className="profile-plan-badges-v16">
+                  {isActive ? <span className="active">Active</span> : null}
+                  {isPending ? <span className="pending">Pending payment</span> : null}
+                  {selected && !isActive && !isPending ? <span>Selected</span> : null}
+                  {plan.recommended ? <span>Recommended</span> : null}
+                </div>
+                <div className="profile-review-text-v4">{plan.bestFor || plan.summary}</div>
+                <ul className="profile-plan-features-v16">
+                  {plan.features.slice(0, 5).map((feature) => (
+                    <li key={feature}><FiCheckCircle /> {feature}</li>
+                  ))}
+                </ul>
                 <div className="inline-actions-v4">
                   <button
+                    type="button"
                     className="mini-action-btn-v4"
                     onClick={() => setPlanDetailsTier((current) => (current === tier ? "" : tier))}
                   >
                     View details
                   </button>
                   <button
+                    type="button"
                     className="mini-action-btn-v4 success"
                     onClick={() => onOpenUpgradePlan?.(tier)}
-                    disabled={subscriptionLoading}
+                    disabled={subscriptionLoading || isActive}
                   >
-                    Choose Plan
+                    {isActive ? "Current plan" : tier === "FREE" ? "Start free" : `Select ${plan.name}`}
                   </button>
                 </div>
                 {planDetailsTier === tier ? (
                   <div className="profile-review-text-v4">
-                    Plan name: {plan.name}. Monthly price: {formatSubscriptionPrice(plan, "monthly")}. Annual price: {formatSubscriptionPrice(plan, "annual")}. Provider plans activate after mobile money payment. {detail}.
+                    Plan name: {plan.name}. Monthly price: {formatSubscriptionPrice(plan, "monthly")}. {tier === "FREE" ? "Free starts without payment." : `Annual price: ${formatSubscriptionPrice(plan, "annual")}. Provider plans activate only after backend payment confirmation.`}
                   </div>
                 ) : null}
               </div>
@@ -850,14 +1028,20 @@ export default function ProfilePage({
           </div>
           {pendingSubscriptionPayment?.reference ? (
             <div className="inline-actions-v4 space-top">
-              <button className="mini-action-btn-v4 success" onClick={() => onVerifySubscription?.(pendingSubscriptionPayment.reference)} disabled={subscriptionLoading}>
+              <button type="button" className="mini-action-btn-v4 success" onClick={() => onVerifySubscription?.(pendingSubscriptionPayment.reference)} disabled={subscriptionLoading}>
                 Verify {pendingSubscriptionPayment.tier} payment
               </button>
             </div>
           ) : null}
-          {subscriptionMessage ? <div className={subscriptionMessage.toLowerCase().includes("could not") ? "auth-error" : "auth-success"}>{subscriptionMessage}</div> : null}
+          {subscriptionMessage ? (
+            <div className={subscriptionMessage.toLowerCase().match(/could not|failed|not completed|expired|invalid/) ? "auth-error" : "auth-info"}>
+              {subscriptionMessage}
+            </div>
+          ) : null}
         </div>
-      ) : (
+      ) : null}
+
+      {activeProfileTab === "subscription" && !isProviderAccount ? (
         <div className="simple-card-v4">
           <div className="panel-title-v4">Customer plan</div>
           <div className="profile-sub-v4">
@@ -900,6 +1084,7 @@ export default function ProfilePage({
                 )}
                 {pendingCustomerSubscriptionPayment?.reference ? (
                   <button
+                    type="button"
                     className="mini-action-btn-v4"
                     type="button"
                     onClick={() => onVerifyCustomerPremium?.(pendingCustomerSubscriptionPayment.reference)}
@@ -917,93 +1102,49 @@ export default function ProfilePage({
             </div>
           ) : null}
         </div>
-      )}
-      <div className="simple-card-v4 profile-details-inline-v7">
-        <div className="panel-title-v4">Profile details</div>
-        <div className="field-stack-v4">
-          <label className="label-v4">
-            Full name
-            <input
-              className="field-input-v4 profile-input-v4"
-              value={profile.fullName || ""}
-              onChange={(e) => setProfile((prev) => ({ ...prev, fullName: e.target.value }))}
-              disabled={!editing}
-            />
-          </label>
-          <label className="label-v4">
-            Username
-            <input
-              className="field-input-v4 profile-input-v4"
-              value={currentUser?.username || profile.username || ""}
-              disabled
-            />
-          </label>
-          <label className="label-v4">
-            Phone
-            <div className="phone-field-row-v4">
-              <select
-                className="country-code-select-v4"
-                value={phoneCountryCode}
-                onChange={(e) => {
-                  const nextCode = e.target.value;
-                  setPhoneCountryCode(nextCode);
-                  setProfile((prev) => ({ ...prev, phone: buildPhoneNumber(nextCode, phoneLocalNumber) }));
-                }}
-                disabled={!editing}
-              >
-                {phoneCountries.map((item) => (
-                  <option key={item.code} value={item.code}>{`${item.label} ${item.code}`}</option>
-                ))}
-              </select>
-              <input
-                className="field-input-v4 profile-input-v4 phone-input-v4"
-                value={phoneLocalNumber}
-                placeholder="700123456"
-                onChange={(e) => {
-                  const local = sanitizeDigits(e.target.value).slice(0, 12);
-                  setPhoneLocalNumber(local);
-                  setProfile((prev) => ({ ...prev, phone: buildPhoneNumber(phoneCountryCode, local) }));
-                }}
-                disabled={!editing}
-              />
-            </div>
-          </label>
-          <label className="label-v4">
-            Email
-            <input
-              className="field-input-v4 profile-input-v4"
-              value={profile.email || ""}
-              onChange={(e) => setProfile((prev) => ({ ...prev, email: e.target.value }))}
-              disabled={!editing}
-            />
-          </label>
-          <label className="label-v4">
-            Address
-            <input
-              className="field-input-v4 profile-input-v4"
-              value={profile.address || ""}
-              onChange={(e) => setProfile((prev) => ({ ...prev, address: e.target.value }))}
-              disabled={!editing}
-            />
-          </label>
-          {editing ? (
-            <div className="label-v4">
-              <span>Profile photo</span>
-              <button type="button" className="secondary-btn-v4" onClick={() => profilePhotoInputRef.current?.click()}>
-                <FiCamera /> {profile.profilePhoto ? "Change profile photo" : "Upload profile photo"}
-              </button>
-            </div>
-          ) : null}
-        </div>
-        {editing && (
-          <div className="inline-actions-v4">
-            <button className="mini-action-btn-v4 success" onClick={saveProfileEdits}>
-              {profileSaving ? "Saving..." : "Save updates"}
-            </button>
-          </div>
-        )}
-      </div>
+      ) : null}
 
+      {activeProfileTab === "account" ? (
+      <div className="simple-card-v4 profile-details-inline-v7">
+        <div className="profile-details-head-v17">
+          <div>
+            <div className="panel-title-v4">Account dashboard</div>
+            <div className="profile-sub-v4">Your saved profile, verification status, and business identity.</div>
+          </div>
+          <button type="button" className="mini-action-btn-v4 success" onClick={() => setEditing(true)}>
+            <FiEdit2 /> Edit profile
+          </button>
+        </div>
+        <div className="profile-detail-grid-v17">
+          {accountDetailRows.map(({ label, value, icon: Icon, cta }) => (
+            <div className="profile-detail-tile-v17" key={label}>
+              <span className="profile-detail-icon-v17"><Icon /></span>
+              <div>
+                <small>{label}</small>
+                <strong>{value}</strong>
+                {cta ? <button type="button" onClick={() => setEditing(true)}>{cta}</button> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="profile-status-strip-v17">
+          <span>{verifiedChannels.email ? "Email verified" : "Email needs verification"}</span>
+          <span>{verifiedChannels.phone ? "Phone verified" : profile.phone ? "Verify phone" : "Add phone number"}</span>
+          <span>{isProviderAccount ? businessStatusText : "Customer Free"}</span>
+        </div>
+        {verifyStatus ? <div className="auth-success">{verifyStatus}</div> : null}
+        {verifyError ? <div className="auth-error">{verifyError}</div> : null}
+        <div className="inline-actions-v4">
+          {!profile.phone ? <button type="button" className="mini-action-btn-v4" onClick={() => setEditing(true)}>Add phone number</button> : null}
+          {!profile.address ? <button type="button" className="mini-action-btn-v4" onClick={() => setEditing(true)}>Add address</button> : null}
+          {!verifiedChannels.phone && profile.phone ? (
+            <button type="button" className="mini-action-btn-v4" onClick={() => setActiveProfileTab("security")}>Verify phone</button>
+          ) : null}
+          </div>
+      </div>
+      ) : null}
+
+      {activeProfileTab === "security" ? (
       <div className="simple-card-v4 profile-confirm-card-v4">
         <div className="profile-confirm-copy-v4">
           <h3>Account security</h3>
@@ -1213,25 +1354,36 @@ export default function ProfilePage({
                 <span>{profile.phone?.trim() || "No phone number saved yet"}</span>
               </div>
 
-              <button type="button" className="secondary-btn-v4 verify-send-btn-v4" onClick={() => sendVerification("phone")} disabled={sendingPhoneCode || resendCooldowns.phone > 0}>
-                {sendingPhoneCode ? "Sending..." : resendCooldowns.phone > 0 ? `Resend in ${resendCooldowns.phone}s` : "Send code"}
-              </button>
+              {!phoneCodeSent ? (
+                <button type="button" className="secondary-btn-v4 verify-send-btn-v4" onClick={() => sendVerification("phone")} disabled={sendingPhoneCode || resendCooldowns.phone > 0}>
+                  {sendingPhoneCode ? "Sending..." : resendCooldowns.phone > 0 ? `Resend in ${resendCooldowns.phone}s` : "Send code"}
+                </button>
+              ) : null}
               <div className="cooldown-note-v7">SMS codes can be requested every 45 seconds.</div>
 
-              <label className="label-v4">
-                Verification code
-                <input
-                  className="field-input-v4 profile-input-v4"
-                  placeholder="Enter phone code"
-                  value={phoneCode}
-                  onChange={(e) => setPhoneCode(e.target.value)}
-                />
-              </label>
+              {phoneCodeSent ? (
+                <>
+                  <label className="label-v4">
+                    Verification code
+                    <input
+                      className="field-input-v4 profile-input-v4"
+                      placeholder="Enter phone code"
+                      value={phoneCode}
+                      onChange={(e) => setPhoneCode(e.target.value)}
+                    />
+                  </label>
 
+                  <div className="verify-page-actions-v4">
+                    <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmVerification("phone")}>
+                      <FiCheckCircle /> Verify phone
+                    </button>
+                    <button type="button" className="mini-action-btn-v4" onClick={() => sendVerification("phone")} disabled={sendingPhoneCode || resendCooldowns.phone > 0}>
+                      {sendingPhoneCode ? "Sending..." : "Resend code"}
+                    </button>
+                  </div>
+                </>
+              ) : null}
               <div className="verify-page-actions-v4">
-                <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmVerification("phone")}>
-                  <FiCheckCircle /> Verify phone
-                </button>
                 <button type="button" className="mini-action-btn-v4" onClick={() => setVerificationPage("email")}>
                   &larr; Back to email
                 </button>
@@ -1243,7 +1395,9 @@ export default function ProfilePage({
           {verifyStatus ? <div className="auth-success">{verifyStatus}</div> : null}
         </div>
       </div>
+      ) : null}
 
+      {activeProfileTab === "bookings" ? (
       <div className="simple-card-v4">
         <div className="panel-title-v4">Saved businesses</div>
         {favoriteBarbers.length === 0 ? (
@@ -1271,33 +1425,43 @@ export default function ProfilePage({
           </div>
         )}
       </div>
+      ) : null}
 
+      {activeProfileTab === "account" ? (
+      <>
       {!myBarberProfile ? (
         <div className="simple-card-v4">
-          <div className="panel-title-v4">Create a business account</div>
-          <div className="profile-sub-v4">Register your service business and choose a paid plan to manage bookings.</div>
-          <button className="secondary-btn-v4" onClick={onRegisterBarber}>
-            <FiBriefcase /> Create business
+          <div className="panel-title-v4">Receive bookings on Queless</div>
+          <div className="profile-sub-v4">Create your business profile, add services, and choose Free or a paid plan when you are ready to go live.</div>
+          <button type="button" className="secondary-btn-v4" onClick={onRegisterBarber}>
+            <FiBriefcase /> Create business profile
           </button>
         </div>
       ) : (
         <div className="simple-card-v4">
           <div className="panel-title-v4">Manage business</div>
-          <div className="profile-sub-v4">Your business profile is active. You can edit details or remove the business from this account.</div>
+          <div className="profile-sub-v4">{businessStatusText}</div>
           <div className="inline-actions-v4 space-top">
-            <button className="secondary-btn-v4" onClick={onEditBarber}>
+            <button type="button" className="secondary-btn-v4" onClick={onEditBarber}>
               <FiEdit2 /> Edit my business
             </button>
-            <button className="secondary-btn-v4 danger-outline" onClick={onDeleteBarberStand}>
+            <button type="button" className="secondary-btn-v4 danger-outline" onClick={onDeleteBarberStand}>
               Delete my business
             </button>
           </div>
         </div>
       )}
-
-      <button className="secondary-btn-v4" onClick={logout}>
+      <button type="button" className="secondary-btn-v4 danger-outline profile-account-logout-v17" onClick={logout}>
         <FiLogOut /> Log out
       </button>
+      </>
+      ) : null}
+
+      {activeProfileTab === "security" ? (
+      <button type="button" className="secondary-btn-v4" onClick={logout}>
+        <FiLogOut /> Log out
+      </button>
+      ) : null}
 
       <TopUpWalletModal
         show={topupOpen}

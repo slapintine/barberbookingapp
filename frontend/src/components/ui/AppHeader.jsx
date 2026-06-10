@@ -21,9 +21,10 @@ export default function AppHeader({
 }) {
   const [showLocationMenu, setShowLocationMenu] = useState(false);
   const [manualLocation, setManualLocation] = useState("");
-  const [imageFailed, setImageFailed] = useState(false);
+  const [failedProfileImage, setFailedProfileImage] = useState("");
   const locationRef = useRef(null);
   const nextTheme = theme === "light" ? "dark" : "light";
+  const imageFailed = Boolean(profileImage && failedProfileImage === profileImage);
 
   const closeLocationMenu = () => {
     setShowLocationMenu(false);
@@ -36,10 +37,6 @@ export default function AppHeader({
     setManualLocation("");
     closeLocationMenu();
   };
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [profileImage]);
 
   useEffect(() => {
     if (!showLocationMenu) return undefined;
@@ -148,7 +145,7 @@ export default function AppHeader({
           <FiBell />
           {unreadCount > 0 && (
             <span key={unreadCount} className="mini-badge-v4">
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
         </button>
@@ -159,7 +156,7 @@ export default function AppHeader({
               alt=""
               onError={(event) => {
                 event.currentTarget.style.display = "none";
-                setImageFailed(true);
+                setFailedProfileImage(profileImage || "");
               }}
             />
           ) : (

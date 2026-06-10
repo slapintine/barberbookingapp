@@ -18,7 +18,7 @@ import { formatMoney, formatPlanName, formatSubscriptionPrice, getPlanAmount, no
 
 const PLANS = PROVIDER_PLANS.map((plan) => ({
   ...plan,
-  badge: plan.recommended ? "Recommended" : plan.tier === "PLATINUM" ? "Best visibility" : "",
+  badge: plan.recommended ? "Recommended" : plan.tier === "PLATINUM" ? "Best visibility" : plan.tier === "FREE" ? "No payment" : "",
 }));
 
 const PAYMENT_METHODS = [
@@ -29,26 +29,26 @@ const PAYMENT_METHODS = [
 const COMPARISON_ROWS = [
   ["Business profile", "Included", "Included", "Included"],
   ["Number of services", "5", "20", "Unlimited"],
-  ["Photos/videos", "5 photos", "20 photos", "Unlimited photos and video"],
-  ["Search visibility", "Basic visibility", "Better ranking", "Top search, map, and category ranking"],
-  ["Promotions", "Not included", "Discounts and reminders", "Featured promotions with AI captions"],
-  ["Analytics", "Basic reports", "Booking and service insights", "Advanced analytics dashboard"],
-  ["AI Business Coach", "Not included", "Not included", "Included"],
-  ["Verified badge", "Not included", "Not included", "Included"],
-  ["Homepage feature", "Not included", "Not included", "Priority placement"],
-  ["Support level", "Normal", "Priority", "Premium"],
+  ["Images", "2 images / 20MB total", "5 images / 50MB total", "10 images / 100MB total"],
+  ["Search visibility", "Basic", "Priority visibility", "Top search, map, and category ranking"],
+  ["Promotions", "Not included", "Promotional display tools", "Advanced promotional tools"],
+  ["Analytics", "Basic reports", "Basic analytics", "Advanced analytics dashboard"],
+  ["Smart Match eligibility", "Not included", "Included", "Included"],
+  ["Provider Coach", "Platinum preview", "5 tips/month", "Unlimited"],
+  ["Review blocking", "Not included", "Not included", "Up to 10 reviews"],
+  ["Support level", "Normal support", "Faster support", "Priority support"],
 ];
 
 const PLAN_PREVIEWS = {
-  PLUS: [
+  FREE: [
     { title: "Reviews", text: "Collect and show customer ratings on your business profile.", icon: FiStar },
     { title: "Earnings", text: "Track paid bookings and basic wallet activity.", icon: FiDollarSign },
     { title: "Service list", text: "Publish up to 5 bookable services with prices.", icon: FiCheck },
   ],
   PREMIUM: [
-    { title: "Booking analytics", text: "See booking trends, revenue signals, and customer activity.", icon: FiBarChart2 },
-    { title: "Map visibility", text: "Rank higher when nearby customers open the provider map.", icon: FiEye },
-    { title: "Promotions", text: "Create offers and discounts to bring customers back.", icon: FiTrendingUp },
+    { title: "More services", text: "List more services and add a stronger gallery as your business grows.", icon: FiCheck },
+    { title: "Smart Match", text: "Become eligible for Smart Match discovery where provider matching is available.", icon: FiEye },
+    { title: "Growth tools", text: "Use basic analytics and promotional display tools to attract more customers.", icon: FiTrendingUp },
   ],
   PLATINUM: [
     { title: "Homepage feature", text: "Get premium placement in high-visibility discovery areas.", icon: FiZap },
@@ -57,11 +57,11 @@ const PLAN_PREVIEWS = {
   ],
 };
 
-function normalizePaymentError(error) {
+function normalizePaymentError(error, planName = "selected plan") {
   if (error?.status === 401) return "Your session has expired. Please log in again.";
-  if (error?.status === 403) return "You do not have permission to complete this action.";
+  if (error?.status === 403) return error?.message || "This action is not available for your account type.";
   if (error?.status === 400) return error.message || "Missing payment details.";
-  return error?.message || "Payment failed. Please try again.";
+  return error?.message || `We couldn't activate your ${planName}. Please try again.`;
 }
 
 export default function TrialUpgradeScreen({
@@ -78,7 +78,7 @@ export default function TrialUpgradeScreen({
   currentUser,
   isAdmin = false,
 }) {
-  const [selectedTier, setSelectedTier] = useState(() => normalizePlanTier(initialSelectedTier, "PLUS"));
+  const [selectedTier, setSelectedTier] = useState(() => normalizePlanTier(initialSelectedTier, "FREE"));
   const [step, setStep] = useState("plans");
   const [selectedMethod, setSelectedMethod] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -93,6 +93,7 @@ export default function TrialUpgradeScreen({
     () => PLANS.find((plan) => plan.tier === selectedTier) || PLANS[0],
     [selectedTier]
   );
+  const selectedIsFree = selectedPlan?.tier === "FREE";
   const selectedPaymentMethod = PAYMENT_METHODS.find((method) => method.id === selectedMethod);
   const currentTier = String(subscription?.tier || "LOCKED").toUpperCase();
   const currentTierLabel = formatPlanName(currentTier, "Plan required");
@@ -121,11 +122,34 @@ export default function TrialUpgradeScreen({
   }, [onClose]);
 
   const selectPlan = (tier) => {
-    setSelectedTier(normalizePlanTier(tier, selectedTier || "PLUS"));
+    setSelectedTier(normalizePlanTier(tier, selectedTier || "FREE"));
     setLocalMessage("");
   };
 
-  const openPayment = () => {
+  const openPayment = async () => {
+    if (selectedIsFree) {
+      try {
+        setStatus("processing");
+        setLocalMessage("Starting Free plan...");
+        const ok = await onUpgrade?.({
+          tier: "FREE",
+          method: "free",
+          provider: "free",
+          billingCycle: "monthly",
+        });
+        if (ok) {
+          setStatus("success");
+          setLocalMessage("Free plan activated. Verification may still be required before customers can see it.");
+        } else {
+          setStatus("failed");
+          setLocalMessage("");
+        }
+      } catch (error) {
+        setStatus("failed");
+        setLocalMessage(normalizePaymentError(error, "Free plan"));
+      }
+      return;
+    }
     setStep("payment");
     setStatus("");
     setLocalMessage("");
@@ -133,6 +157,7 @@ export default function TrialUpgradeScreen({
 
   const validatePayment = () => {
     if (!currentUser?.username) return "Your session has expired. Please log in again.";
+    if ((promoApplied || promoCode.trim()) && !selectedMethod) return "";
     if (!selectedMethod) return "Choose MTN Mobile Money or Airtel Money before paying.";
     if (!phoneNumber.trim()) return "Enter a phone number for Mobile Money payment.";
     return "";
@@ -165,14 +190,14 @@ export default function TrialUpgradeScreen({
       });
       if (ok) {
         setStatus("pending");
-        setLocalMessage("Payment started. Complete authorization to activate your plan.");
+        setLocalMessage("Plan selected. Complete payment to activate your business.");
       } else {
         setStatus("failed");
         setLocalMessage("");
       }
     } catch (error) {
       setStatus("failed");
-      setLocalMessage(normalizePaymentError(error));
+      setLocalMessage(normalizePaymentError(error, selectedPlan?.name || "selected plan"));
     }
   };
 
@@ -216,15 +241,12 @@ export default function TrialUpgradeScreen({
           </button>
         </div>
 
-        <section className="trial-upgrade-hero-v12">
+        <section className="trial-upgrade-hero-v12 trial-plan-helper-v16">
           <div className="trial-hero-badge-v12">
             {isAdmin ? <FiEye /> : <FiLock />}
-            {isAdmin ? "Admin preview mode" : currentTier === "LOCKED" ? "Choose a provider plan to activate your business." : `Selected plan: ${currentTierLabel}`}
+            {isAdmin ? "Admin preview mode" : currentTier === "LOCKED" ? "Plan setup" : `Current plan: ${currentTierLabel}`}
           </div>
-          <h1>Upgrade to grow faster</h1>
-          <p>
-            Upgrade to get more bookings, better visibility, and more business tools.
-          </p>
+          <p>Start free or upgrade when you are ready.</p>
         </section>
 
         <div className="trial-billing-toggle-v15" role="group" aria-label="Billing cycle">
@@ -254,7 +276,7 @@ export default function TrialUpgradeScreen({
                 </span>
                 <strong>{formatSubscriptionPrice(plan, billingCycle)}</strong>
                 <small>{plan.summary}</small>
-                {billingCycle === "annual" ? <small>Save {formatMoney(plan.annualSavings)} yearly</small> : null}
+                {billingCycle === "annual" && plan.annualSavings > 0 ? <small>Save {formatMoney(plan.annualSavings)} yearly</small> : null}
               </button>
               <span className="trial-feature-list-v12">
                 {plan.features.map((feature) => (
@@ -262,7 +284,7 @@ export default function TrialUpgradeScreen({
                 ))}
               </span>
               <button type="button" className="trial-select-btn-v13" onClick={() => selectPlan(plan.tier)}>
-                {selectedTier === plan.tier ? "Selected" : "Select Plan"}
+                {selectedTier === plan.tier ? "Selected" : plan.tier === "FREE" ? "Start free" : `Upgrade to ${plan.name}`}
               </button>
               <button
                 type="button"
@@ -270,7 +292,7 @@ export default function TrialUpgradeScreen({
                 aria-expanded={expandedPlan === plan.tier}
                 onClick={() => setExpandedPlan((current) => (current === plan.tier ? "" : plan.tier))}
               >
-                {expandedPlan === plan.tier ? "Hide Plan Details" : "View Plan Details"} <FiArrowRight />
+                {expandedPlan === plan.tier ? "Hide plan details" : "View plan details"} <FiArrowRight />
               </button>
               {expandedPlan === plan.tier ? (
                 <div className="trial-plan-preview-v14">
@@ -293,14 +315,14 @@ export default function TrialUpgradeScreen({
               <div>
                 <span>Selected plan: {selectedPlan.name}</span>
                 <strong>{formatSubscriptionPrice(selectedPlan, billingCycle)}</strong>
-                {billingCycle === "annual" ? <span>Pay yearly and save {formatMoney(selectedPlan.annualSavings)}</span> : null}
+                {billingCycle === "annual" && selectedPlan.annualSavings > 0 ? <span>Pay yearly and save {formatMoney(selectedPlan.annualSavings)}</span> : null}
               </div>
               {visibleMessage ? <p className="trial-message-v12">{visibleMessage}</p> : null}
               <button type="button" className="trial-primary-btn-v12" onClick={openPayment} disabled={loading}>
-                Continue to Payment <FiArrowRight />
+                {selectedIsFree ? "Start free" : "Continue to payment"} <FiArrowRight />
               </button>
               <button type="button" className="trial-secondary-btn-v12" onClick={onChooseLater}>
-                Choose Later
+                Choose later
               </button>
             </section>
 
@@ -314,16 +336,16 @@ export default function TrialUpgradeScreen({
                   <thead>
                     <tr>
                       <th>Feature</th>
-                      <th>Plus</th>
+                      <th>Free</th>
                       <th>Premium</th>
                       <th>Platinum</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {COMPARISON_ROWS.map(([feature, plus, premium, platinum]) => (
+                    {COMPARISON_ROWS.map(([feature, FREE, premium, platinum]) => (
                       <tr key={feature}>
                         <th>{feature}</th>
-                        <td>{plus}</td>
+                        <td>{FREE}</td>
                         <td>{premium}</td>
                         <td>{platinum}</td>
                       </tr>
@@ -379,7 +401,15 @@ export default function TrialUpgradeScreen({
                       setPromoApplied("");
                     }}
                   />
-                  <button type="button" onClick={() => setPromoApplied(promoCode.trim())} disabled={!promoCode.trim()}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromoApplied(promoCode.trim());
+                      setStatus("");
+                      setLocalMessage("Promo code applied.");
+                    }}
+                    disabled={!promoCode.trim()}
+                  >
                     Apply
                   </button>
                 </span>
@@ -404,7 +434,7 @@ export default function TrialUpgradeScreen({
             </div>
             <div className="trial-readonly-row-v13">
               <span>After payment</span>
-              <strong>Your business stays active for {billingCycle === "annual" ? "12 months" : "1 month"}.</strong>
+              <strong>Activation happens only after backend payment confirmation.</strong>
             </div>
 
             {visibleMessage ? (
@@ -442,7 +472,7 @@ export default function TrialUpgradeScreen({
           <span>
             {isAdmin
               ? "Admin users can preview all subscription and payment screens without being blocked."
-              : "Paid features activate after payment is confirmed."}
+              : "Free starts without payment. Paid features activate after payment is confirmed."}
           </span>
         </div>
       </div>

@@ -3,32 +3,38 @@
   padding-bottom: 110px;
 }
 
+/* ─── Card surfaces ──────────────────────────────────────────────── */
 .ai-coach-hero-v1,
 .ai-coach-lock-v1,
 .ai-coach-loading-v1,
 .ai-coach-error-v1,
+.ai-coach-chat-v1,
 .ai-coach-setup-v1,
 .ai-coach-card-v1,
 .ai-coach-readiness-v1,
-.ai-coach-empty-card-v1 {
-  border: 1px solid rgba(112, 38, 146, 0.14);
+.ai-coach-empty-card-v1,
+.ai-coach-open-cta-v1 {
+  border: 1px solid rgba(112, 38, 146, 0.13);
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 45px rgba(54, 18, 77, 0.09);
+  box-shadow: 0 14px 36px rgba(54, 18, 77, 0.07);
 }
 
 .dark .ai-coach-hero-v1,
 .dark .ai-coach-lock-v1,
 .dark .ai-coach-loading-v1,
 .dark .ai-coach-error-v1,
+.dark .ai-coach-chat-v1,
 .dark .ai-coach-setup-v1,
 .dark .ai-coach-card-v1,
 .dark .ai-coach-readiness-v1,
-.dark .ai-coach-empty-card-v1 {
-  border-color: rgba(255, 255, 255, 0.12);
+.dark .ai-coach-empty-card-v1,
+.dark .ai-coach-open-cta-v1 {
+  border-color: rgba(255, 255, 255, 0.1);
   background: rgba(28, 22, 34, 0.94);
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
 }
 
+/* ─── Hero ───────────────────────────────────────────────────────── */
 .ai-coach-hero-v1 {
   display: flex;
   align-items: center;
@@ -38,58 +44,240 @@
   padding: 22px;
 }
 
-.ai-coach-hero-v1 h1,
-.ai-coach-lock-v1 h1 {
+.ai-coach-hero-actions-v1 {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ai-coach-hero-v1 h1 {
   margin: 6px 0 8px;
   color: var(--text-strong, #261236);
-  font-size: clamp(1.7rem, 5vw, 2.45rem);
-  line-height: 1.06;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  line-height: 1.08;
 }
+.dark .ai-coach-hero-v1 h1 { color: #fff; }
 
-.dark .ai-coach-hero-v1 h1,
-.dark .ai-coach-lock-v1 h1 {
-  color: #fff;
-}
-
-.ai-coach-hero-v1 p,
-.ai-coach-lock-v1 p,
-.ai-coach-setup-v1 p {
+.ai-coach-hero-v1 p {
   margin: 0;
   color: var(--text-muted, #695873);
-  line-height: 1.55;
+  line-height: 1.5;
 }
+.dark .ai-coach-hero-v1 p { color: rgba(255,255,255,0.72); }
 
-.dark .ai-coach-hero-v1 p,
-.dark .ai-coach-lock-v1 p,
-.dark .ai-coach-setup-v1 p {
-  color: rgba(255, 255, 255, 0.72);
-}
-
+/* ─── Eyebrow label ──────────────────────────────────────────────── */
 .ai-coach-eyebrow-v1 {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: #6b1f8f;
-  font-size: 0.8rem;
+  gap: 7px;
+  color: #5b1a7e;
+  font-size: 0.79rem;
   font-weight: 900;
-  letter-spacing: 0;
   text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.dark .ai-coach-eyebrow-v1 { color: #d4a8f7; }
+
+/* ─── Status pill ────────────────────────────────────────────────── */
+.ai-coach-status-pill-v1 {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(107, 31, 143, 0.18);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #4d1d64;
+  background: #f8f2ff;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+.ai-coach-status-pill-v1.platinum {
+  color: #155e3d;
+  border-color: rgba(16, 122, 78, 0.22);
+  background: #edfaf4;
+}
+.ai-coach-status-pill-v1.premium {
+  color: #5a3c02;
+  border-color: rgba(170, 121, 14, 0.22);
+  background: #fff8e8;
+}
+.dark .ai-coach-status-pill-v1 {
+  color: rgba(255,255,255,0.88);
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.08);
 }
 
-.dark .ai-coach-eyebrow-v1 {
-  color: #f4b8ff;
+/* ─── Primary CTA button (Queless deep purple, white text) ────────── */
+.ai-coach-cta-btn-v1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 14px;
+  padding: 13px 22px;
+  background: #2b0038;
+  color: #fff;
+  font-size: 0.96rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(43, 0, 56, 0.22);
+  transition: background 0.15s;
+}
+.ai-coach-cta-btn-v1:hover { background: #3d0051; }
+.ai-coach-cta-btn-v1:active { background: #1e0028; }
+.dark .ai-coach-cta-btn-v1 {
+  background: #6b21a8;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+}
+.dark .ai-coach-cta-btn-v1:hover { background: #7c3aed; }
+
+/* ─── Secondary button ───────────────────────────────────────────── */
+.ai-coach-secondary-btn-v1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(107, 31, 143, 0.22);
+  border-radius: 12px;
+  padding: 9px 16px;
+  background: rgba(107, 31, 143, 0.07);
+  color: #4d1d64;
+  font-size: 0.88rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ai-coach-secondary-btn-v1:hover { background: rgba(107, 31, 143, 0.13); }
+.dark .ai-coach-secondary-btn-v1 {
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.88);
 }
 
-.ai-coach-summary-v1 {
+/* ─── Inline link button ─────────────────────────────────────────── */
+.ai-coach-link-btn-v1 {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: #fff;
+  background: #2b0038;
+  font-size: 0.88rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ai-coach-link-btn-v1:hover { background: #3d0051; }
+.ai-coach-link-btn-v1.muted {
+  color: #4d1d64;
+  background: rgba(107, 31, 143, 0.1);
+}
+.ai-coach-link-btn-v1.muted:hover { background: rgba(107, 31, 143, 0.17); }
+.dark .ai-coach-link-btn-v1 { background: #6b21a8; }
+.dark .ai-coach-link-btn-v1:hover { background: #7c3aed; }
+.dark .ai-coach-link-btn-v1.muted {
+  color: #d4a8f7;
+  background: rgba(255,255,255,0.09);
+}
+
+/* ─── Stand-blocked states ───────────────────────────────────────── */
+.ai-coach-stand-blocked-v1 {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  justify-items: center;
+  text-align: center;
   gap: 14px;
+  border-radius: 24px;
+  border: 1.5px dashed rgba(107, 31, 143, 0.25);
+  background: rgba(248, 242, 255, 0.7);
+  padding: 40px 28px;
+}
+.dark .ai-coach-stand-blocked-v1 {
+  background: rgba(43, 18, 70, 0.5);
+  border-color: rgba(200, 150, 240, 0.2);
 }
 
-.ai-coach-section-v1 {
+.ai-coach-stand-blocked-icon-v1 {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: rgba(107, 31, 143, 0.1);
+  color: #5b1a7e;
+}
+.ai-coach-stand-blocked-icon-v1 svg { width: 26px; height: 26px; }
+.dark .ai-coach-stand-blocked-icon-v1 { background: rgba(255,255,255,0.08); color: #d4a8f7; }
+
+.ai-coach-stand-blocked-v1 strong {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-strong, #2b0d4a);
+}
+.dark .ai-coach-stand-blocked-v1 strong { color: #ede0fb; }
+
+.ai-coach-stand-blocked-v1 span {
+  font-size: 0.92rem;
+  color: var(--text-muted, #6b4d8a);
+  line-height: 1.55;
+  max-width: 340px;
+}
+.dark .ai-coach-stand-blocked-v1 span { color: rgba(255,255,255,0.65); }
+
+/* ─── "Open Coach" CTA card ──────────────────────────────────────── */
+.ai-coach-open-cta-v1 {
   display: grid;
   gap: 12px;
+  border-radius: 20px;
+  padding: 22px;
 }
+.ai-coach-open-cta-v1 p {
+  margin: 0;
+  color: var(--text-muted, #695873);
+  line-height: 1.5;
+}
+.dark .ai-coach-open-cta-v1 p { color: rgba(255,255,255,0.72); }
+
+/* ─── Weekly focus banner ────────────────────────────────────────── */
+.ai-coach-weekly-focus-v1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(112, 38, 146, 0.13);
+  border-radius: 18px;
+  padding: 18px;
+  background: #fffdfa;
+  box-shadow: 0 12px 30px rgba(54, 18, 77, 0.06);
+}
+.ai-coach-weekly-focus-v1 small {
+  display: block;
+  margin-bottom: 6px;
+  color: #5b1a7e;
+  font-size: 0.77rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.ai-coach-weekly-focus-v1 p {
+  margin: 0;
+  color: var(--text-strong, #241331);
+  line-height: 1.5;
+}
+.dark .ai-coach-weekly-focus-v1 {
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(28, 22, 34, 0.94);
+}
+.dark .ai-coach-weekly-focus-v1 p { color: #fff; }
+
+/* ─── Insights summary grid ──────────────────────────────────────── */
+.ai-coach-summary-v1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.7fr);
+  gap: 14px;
+}
+.ai-coach-section-v1 { display: grid; gap: 12px; }
 
 .ai-coach-section-title-v1 {
   display: flex;
@@ -99,10 +287,7 @@
   font-size: 1rem;
   font-weight: 900;
 }
-
-.dark .ai-coach-section-title-v1 {
-  color: #fff;
-}
+.dark .ai-coach-section-title-v1 { color: #fff; }
 
 .ai-coach-grid-v1 {
   display: grid;
@@ -113,15 +298,13 @@
 .ai-coach-card-v1,
 .ai-coach-readiness-v1,
 .ai-coach-empty-card-v1,
+.ai-coach-chat-v1,
 .ai-coach-setup-v1 {
   border-radius: 18px;
   padding: 18px;
 }
 
-.ai-coach-card-v1 {
-  display: grid;
-  gap: 10px;
-}
+.ai-coach-card-v1 { display: grid; gap: 10px; }
 
 .ai-coach-card-head-v1 {
   display: flex;
@@ -129,7 +312,6 @@
   justify-content: space-between;
   gap: 12px;
 }
-
 .ai-coach-card-head-v1 span {
   display: grid;
   place-items: center;
@@ -137,121 +319,54 @@
   height: 36px;
   border-radius: 12px;
   color: #fff;
-  background: linear-gradient(135deg, #6b1f8f, #e24aa5);
+  background: #2b0038;
 }
-
-.ai-coach-card-head-v1 small {
-  color: var(--text-muted, #78627d);
-  font-weight: 800;
-}
-
-.dark .ai-coach-card-head-v1 small {
-  color: rgba(255, 255, 255, 0.7);
-}
+.ai-coach-card-head-v1 small { color: var(--text-muted, #78627d); font-weight: 800; }
+.dark .ai-coach-card-head-v1 small { color: rgba(255,255,255,0.7); }
 
 .ai-coach-card-v1 h3 {
   margin: 0;
   color: var(--text-strong, #241331);
-  font-size: 1.08rem;
+  font-size: 1.06rem;
   line-height: 1.22;
 }
-
-.dark .ai-coach-card-v1 h3 {
-  color: #fff;
-}
+.dark .ai-coach-card-v1 h3 { color: #fff; }
 
 .ai-coach-card-v1 p {
   margin: 0;
   color: var(--text-muted, #62506d);
-  font-size: 0.94rem;
+  font-size: 0.93rem;
   line-height: 1.48;
 }
+.dark .ai-coach-card-v1 p { color: rgba(255,255,255,0.74); }
+.ai-coach-card-v1 p strong { color: var(--text-strong, #241331); }
+.dark .ai-coach-card-v1 p strong { color: #fff; }
 
-.dark .ai-coach-card-v1 p {
-  color: rgba(255, 255, 255, 0.74);
-}
-
-.ai-coach-card-v1 p strong {
-  color: var(--text-strong, #241331);
-}
-
-.dark .ai-coach-card-v1 p strong {
-  color: #fff;
-}
-
-.ai-coach-link-btn-v1 {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 0;
-  border-radius: 999px;
-  padding: 10px 13px;
-  color: #fff;
-  background: #5b167d;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.ai-coach-link-btn-v1.muted {
-  color: #5b167d;
-  background: rgba(107, 31, 143, 0.1);
-}
-
-.dark .ai-coach-link-btn-v1.muted {
-  color: #f4b8ff;
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.ai-coach-lock-note-v1 {
-  color: var(--text-muted, #695873);
-  line-height: 1.45;
-}
-
-.dark .ai-coach-lock-note-v1 {
-  color: rgba(255, 255, 255, 0.68);
-}
-
-.ai-coach-setup-actions-v1 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-  margin-top: 14px;
-}
-
+/* ─── Readiness widget ───────────────────────────────────────────── */
 .ai-coach-readiness-v1 {
   display: grid;
   align-content: center;
   gap: 14px;
 }
-
-.ai-coach-readiness-v1 small {
-  color: var(--text-muted, #745f7e);
-  font-weight: 800;
-}
-
+.ai-coach-readiness-v1 small { color: var(--text-muted, #745f7e); font-weight: 800; }
 .ai-coach-readiness-v1 strong {
   display: block;
   color: var(--text-strong, #241331);
   font-size: 2rem;
 }
-
-.dark .ai-coach-readiness-v1 strong {
-  color: #fff;
-}
+.dark .ai-coach-readiness-v1 strong { color: #fff; }
 
 .ai-coach-progress-v1 {
   overflow: hidden;
   height: 10px;
   border-radius: 999px;
-  background: rgba(107, 31, 143, 0.13);
+  background: rgba(107, 31, 143, 0.12);
 }
-
 .ai-coach-progress-v1 span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #6b1f8f, #e24aa5);
+  background: #2b0038;
 }
 
 .ai-coach-metrics-v1,
@@ -261,7 +376,6 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-
 .ai-coach-metrics-v1 span,
 .ai-coach-checklist-v1 span,
 .ai-coach-lock-grid-v1 span {
@@ -269,78 +383,266 @@
   align-items: center;
   gap: 7px;
   border-radius: 999px;
-  padding: 9px 11px;
+  padding: 8px 12px;
   color: #4f285f;
   background: rgba(107, 31, 143, 0.08);
   font-size: 0.84rem;
   font-weight: 850;
 }
-
 .dark .ai-coach-metrics-v1 span,
 .dark .ai-coach-checklist-v1 span,
 .dark .ai-coach-lock-grid-v1 span {
-  color: rgba(255, 255, 255, 0.86);
-  background: rgba(255, 255, 255, 0.09);
+  color: rgba(255,255,255,0.86);
+  background: rgba(255,255,255,0.09);
 }
-
 .ai-coach-checklist-v1 span.complete {
   color: #0f6b43;
-  background: rgba(14, 161, 99, 0.13);
+  background: rgba(14, 161, 99, 0.12);
 }
+.dark .ai-coach-checklist-v1 span.complete { color: #a7f5d0; }
 
-.dark .ai-coach-checklist-v1 span.complete {
-  color: #a7f5d0;
+/* ─── Setup section ──────────────────────────────────────────────── */
+.ai-coach-setup-v1 { display: grid; gap: 14px; }
+.ai-coach-setup-v1 p {
+  margin: 0;
+  color: var(--text-muted, #695873);
+  line-height: 1.55;
 }
-
-.ai-coach-setup-v1 {
-  display: grid;
-  gap: 14px;
-}
+.dark .ai-coach-setup-v1 p { color: rgba(255,255,255,0.72); }
+.ai-coach-setup-actions-v1 { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
 
 .ai-coach-empty-card-v1 {
   color: var(--text-muted, #6f5b78);
   line-height: 1.5;
 }
+.dark .ai-coach-empty-card-v1 { color: rgba(255,255,255,0.72); }
 
-.dark .ai-coach-empty-card-v1 {
-  color: rgba(255, 255, 255, 0.72);
-}
-
+/* ─── Loading / error ────────────────────────────────────────────── */
 .ai-coach-loading-v1,
 .ai-coach-error-v1,
 .ai-coach-lock-v1 {
   display: grid;
   justify-items: start;
   gap: 12px;
-  border-radius: 24px;
+  border-radius: 22px;
   padding: 24px;
 }
 
-.ai-coach-loading-v1 svg,
-.ai-coach-error-v1 svg {
-  width: 34px;
-  height: 34px;
-  color: #6b1f8f;
-}
-
-.ai-coach-loading-v1 svg {
+.ai-coach-spin-icon-v1 {
+  width: 32px;
+  height: 32px;
+  color: #5b1a7e;
   animation: aiCoachSpin 1.1s linear infinite;
 }
+.ai-coach-loading-v1 strong,
+.ai-coach-error-v1 strong {
+  color: var(--text-strong, #241331);
+}
+.dark .ai-coach-loading-v1 strong,
+.dark .ai-coach-error-v1 strong { color: #fff; }
+.ai-coach-loading-v1 span,
+.ai-coach-error-v1 span {
+  color: var(--text-muted, #695873);
+  line-height: 1.5;
+}
+.dark .ai-coach-loading-v1 span,
+.dark .ai-coach-error-v1 span { color: rgba(255,255,255,0.72); }
+.ai-coach-error-v1 svg { width: 30px; height: 30px; color: #8a1f2d; }
+
+/* ─── Lock section ───────────────────────────────────────────────── */
+.ai-coach-lock-v1 h1 {
+  margin: 6px 0 8px;
+  color: var(--text-strong, #261236);
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  line-height: 1.1;
+}
+.dark .ai-coach-lock-v1 h1 { color: #fff; }
+.ai-coach-lock-v1 p {
+  margin: 0;
+  color: var(--text-muted, #695873);
+  line-height: 1.55;
+}
+.dark .ai-coach-lock-v1 p { color: rgba(255,255,255,0.72); }
 
 .ai-coach-lock-icon-v1 {
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
-  border-radius: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
   color: #fff;
-  background: linear-gradient(135deg, #6b1f8f, #e24aa5);
+  background: #2b0038;
+}
+
+/* ─── Question panel ─────────────────────────────────────────────── */
+.ai-coach-chat-v1 { display: grid; gap: 16px; }
+
+.ai-coach-chat-head-v1 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.ai-coach-chat-head-v1 p {
+  margin: 7px 0 0;
+  color: var(--text-muted, #695873);
+  line-height: 1.5;
+}
+.dark .ai-coach-chat-head-v1 p { color: rgba(255,255,255,0.72); }
+
+.ai-coach-category-list-v1 { display: grid; gap: 14px; }
+.ai-coach-category-v1 {
+  display: grid;
+  gap: 9px;
+  border: 1px solid rgba(107, 31, 143, 0.09);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(250, 247, 253, 0.5);
+}
+.ai-coach-category-v1 h3 {
+  margin: 0;
+  color: var(--text-strong, #241331);
+  font-size: 0.96rem;
+  font-weight: 900;
+}
+.dark .ai-coach-category-v1 {
+  border-color: rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.04);
+}
+.dark .ai-coach-category-v1 h3 { color: #fff; }
+
+.ai-coach-question-grid-v1 { display: flex; flex-wrap: wrap; gap: 9px; }
+.ai-coach-question-grid-v1 button {
+  border: 1px solid rgba(107, 31, 143, 0.2);
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: #4d1d64;
+  background: rgba(107, 31, 143, 0.07);
+  font-size: 0.88rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.ai-coach-question-grid-v1 button:hover:not(:disabled),
+.ai-coach-question-grid-v1 button.active {
+  color: #fff;
+  background: #2b0038;
+  border-color: #2b0038;
+}
+.dark .ai-coach-question-grid-v1 button {
+  border-color: rgba(255,255,255,0.13);
+  color: #d4a8f7;
+  background: rgba(255,255,255,0.07);
+}
+.dark .ai-coach-question-grid-v1 button:hover:not(:disabled),
+.dark .ai-coach-question-grid-v1 button.active {
+  color: #fff;
+  background: #6b21a8;
+  border-color: #6b21a8;
+}
+.ai-coach-question-grid-v1 button:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.ai-coach-usage-pill-v1 {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #4f285f;
+  background: rgba(107, 31, 143, 0.08);
+  font-size: 0.83rem;
+  font-weight: 900;
+}
+.dark .ai-coach-usage-pill-v1 {
+  color: rgba(255,255,255,0.86);
+  background: rgba(255,255,255,0.09);
+}
+
+/* ─── Answer card ────────────────────────────────────────────────── */
+.ai-coach-answer-v1 {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(112, 38, 146, 0.13);
+  border-radius: 18px;
+  padding: 20px;
+  background: rgba(250, 247, 253, 0.78);
+}
+.dark .ai-coach-answer-v1 {
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+}
+.ai-coach-answer-v1 h3,
+.ai-coach-answer-v1 p { margin: 0; }
+.ai-coach-answer-v1 h3 {
+  color: var(--text-strong, #241331);
+  font-size: 1.1rem;
+  line-height: 1.24;
+}
+.dark .ai-coach-answer-v1 h3 { color: #fff; }
+.ai-coach-answer-v1 p {
+  color: var(--text-muted, #62506d);
+  line-height: 1.52;
+}
+.dark .ai-coach-answer-v1 p { color: rgba(255,255,255,0.74); }
+
+.ai-coach-answer-title-row-v1 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ai-coach-priority-v1 {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(107, 31, 143, 0.16);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #4d1d64;
+  background: #f8f2ff;
+  font-size: 0.79rem;
+  font-weight: 900;
+}
+.ai-coach-priority-v1.high { color: #8a1f2d; border-color: rgba(214,51,72,0.2); background: #fff0f2; }
+.ai-coach-priority-v1.medium { color: #6d4600; border-color: rgba(198,139,18,0.22); background: #fff8e8; }
+.ai-coach-priority-v1.low { color: #155e3d; border-color: rgba(16,122,78,0.2); background: #edfaf4; }
+
+.ai-coach-answer-list-v1 { display: grid; gap: 8px; }
+.ai-coach-answer-list-v1 strong {
+  color: var(--text-strong, #241331);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+.dark .ai-coach-answer-list-v1 strong { color: #fff; }
+.ai-coach-answer-list-v1 span {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text-muted, #62506d);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.dark .ai-coach-answer-list-v1 span { color: rgba(255,255,255,0.74); }
+
+.ai-coach-chat-error-v1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 10px 13px;
+  color: #8a1f2d;
+  background: rgba(214, 51, 72, 0.09);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+.dark .ai-coach-chat-error-v1 { color: #ffb7c0; background: rgba(255,255,255,0.07); }
+
+.ai-coach-loading-v1.compact {
+  border-radius: 16px;
+  padding: 16px;
 }
 
 @keyframes aiCoachSpin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 720px) {
@@ -348,14 +650,16 @@
   .ai-coach-summary-v1 {
     grid-template-columns: 1fr;
   }
-
   .ai-coach-hero-v1 {
     display: grid;
     border-radius: 20px;
     padding: 18px;
   }
-
-  .ai-coach-grid-v1 {
-    grid-template-columns: 1fr;
+  .ai-coach-hero-actions-v1,
+  .ai-coach-weekly-focus-v1 {
+    align-items: stretch;
+    justify-content: start;
   }
+  .ai-coach-weekly-focus-v1 { display: grid; }
+  .ai-coach-grid-v1 { grid-template-columns: 1fr; }
 }

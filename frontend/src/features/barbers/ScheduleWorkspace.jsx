@@ -120,7 +120,7 @@ export default function ScheduleWorkspace({
 
   const selectedDayBookings = useMemo(
     () =>
-      [...(bookingsByDateMap[selectedScheduleDate] || [])].sort(
+      (bookingsByDateMap[selectedScheduleDate] || []).toSorted(
         (a, b) => timeToMinutes(a.time) - timeToMinutes(b.time)
       ),
     [bookingsByDateMap, selectedScheduleDate]
@@ -178,7 +178,7 @@ export default function ScheduleWorkspace({
               <span>{confirmedCount} confirmed</span>
             </div>
           </div>
-          <button className="primary-btn-v4 schedule-open-btn-v6" onClick={() => setShowSchedule(true)}>
+          <button type="button" className="primary-btn-v4 schedule-open-btn-v6" onClick={() => setShowSchedule(true)}>
             <FiCalendar /> Open schedule
           </button>
         </div>
@@ -186,9 +186,14 @@ export default function ScheduleWorkspace({
 
       {showSchedule ? (
         <>
-          <div className="booking-overlay-v4 open" onClick={() => setShowSchedule(false)} />
+          <button
+            type="button"
+            className="booking-overlay-v4 open"
+            onClick={() => setShowSchedule(false)}
+            aria-label="Close schedule"
+          />
           <div className="barber-schedule-sheet-v6 open">
-            <div className="barber-schedule-card-v6" onClick={(e) => e.stopPropagation()}>
+            <div className="barber-schedule-card-v6">
               <div className="barber-profile-topbar-v4">
                 <button type="button" className="profile-back-btn-v4" onClick={() => setShowSchedule(false)}>
                   <FiArrowLeft />
@@ -310,21 +315,21 @@ export default function ScheduleWorkspace({
                           </div>
                           <div className="schedule-record-side-v9">
                             <span className={`schedule-status-pill-v9 tone-${getBookingStatusTone(item.status)}`}>{item.status}</span>
-                            <button className="mini-action-btn-v4" onClick={() => onOpenConversation(item)}>
+                            <button type="button" className="mini-action-btn-v4" onClick={() => onOpenConversation(item)}>
                               Message
                             </button>
                             {item.status === "pending" ? (
                               <div className="schedule-record-actions-v9">
-                                <button className="mini-action-btn-v4 success" onClick={() => onApproveBooking(item.id)}>
+                                <button type="button" className="mini-action-btn-v4 success" onClick={() => onApproveBooking(item.id)}>
                                   Approve
                                 </button>
-                                <button className="mini-action-btn-v4 danger" onClick={() => onRejectBooking(item.id)}>
+                                <button type="button" className="mini-action-btn-v4 danger" onClick={() => onRejectBooking(item.id)}>
                                   Reject
                                 </button>
                               </div>
                             ) : null}
                             {item.status === "confirmed" ? (
-                              <button className="mini-action-btn-v4 success" onClick={() => onCompleteBooking(item.id)}>
+                              <button type="button" className="mini-action-btn-v4 success" onClick={() => onCompleteBooking(item.id)}>
                                 Mark done
                               </button>
                             ) : null}

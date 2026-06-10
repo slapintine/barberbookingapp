@@ -1,12 +1,12 @@
 import { all, get, run, transaction } from "../db/query.js";
 import { getCustomerPremiumPlan, getCustomerPremiumPrice, getCustomerSubscriptionEndDate, isActiveCustomerPremium, mapCustomerSubscription } from "../services/customerSubscriptionService.js";
-import { getDeploymentReadiness, softDisableDemoBusinesses } from "../services/deploymentReadiness.js";
+import { getDeploymentReadiness, getPaidFeatureSafety, remediatePaidFeatureEntitlements, softDisableDemoBusinesses } from "../services/deploymentReadiness.js";
 import { FREE_TRIAL_DAYS, getPlanPrice, getSubscriptionEndDate, getSubscriptionTierConfig, normalizeBillingCycle } from "../services/paymentService.js";
 import { getProviderPublicationReadiness } from "../services/providerPublicationReadiness.js";
-import { getLatestProviderSubscription, isActiveProviderPlatinum } from "../services/providerSubscriptionAccess.js";
+import { getLatestProviderSubscription, getProviderCoachPlan, isActiveProviderPlatinum } from "../services/providerSubscriptionAccess.js";
 import { env } from "../config/env.js";
 
-const PLAN_CODES = ["PLUS", "PREMIUM", "PLATINUM"];
+const PLAN_CODES = ["FREE", "PREMIUM", "PLATINUM"];
 const CUSTOMER_STATUSES = new Set(["active", "inactive", "expired", "cancelled", "pending"]);
 const PROVIDER_STATUSES = new Set(["active", "inactive", "expired", "cancelled", "pending", "trialing"]);
 const SUPPORT_REQUEST_STATUSES = new Set(["open", "in_progress", "waiting_on_customer", "resolved", "closed"]);
@@ -62,13 +62,24 @@ function mapBusiness(row = {}) {
     plan_start_date: row.latest_subscription_started_at || row.created_at,
     renewal_date: row.latest_subscription_expires_at || row.subscription_expires_at || null,
     verification_status: row.verified_status || "New",
+    review_status: row.review_status || "pending_review",
+    is_verified: Number(row.is_verified || 0) === 1,
+    is_suspended: Number(row.is_suspended || 0) === 1,
+    is_banned: Number(row.is_banned || 0) === 1,
+    verification_change_reason: row.verification_change_reason || "",
+    moderation_note: row.moderation_note || "",
+    moderated_at: row.moderated_at || null,
     verification_document_name: row.verification_document_name || "",
     verification_document_url: row.verification_document_url || "",
     verification_notes: row.verification_notes || "",
     verification_submitted_at: row.verification_submitted_at || null,
     verification_reviewed_at: row.verification_reviewed_at || null,
     verification_reviewed_by: row.verification_reviewed_by || null,
-    active_status: ["suspended", "inactive"].includes(String(row.subscription_status || "").toLowerCase())
+    active_status: Number(row.is_banned || 0) === 1
+      ? "banned"
+      : Number(row.is_suspended || 0) === 1
+      ? "suspended"
+      : ["suspended", "inactive"].includes(String(row.subscription_status || "").toLowerCase())
       ? row.subscription_status
       : "active",
     service_count: Number(row.service_count || 0),
@@ -129,7 +140,7 @@ function getFeatureRules() {
     { key: "provider_listing", label: "Provider listing", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "booking_management", label: "Booking management", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "business_wallet", label: "Business wallet/earnings", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
-    { key: "ai_coach", label: "AI Business Coach", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: false, platinumProvider: true },
+    { key: "ai_coach", label: "Provider Coach", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: true, platinumProvider: true },
     { key: "subscription_upgrade", label: "Subscription upgrade", freeCustomer: true, premiumCustomer: true, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "subscription_expiry_lock", label: "Subscription expiry lock", freeCustomer: false, premiumCustomer: true, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "analytics", label: "Analytics", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: true, platinumProvider: true },
@@ -208,7 +219,8 @@ function mapProviderSubscriptionRow(row = {}) {
     is_active: row.subscription_is_active,
     expires_at: row.expires_at || row.subscription_expires_at,
   };
-  const aiCoachAccess = isActiveProviderPlatinum(row, subscription);
+  const coachPlan = getProviderCoachPlan(row, subscription);
+  const aiCoachAccess = coachPlan.active && ["premium", "platinum"].includes(coachPlan.plan);
   return {
     businessId: row.business_id,
     userId: row.owner_user_id,
@@ -298,7 +310,7 @@ export async function getAdminOverview(req, res, next) {
       total_users: Number(usersRow?.count || 0),
       total_businesses: businesses.length,
       active_trials: businesses.filter((item) => item.current_plan === "TRIAL").length,
-      plus_businesses: businesses.filter((item) => item.current_plan === "PLUS").length,
+      free_businesses: businesses.filter((item) => item.current_plan === "FREE").length,
       premium_businesses: businesses.filter((item) => item.current_plan === "PREMIUM").length,
       platinum_businesses: businesses.filter((item) => item.current_plan === "PLATINUM").length,
       expired_trials: businesses.filter((item) => item.trial_status === "expired").length,
@@ -382,7 +394,7 @@ export async function getAdminSubscriptionSummary(req, res, next) {
       summary: {
         totalFreeCustomers: customerMapped.filter((item) => item.plan === "FREE").length,
         totalPremiumCustomers: customerMapped.filter((item) => item.plan === "PREMIUM").length,
-        totalPlusProviders: providerMapped.filter((item) => String(item.plan).toUpperCase() === "PLUS").length,
+        totalFreeProviders: providerMapped.filter((item) => String(item.plan).toUpperCase() === "FREE").length,
         totalPremiumProviders: providerMapped.filter((item) => String(item.plan).toUpperCase() === "PREMIUM").length,
         totalPlatinumProviders: providerMapped.filter((item) => String(item.plan).toUpperCase() === "PLATINUM").length,
         totalAiCoachProviders: providerMapped.filter((item) => item.aiCoachAccess).length,
@@ -567,10 +579,10 @@ export async function updateAdminProviderSubscription(req, res, next) {
         const insert = await client.run(
           `INSERT INTO barber_subscriptions
            (barber_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, trial_status, payment_reference, provider, expires_at, activated_at, is_active)
-           VALUES (?, 'PLUS', 0, 'trialing', 'monthly', 0, 'UGX', 'trial', 'active', ?, 'admin', ?, CURRENT_TIMESTAMP, 1)`,
+           VALUES (?, 'FREE', 0, 'trialing', 'monthly', 0, 'UGX', 'trial', 'active', ?, 'admin', ?, CURRENT_TIMESTAMP, 1)`,
           [businessId, `admin-trial-${businessId}-${Date.now()}`, expiresAt]
         );
-        await client.run(`UPDATE barbers SET subscription_tier = 'PLUS', subscription_status = 'trialing', subscription_expires_at = ?, business_status = 'active', is_published = 1 WHERE id = ?`, [expiresAt, businessId]);
+        await client.run(`UPDATE barbers SET subscription_tier = 'FREE', subscription_status = 'trialing', subscription_expires_at = ?, business_status = 'active', is_published = 1 WHERE id = ?`, [expiresAt, businessId]);
         nextSubscription = await client.get(`SELECT * FROM barber_subscriptions WHERE id = ?`, [insert.lastID]);
       } else if (action === "deactivate" || action === "expire" || action === "cancel" || action === "set_status") {
         const nextStatus = action === "expire" ? "expired" : action === "cancel" ? "cancelled" : action === "deactivate" ? "inactive" : String(req.body.status || "").trim().toLowerCase();
@@ -699,14 +711,15 @@ export async function runAdminAccessTest(req, res, next) {
       const business = await get(`SELECT * FROM barbers WHERE id = ?`, [businessId]);
       if (!business) throw httpError(404, "Business not found.");
       const subscription = await getLatestProviderSubscription(businessId);
-      const allowed = isActiveProviderPlatinum(business, subscription);
+      const coachPlan = getProviderCoachPlan(business, subscription);
+      const allowed = coachPlan.active && ["premium", "platinum"].includes(coachPlan.plan);
       return res.json({
         success: true,
         result: {
           selectedBusiness: business.business_name,
           providerPlan: subscription?.tier || business.subscription_tier || "None",
           subscriptionStatus: subscription?.status || business.subscription_status || "inactive",
-          featureTested: "Provider AI Business Coach",
+          featureTested: "Provider Coach",
           expectedAccess: allowed ? "allowed" : "blocked",
           actualApiResult: allowed ? 200 : 403,
           status: "PASS",
@@ -757,10 +770,10 @@ export async function getAdminSummary(req, res, next) {
         totalCustomers: users.filter((row) => String(row.role).toLowerCase() === "customer").reduce((sum, row) => sum + Number(row.count || 0), 0),
         totalProviders: businesses.length,
         totalAdmins: users.filter((row) => String(row.role).toLowerCase().includes("admin")).reduce((sum, row) => sum + Number(row.count || 0), 0),
-        activeSubscriptions: customerPremiumActive + businesses.filter((item) => ["PLUS", "PREMIUM", "PLATINUM"].includes(String(item.current_plan).toUpperCase()) && String(item.payment_status).toLowerCase() === "active").length,
+        activeSubscriptions: customerPremiumActive + businesses.filter((item) => ["FREE", "PREMIUM", "PLATINUM"].includes(String(item.current_plan).toUpperCase()) && String(item.payment_status).toLowerCase() === "active").length,
         freeCustomers: Math.max(0, users.filter((row) => String(row.role).toLowerCase() === "customer").reduce((sum, row) => sum + Number(row.count || 0), 0) - customerPremiumActive),
         premiumCustomers: customerPremiumActive,
-        plusProviders: providerCounts.PLUS || 0,
+        freeProviders: providerCounts.FREE || 0,
         premiumProviders: providerCounts.PREMIUM || 0,
         platinumProviders: providerCounts.PLATINUM || 0,
         pendingProviderApprovals: businesses.filter((item) => ["pending", "pending_subscription", "new"].includes(String(item.active_status || item.verification_status).toLowerCase())).length,
@@ -842,13 +855,16 @@ export async function getAdminBusinesses(req, res, next) {
         const mapped = mapBusiness(row);
         return {
           ...mapped,
-          aiCoachAccess: isActiveProviderPlatinum(row, {
+          aiCoachAccess: (() => {
+            const coachPlan = getProviderCoachPlan(row, {
             tier: row.latest_subscription_tier || row.subscription_tier,
             status: row.latest_subscription_status || row.subscription_status,
             payment_status: row.latest_subscription_payment_status,
             trial_status: row.latest_subscription_trial_status,
             expires_at: row.latest_subscription_expires_at || row.subscription_expires_at,
-          }),
+            });
+            return coachPlan.active && ["premium", "platinum"].includes(coachPlan.plan);
+          })(),
           profileCompleteness: [
             mapped.business_name,
             mapped.business_type,
@@ -899,7 +915,7 @@ export async function getAdminSystemHealth(req, res, next) {
         },
         payments: { status: "configured", note: "Payment provider secrets are intentionally not exposed." },
         mtn: { status: "check_available", endpoint: "/api/payments/mtn/check-auth" },
-        subscriptionLogic: { status: "active", rules: ["Premium customer unlocks Smart Match", "Platinum provider unlocks AI Business Coach"] },
+        subscriptionLogic: { status: "active", rules: ["Premium customer unlocks Smart Match", "Premium provider unlocks limited Provider Coach", "Platinum provider unlocks unlimited Provider Coach"] },
         lastSuccessfulPaymentCallback: lastSuccess ? { id: lastSuccess.id, reference: lastSuccess.internal_reference, updatedAt: lastSuccess.updated_at } : null,
         lastFailedPaymentCallback: lastFailure ? { id: lastFailure.id, reference: lastFailure.internal_reference, updatedAt: lastFailure.updated_at } : null,
       },
@@ -991,6 +1007,27 @@ export async function remediateAdminDeploymentReadiness(req, res, next) {
       });
       if (!result.disabledCount) throw httpError(404, "Business is not in the demo/test suspect list.");
       message = `Soft-disabled ${result.disabledCount} demo/test business.`;
+    } else if (action === "remediate_paid_feature_entitlements") {
+      const confirmation = String(req.body.confirmation || "").trim();
+      if (confirmation !== "REMEDIATE PAID FEATURE ENTITLEMENTS") {
+        throw httpError(400, "Type REMEDIATE PAID FEATURE ENTITLEMENTS to confirm paid-feature cleanup.");
+      }
+
+      const safety = await getPaidFeatureSafety();
+      const expectedCustomerRows = Number(req.body.expectedCustomerRows ?? safety.customerUnsafeRows.length);
+      const expectedProviderRows = Number(req.body.expectedProviderRows ?? safety.providerUnsafeRows.length);
+      if (
+        expectedCustomerRows !== safety.customerUnsafeRows.length ||
+        expectedProviderRows !== safety.providerUnsafeRows.length
+      ) {
+        throw httpError(409, "Paid-feature safety rows changed. Refresh deployment readiness before applying cleanup.");
+      }
+
+      const result = await remediatePaidFeatureEntitlements({
+        adminUser: req.user,
+        reason,
+      });
+      message = `Remediated ${result.before.customerUnsafeRows.length} Customer Premium row(s) and ${result.before.providerUnsafeRows.length} Provider Platinum row(s).`;
     } else {
       if (!Number.isInteger(businessId) || businessId <= 0) throw httpError(400, "Business id is required.");
 
@@ -1023,13 +1060,13 @@ export async function remediateAdminDeploymentReadiness(req, res, next) {
           const insert = await client.run(
             `INSERT INTO barber_subscriptions
              (barber_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, trial_status, payment_reference, provider, expires_at, activated_at, is_active)
-             VALUES (?, 'PLUS', 0, 'trialing', 'monthly', 0, 'UGX', 'trial', 'active', ?, 'admin', ?, CURRENT_TIMESTAMP, 1)`,
+             VALUES (?, 'FREE', 0, 'trialing', 'monthly', 0, 'UGX', 'trial', 'active', ?, 'admin', ?, CURRENT_TIMESTAMP, 1)`,
             [businessId, `admin-readiness-trial-${businessId}-${Date.now()}`, expiresAt]
           );
           const nextSubscription = await client.get(`SELECT * FROM barber_subscriptions WHERE id = ?`, [insert.lastID]);
           await client.run(
             `UPDATE barbers
-             SET subscription_tier = 'PLUS',
+             SET subscription_tier = 'FREE',
                  subscription_status = 'trialing',
                  subscription_expires_at = ?,
                  trial_status = 'active',
@@ -1053,8 +1090,8 @@ export async function remediateAdminDeploymentReadiness(req, res, next) {
           await client.run(
             `UPDATE barbers
              SET subscription_tier = CASE
-                   WHEN subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM') THEN subscription_tier
-                   ELSE 'PLUS'
+                   WHEN subscription_tier IN ('FREE', 'PREMIUM', 'PLATINUM') THEN subscription_tier
+                   ELSE 'FREE'
                  END,
                  subscription_status = 'manual_approved',
                  business_status = 'approved',
@@ -1150,14 +1187,16 @@ export async function runAdminFeatureAccessTest(req, res, next) {
       const subscription = await getLatestProviderSubscription(businessId);
       const tier = String(subscription?.tier || business.subscription_tier || "").toUpperCase();
       const active = ["active", "trialing"].includes(String(subscription?.status || business.subscription_status || "").toLowerCase());
-      const platinum = isActiveProviderPlatinum(business, subscription);
-      allowed = feature === "ai_coach" ? platinum : active && ["PLUS", "PREMIUM", "PLATINUM"].includes(tier);
+      const coachPlan = getProviderCoachPlan(business, subscription);
+      allowed = feature === "ai_coach" ? coachPlan.active && ["premium", "platinum"].includes(coachPlan.plan) : active && ["FREE", "PREMIUM", "PLATINUM"].includes(tier);
       reason = allowed
         ? feature === "ai_coach"
-          ? "Active Platinum provider entitlement allows AI Business Coach."
+          ? coachPlan.unlimited
+            ? "Active Platinum provider entitlement allows unlimited Provider Coach."
+            : "Active Premium provider entitlement allows limited Provider Coach."
           : "Active provider plan allows this provider workflow."
         : feature === "ai_coach"
-          ? "AI Business Coach is locked unless the provider has active Platinum."
+          ? "Provider Coach advice is locked unless the provider has active Premium or Platinum."
           : "Provider plan is inactive, expired, or missing.";
       subject = { id: business.id, name: business.business_name, role: "provider", tier: tier || "NONE", status: subscription?.status || business.subscription_status };
     }
@@ -1362,11 +1401,19 @@ export async function updateAdminBusiness(req, res, next) {
         await client.run(
           `UPDATE barbers
            SET verified_status = 'Verified',
+               review_status = 'verified',
+               is_verified = 1,
+               is_suspended = 0,
+               is_banned = 0,
+               verification_change_reason = '',
+               moderation_note = ?,
+               moderated_at = CURRENT_TIMESTAMP,
+               moderated_by = ?,
                verification_reviewed_at = CURRENT_TIMESTAMP,
                verification_reviewed_by = ?,
                verification_notes = ?
            WHERE id = ?`,
-          [req.user?.id || null, reason || "Admin approved provider verification.", barberId]
+          [reason || "", req.user?.id || null, req.user?.id || null, reason || "Admin approved provider verification.", barberId]
         );
         const after = await client.get(`SELECT * FROM barbers WHERE id = ?`, [barberId]);
         await logAdminAction(client, req, {
@@ -1383,12 +1430,18 @@ export async function updateAdminBusiness(req, res, next) {
         await client.run(
           `UPDATE barbers
            SET verified_status = 'Pending verification',
+               review_status = 'pending_review',
+               is_verified = 0,
                verification_submitted_at = COALESCE(verification_submitted_at, CURRENT_TIMESTAMP),
                verification_reviewed_at = NULL,
                verification_reviewed_by = NULL,
+               verification_change_reason = '',
+               moderation_note = ?,
+               moderated_at = CURRENT_TIMESTAMP,
+               moderated_by = ?,
                verification_notes = ?
            WHERE id = ?`,
-          [reason || "Waiting for provider verification review.", barberId]
+          [reason || "", req.user?.id || null, reason || "Waiting for provider verification review.", barberId]
         );
         const after = await client.get(`SELECT * FROM barbers WHERE id = ?`, [barberId]);
         await logAdminAction(client, req, {
@@ -1401,41 +1454,145 @@ export async function updateAdminBusiness(req, res, next) {
         });
         return;
       }
-      if (action === "reject_verification") {
+      if (action === "reject_verification" || action === "request_changes") {
         await client.run(
           `UPDATE barbers
-           SET verified_status = 'Rejected',
+           SET verified_status = 'Changes Requested',
+               review_status = 'changes_requested',
+               is_verified = 0,
+               verification_change_reason = ?,
+               moderation_note = ?,
+               moderated_at = CURRENT_TIMESTAMP,
+               moderated_by = ?,
                verification_reviewed_at = CURRENT_TIMESTAMP,
                verification_reviewed_by = ?,
                verification_notes = ?
            WHERE id = ?`,
-          [req.user?.id || null, reason || "Admin rejected provider verification.", barberId]
+          [reason || "Admin has requested changes before verification can be approved.",
+           reason || "",
+           req.user?.id || null,
+           req.user?.id || null,
+           reason || "Admin requested changes before approving verification.",
+           barberId]
         );
         const after = await client.get(`SELECT * FROM barbers WHERE id = ?`, [barberId]);
         await logAdminAction(client, req, {
-          actionType: "provider_verification_rejected",
+          actionType: action === "request_changes" ? "provider_verification_changes_requested" : "provider_verification_rejected",
           targetType: "business",
           targetId: barberId,
           oldValue: business,
           newValue: after,
-          reason: reason || "Provider verification rejected.",
+          reason: reason || "Provider verification — changes requested.",
         });
         return;
       }
       if (action === "suspend") {
-        await client.run(`UPDATE barbers SET subscription_status = 'suspended' WHERE id = ?`, [barberId]);
+        await client.run(
+          `UPDATE barbers
+           SET is_suspended = 1,
+               is_banned = 0,
+               review_status = 'suspended',
+               is_published = 0,
+               moderation_note = ?,
+               moderated_at = CURRENT_TIMESTAMP,
+               moderated_by = ?,
+               subscription_status = 'suspended'
+           WHERE id = ?`,
+          [reason || "Business suspended by admin.", req.user?.id || null, barberId]
+        );
+        await logAdminAction(client, req, {
+          actionType: "provider_suspended",
+          targetType: "business",
+          targetId: barberId,
+          oldValue: business,
+          newValue: await client.get(`SELECT * FROM barbers WHERE id = ?`, [barberId]),
+          reason: reason || "Business suspended.",
+        });
+        return;
+      }
+      if (action === "ban") {
+        await client.run(
+          `UPDATE barbers
+           SET is_banned = 1,
+               is_suspended = 0,
+               review_status = 'banned',
+               is_published = 0,
+               moderation_note = ?,
+               moderated_at = CURRENT_TIMESTAMP,
+               moderated_by = ?,
+               subscription_status = 'suspended'
+           WHERE id = ?`,
+          [reason || "Business banned by admin.", req.user?.id || null, barberId]
+        );
+        await logAdminAction(client, req, {
+          actionType: "provider_banned",
+          targetType: "business",
+          targetId: barberId,
+          oldValue: business,
+          newValue: await client.get(`SELECT * FROM barbers WHERE id = ?`, [barberId]),
+          reason: reason || "Business banned.",
+        });
+        return;
+      }
+      if (action === "unban" || action === "restore") {
+        await client.run(
+          `UPDATE barbers
+           SET is_banned = 0,
+               is_suspended = 0,
+               review_status = 'pending_review',
+               is_verified = 0,
+               moderation_note = ?,
+               moderated_at = CURRENT_TIMESTAMP,
+               moderated_by = ?
+           WHERE id = ?`,
+          [reason || "Business restored by admin.", req.user?.id || null, barberId]
+        );
+        await logAdminAction(client, req, {
+          actionType: "provider_restored",
+          targetType: "business",
+          targetId: barberId,
+          oldValue: business,
+          newValue: await client.get(`SELECT * FROM barbers WHERE id = ?`, [barberId]),
+          reason: reason || "Business restored.",
+        });
+        return;
+      }
+      if (action === "unpublish") {
+        await client.run(
+          `UPDATE barbers SET is_published = 0, moderation_note = ?, moderated_at = CURRENT_TIMESTAMP, moderated_by = ? WHERE id = ?`,
+          [reason || "Stand unpublished by admin.", req.user?.id || null, barberId]
+        );
+        await logAdminAction(client, req, {
+          actionType: "provider_unpublished",
+          targetType: "business",
+          targetId: barberId,
+          oldValue: business,
+          newValue: await client.get(`SELECT * FROM barbers WHERE id = ?`, [barberId]),
+          reason: reason || "Stand unpublished.",
+        });
         return;
       }
       if (action === "activate") {
-        await client.run(`UPDATE barbers SET subscription_status = 'active' WHERE id = ?`, [barberId]);
+        await client.run(
+          `UPDATE barbers
+           SET is_suspended = 0,
+               is_banned = 0,
+               review_status = CASE WHEN is_verified = 1 THEN 'verified' ELSE 'pending_review' END,
+               moderation_note = ?,
+               moderated_at = CURRENT_TIMESTAMP,
+               moderated_by = ?,
+               subscription_status = 'active'
+           WHERE id = ?`,
+          [reason || "Business activated by admin.", req.user?.id || null, barberId]
+        );
         return;
       }
       if (action === "approve" || action === "manual_approve") {
         await client.run(
           `UPDATE barbers
            SET subscription_tier = CASE
-                 WHEN subscription_tier IN ('PLUS', 'PREMIUM', 'PLATINUM') THEN subscription_tier
-                 ELSE 'PLUS'
+                 WHEN subscription_tier IN ('FREE', 'PREMIUM', 'PLATINUM') THEN subscription_tier
+                 ELSE 'FREE'
                END,
                subscription_status = 'manual_approved',
                business_status = 'approved',
@@ -1453,7 +1610,7 @@ export async function updateAdminBusiness(req, res, next) {
       if (action === "extend_trial") {
         await client.run(
           `UPDATE barbers
-           SET subscription_tier = 'PLUS',
+           SET subscription_tier = 'FREE',
                subscription_status = 'trial_extended',
                subscription_expires_at = ?
            WHERE id = ?`,
@@ -1464,7 +1621,7 @@ export async function updateAdminBusiness(req, res, next) {
       if (action === "reset_subscription") {
         await client.run(
           `UPDATE barbers
-           SET subscription_tier = 'PLUS',
+           SET subscription_tier = 'FREE',
                subscription_status = 'active',
                subscription_expires_at = NULL,
                featured_until = NULL

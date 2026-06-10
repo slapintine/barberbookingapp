@@ -27,11 +27,11 @@ const EXTRA_CUSTOMER_COUNT = 8;
 
 const PROVIDERS = [
   {
-    username: "qa_plus_provider",
-    tier: "PLUS",
-    businessName: "QA Plus Starter Studio",
-    fullName: "QA Plus Owner",
-    email: "qa.plus@queless.test",
+    username: "qa_free_provider",
+    tier: "FREE",
+    businessName: "QA Free Starter Studio",
+    fullName: "QA Free Owner",
+    email: "qa.free@queless.test",
     phone: "+256700100101",
     serviceCount: 5,
     photoCount: 5,
@@ -105,7 +105,7 @@ function portfolioItems(count, tier) {
 function serviceRows(count, basePrice) {
   return Array.from({ length: count }, (_, index) => ({
     name: index % 3 === 0 ? `Signature service ${index + 1}` : index % 3 === 1 ? `Home service ${index + 1}` : `Express service ${index + 1}`,
-    category: index % 2 === 0 ? "Beauty & Grooming" : "Home Services",
+    category: index % 2 === 0 ? "Barber" : "Home Services",
     price: basePrice + index * 1000,
     duration: 30 + (index % 3) * 15,
     description: `QA service ${index + 1} for plan limit testing.`,
@@ -170,8 +170,8 @@ async function upsertProviderBusiness(provider, ownerUserId) {
     32.5825,
     provider.averagePrice,
     provider.tier === "PLATINUM" ? "Verified" : "New",
-    "Beauty & Grooming",
-    provider.tier === "PLUS" ? 0 : 1,
+    "Barber",
+    provider.tier === "FREE" ? 0 : 1,
     `${plan.name} QA fixture with realistic dashboard and report data.`,
     JSON.stringify(portfolio),
     provider.tier,
@@ -226,7 +226,7 @@ async function seedServices(barberId, provider) {
         service.category,
         service.price,
         service.duration,
-        provider.tier === "PLUS" ? "provider_location" : "customer_location",
+        provider.tier === "FREE" ? "provider_location" : "customer_location",
         service.description,
         service.featured ? 1 : 0,
       ]

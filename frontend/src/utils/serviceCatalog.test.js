@@ -5,9 +5,11 @@ import { formatServicePrice, normalizeServiceForBooking, serviceMatchesCategory 
 test("infers string service categories so cleaning does not appear as barbering", () => {
   const cleaning = normalizeServiceForBooking("Deep cleaning", 0);
   const barber = normalizeServiceForBooking("Men's haircut", 1);
+  const plumbing = normalizeServiceForBooking("Leaking pipe repair", 2);
 
   assert.equal(cleaning.category, "Cleaning Services");
-  assert.equal(barber.category, "Beauty & Grooming");
+  assert.equal(barber.category, "Barber");
+  assert.equal(plumbing.category, "Plumbing Services");
 });
 
 test("matches category services without leaking unrelated provider services", () => {

@@ -42,7 +42,7 @@ const POLICIES = [
     icon: FiUsers,
     points: [
       "Providers must use real business names, real service areas, clear prices, and photos they own or have permission to use.",
-      "Provider plans are paid only: Plus UGX 6,000/month, Premium UGX 12,000/month, and Platinum UGX 24,000/month.",
+      "Providers can start on Free at UGX 0/month. Premium is UGX 12,000/month and Platinum is UGX 24,000/month.",
       "New providers may remain in verification pending until their profile, phone, services, location, and documents are reviewed.",
       "Repeated rejection, no-shows, fake listings, abusive conduct, or unsafe work may reduce visibility or remove the provider from Queless.",
     ],
@@ -104,4 +104,3 @@ export default function PoliciesPage({ onOpenSupport }) {
     </main>
   );
 }
-

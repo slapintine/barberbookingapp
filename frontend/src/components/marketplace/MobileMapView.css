@@ -1,0 +1,425 @@
+/* Queless mobile "View Map" — scoped under .qmm. Purple + cream theme. */
+.qmm {
+  --qmm-purple: #5b21b6;
+  --qmm-purple-deep: #3b0d73;
+  --qmm-purple-soft: #efe7fc;
+  --qmm-cream: #faf6f1;
+  --qmm-surface: #ffffff;
+  --qmm-ink: #1f1235;
+  --qmm-muted: #6b6480;
+  --qmm-line: #ece7f3;
+  --qmm-shadow: 0 12px 30px rgba(47, 7, 85, 0.16);
+
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  background: var(--qmm-cream);
+  color: var(--qmm-ink);
+  font-family: inherit;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+.qmm-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  background: var(--qmm-cream);
+}
+.qmm-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--qmm-ink);
+  letter-spacing: -0.01em;
+}
+.qmm-round-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--qmm-surface);
+  color: var(--qmm-purple);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(47, 7, 85, 0.1);
+  flex: 0 0 auto;
+}
+.qmm-round-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.4;
+}
+.qmm-round-btn.is-active {
+  background: var(--qmm-purple);
+  color: #fff;
+}
+
+/* ── Category chips ─────────────────────────────────── */
+.qmm-chips {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 9px;
+  padding: 4px 16px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.qmm-chips::-webkit-scrollbar {
+  display: none;
+}
+.qmm-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--qmm-line);
+  background: var(--qmm-surface);
+  color: var(--qmm-ink);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 130ms ease;
+}
+.qmm-chip svg {
+  width: 16px;
+  height: 16px;
+  color: var(--qmm-purple);
+  stroke-width: 2.3;
+}
+.qmm-chip.is-active {
+  background: var(--qmm-purple-soft);
+  border-color: var(--qmm-purple);
+  color: var(--qmm-purple-deep);
+}
+
+/* ── Map ────────────────────────────────────────────── */
+.qmm-map-area {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.qmm-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.leaflet-container.qmm-map {
+  background: #f3eee9;
+}
+
+.qmm-locate {
+  position: absolute;
+  right: 16px;
+  bottom: 232px;
+  z-index: 500;
+  width: 50px;
+  height: 50px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--qmm-surface);
+  color: var(--qmm-purple);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--qmm-shadow);
+}
+.qmm-locate svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 2.4;
+}
+.qmm-locate:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── Bottom sheet ───────────────────────────────────── */
+.qmm-sheet {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 600;
+  background: var(--qmm-surface);
+  border-radius: 26px;
+  padding: 10px 16px 16px;
+  box-shadow: 0 -6px 26px rgba(47, 7, 85, 0.16);
+}
+.qmm-handle {
+  display: block;
+  width: 42px;
+  height: 5px;
+  border-radius: 999px;
+  background: #e2dced;
+  margin: 0 auto 12px;
+}
+
+.qmm-sheet-body {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.qmm-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 96px;
+  height: 96px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  background: var(--qmm-purple-soft);
+  cursor: pointer;
+}
+.qmm-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.qmm-thumb-fav {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #8a7fa3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(47, 7, 85, 0.18);
+}
+.qmm-thumb-fav svg {
+  width: 14px;
+  height: 14px;
+}
+.qmm-thumb-fav.is-active {
+  color: #e1306c;
+}
+.qmm-thumb-fav.is-active svg {
+  fill: currentColor;
+}
+
+.qmm-sheet-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.qmm-sheet-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.qmm-sheet-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--qmm-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qmm-kebab {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--qmm-muted);
+  cursor: pointer;
+  padding: 2px;
+}
+.qmm-kebab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.qmm-tag {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--qmm-purple-soft);
+  color: var(--qmm-purple-deep);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.qmm-tag svg {
+  width: 13px;
+  height: 13px;
+}
+
+.qmm-rating-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  color: var(--qmm-ink);
+}
+.qmm-rating-row b {
+  font-weight: 800;
+}
+.qmm-star {
+  width: 15px;
+  height: 15px;
+  color: #f5b301;
+  fill: #f5b301;
+}
+.qmm-reviews {
+  color: var(--qmm-muted);
+  font-weight: 600;
+}
+.qmm-dot {
+  color: var(--qmm-muted);
+}
+.qmm-distance {
+  color: var(--qmm-muted);
+  font-weight: 600;
+}
+
+.qmm-location {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--qmm-muted);
+}
+.qmm-location svg {
+  width: 14px;
+  height: 14px;
+  color: var(--qmm-purple);
+  flex: 0 0 auto;
+}
+
+.qmm-verified {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--qmm-purple-soft);
+  color: var(--qmm-purple-deep);
+  font-size: 12px;
+  font-weight: 700;
+}
+.qmm-verified svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 3;
+}
+
+.qmm-cta {
+  margin-top: 14px;
+  width: 100%;
+  height: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--qmm-purple);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 10px 22px rgba(91, 33, 182, 0.32);
+}
+.qmm-cta svg {
+  position: absolute;
+  right: 18px;
+  width: 20px;
+  height: 20px;
+}
+.qmm-cta:hover {
+  background: var(--qmm-purple-deep);
+}
+.qmm-cta--ghost {
+  background: var(--qmm-purple-soft);
+  color: var(--qmm-purple-deep);
+  box-shadow: none;
+  height: 46px;
+  font-size: 14px;
+}
+
+.qmm-empty {
+  text-align: center;
+  padding: 8px 8px 4px;
+}
+.qmm-empty strong {
+  display: block;
+  font-size: 16px;
+  color: var(--qmm-ink);
+  margin-bottom: 4px;
+}
+.qmm-empty p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--qmm-muted);
+}
+
+/* ── Bottom navigation ──────────────────────────────── */
+.qmm-bottomnav {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: var(--qmm-surface);
+  border-top: 1px solid var(--qmm-line);
+}
+.qmm-navitem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--qmm-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.qmm-navicon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+}
+.qmm-navicon svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 2.2;
+}
+.qmm-navitem.is-active {
+  color: var(--qmm-purple-deep);
+  font-weight: 800;
+}
+.qmm-navitem.is-active .qmm-navicon {
+  background: var(--qmm-purple-soft);
+  color: var(--qmm-purple);
+}
+.qmm-navitem.is-active .qmm-navicon svg {
+  fill: rgba(91, 33, 182, 0.12);
+}

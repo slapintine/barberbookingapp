@@ -1,33 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiArrowRight,
-  FiBookOpen,
   FiBriefcase,
   FiCheckCircle,
-  FiDroplet,
-  FiHome,
   FiMap,
   FiMapPin,
   FiSearch,
   FiShield,
   FiStar,
-  FiTool,
-  FiUsers,
   FiZap,
 } from "react-icons/fi";
-import fallbackStandIcon from "../assets/queless-logo-icon.png";
+import { FaBroom, FaCut, FaDumbbell, FaGraduationCap, FaSpa, FaStethoscope, FaTools, FaUtensils } from "react-icons/fa";
+import { resolveProviderImage, getProviderInitials, buildInitialsAvatar } from "../utils/providerImage.js";
 import heroProfessional from "../assets/queless-hero-service-professional.png";
 
 const CATEGORY_CHIPS = [
-  { label: "Barber", icon: FiUsers, category: "Beauty & Grooming" },
-  { label: "Salon", icon: FiUsers, category: "Beauty & Grooming" },
-  { label: "Spa", icon: FiStar, category: "Beauty & Grooming" },
-  { label: "Plumbing", icon: FiTool, category: "Home Services" },
-  { label: "Carpentry", icon: FiHome, category: "Repairs & Maintenance" },
-  { label: "Cleaning", icon: FiDroplet, category: "Cleaning Services" },
-  { label: "Repairs", icon: FiTool, category: "Repairs & Maintenance" },
-  { label: "Tutor", icon: FiBookOpen, category: "Tutor / Lessons" },
-  { label: "Other", icon: FiBriefcase, category: "All" },
+  { label: "Barber", icon: FaCut, category: "Barber", colors: ["#522B5B", "#FBE4D8"] },
+  { label: "Beauty", icon: FaSpa, category: "Beauty", colors: ["#c53d8c", "#fff0f8"] },
+  { label: "Tutor", icon: FaGraduationCap, category: "Tutor / Lessons", colors: ["#2B79C2", "#edf6ff"] },
+  { label: "Health", icon: FaStethoscope, category: "Health & Fitness", colors: ["#854F6C", "#fbe4d8"] },
+  { label: "Food", icon: FaUtensils, category: "Catering & Food Services", colors: ["#c7682b", "#fff1e6"] },
+  { label: "Repair", icon: FaTools, category: "Repairs & Maintenance", colors: ["#d89b16", "#fff5d9"] },
+  { label: "Cleaning", icon: FaBroom, category: "Cleaning Services", colors: ["#1d9f72", "#e7fff4"] },
+  { label: "Fitness", icon: FaDumbbell, category: "Health & Fitness", colors: ["#2B124C", "#f1e8ff"] },
+  { label: "Professional", icon: FiBriefcase, category: "Business Services", colors: ["#522B5B", "#fbe4d8"] },
+  { label: "Other", icon: FaTools, category: "All", colors: ["#854F6C", "#fbe4d8"] },
 ];
 
 const TRUST_BADGES = [
@@ -118,7 +115,7 @@ function getPopularItemImage(item = {}) {
     service.image ||
     service.image_url ||
     service.photo ||
-    fallbackStandIcon
+    resolveProviderImage(item, service)
   );
 }
 
@@ -172,6 +169,7 @@ export default function HomeScreen({
   onSearchSubmit,
   onOpenSmartMatch,
   smartMatchPremiumActive = false,
+  smartMatchUpsellVisible = false,
   openBarber,
   onBecomeProvider,
   popularServices = [],
@@ -293,7 +291,7 @@ export default function HomeScreen({
             src={heroProfessional}
             alt="Professional service provider ready for work"
             onError={(event) => {
-              event.currentTarget.src = fallbackStandIcon;
+              event.currentTarget.style.display = "none";
             }}
           />
         </div>
@@ -329,8 +327,14 @@ export default function HomeScreen({
       <section className="customer-home-section customer-home-category-section">
         <SectionHeader title="Browse by Category" onViewAll={() => onOpenCategory?.("All")} />
         <div className="customer-home-category-row" aria-label="Popular categories">
-          {CATEGORY_CHIPS.map(({ label, icon: Icon, category }) => (
-            <button type="button" className="customer-home-category-card" key={label} onClick={() => chooseCategory(category, label)}>
+          {CATEGORY_CHIPS.map(({ label, icon: Icon, category, colors }) => (
+            <button
+              type="button"
+              className="customer-home-category-card"
+              key={label}
+              onClick={() => chooseCategory(category, label)}
+              style={{ "--category-start": colors[0], "--category-end": colors[1] }}
+            >
               <span className="customer-home-icon-bubble">
                 <Icon aria-hidden="true" />
               </span>
@@ -374,8 +378,12 @@ export default function HomeScreen({
                     <img
                       src={image}
                       alt=""
+                      loading="lazy"
+                      decoding="async"
                       onError={(event) => {
-                        event.currentTarget.src = fallbackStandIcon;
+                        event.currentTarget.src = buildInitialsAvatar(
+                          provider?.business_name || title || getProviderInitials(provider || {})
+                        );
                       }}
                     />
                     {rating ? (
@@ -416,7 +424,15 @@ export default function HomeScreen({
             ) : null}
           </>
         ) : (
-          <div className="customer-home-empty-state">No providers found here yet. Try a nearby area, browse categories, or open the map to widen your search.</div>
+          <div className="customer-home-empty-state">
+            <span className="customer-home-empty-icon"><FiSearch /></span>
+            <strong>No providers match this filter yet.</strong>
+            <p>Try a different category, clear the filter, or view all nearby providers on the map.</p>
+            <div className="customer-home-empty-actions">
+              <button type="button" onClick={requestLocation}><FiMapPin /> Change location</button>
+              <button type="button" onClick={() => onOpenMap?.("All")}><FiMap /> View all services</button>
+            </div>
+          </div>
         )}
       </section>
 
@@ -434,18 +450,20 @@ export default function HomeScreen({
         </button>
       </section>
 
-      <section className="customer-home-section">
-        <button type="button" className="customer-home-premium-card" onClick={() => onOpenSmartMatch?.({ category: serviceQuery })}>
-          <span className="customer-home-premium-icon">
-            <FiZap aria-hidden="true" />
-          </span>
-          <span>
-            <strong>{smartMatchPremiumActive ? "Smart Match ready" : "Smart Match with Premium"}</strong>
-            <small>Location, budget, rating and availability matching for unfamiliar places.</small>
-          </span>
-          <FiArrowRight aria-hidden="true" />
-        </button>
-      </section>
+      {smartMatchUpsellVisible ? (
+        <section className="customer-home-section">
+          <button type="button" className="customer-home-premium-card" onClick={() => onOpenSmartMatch?.({ category: serviceQuery })}>
+            <span className="customer-home-premium-icon">
+              <FiZap aria-hidden="true" />
+            </span>
+            <span>
+              <strong>Smart Match with Premium</strong>
+              <small>Location, budget, rating and availability matching for unfamiliar places.</small>
+            </span>
+            <FiArrowRight aria-hidden="true" />
+          </button>
+        </section>
+      ) : null}
 
       <section className="customer-home-section">
         <SectionHeader title="Why book with Queless" />

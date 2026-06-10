@@ -46,8 +46,8 @@ function validateProfilePhoto(value) {
   }
   const base64 = photo.split(",", 2)[1] || "";
   const approxBytes = Math.ceil((base64.length * 3) / 4);
-  if (approxBytes > 2 * 1024 * 1024) {
-    throw httpError(413, "Profile photo must be 2 MB or smaller.");
+  if (approxBytes > 20 * 1024 * 1024) {
+    throw httpError(413, "Profile photo is too large. Please upload a smaller image.");
   }
   return photo;
 }

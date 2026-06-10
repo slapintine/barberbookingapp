@@ -133,6 +133,12 @@ export const smartMatchRateLimiter = rateLimit({
   max: 20,
 });
 
+export const aiCoachRateLimiter = rateLimit({
+  name: "ai-coach",
+  windowMs: 60 * 1000,
+  max: 8,
+});
+
 export const supportRateLimiter = rateLimit({
   name: "support",
   windowMs: 15 * 60 * 1000,

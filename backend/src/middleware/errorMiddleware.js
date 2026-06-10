@@ -7,11 +7,15 @@ export function notFoundHandler(req, res, next) {
 }
 
 export function errorHandler(err, req, res, next) {
-  const statusCode = err.statusCode || 500;
+  const isSqliteConstraint = String(err?.code || "").startsWith("SQLITE_CONSTRAINT");
+  const statusCode = err.statusCode || (isSqliteConstraint ? 400 : 500);
+  const safeMessage = isSqliteConstraint
+    ? "We couldn't activate this plan. Please try again."
+    : err.message;
   const publicMessage =
     envSafeProduction() && statusCode >= 500
-      ? "Something went wrong on our side. Please try again shortly."
-      : err.message || "Internal server error";
+      ? err.publicMessage || "Something went wrong on our side. Please try again shortly."
+      : safeMessage || "Internal server error";
 
   const requestLogger = req?.log || logger;
   requestLogger.error(

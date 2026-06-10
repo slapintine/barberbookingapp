@@ -36,7 +36,7 @@ export function isActiveProviderPlatinum(business, subscription, now = new Date(
   const trialExpiry = subscription?.trial_ends_at || business?.trial_ends_at;
 
   if (status === "active") {
-    return PAID_PAYMENT_STATUSES.has(paymentStatus) && isFutureDate(expiry, now);
+    return PAID_PAYMENT_STATUSES.has(paymentStatus) && (expiry ? isFutureDate(expiry, now) : true);
   }
 
   if (status === "trialing") {
@@ -45,4 +45,46 @@ export function isActiveProviderPlatinum(business, subscription, now = new Date(
   }
 
   return false;
+}
+
+export function getProviderCoachPlan(business, subscription, now = new Date()) {
+  const subscriptionTier = normalizeProviderPlan(subscription?.tier);
+  const businessTier = normalizeProviderPlan(
+    business?.subscription_tier || business?.selected_plan || "FREE"
+  );
+  const tier = subscriptionTier || businessTier || "FREE";
+
+  if (tier === "FREE") {
+    return { plan: "free", active: true, unlimited: false };
+  }
+
+  const status = String(subscription?.status || business?.subscription_status || "").trim().toLowerCase();
+  const paymentStatus = String(subscription?.payment_status || "").trim().toLowerCase();
+  const trialStatus = String(subscription?.trial_status || business?.trial_status || "").trim().toLowerCase();
+  const expiry = subscription?.expires_at || business?.subscription_expires_at;
+  const trialExpiry = subscription?.trial_ends_at || business?.trial_ends_at;
+
+  // If expires_at is present, require it to be in the future.
+  // If expires_at is missing (e.g. admin-provisioned or data gap), trust status+payment_status.
+  const paidActive =
+    status === "active" &&
+    PAID_PAYMENT_STATUSES.has(paymentStatus) &&
+    (expiry ? isFutureDate(expiry, now) : true);
+  const trialActive =
+    status === "trialing" &&
+    (trialStatus === "active" || trialStatus === "trialing" || TRIAL_PAYMENT_STATUSES.has(paymentStatus)) &&
+    isFutureDate(trialExpiry || expiry, now);
+  const adminActive =
+    ["manual_approved", "admin_approved", "approved"].includes(status) ||
+    Number(business?.admin_approved || 0) === 1;
+
+  if (tier === "PLATINUM") {
+    return { plan: "platinum", active: paidActive || trialActive || adminActive, unlimited: true };
+  }
+
+  if (tier === "PREMIUM") {
+    return { plan: "premium", active: paidActive || trialActive || adminActive, unlimited: false };
+  }
+
+  return { plan: "free", active: true, unlimited: false };
 }

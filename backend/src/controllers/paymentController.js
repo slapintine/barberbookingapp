@@ -6,7 +6,9 @@ import {
   createPaymentRecord,
   getPaymentRecordByBookingId,
   getPaymentRecordByReference,
+  markWebhookEventProcessed,
   normalizeLifecycleStatus,
+  recordWebhookEvent,
   updatePaymentRecord,
 } from "../services/paymentDataService.js";
 import { createWalletTransaction, ensureBarberWallet } from "../services/ledgerService.js";
@@ -75,6 +77,258 @@ function validatePositiveAmount(value) {
   }
 }
 
+function isTerminalFailureStatus(value) {
+  return ["failed", "rejected", "expired", "cancelled", "canceled"].includes(String(value || "").trim().toLowerCase());
+}
+
+function isSuccessfulStatus(value) {
+  return ["successful", "success", "completed", "paid"].includes(String(value || "").trim().toLowerCase());
+}
+
+function payoutVerificationMatches({ verification, payoutRequest, expectedStatus }) {
+  const status = normalizeMomoStatus(verification?.status);
+  const verifiedAmount = Number(verification?.amount || 0);
+  const expectedAmount = Number(payoutRequest?.amount || 0);
+
+  if (expectedStatus === "successful") {
+    return Boolean(verification?.success) && status === "successful" && verifiedAmount >= expectedAmount;
+  }
+
+  return status === "failed";
+}
+
+function verificationMatchesSubscriptionPayment({ verification, payment }) {
+  const paidAmount = Number(verification?.amount || 0);
+  const expectedAmount = Number(payment?.gross_amount || 0);
+  const currency = String(verification?.currency || "UGX").trim().toUpperCase();
+
+  return Boolean(verification?.success) && paidAmount >= expectedAmount && currency === "UGX";
+}
+
+async function processSubscriptionWebhook({ client, providerKey, providerReference, reference, status, payload, signature }) {
+  const webhookEvent = await recordWebhookEvent({
+    client,
+    provider: providerKey,
+    eventType: "subscription_payment_callback",
+    reference,
+    providerReference,
+    signature,
+    payload,
+    processingStatus: "received",
+  });
+
+  const payment = await client.get(
+    `SELECT *
+     FROM payment_transactions
+     WHERE transaction_type = 'subscription_payment'
+       AND provider IN ('mtn_mobile_money', 'airtel_money')
+       AND (internal_reference = ? OR provider_reference = ?)
+     ORDER BY id DESC
+     LIMIT 1`,
+    [reference, providerReference]
+  );
+
+  if (!payment) {
+    await markWebhookEventProcessed({
+      client,
+      eventId: webhookEvent.id,
+      processingStatus: "ignored",
+    });
+    return null;
+  }
+
+  const subscription = await client.get(`SELECT * FROM barber_subscriptions WHERE id = ?`, [payment.subscription_id]);
+  if (!subscription) {
+    await markWebhookEventProcessed({
+      client,
+      eventId: webhookEvent.id,
+      processingStatus: "failed_verification",
+    });
+    return { flow: "subscription", status: "missing_subscription", paymentId: payment.id };
+  }
+
+  const alreadyActive =
+    String(payment.status || "").toLowerCase() === "successful" &&
+    String(subscription.status || "").toLowerCase() === "active" &&
+    ["paid", "successful"].includes(String(subscription.payment_status || "").toLowerCase());
+  if (alreadyActive) {
+    await markWebhookEventProcessed({
+      client,
+      eventId: webhookEvent.id,
+      processingStatus: "duplicate_ignored",
+    });
+    return { flow: "subscription", status: "duplicate_ignored", subscriptionId: subscription.id, barberId: payment.barber_id };
+  }
+
+  if (isTerminalFailureStatus(status)) {
+    const verification = await getMobileMoneyService(payment.provider).verifyTransaction({
+      provider: payment.provider,
+      providerReference: providerReference || payment.provider_reference,
+      reference: reference || payment.internal_reference,
+      amount: payment.gross_amount,
+    }).catch(() => ({ success: false, status: "pending" }));
+
+    if (!verification.success && !isTerminalFailureStatus(verification.status)) {
+      await markWebhookEventProcessed({
+        client,
+        eventId: webhookEvent.id,
+        processingStatus: "failed_verification",
+      });
+      return { flow: "subscription", status: "pending", subscriptionId: subscription.id, barberId: payment.barber_id };
+    }
+
+    await client.run(
+      `UPDATE payment_transactions
+       SET status = 'failed',
+           provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+           metadata = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+         AND LOWER(COALESCE(status, '')) <> 'successful'`,
+      [
+        verification.providerReference || providerReference,
+        JSON.stringify({ ...payload, verification: verification.rawResponse || {} }),
+        payment.id,
+      ]
+    );
+    await client.run(
+      `UPDATE barber_subscriptions
+       SET status = 'pending',
+           payment_status = 'failed',
+           is_active = 0,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+         AND LOWER(COALESCE(status, '')) <> 'active'`,
+      [subscription.id]
+    );
+    await markWebhookEventProcessed({
+      client,
+      eventId: webhookEvent.id,
+      processingStatus: "processed",
+    });
+    return { flow: "subscription", status: "failed", subscriptionId: subscription.id, barberId: payment.barber_id };
+  }
+
+  if (!isSuccessfulStatus(status)) {
+    await client.run(
+      `UPDATE payment_transactions
+       SET status = 'pending',
+           provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+           metadata = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+         AND LOWER(COALESCE(status, '')) NOT IN ('successful', 'failed', 'cancelled', 'expired')`,
+      [providerReference, JSON.stringify(payload || {}), payment.id]
+    );
+    await markWebhookEventProcessed({
+      client,
+      eventId: webhookEvent.id,
+      processingStatus: "received",
+    });
+    return { flow: "subscription", status: "pending", subscriptionId: subscription.id, barberId: payment.barber_id };
+  }
+
+  const verification = await getMobileMoneyService(payment.provider).verifyTransaction({
+    provider: payment.provider,
+    providerReference: providerReference || payment.provider_reference,
+    reference: reference || payment.internal_reference,
+    amount: payment.gross_amount,
+  }).catch(() => ({ success: false, status: "pending" }));
+
+  if (!verificationMatchesSubscriptionPayment({ verification, payment })) {
+    await markWebhookEventProcessed({
+      client,
+      eventId: webhookEvent.id,
+      processingStatus: "failed_verification",
+    });
+    return { flow: "subscription", status: "pending", subscriptionId: subscription.id, barberId: payment.barber_id };
+  }
+
+  await client.run(
+    `UPDATE payment_transactions
+     SET status = 'successful',
+         provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+         metadata = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [
+      verification.providerReference || providerReference,
+      JSON.stringify({ ...payload, verification: verification.rawResponse || {} }),
+      payment.id,
+    ]
+  );
+  await client.run(
+    `UPDATE barber_subscriptions
+     SET status = 'expired',
+         is_active = 0,
+         expires_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE barber_id = ?
+       AND id <> ?
+       AND LOWER(status) IN ('active', 'trialing')
+       AND expires_at IS NOT NULL
+       AND expires_at > CURRENT_TIMESTAMP`,
+    [payment.barber_id, subscription.id]
+  );
+  await client.run(
+    `UPDATE barber_subscriptions
+     SET status = 'active',
+         payment_status = 'paid',
+         currency = 'UGX',
+         is_active = 1,
+         activated_at = CURRENT_TIMESTAMP,
+         started_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [subscription.id]
+  );
+  const activatedSubscription = await client.get(`SELECT * FROM barber_subscriptions WHERE id = ?`, [subscription.id]);
+  await client.run(
+    `UPDATE barbers
+     SET subscription_tier = ?,
+         selected_plan = ?,
+         subscription_status = 'active',
+         subscription_expires_at = ?,
+         business_status = 'active',
+         is_published = 1,
+         deleted_at = NULL,
+         featured_until = CASE WHEN ? IN ('PREMIUM', 'PLATINUM') THEN ? ELSE featured_until END
+     WHERE id = ?`,
+    [
+      activatedSubscription.tier,
+      String(activatedSubscription.tier || "").toLowerCase(),
+      activatedSubscription.expires_at,
+      activatedSubscription.tier,
+      activatedSubscription.expires_at,
+      payment.barber_id,
+    ]
+  );
+  await client.run(
+    `UPDATE profiles
+     SET subscription_status = 'active',
+         selected_plan = ?
+     WHERE user_id = ?`,
+    [activatedSubscription.tier, payment.user_id]
+  ).catch(() => {});
+  await client.run(
+    `INSERT INTO subscription_events (user_id, business_id, event_type, plan_id, status, metadata)
+     VALUES (?, ?, 'subscription_started', ?, 'active', ?)`,
+    [
+      payment.user_id,
+      payment.barber_id,
+      activatedSubscription.tier,
+      JSON.stringify({ source: "provider_callback", expiresAt: activatedSubscription.expires_at }),
+    ]
+  ).catch(() => {});
+  await markWebhookEventProcessed({
+    client,
+    eventId: webhookEvent.id,
+    processingStatus: "processed",
+  });
+
+  return { flow: "subscription", status: "processed", subscriptionId: subscription.id, barberId: payment.barber_id };
+}
+
 async function processPayoutWebhook({ client, providerReference, reference, status, payload }) {
   const payoutRequest = await client.get(
     `SELECT *
@@ -103,7 +357,49 @@ async function processPayoutWebhook({ client, providerReference, reference, stat
   const normalizedStatus = normalizeMomoStatus(status);
   const normalizedAmount = toAmount(payoutRequest.amount);
   const resolvedProviderReference = providerReference || payoutRequest.provider_reference || "";
+  const payoutProvider = String(payoutRequest.provider || "mtn_mobile_money").trim().toLowerCase();
   const wallet = await ensureBarberWallet(payoutRequest.barber_id, client);
+
+  if (["successful", "failed"].includes(normalizedStatus)) {
+    const verification = await getMobileMoneyService(payoutProvider).verifyDisbursement({
+      provider: payoutProvider,
+      providerReference: resolvedProviderReference,
+      reference: reference || payoutRequest.reference,
+      amount: payoutRequest.amount,
+    }).catch(() => ({ success: false, status: "pending", rawResponse: {} }));
+
+    if (!payoutVerificationMatches({ verification, payoutRequest, expectedStatus: normalizedStatus })) {
+      await client.run(
+        `UPDATE payout_requests
+         SET status = CASE WHEN status = 'paid' THEN status ELSE 'processing' END,
+             provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [verification.providerReference || resolvedProviderReference, payoutRequest.id]
+      );
+
+      await client.run(
+        `UPDATE payouts
+         SET status = CASE WHEN status = 'paid' THEN status ELSE 'pending' END,
+             provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+             updated_at = CURRENT_TIMESTAMP,
+             metadata = ?
+         WHERE id = ?`,
+        [
+          verification.providerReference || resolvedProviderReference,
+          JSON.stringify({ ...payload, verification: verification.rawResponse || {}, verificationAccepted: false }),
+          payoutMirror?.id || 0,
+        ]
+      );
+
+      return {
+        flow: "payout",
+        status: "processing",
+        payoutRequestId: payoutRequest.id,
+        barberId: payoutRequest.barber_id,
+      };
+    }
+  }
 
   if (normalizedStatus === "successful") {
     if (payoutRequest.status !== "paid") {
@@ -680,6 +976,32 @@ async function handleMobileMoneyWebhook(req, res, next, providerKey) {
             : topupWebhookResult.status === "failed"
             ? "Customer wallet top-up marked failed."
             : "Customer wallet top-up remains pending.",
+      });
+    }
+
+    const subscriptionWebhookResult = await transaction(async (client) =>
+      processSubscriptionWebhook({
+        client,
+        providerKey,
+        providerReference: String(payload.provider_reference || "").trim(),
+        reference: String(payload.reference || "").trim(),
+        status: payload.status,
+        payload,
+        signature: String(req.get("x-signature") || ""),
+      })
+    );
+
+    if (subscriptionWebhookResult) {
+      return res.status(200).json({
+        success: true,
+        message:
+          subscriptionWebhookResult.status === "processed"
+            ? "Subscription webhook processed successfully."
+            : subscriptionWebhookResult.status === "duplicate_ignored"
+            ? "Duplicate subscription webhook already processed."
+            : subscriptionWebhookResult.status === "failed"
+            ? "Subscription webhook recorded failed payment."
+            : "Subscription webhook recorded pending payment.",
       });
     }
 

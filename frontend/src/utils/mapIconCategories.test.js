@@ -3,9 +3,9 @@ import test from "node:test";
 import { getMapIconTypeForCategory, getMapIconTypeForSelectedCategories } from "./mapIconCategories.js";
 
 test("derives signup map icon from the current selected categories", () => {
-  assert.equal(getMapIconTypeForSelectedCategories(["Beauty & Grooming"]), "beauty-grooming");
-  assert.equal(getMapIconTypeForSelectedCategories(["Beauty & Grooming", "Repairs & Maintenance"]), "multi");
-  assert.equal(getMapIconTypeForSelectedCategories(["Beauty & Grooming"]), "beauty-grooming");
+  assert.equal(getMapIconTypeForSelectedCategories(["Barber"]), "barber");
+  assert.equal(getMapIconTypeForSelectedCategories(["Beauty", "Repairs & Maintenance"]), "multi");
+  assert.equal(getMapIconTypeForSelectedCategories(["Beauty"]), "beauty");
   assert.equal(getMapIconTypeForSelectedCategories([]), "");
 
   assert.equal(getMapIconTypeForSelectedCategories(["Repairs & Maintenance", "Cleaning Services"]), "multi");
@@ -17,7 +17,10 @@ test("derives signup map icon from the current selected categories", () => {
 });
 
 test("maps every signup category to a distinct provider map icon", () => {
-  assert.equal(getMapIconTypeForCategory("Beauty & Grooming"), "beauty-grooming");
+  assert.equal(getMapIconTypeForCategory("Barber"), "barber");
+  assert.equal(getMapIconTypeForCategory("Beauty"), "beauty");
+  assert.equal(getMapIconTypeForCategory("Salon"), "salon");
+  assert.equal(getMapIconTypeForCategory("Spa"), "spa");
   assert.equal(getMapIconTypeForCategory("Home Services"), "home-services");
   assert.equal(getMapIconTypeForCategory("Auto Services"), "auto-services");
   assert.equal(getMapIconTypeForCategory("Events & Photography"), "events-photography");

@@ -133,7 +133,7 @@ Do not create fake public providers for launch. A provider becomes public only w
 - the business is not soft-deleted and is not marked as demo/test data
 - `business_status` is `active`, `approved`, or `live`
 - `is_published=1`
-- `subscription_tier` is `PRO`, `PREMIUM`, or `PLATINUM`
+- `subscription_tier` is `FREE`, `PREMIUM`, or `PLATINUM`
 - the provider has an active non-expired subscription, an active non-expired trial, or explicit admin approval
 
 Production setup path:

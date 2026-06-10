@@ -18,17 +18,29 @@ import {
 import { DEFAULT_SERVICE_TYPES, SERVICE_CATEGORIES, formatServicePrice, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
 import { MAP_ICON_OPTIONS, MULTI_SERVICE_MAP_ICON_TYPE, getMapIconOption, getMapIconTypeForCategory, getMapIconTypeForSelectedCategories } from "../../utils/mapIconCategories.js";
 import { getGeolocationErrorMessage, reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
-import { formatMoney, formatSubscriptionPrice, getPlanFeatures, PROVIDER_PLANS } from "../../utils/subscriptionPlans.js";
+import {
+  formatMoney,
+  formatSubscriptionPrice,
+  getPlanFeatures,
+  getPlanImageCountMessage,
+  getPlanImageLimitLabel,
+  getPlanImageLimits,
+  getPlanImageSizeMessage,
+  PROVIDER_PLANS,
+} from "../../utils/subscriptionPlans.js";
 
 const DEFAULT_CENTER = [0.3136, 32.5811];
 const TOTAL_STEPS = 6;
+const BYTES_PER_MB = 1024 * 1024;
+const IMAGE_OPTIMIZE_THRESHOLD_BYTES = 3 * BYTES_PER_MB;
+const IMAGE_MAX_DIMENSION = 1800;
 
 const DEFAULT_FORM = {
   businessName: "",
   phone: "",
   documentName: "",
-  businessType: "Beauty & Grooming",
-  mapIconType: "beauty-grooming",
+  businessType: "Home Services",
+  mapIconType: "home-services",
   location: "",
   services: [],
   pricing: "20000",
@@ -44,7 +56,7 @@ const DEFAULT_FORM = {
   standType: "individual",
   teamMembers: "",
   portfolio: [],
-  selectedPlan: "PLUS",
+  selectedPlan: "FREE",
   startFreeTrial: false,
 };
 
@@ -111,11 +123,46 @@ function normalizeFormServices(value, fallbackToDefaults = false) {
   if (typeof value === "string" && value.trim()) {
     return value
       .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
+      .flatMap((item) => {
+        const value = item.trim();
+        return value ? [value] : [];
+      })
       .map(normalizeServiceForBooking);
   }
   return fallbackToDefaults ? DEFAULT_SERVICE_TYPES.map(normalizeServiceForBooking) : [];
+}
+
+function splitProfileName(profile = {}) {
+  const firstName = String(profile.firstName || profile.first_name || "").trim();
+  const lastName = String(profile.lastName || profile.last_name || "").trim();
+  if (firstName || lastName) return { firstName, lastName };
+
+  const parts = String(profile.fullName || profile.full_name || profile.name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.length > 1 ? parts.slice(1).join(" ") : "",
+  };
+}
+
+export function validateBusinessStand(data = {}, profile = {}) {
+  const form = data && typeof data === "object" ? data : {};
+  const { firstName, lastName } = splitProfileName(profile);
+  const services = normalizeFormServices(form.services);
+  const missing = [];
+
+  if (!firstName) missing.push({ key: "firstName", label: "First name is required" });
+  if (!lastName) missing.push({ key: "lastName", label: "Last name is required" });
+  if (!String(form.businessName || "").trim()) missing.push({ key: "businessName", label: "Business name is required" });
+  if (!String(form.businessType || "").trim()) missing.push({ key: "businessType", label: "Business category is required" });
+  if (!String(form.phone || "").trim()) missing.push({ key: "phone", label: "Phone number is required" });
+  if (!String(form.location || "").trim() && (!form.latitude || !form.longitude)) missing.push({ key: "location", label: "Business location is required" });
+  if (!services.length) missing.push({ key: "services", label: "At least one service is required" });
+  if (services.some((service) => !String(service.service_name || "").trim())) missing.push({ key: "services", label: "Each service needs a clear listing title" });
+
+  return missing;
 }
 
 function fileToDataUrl(file) {
@@ -125,6 +172,127 @@ function fileToDataUrl(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function getDataUrlBytes(dataUrl = "") {
+  const base64 = String(dataUrl).split(",", 2)[1] || "";
+  return Math.ceil((base64.length * 3) / 4);
+}
+
+function getImageReferenceStats(value = "") {
+  const image = String(value || "").trim();
+  return image ? { count: 1, bytes: getDataUrlBytes(image) } : { count: 0, bytes: 0 };
+}
+
+function addStats(target, value = "") {
+  const stats = getImageReferenceStats(value);
+  target.count += stats.count;
+  target.bytes += stats.bytes;
+  return target;
+}
+
+function createImageStats() {
+  return {
+    logo: { count: 0, bytes: 0 },
+    service: { count: 0, bytes: 0 },
+    portfolio: { count: 0, bytes: 0 },
+  };
+}
+
+function getFormImageStats(form = {}) {
+  const stats = createImageStats();
+  addStats(stats.logo, form.image);
+  (Array.isArray(form.portfolio) ? form.portfolio : []).forEach((item) => {
+    addStats(stats.portfolio, item.beforeImage || item.before_image);
+    addStats(stats.portfolio, item.afterImage || item.after_image || item.image);
+  });
+  (Array.isArray(form.team_members || form.teamMembers) ? form.team_members || form.teamMembers : []).forEach((member) => {
+    addStats(stats.service, member.image);
+  });
+  normalizeFormServices(form.services).forEach((service) => addStats(stats.service, service.image));
+  return stats;
+}
+
+function getStatsForType(currentStats, imageType) {
+  if (currentStats?.logo || currentStats?.service || currentStats?.portfolio) {
+    return currentStats[imageType] || { count: 0, bytes: 0 };
+  }
+  return currentStats || { count: 0, bytes: 0 };
+}
+
+function getLimitForType(limits, imageType) {
+  if (imageType === "logo") return { maxImages: limits.logoImages, totalBytes: limits.logoTotalBytes };
+  if (imageType === "service") return { maxImages: limits.serviceImages, totalBytes: limits.serviceTotalBytes };
+  return { maxImages: limits.portfolioImages, totalBytes: limits.portfolioTotalBytes };
+}
+
+function getNextImageLimitMessage({ currentStats, existingImage = "", incomingFiles = [], planTier, imageType = "portfolio" }) {
+  const limits = getPlanImageLimits(planTier);
+  const scopedStats = getStatsForType(currentStats, imageType);
+  const scopedLimits = getLimitForType(limits, imageType);
+  const existing = getImageReferenceStats(existingImage);
+  const incomingCount = incomingFiles.length;
+  const incomingBytes = incomingFiles.reduce((sum, file) => sum + Number(file?.size || 0), 0);
+  if (imageType === "service") {
+    if (incomingCount > scopedLimits.maxImages) {
+      return { tone: "upgrade", message: getPlanImageCountMessage(planTier, imageType) };
+    }
+    if (incomingBytes > scopedLimits.totalBytes) {
+      return { tone: "error", message: getPlanImageSizeMessage(planTier, imageType) };
+    }
+    return null;
+  }
+  const nextCount = scopedStats.count - existing.count + incomingCount;
+  const nextBytes = scopedStats.bytes - existing.bytes + incomingBytes;
+  if (nextCount > scopedLimits.maxImages) {
+    return { tone: imageType === "logo" ? "error" : "upgrade", message: getPlanImageCountMessage(planTier, imageType) };
+  }
+  if (nextBytes > scopedLimits.totalBytes) {
+    return { tone: "error", message: getPlanImageSizeMessage(planTier, imageType) };
+  }
+  return null;
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read the selected image."));
+    };
+    image.src = url;
+  });
+}
+
+async function optimizeImageFile(file, { onStatus } = {}) {
+  if (!file?.type?.startsWith("image/")) {
+    throw new Error("Please choose a PNG, JPG, or WebP image.");
+  }
+  if (file.size <= IMAGE_OPTIMIZE_THRESHOLD_BYTES) {
+    return fileToDataUrl(file);
+  }
+
+  onStatus?.("Optimizing images...");
+  try {
+    const image = await loadImageFromFile(file);
+    const scale = Math.min(1, IMAGE_MAX_DIMENSION / Math.max(image.width, image.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const context = canvas.getContext("2d");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const optimized = canvas.toDataURL("image/jpeg", 0.84);
+    return optimized;
+  } catch {
+    // Backend validation still enforces the same limit if browser optimization fails.
+  }
+
+  return fileToDataUrl(file);
 }
 
 function ImageUploadInput({
@@ -137,21 +305,59 @@ function ImageUploadInput({
   changeLabel = "Change image",
   previewAlt = "uploaded preview",
   compact = false,
+  planTier = "FREE",
+  currentImageStats = { count: 0, bytes: 0 },
+  imageType = "logo",
 }) {
   const imageInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("info");
 
   const handleImageChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const precheck = getNextImageLimitMessage({
+      currentStats: currentImageStats,
+      existingImage: image,
+      incomingFiles: [file],
+      planTier,
+      imageType,
+    });
+    if (precheck) {
+      setMessageTone(precheck.tone);
+      setMessage(precheck.message);
+      event.target.value = "";
+      return;
+    }
     try {
       setUploading(true);
+      setMessage("");
       setProgress(22);
-      const result = await fileToDataUrl(file);
+      const result = await optimizeImageFile(file, {
+        onStatus: (status) => {
+          setMessageTone("info");
+          setMessage(status);
+          setProgress(56);
+        },
+      });
+      const limits = getPlanImageLimits(planTier);
+      const scopedStats = getStatsForType(currentImageStats, imageType);
+      const scopedLimits = getLimitForType(limits, imageType);
+      const existing = getImageReferenceStats(image);
+      const nextBytes = scopedStats.bytes - existing.bytes + getDataUrlBytes(result);
+      if (nextBytes > scopedLimits.totalBytes) {
+        throw new Error(getPlanImageSizeMessage(planTier, imageType));
+      }
       setProgress(100);
       onChange(result);
-    } catch {}
+      setMessageTone("success");
+      setMessage(file.size > IMAGE_OPTIMIZE_THRESHOLD_BYTES ? "Image optimized and ready." : "");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error.message || "Your images are too large for your current plan. Please reduce the image size or upgrade your plan.");
+    }
     finally {
       event.target.value = "";
       window.setTimeout(() => {
@@ -182,6 +388,7 @@ function ImageUploadInput({
           <span style={{ width: `${progress}%` }} />
         </div>
       ) : null}
+      {message ? <div className={`image-upload-message-v10 ${messageTone}`}>{message}</div> : null}
       <input
         ref={imageInputRef}
         type="file"
@@ -190,36 +397,62 @@ function ImageUploadInput({
         onChange={handleImageChange}
       />
       <div className="image-upload-actions-v9">
-        <button type="button" className="secondary-btn-v4" onClick={() => imageInputRef.current?.click()}>
-          <FiImage /> {image ? changeLabel : uploadLabel}
-        </button>
         {image ? (
-          <button type="button" className="secondary-btn-v4 danger-soft-v9" onClick={() => onChange("")}>
+          <button type="button" className="secondary-btn-v4 danger-soft-v9" onClick={() => {
+            setMessage("");
+            onChange("");
+          }}>
             Remove
           </button>
-        ) : null}
+        ) : (
+          <small>Tap the image area to upload. {getPlanImageLimitLabel(planTier, imageType)}</small>
+        )}
       </div>
     </div>
   );
 }
 
-function PortfolioImageInput({ portfolio = [], onChange, maxPhotos = Infinity, planName = "Platinum" }) {
+function PortfolioImageInput({ portfolio = [], onChange, maxPhotos = Infinity, planName = "Platinum", planTier = "FREE", currentImageStats = { count: 0, bytes: 0 } }) {
   const portfolioInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("info");
   const portfolioItems = Array.isArray(portfolio) ? portfolio : [];
 
   const handlePortfolioChange = async (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    if (Number.isFinite(maxPhotos) && portfolioItems.length + files.length > maxPhotos) {
+    const precheck = getNextImageLimitMessage({
+      currentStats: currentImageStats,
+      incomingFiles: files,
+      planTier,
+      imageType: "portfolio",
+    });
+    if (precheck) {
+      setMessageTone(precheck.tone);
+      setMessage(precheck.message);
       onChange(portfolioItems);
+      event.target.value = "";
       return;
     }
     try {
       setUploading(true);
+      setMessage("");
       setProgress(25);
-      const images = await Promise.all(files.map(fileToDataUrl));
+      const images = await Promise.all(files.map((file) => optimizeImageFile(file, {
+        onStatus: (status) => {
+          setMessageTone("info");
+          setMessage(status);
+          setProgress(58);
+        },
+      })));
+      const limits = getPlanImageLimits(planTier);
+      const scopedStats = getStatsForType(currentImageStats, "portfolio");
+      const optimizedBytes = images.reduce((sum, image) => sum + getDataUrlBytes(image), 0);
+      if (scopedStats.bytes + optimizedBytes > limits.portfolioTotalBytes) {
+        throw new Error(getPlanImageSizeMessage(planTier, "portfolio"));
+      }
       setProgress(100);
       const nextItems = images.map((image, index) => ({
         id: `portfolio-${Date.now()}-${index}`,
@@ -230,7 +463,12 @@ function PortfolioImageInput({ portfolio = [], onChange, maxPhotos = Infinity, p
         note: "",
       }));
       onChange([...portfolioItems, ...nextItems]);
-    } catch {}
+      setMessageTone("success");
+      setMessage(files.some((file) => file.size > IMAGE_OPTIMIZE_THRESHOLD_BYTES) ? "Images optimized and ready." : "");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error.message || "Your images are too large for your current plan. Please reduce the image size or upgrade your plan.");
+    }
     finally {
       event.target.value = "";
       window.setTimeout(() => {
@@ -248,7 +486,7 @@ function PortfolioImageInput({ portfolio = [], onChange, maxPhotos = Infinity, p
     <div className="image-upload-v9 portfolio-upload-v9 compact-portfolio-v10">
       <div className="image-upload-head-v9">
         <span>Portfolio photos</span>
-        <small>{Number.isFinite(maxPhotos) ? `${portfolioItems.length}/${maxPhotos} photos used on this plan.` : "Unlimited portfolio photos on this plan."}</small>
+        <small>{getPlanImageLimitLabel(planTier, "portfolio")}</small>
       </div>
       <input
         ref={portfolioInputRef}
@@ -264,14 +502,15 @@ function PortfolioImageInput({ portfolio = [], onChange, maxPhotos = Infinity, p
           <strong>{portfolioItems.length ? "Add more photos" : "Upload portfolio photos"}</strong>
         </span>
       </button>
-      {Number.isFinite(maxPhotos) && portfolioItems.length >= maxPhotos ? (
-        <div className="wizard-note-v10">You have reached the {planName} limit of {maxPhotos} photos. Upgrade to add more.</div>
+      {Number.isFinite(maxPhotos) && getStatsForType(currentImageStats, "portfolio").count >= maxPhotos ? (
+        <div className="wizard-note-v10">{getPlanImageCountMessage(planTier, "portfolio")}</div>
       ) : null}
       {uploading ? (
         <div className="upload-progress-v9" aria-label="Uploading portfolio images">
           <span style={{ width: `${progress}%` }} />
         </div>
       ) : null}
+      {message ? <div className={`image-upload-message-v10 ${messageTone}`}>{message}</div> : null}
       {portfolioItems.length ? (
         <div className="portfolio-preview-grid-v9">
           {portfolioItems.map((item, index) => {
@@ -295,8 +534,9 @@ function StepHeader({ currentStep, stepTitle }) {
   return (
     <div className="business-step-progress-v10">
       <div className="business-step-progress-copy-v10">
-        <span>Step {currentStep} of {TOTAL_STEPS}</span>
+        <span>Step {currentStep} of {TOTAL_STEPS} - {stepTitle}</span>
         <strong>{stepTitle}</strong>
+        <small>Takes about 3 minutes.</small>
       </div>
       <div className="progress-track-v10">
         <div className="progress-fill-v10" style={{ width: `${(currentStep / TOTAL_STEPS) * 100}%` }} />
@@ -309,18 +549,24 @@ function WizardNotice({ children }) {
   return <div className="wizard-note-v10">{children}</div>;
 }
 
-function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose, onSubmit, requirePlan = false }) {
+function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose, onSubmit, requirePlan = false, profile = {} }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
+  const [missingFields, setMissingFields] = useState([]);
   const [activeServiceIndex, setActiveServiceIndex] = useState(0);
   const [detailsPlan, setDetailsPlan] = useState("");
   const [locationDetecting, setLocationDetecting] = useState(false);
+  const [savingIntent, setSavingIntent] = useState("");
   const services = normalizeFormServices(form.services);
   const selectedPlan = PROVIDER_PLANS.find((plan) => plan.tier === form.selectedPlan) || PROVIDER_PLANS[0];
   const planFeatures = getPlanFeatures(selectedPlan.id);
   const maxServices = planFeatures.maxServices;
   const maxPhotos = planFeatures.maxPhotos;
-  const selectedCategories = useMemo(() => [...new Set(services.map((service) => service.category).filter(Boolean))], [services]);
+  const imageStats = useMemo(() => getFormImageStats({ ...form, services }), [form, services]);
+  const selectedCategories = useMemo(
+    () => [...new Set(services.flatMap((service) => (service.category ? [service.category] : [])))],
+    [services]
+  );
   const selectedCategoryItems = useMemo(
     () =>
       selectedCategories.map((category) => ({
@@ -340,6 +586,8 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     ? "This icon will appear when your business spans several service categories."
     : "This icon will appear on the Queless map.";
   const canSubmit = true;
+  const missingFieldKeys = useMemo(() => new Set(missingFields.map((item) => item.key)), [missingFields]);
+  const fieldClass = (key, base = "label-v4") => (missingFieldKeys.has(key) ? `${base} missing-v10` : base);
 
   const stepTitles = [
     "Business Basics",
@@ -349,16 +597,6 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     "Payments & Booking",
     "Review & Submit",
   ];
-
-  useEffect(() => {
-    if (show) {
-      setCurrentStep(1);
-      setError("");
-      setActiveServiceIndex(0);
-      setDetailsPlan("");
-      setLocationDetecting(false);
-    }
-  }, [show]);
 
   useEffect(() => {
     if (activeServiceIndex > services.length - 1) {
@@ -404,7 +642,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
       const nextServices = selected
         ? current.filter((service) => service.category !== category)
         : [...current, createBlankService(category)];
-      const nextCategories = [...new Set(nextServices.map((service) => service.category).filter(Boolean))];
+      const nextCategories = [...new Set(nextServices.flatMap((service) => (service.category ? [service.category] : [])))];
       const nextMapIconType = getMapIconTypeForSelectedCategories(nextCategories);
       return {
         ...prev,
@@ -489,7 +727,14 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     }
     if (step === 5) {
       if (!canSubmit) return "Please choose at least one payment option.";
-      if (Number.isFinite(maxPhotos) && Array.isArray(form.portfolio) && form.portfolio.length > maxPhotos) return `You have reached the ${selectedPlan.name} limit of ${maxPhotos} photos. Upgrade to add more.`;
+      const limits = getPlanImageLimits(selectedPlan.tier);
+      if (imageStats.logo.count > limits.logoImages) return getPlanImageCountMessage(selectedPlan.tier, "logo");
+      if (imageStats.logo.bytes > limits.logoTotalBytes) return getPlanImageSizeMessage(selectedPlan.tier, "logo");
+      if (imageStats.portfolio.count > limits.portfolioImages) return getPlanImageCountMessage(selectedPlan.tier, "portfolio");
+      if (imageStats.portfolio.bytes > limits.portfolioTotalBytes) return getPlanImageSizeMessage(selectedPlan.tier, "portfolio");
+      if (services.some((service) => getImageReferenceStats(service.image).bytes > limits.serviceTotalBytes)) {
+        return getPlanImageSizeMessage(selectedPlan.tier, "service");
+      }
     }
     if (requirePlan && step === 6 && form.startFreeTrial) {
       if (!form.selectedPlan) return "Please choose a plan before creating your business.";
@@ -504,34 +749,66 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
       return;
     }
     setError("");
+    setMissingFields([]);
     setCurrentStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
   };
 
   const goBack = () => {
     setError("");
+    setMissingFields([]);
     setCurrentStep((prev) => Math.max(1, prev - 1));
   };
 
-  const submitWizard = (intent = "draft") => {
-    for (let step = 1; step <= TOTAL_STEPS - 1; step += 1) {
-      const message = validateStep(step);
-      if (message) {
-        setCurrentStep(step);
-        setError(message);
+  const submitWizard = async (intent = "draft") => {
+    if (savingIntent) return;
+    if (intent === "draft") {
+      const draftMissing = [];
+      if (!String(form.businessName || "").trim()) draftMissing.push({ key: "businessName", label: "Business name" });
+      if (!String(form.location || "").trim()) draftMissing.push({ key: "location", label: "Business location" });
+      if (draftMissing.length) {
+        setCurrentStep(draftMissing[0].key === "businessName" ? 1 : 2);
+        setMissingFields(draftMissing);
+        setError("Your draft needs these details before it can be saved.");
+        return;
+      }
+    } else {
+      for (let step = 1; step <= TOTAL_STEPS - 1; step += 1) {
+        const message = validateStep(step);
+        if (message) {
+          setCurrentStep(step);
+          setMissingFields([]);
+          setError(message);
+          return;
+        }
+      }
+      const missing = validateBusinessStand({ ...form, services }, profile);
+      if (missing.length) {
+        setCurrentStep(TOTAL_STEPS);
+        setMissingFields(missing);
+        setError("Your business stand is not complete yet.");
         return;
       }
     }
+    setMissingFields([]);
     setError("");
-    onSubmit({
-      ...form,
-      submitIntent: intent,
-      categories: selectedCategoryItems.map((category) => category.key),
-      selectedCategories: selectedCategoryItems,
-      primaryCategory: selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : null,
-      businessType: selectedCategories[0] || form.businessType,
-      mapIconType: selectedMapIconType,
-      services,
-    });
+    setSavingIntent(intent);
+    try {
+      const saved = await onSubmit({
+        ...form,
+        submitIntent: intent,
+        categories: selectedCategoryItems.map((category) => category.key),
+        selectedCategories: selectedCategoryItems,
+        primaryCategory: selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : null,
+        businessType: selectedCategories[0] || form.businessType,
+        mapIconType: selectedMapIconType,
+        services,
+      });
+      if (saved === false) {
+        setError(intent === "draft" ? "Could not save this draft. Please check the highlighted details and try again." : "Could not continue. Please check your business details and try again.");
+      }
+    } finally {
+      setSavingIntent("");
+    }
   };
 
   if (!show) return null;
@@ -542,15 +819,15 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
 
   return (
     <>
-      <div className="booking-overlay-v4 open" onClick={onClose} />
+      <button type="button" className="booking-overlay-v4 open" onClick={onClose} aria-label="Close business wizard" />
       <div className="booking-modal-v4 open business-wizard-modal-v10">
         <div className="booking-modal-card-v4 business-wizard-card-v10">
           <div className="barber-profile-topbar-v4 business-wizard-topbar-v10">
-            <button type="button" className="profile-back-btn-v4" onClick={currentStep === 1 ? onClose : goBack}>
+            <button type="button" className="profile-back-btn-v4" onClick={currentStep === 1 ? onClose : goBack} disabled={Boolean(savingIntent)}>
               <FiArrowLeft />
             </button>
             <div className="profile-top-title-v4">{title}</div>
-            <button type="button" className="profile-back-btn-v4" onClick={onClose}>
+            <button type="button" className="profile-back-btn-v4" onClick={onClose} disabled={Boolean(savingIntent)}>
               <FiX />
             </button>
           </div>
@@ -560,7 +837,17 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
 
             {error ? (
               <div className="auth-error business-wizard-error-v10">
-                {error}
+                <strong>{error}</strong>
+                {missingFields.length ? (
+                  <>
+                    <span>Please complete the following before continuing:</span>
+                    <ul>
+                      {missingFields.map((item) => (
+                        <li key={`${item.key}-${item.label}`}>{item.label}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
                 {error.toLowerCase().includes("business with this name already exists") ? (
                   <button type="button" className="mini-action-btn-v4" onClick={() => setError("Claim/report request noted. Admin review will be available from the support workflow.")}>
                     This is my business / Claim or report
@@ -582,9 +869,11 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                   changeLabel="Change business image"
                   previewAlt="Business image"
                   compact
+                  planTier={selectedPlan.tier}
+                  currentImageStats={imageStats}
                 />
                 <div className="business-field-grid-v10">
-                  <label className="label-v4">
+                  <label className={fieldClass("businessName")}>
                     Business name
                     <input
                       className="field-input-v4 profile-input-v4"
@@ -593,7 +882,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       onChange={(e) => setForm((prev) => ({ ...prev, businessName: e.target.value }))}
                     />
                   </label>
-                  <label className="label-v4">
+                  <label className={fieldClass("businessType")}>
                     Main category
                     <select
                       className="field-input-v4 profile-input-v4"
@@ -605,7 +894,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       ))}
                     </select>
                   </label>
-                  <label className="label-v4">
+                  <label className={fieldClass("phone")}>
                     Business phone
                     <input
                       className="field-input-v4 profile-input-v4"
@@ -645,7 +934,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       onChange={(e) => setForm((prev) => ({ ...prev, introText: e.target.value }))}
                     />
                   </label>
-                  <label className="label-v4">
+                  <label className={fieldClass("documentName")}>
                     Verification document or reference
                     <input
                       className="field-input-v4 profile-input-v4"
@@ -661,7 +950,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
             {currentStep === 2 ? (
               <section className="business-step-card-v10">
                 <WizardNotice>Set where customers can find you and when you are usually available.</WizardNotice>
-                <label className="label-v4">
+                <label className={fieldClass("location")}>
                   Business location
                   <input
                     className="field-input-v4 profile-input-v4"
@@ -787,7 +1076,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
             ) : null}
 
             {currentStep === 4 ? (
-              <section className="business-step-card-v10">
+              <section className={missingFieldKeys.has("services") ? "business-step-card-v10 missing-v10" : "business-step-card-v10"}>
                 <WizardNotice>Add the actual services customers can book. Use quote-required only when the price depends on scope.</WizardNotice>
                 <div className="service-summary-list-v10">
                   <WizardNotice>
@@ -972,6 +1261,9 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       changeLabel="Change service image"
                       previewAlt={`${activeService.service_name || activeService.category || "Service"} image`}
                       onChange={(image) => updateService(activeServiceIndex, { image })}
+                      planTier={selectedPlan.tier}
+                      currentImageStats={imageStats}
+                      imageType="service"
                     />
                     <label className="label-v4">
                       Service description
@@ -1044,6 +1336,8 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                   onChange={(portfolio) => setForm((prev) => ({ ...prev, portfolio }))}
                   maxPhotos={maxPhotos}
                   planName={selectedPlan.name}
+                  planTier={selectedPlan.tier}
+                  currentImageStats={imageStats}
                 />
               </section>
             ) : null}
@@ -1051,6 +1345,17 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
             {currentStep === 6 ? (
               <section className="business-step-card-v10">
                 <WizardNotice>Review everything before creating your business profile.</WizardNotice>
+                {missingFields.length ? (
+                  <div className="business-missing-summary-v10">
+                    <strong>Your business stand is not complete yet.</strong>
+                    <span>Please complete the following before continuing:</span>
+                    <ul>
+                      {missingFields.map((item) => (
+                        <li key={`${item.key}-${item.label}`}>{item.label}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <div className="payment-config-v5 business-mini-card-v10">
                   <div className="payment-config-title-v5"><FiCreditCard /> Provider plan</div>
                   {PROVIDER_PLANS.map((plan) => (
@@ -1082,13 +1387,13 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       </div>
                       {detailsPlan === plan.tier ? (
                         <div className="profile-review-text-v4">
-                          <strong>{plan.name}</strong> plan includes: {plan.features.join(", ")}. Annual: {formatSubscriptionPrice(plan, "annual")} (save {formatMoney(plan.annualSavings)} yearly).
+                          <strong>{plan.name}</strong> plan includes: {plan.features.join(", ")}. {plan.tier === "FREE" ? "No payment is required." : `Annual: ${formatSubscriptionPrice(plan, "annual")} (save ${formatMoney(plan.annualSavings)} yearly).`}
                         </div>
                       ) : null}
                     </div>
                   ))}
                   <div className="wizard-note-v10">
-                    Save a draft to finish later, or continue to payment to activate after Mobile Money succeeds.
+                    Free starts without payment. Premium and Platinum go live only after payment confirmation.
                   </div>
                 </div>
                 <div className="wizard-note-v10">
@@ -1128,17 +1433,17 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
 
           <div className="business-wizard-actions-v10">
             {currentStep > 1 ? (
-              <button type="button" className="secondary-btn-v4" onClick={goBack}>Back</button>
+              <button type="button" className="secondary-btn-v4" onClick={goBack} disabled={Boolean(savingIntent)}>Back</button>
             ) : null}
             {currentStep < TOTAL_STEPS ? (
-              <button type="button" className="primary-btn-v4" onClick={goNext}>Continue</button>
+              <button type="button" className="primary-btn-v4" onClick={goNext} disabled={Boolean(savingIntent)}>Continue</button>
             ) : (
               <>
-                <button type="button" className="secondary-btn-v4" onClick={() => submitWizard("draft")} disabled={!canSubmit}>
-                  Save as Draft
+                <button type="button" className="secondary-btn-v4" onClick={() => submitWizard("draft")} disabled={!canSubmit || Boolean(savingIntent)}>
+                  {savingIntent === "draft" ? "Saving..." : "Save as Draft"}
                 </button>
-                <button type="button" className="primary-btn-v4" onClick={() => submitWizard("payment")} disabled={!canSubmit}>
-                  Continue to Payment
+                <button type="button" className="primary-btn-v4" onClick={() => submitWizard("payment")} disabled={!canSubmit || Boolean(savingIntent)}>
+                  {savingIntent === "payment" ? "Saving..." : form.selectedPlan === "FREE" ? "Start free" : "Continue to Payment"}
                 </button>
               </>
             )}
@@ -1149,7 +1454,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
   );
 }
 
-export function EditBarberModal({ show, barber, onClose, onSubmit }) {
+export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit }) {
   const [form, setForm] = useState(DEFAULT_FORM);
 
   useEffect(() => {
@@ -1162,8 +1467,8 @@ export function EditBarberModal({ show, barber, onClose, onSubmit }) {
       services: Array.isArray(barber.services)
         ? barber.services.map(normalizeServiceForBooking)
         : DEFAULT_SERVICE_TYPES.map(normalizeServiceForBooking),
-      businessType: barber.business_type || barber.businessType || "Beauty & Grooming",
-      mapIconType: barber.map_icon_type || barber.mapIconType || getMapIconTypeForCategory(barber.business_type || barber.businessType || "Beauty & Grooming"),
+      businessType: barber.business_type || barber.businessType || "Home Services",
+      mapIconType: barber.map_icon_type || barber.mapIconType || getMapIconTypeForCategory(barber.business_type || barber.businessType || "Home Services"),
       pricing: String(barber.price_from || ""),
       scheduleStart: barber.availability?.start || "08:00",
       scheduleEnd: barber.availability?.end || "20:00",
@@ -1177,18 +1482,21 @@ export function EditBarberModal({ show, barber, onClose, onSubmit }) {
       standType: barber.stand_type || barber.standType || "individual",
       teamMembers: Array.isArray(barber.team_members || barber.teamMembers)
         ? (barber.team_members || barber.teamMembers)
-            .map((member) => (typeof member === "string" ? member : member.name))
-            .filter(Boolean)
+            .flatMap((member) => {
+              const name = typeof member === "string" ? member : member.name;
+              return name ? [name] : [];
+            })
             .join(", ")
         : "",
       portfolio: Array.isArray(barber.portfolio) ? barber.portfolio : [],
-      selectedPlan: barber.subscription?.tier || barber.subscription_tier || "PLUS",
+      selectedPlan: barber.subscription?.tier || barber.subscription_tier || "FREE",
       startFreeTrial: false,
     });
   }, [show, barber]);
 
   return (
     <BarberStandFormModal
+      key={show && barber ? `edit-${barber.id || barber.business_name || "open"}` : "edit-closed"}
       show={show && !!barber}
       title="Edit Business"
       submitLabel="Save business changes"
@@ -1196,6 +1504,7 @@ export function EditBarberModal({ show, barber, onClose, onSubmit }) {
       setForm={setForm}
       onClose={onClose}
       onSubmit={onSubmit}
+      profile={profile}
     />
   );
 }
@@ -1214,6 +1523,7 @@ export function RegisterBarberModal({ show, profile, onClose, onSubmit }) {
 
   return (
     <BarberStandFormModal
+      key={show ? `register-${profile?.id || profile?.username || "open"}` : "register-closed"}
       show={show}
       title="List Your Service"
       submitLabel="Create business account"
@@ -1222,6 +1532,7 @@ export function RegisterBarberModal({ show, profile, onClose, onSubmit }) {
       onClose={onClose}
       onSubmit={onSubmit}
       requirePlan
+      profile={profile}
     />
   );
 }

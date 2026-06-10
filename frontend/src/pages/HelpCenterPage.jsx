@@ -11,7 +11,7 @@ const HOW_IT_WORKS = [
 const PRICING = [
   { title: "Customer Free", price: "Free", text: "Browse, save providers, request quotes, and book services." },
   { title: "Customer Premium", price: "UGX 10,000/month", text: "Unlock Smart Match recommendations for faster provider discovery." },
-  { title: "Provider Plus", price: "UGX 6,000/month", text: "Start listing services and receiving booking requests." },
+  { title: "Provider Free", price: "UGX 0/month", text: "Start listing services and receiving booking requests." },
   { title: "Provider Premium", price: "UGX 12,000/month", text: "Grow visibility with stronger profile and booking tools." },
   { title: "Provider Platinum", price: "UGX 24,000/month", text: "Top visibility, advanced insights, and premium trust signals." },
 ];
@@ -39,7 +39,7 @@ const FAQS = [
   },
   {
     question: "How do subscriptions work?",
-    answer: "Customers can use Queless Free or Customer Premium. Providers must choose a paid provider plan: Plus, Premium, or Platinum. Provider listings are reviewed before they appear publicly.",
+    answer: "Customers can use Queless Free or Customer Premium. Providers can start on Free, then upgrade to Premium or Platinum for paid visibility and tools. Provider listings are reviewed before they appear publicly.",
   },
   {
     question: "What happens if a provider does not show up?",

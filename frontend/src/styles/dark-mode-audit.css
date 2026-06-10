@@ -51,6 +51,179 @@ body[data-theme="light"],
   color-scheme: light;
 }
 
+/* Professional notification/profile overrides */
+.notification-sheet-head-v17 {
+  align-items: center;
+  gap: 10px;
+}
+
+.notification-done-btn-v17 {
+  width: auto !important;
+  min-width: 74px;
+  padding-inline: 10px !important;
+  gap: 6px;
+}
+
+.notification-done-btn-v17 span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notification-card-v4 {
+  background: var(--card-bg, #fff8f5) !important;
+  border: 1px solid rgba(82, 43, 91, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(22, 8, 32, 0.18) !important;
+}
+
+.notification-card-v4::before,
+.notification-card-v4::after {
+  display: none !important;
+}
+
+.notification-empty-v16 {
+  border-radius: 14px !important;
+  background: rgba(255, 248, 245, 0.78) !important;
+  border: 1px dashed rgba(82, 43, 91, 0.18) !important;
+  box-shadow: none !important;
+}
+
+.notification-empty-v16 > span,
+.notification-type-icon-v16 {
+  color: #522b5b !important;
+  background: #fbe4d8 !important;
+  box-shadow: none !important;
+}
+
+.notification-type-icon-v16 {
+  flex: 0 0 34px;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+}
+
+.notification-item-v4.as-card {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  padding: 12px !important;
+  border-radius: 12px !important;
+  background: rgba(255, 248, 245, 0.72) !important;
+  border: 1px solid rgba(82, 43, 91, 0.12) !important;
+  box-shadow: none !important;
+}
+
+.notification-item-v4.as-card.unread {
+  background: #fff3ec !important;
+  border-color: rgba(133, 79, 108, 0.24) !important;
+}
+
+.notification-title-row-v17 {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.notification-title-row-v17 strong {
+  min-width: 0;
+  flex: 1;
+  color: inherit;
+}
+
+.notification-title-row-v17 em {
+  flex: 0 0 auto;
+  margin-left: 0 !important;
+  background: #522b5b !important;
+  color: #fff !important;
+}
+
+.notification-copy-v4 {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  text-align: left;
+}
+
+.dark .notification-card-v4,
+.app-wrap-v4.dark .notification-card-v4,
+body[data-theme="dark"] .notification-card-v4 {
+  background: #221126 !important;
+  border-color: rgba(251, 228, 216, 0.16) !important;
+}
+
+.dark .notification-item-v4.as-card,
+.app-wrap-v4.dark .notification-item-v4.as-card,
+body[data-theme="dark"] .notification-item-v4.as-card {
+  background: rgba(255, 248, 245, 0.08) !important;
+  border-color: rgba(251, 228, 216, 0.14) !important;
+}
+
+.dark .notification-item-v4.as-card.unread,
+.app-wrap-v4.dark .notification-item-v4.as-card.unread,
+body[data-theme="dark"] .notification-item-v4.as-card.unread {
+  background: rgba(251, 228, 216, 0.13) !important;
+  border-color: rgba(251, 228, 216, 0.26) !important;
+}
+
+.wallet-layer-stack-v5,
+.wallet-visual-card-v5::before,
+.wallet-visual-card-v5::after,
+.customer-pay-glow-v15 {
+  display: none !important;
+}
+
+.trial-upgrade-sheet-v14.trial-upgrade-screen-v12 {
+  background: linear-gradient(180deg, #fffaf7 0%, #fbf6ff 100%) !important;
+}
+
+.trial-upgrade-hero-v12,
+.trial-action-panel-v12,
+.trial-payment-panel-v13,
+.trial-comparison-v13,
+.trial-footer-note-v12 {
+  border-radius: 8px !important;
+  border-color: rgba(82, 43, 91, 0.14) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  box-shadow: none !important;
+}
+
+.trial-plan-card-v12,
+.trial-plan-card-v12:nth-child(2),
+.trial-plan-card-v12:nth-child(3) {
+  border-radius: 8px !important;
+  border-color: rgba(82, 43, 91, 0.14) !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.trial-plan-card-v12.selected {
+  border-color: #522b5b !important;
+  box-shadow: 0 0 0 2px rgba(82, 43, 91, 0.12) !important;
+}
+
+.trial-primary-btn-v12,
+.trial-select-btn-v13 {
+  background: linear-gradient(135deg, #2b124c, #522b5b) !important;
+  color: #fff !important;
+  border: 1px solid rgba(82, 43, 91, 0.24) !important;
+  box-shadow: none !important;
+}
+
+.trial-view-more-btn-v14,
+.trial-secondary-btn-v12 {
+  background: rgba(82, 43, 91, 0.07) !important;
+  color: #2b124c !important;
+  border: 1px solid rgba(82, 43, 91, 0.14) !important;
+  box-shadow: none !important;
+}
+
+.wallet-visual-card-v5,
+.customer-pay-card-v15 {
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
 html[data-theme="dark"],
 body[data-theme="dark"],
 .app-wrap-v4.dark {
@@ -365,8 +538,7 @@ button:disabled,
 .barber-profile-card-v4,
 .chat-card-v4,
 .payment-flow-panel-v1,
-.wallet-topup-panel-v16,
-.smart-match-modal-v1 {
+.wallet-topup-panel-v16 {
   background:
     radial-gradient(circle at 94% 0%, color-mix(in srgb, var(--brand) 13%, transparent), transparent 34%),
     var(--surface) !important;
@@ -603,6 +775,7 @@ body[data-theme="dark"] .leaflet-container,
 .wallet-topup-alert-v16,
 .global-error-v4,
 .auth-error,
+.auth-info,
 .auth-success,
 .chat-error-v4 {
   background: var(--surface-soft) !important;
@@ -798,4 +971,48 @@ body[data-theme="dark"] .app-wrap-v4.dark .queless-map-message span,
 body[data-theme="dark"] .app-wrap-v4.dark .queless-map-empty small,
 body[data-theme="dark"] .app-wrap-v4.dark .queless-map-message small {
   color: var(--text-secondary) !important;
+}
+
+.notification-card-v4 {
+  background: var(--card-bg, #fff8f5) !important;
+}
+
+.header-v4 .header-icon-btn.queless-bell-btn {
+  overflow: visible !important;
+}
+
+.header-v4 .header-icon-btn.queless-bell-btn .mini-badge-v4,
+.mini-badge-v4 {
+  top: -7px !important;
+  right: -7px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 5px !important;
+  z-index: 5 !important;
+  border: 2px solid var(--surface, #fff8f4) !important;
+  background: #c92f5d !important;
+  color: #fff !important;
+  box-shadow: 0 4px 10px rgba(31, 10, 38, 0.18) !important;
+}
+
+.notification-item-v4.as-card {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+.notification-type-icon-v16,
+.notification-empty-v16 > span {
+  color: #522b5b !important;
+  background: #fbe4d8 !important;
+  box-shadow: none !important;
+}
+
+.wallet-layer-stack-v5,
+.wallet-visual-card-v5::before,
+.wallet-visual-card-v5::after,
+.customer-pay-glow-v15 {
+  display: none !important;
 }

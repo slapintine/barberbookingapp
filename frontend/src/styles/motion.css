@@ -1,4 +1,4 @@
-/* =========================================
+﻿/* =========================================
    MOTION + UX DELIGHT LAYER
    Compatible with current App.jsx
    ========================================= */
@@ -660,7 +660,7 @@ body[data-lineup-theme="light"] {
   line-height: 1.12;
   white-space: normal;
   word-break: break-word;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   margin: 0;
   max-width: 100%;
 }
