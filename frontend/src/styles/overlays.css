@@ -12,10 +12,14 @@
   pointer-events: auto;
 }
 
-/* Ensure overlay is below content */
+/* Z-index ladder — these sheets must sit ABOVE the map overlay (.qmm, z 1400)
+   so the map can stay mounted underneath the provider profile (no blank/dark
+   gap while the profile loads, and back-nav returns to the same map). Among
+   themselves they share a level; JSX source order layers a later sheet (e.g.
+   Booking opened from the profile) on top of an earlier one (the profile). */
 .booking-overlay-v4,
 .profile-overlay-v4 {
-  z-index: 1000;
+  z-index: 1490;
 }
 
 /* Sheet container */
@@ -23,7 +27,7 @@
 .barber-profile-sheet-v4,
 .notification-sheet-v4,
 .chat-sheet-wrap-v4 {
-  z-index: 1001;
+  z-index: 1491;
   pointer-events: none;
 }
 
@@ -41,7 +45,7 @@
 .notification-card-v4,
 .chat-card-v4 {
   position: relative;
-  z-index: 1002;
+  z-index: 1492;
   pointer-events: auto;
 }
 

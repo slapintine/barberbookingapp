@@ -566,18 +566,20 @@ body[data-theme="light"] .pps-btn-secondary {
   transition: transform 0.15s ease;
 }
 
+/* Explicit high-contrast secondary style (never inherits a parent text color)
+   — purple-tinted fill, strong purple text, purple border. */
 .light .pps-btn-tertiary,
 body[data-theme="light"] .pps-btn-tertiary {
-  background: #fff;
-  color: #2b0038;
-  border: 1.5px solid rgba(43, 0, 56, 0.14);
+  background: #f2e9ff;
+  color: #3d075f;
+  border: 1.5px solid #6f1d8f;
   box-shadow: 0 2px 8px rgba(43, 0, 56, 0.06);
 }
 
 .dark .pps-btn-tertiary {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(139, 92, 246, 0.14);
   color: #e9d5ff;
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border: 1.5px solid rgba(139, 92, 246, 0.4);
 }
 
 .pps-btn-tertiary:active {
@@ -1879,7 +1881,7 @@ body[data-theme="light"] .pps-trust-full-card {
 .overlay-error-v1 {
   position: fixed;
   inset: 0;
-  z-index: 1001;
+  z-index: 1492; /* above the map overlay (.qmm, 1400), matching the sheet stack */
   display: flex;
   align-items: center;
   justify-content: center;

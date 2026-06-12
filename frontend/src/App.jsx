@@ -4459,7 +4459,9 @@ const updateBarberStand = async (payload) => {
     setShowBookingModal(false);
     setShowQuoteModal(false);
     setShowChat(false);
-    setMapState((prev) => ({ ...prev, show: false }));
+    // Keep the map mounted underneath (profile sheet sits above it via z-index)
+    // so there's no blank/dark gap while the profile loads and closing the
+    // profile returns to the same map position + filters.
   };
 
   const openSearchResults = (value, locationOverride) => {
