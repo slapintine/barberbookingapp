@@ -282,18 +282,20 @@ export default function BookingModal({
           onClick={onClose}
           aria-label="Close booking modal"
         />
-        <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
-          <div className="booking-modal-card-v4 booking-modal-clean-v5">
+        <div className={show ? "booking-modal-v4 bk-fullpage open" : "booking-modal-v4 bk-fullpage"}>
+          <div className="booking-modal-card-v4 booking-modal-clean-v5 bk-shell">
             <div className="booking-modal-shell-v5">
-              <div className="bk-topbar">
-                <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
-                  <FiX />
-                </button>
-                <div className="bk-topbar-copy">
-                  <strong>No bookable services</strong>
-                  <span>This provider has not added services yet.</span>
+              <div className="booking-modal-scroll-v5 bk-scroll">
+                <div className="bk-topbar">
+                  <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Back">
+                    <FiArrowLeft />
+                  </button>
+                  <div className="bk-topbar-copy">
+                    <strong>No bookable services</strong>
+                    <span>This provider has not added services yet.</span>
+                  </div>
+                  <span className="bk-icon-btn bk-icon-btn-ghost" aria-hidden="true" />
                 </div>
-                <span className="bk-icon-btn bk-icon-btn-ghost" aria-hidden="true" />
               </div>
             </div>
           </div>
@@ -384,13 +386,12 @@ export default function BookingModal({
           onClick={onClose}
           aria-label="Close booking modal"
         />
-        <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
-          <div className="booking-modal-card-v4 booking-modal-clean-v5">
-            <div className="booking-sheet-handle-v5" />
+        <div className={show ? "booking-modal-v4 bk-fullpage open" : "booking-modal-v4 bk-fullpage"}>
+          <div className="booking-modal-card-v4 booking-modal-clean-v5 bk-shell">
             <div className="booking-modal-shell-v5">
-              <div className="booking-modal-scroll-v5">
+              <div className="booking-modal-scroll-v5 bk-scroll">
                 <div className="bk-topbar">
-                  <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
+                  <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Back">
                     <FiArrowLeft />
                   </button>
                   <div className="bk-topbar-copy">
@@ -437,11 +438,11 @@ export default function BookingModal({
   const onPaymentStep = step === 1;
   const footerLabel = onPaymentStep
     ? creatingBooking
-      ? "Booking..."
+      ? "Confirming booking…"
       : "Confirm Booking"
     : isQuoteService
-    ? "Request Quote"
-    : "Continue Booking";
+    ? "Send Quote Request"
+    : "Continue to Payment";
   const footerDisabled = onPaymentStep ? isBlocked : isQuoteService ? !selectedService : !bookReady;
 
   const handlePrimary = () => {
@@ -466,17 +467,16 @@ export default function BookingModal({
         onClick={onClose}
         aria-label="Close booking modal"
       />
-      <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
+      <div className={show ? "booking-modal-v4 bk-fullpage open" : "booking-modal-v4 bk-fullpage"} data-testid="booking-page">
         <div className="booking-modal-card-v4 booking-modal-clean-v5 bk-shell">
-          <div className="booking-sheet-handle-v5" />
           <div className="booking-modal-shell-v5">
             <div className="booking-modal-scroll-v5 bk-scroll">
               <div className="bk-topbar">
-                <button type="button" className="bk-icon-btn" onClick={onPaymentStep ? () => setStep(0) : onClose} aria-label={onPaymentStep ? "Back" : "Close"}>
-                  {onPaymentStep ? <FiArrowLeft /> : <FiX />}
+                <button type="button" className="bk-icon-btn" onClick={onPaymentStep ? () => setStep(0) : onClose} aria-label={onPaymentStep ? "Back" : "Back"}>
+                  <FiArrowLeft />
                 </button>
                 <div className="bk-topbar-copy">
-                  <strong>{onPaymentStep ? "Payment" : "Book service"}</strong>
+                  <strong>{onPaymentStep ? "Payment" : isQuoteService ? "Request a Quote" : "Book Service"}</strong>
                   <span>{barber.business_name}</span>
                 </div>
                 <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
@@ -535,8 +535,8 @@ export default function BookingModal({
                   <div className="bk-summary-card">
                     <div className="bk-summary-head">
                       <div>
-                        <strong>Booking summary</strong>
-                        <span>Review before you confirm</span>
+                        <strong>{isQuoteService ? "Quote Request Summary" : "Booking summary"}</strong>
+                        <span>{isQuoteService ? "The provider will reply with pricing" : "Review before you confirm"}</span>
                       </div>
                       <div className="bk-summary-total">{totalLabel}</div>
                     </div>
