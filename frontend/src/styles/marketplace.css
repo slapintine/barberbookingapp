@@ -965,6 +965,16 @@ body[data-theme="dark"] .queless-category-empty-v18 > p {
   font-weight: 900;
   white-space: nowrap;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.queless-filter-chips button svg {
+  color: var(--chip-color, var(--queless-mid));
+  flex-shrink: 0;
+}
+.queless-filter-chips button.active svg {
+  color: inherit;
 }
 
 .queless-filter-chips button.active {
@@ -1509,6 +1519,93 @@ body[data-theme="dark"] .queless-category-empty-v18 > p {
   align-items: center;
   gap: 12px;
   padding: 14px;
+  /* rows are buttons now — whole row clickable */
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+.queless-inbox-card:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.queless-inbox-card:focus-visible {
+  outline: 2px solid var(--queless-mid, #854f6c);
+  outline-offset: -2px;
+  border-radius: 14px;
+}
+
+.queless-inbox-card--unread strong {
+  font-weight: 950;
+}
+
+.queless-inbox-unread-dot {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #7c3aed;
+}
+
+/* Loading skeletons */
+.queless-inbox-skeletons {
+  display: grid;
+  gap: 10px;
+}
+.queless-inbox-skeleton {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+}
+.queless-inbox-skeleton > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, rgba(80, 43, 107, 0.10), rgba(80, 43, 107, 0.18), rgba(80, 43, 107, 0.10));
+  background-size: 200% 100%;
+  animation: inbox-shimmer 1.2s ease-in-out infinite;
+}
+.queless-inbox-skeleton > div {
+  display: grid;
+  gap: 8px;
+}
+.queless-inbox-skeleton i,
+.queless-inbox-skeleton em {
+  height: 11px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(80, 43, 107, 0.10), rgba(80, 43, 107, 0.18), rgba(80, 43, 107, 0.10));
+  background-size: 200% 100%;
+  animation: inbox-shimmer 1.2s ease-in-out infinite;
+}
+.queless-inbox-skeleton i { width: 55%; }
+.queless-inbox-skeleton em { width: 80%; }
+
+@keyframes inbox-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.queless-inbox-retry {
+  margin-top: 10px;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--queless-mid, #854f6c);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .queless-inbox-card > span {

@@ -1,0 +1,160 @@
+/* ═══════════════════════════════════════════════════════════════
+   Queless Category Icon System — shared styles
+   Used by CategoryBadge, CategoryChip, CategorySelectorItem
+   All colors come from CSS variables set inline from the registry.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── CategoryChip ────────────────────────────────────────────── */
+.ql-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(0, 0, 0, 0.10);
+  background: #fff;
+  color: #333;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+.ql-cat-chip svg {
+  color: var(--chip-color, #64748b);
+  flex-shrink: 0;
+}
+.ql-cat-chip--active,
+.ql-cat-chip:hover {
+  background: var(--chip-bg, #f5edf8);
+  border-color: var(--chip-color, #522B5B);
+  color: var(--chip-color, #522B5B);
+}
+.ql-cat-chip--sm {
+  font-size: 11px;
+  padding: 5px 10px;
+  gap: 4px;
+}
+
+/* ── CategoryBadge (handled mostly inline, just base reset) ──── */
+.ql-cat-badge {
+  line-height: 1;
+  user-select: none;
+}
+
+/* ── Provider icon selector grid ─────────────────────────────── */
+.ql-icon-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+
+.ql-cat-selector-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 6px 8px;
+  border-radius: 12px;
+  border: 1.5px solid var(--cat-border, rgba(0,0,0,0.10));
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  position: relative;
+}
+.ql-cat-selector-item:hover {
+  background: var(--cat-bg, #f5f3ff);
+  border-color: var(--cat-color, #522B5B);
+}
+.ql-cat-selector-item--selected {
+  background: var(--cat-bg, #f5edf8);
+  border-color: var(--cat-color, #522B5B);
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--cat-color, #522B5B) 22%, transparent);
+}
+.ql-cat-selector-item__bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--cat-bg, #f5edf8);
+  color: var(--cat-color, #522B5B);
+  flex-shrink: 0;
+}
+.ql-cat-selector-item__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #444;
+  text-align: center;
+  line-height: 1.2;
+  word-break: break-word;
+}
+.ql-cat-selector-item--selected .ql-cat-selector-item__label {
+  color: var(--cat-color, #522B5B);
+}
+.ql-cat-selector-item__check {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--cat-color, #522B5B);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Selected icon preview bar ───────────────────────────────── */
+.ql-icon-selector-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #f8f5ff;
+  border: 1px solid rgba(82,43,91,0.12);
+  font-size: 13px;
+  font-weight: 600;
+  color: #522B5B;
+}
+
+/* ── Dark mode ───────────────────────────────────────────────── */
+body[data-theme="dark"] .ql-cat-chip {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.10);
+  color: #e2d9f3;
+}
+body[data-theme="dark"] .ql-cat-chip--active,
+body[data-theme="dark"] .ql-cat-chip:hover {
+  background: color-mix(in srgb, var(--chip-bg, #f5edf8) 15%, #1a0a2e);
+  border-color: var(--chip-color, #a78bfa);
+  color: var(--chip-color, #a78bfa);
+}
+body[data-theme="dark"] .ql-cat-selector-item {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.08);
+}
+body[data-theme="dark"] .ql-cat-selector-item:hover {
+  background: color-mix(in srgb, var(--cat-bg, #f5edf8) 12%, #1a0a2e);
+  border-color: var(--cat-color, #a78bfa);
+}
+body[data-theme="dark"] .ql-cat-selector-item--selected {
+  background: color-mix(in srgb, var(--cat-bg, #f5edf8) 15%, #1a0a2e);
+  border-color: var(--cat-color, #a78bfa);
+}
+body[data-theme="dark"] .ql-cat-selector-item__label {
+  color: #c4b5d8;
+}
+body[data-theme="dark"] .ql-icon-selector-preview {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.10);
+  color: #e2d9f3;
+}

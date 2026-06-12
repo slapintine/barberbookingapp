@@ -12,3 +12,10 @@ export function createMessage(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// Real conversation list for the authenticated user. Each conversation already
+// carries the resolved other participant (title/otherUser), lastMessage (with
+// stable sender_user_id), and unreadCount — the backend is the source of truth.
+export function getConversations() {
+  return apiFetch("/api/messages/conversations");
+}

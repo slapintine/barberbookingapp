@@ -16,7 +16,8 @@ import {
   FiX,
 } from "react-icons/fi";
 import { DEFAULT_SERVICE_TYPES, SERVICE_CATEGORIES, formatServicePrice, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
-import { MAP_ICON_OPTIONS, MULTI_SERVICE_MAP_ICON_TYPE, getMapIconOption, getMapIconTypeForCategory, getMapIconTypeForSelectedCategories } from "../../utils/mapIconCategories.js";
+import { MULTI_SERVICE_MAP_ICON_TYPE, getMapIconOption, getMapIconTypeForCategory, getMapIconTypeForSelectedCategories } from "../../utils/mapIconCategories.js";
+import { getCategoryDef, getCategoryList, CategorySelectorItem } from "../../utils/categoryRegistry.jsx";
 import { getGeolocationErrorMessage, reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
 import {
   formatMoney,
@@ -903,18 +904,31 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
                     />
                   </label>
-                  <label className="label-v4">
+                  <div className="label-v4">
                     Map icon
-                    <select
-                      className="field-input-v4 profile-input-v4"
-                      value={effectiveMapIconType}
-                      onChange={(e) => setForm((prev) => ({ ...prev, mapIconType: e.target.value }))}
-                    >
-                      {MAP_ICON_OPTIONS.map((option) => (
-                        <option key={option.id} value={option.id}>{option.label}</option>
+                    <div className="ql-icon-selector-grid">
+                      {getCategoryList().map((def) => (
+                        <CategorySelectorItem
+                          key={def.id}
+                          categoryId={def.id}
+                          selected={effectiveMapIconType === def.id}
+                          onSelect={(id) => setForm((prev) => ({ ...prev, mapIconType: id }))}
+                        />
                       ))}
-                    </select>
-                  </label>
+                    </div>
+                    {effectiveMapIconType && (() => {
+                      const def = getCategoryDef(effectiveMapIconType);
+                      const { Icon, primaryColor, softBg } = def;
+                      return (
+                        <div className="ql-icon-selector-preview">
+                          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: softBg }}>
+                            <Icon size={16} style={{ color: primaryColor }} aria-hidden="true" />
+                          </span>
+                          <span>{def.label}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
                   <label className="label-v4">
                     Price from
                     <input

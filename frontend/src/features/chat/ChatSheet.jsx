@@ -48,17 +48,26 @@ export default function ChatSheet({
                 <span>Send a quick note to start the conversation.</span>
               </div>
             ) : (
-              messages.map((item) => (
-                <div
-                  key={item.id}
-                  className={item.sender === currentUser?.username ? "chat-bubble-v4 mine" : "chat-bubble-v4"}
-                >
-                  <div className="chat-bubble-text-v4">{item.text}</div>
-                  {item.sender === currentUser?.username ? (
-                    <div className="tiny-meta-v4">{item.seen ? "Seen" : "Sent"}</div>
-                  ) : null}
-                </div>
-              ))
+              messages.map((item) => {
+                // Ownership by stable user id; fall back to username only for
+                // optimistic/local messages that have no senderId yet.
+                const senderId = item.senderId ?? item.sender_user_id ?? null;
+                const isMine =
+                  senderId != null && currentUser?.id != null
+                    ? Number(senderId) === Number(currentUser.id)
+                    : item.sender === currentUser?.username;
+                return (
+                  <div
+                    key={item.id}
+                    className={isMine ? "chat-bubble-v4 mine" : "chat-bubble-v4"}
+                  >
+                    <div className="chat-bubble-text-v4">{item.text}</div>
+                    {isMine ? (
+                      <div className="tiny-meta-v4">{item.seen ? "Seen" : "Sent"}</div>
+                    ) : null}
+                  </div>
+                );
+              })
             )}
           </div>
 

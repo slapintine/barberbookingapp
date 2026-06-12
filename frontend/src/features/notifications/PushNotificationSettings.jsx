@@ -5,42 +5,48 @@ import {
   getNotificationSupportState,
 } from "../../pushNotifications.js";
 
+// User-facing copy only — no technical configuration details (push keys, VAPID,
+// service-worker internals). Those belong in logs/admin diagnostics, not here.
+// In-app alerts (the notification bell) keep working regardless of this state.
+const IN_APP_NOTE = "You'll still see alerts in the notification bell.";
+
 const STATE_COPY = {
   granted: {
-    label: "Notifications",
+    label: "Notifications enabled",
     text: "Booking, payment, wallet, and account alerts are active on this device.",
   },
   denied: {
     label: "Notifications blocked",
-    text: "Browser notifications are blocked. Enable them in your browser site settings to receive alerts.",
+    text: `Notifications are blocked in your browser settings. Re-enable them there to get device alerts. ${IN_APP_NOTE}`,
   },
   unsupported: {
     label: "Notifications not supported",
-    text: "This browser or device does not support web push notifications.",
+    text: `Push notifications aren't supported on this browser. ${IN_APP_NOTE}`,
   },
   missing_config: {
-    label: "Notifications unavailable",
-    text: "Notifications need a valid push key before this browser can ask for permission.",
+    label: "Notifications temporarily unavailable",
+    text: `Device notifications are temporarily unavailable. Please try again later. ${IN_APP_NOTE}`,
   },
   service_worker: {
-    label: "Notifications unavailable",
-    text: "Notifications could not start in this browser. Try again later or use another browser.",
+    label: "Notifications temporarily unavailable",
+    text: `Device notifications couldn't start in this browser right now. Please try again later. ${IN_APP_NOTE}`,
   },
   default: {
-    label: "Notifications",
-    text: "Enable booking, payment, wallet, and account alerts on this device.",
+    label: "Enable notifications",
+    text: "Get booking, payment, wallet, and account alerts on this device.",
   },
 };
 
 function getFriendlyNotificationMessage(error) {
   const message = String(error?.message || error || "");
-  if (/applicationServerKey|PushManager|subscribe|vapid/i.test(message)) {
-    return "Notifications need a valid push key before this browser can ask for permission.";
+  // Config/key/service-worker problems → generic, friendly "temporarily unavailable".
+  if (/applicationServerKey|PushManager|subscribe|vapid|serviceworker|sw\b/i.test(message)) {
+    return "Device notifications are temporarily unavailable. Please try again later.";
   }
   if (/permission|blocked|denied/i.test(message)) {
-    return "Notifications are blocked in this browser. You can enable them in site settings.";
+    return "Notifications are blocked in your browser settings. You can re-enable them there.";
   }
-  return "Notifications could not be enabled right now. Please try again later.";
+  return "Notifications couldn't be enabled right now. Please try again later.";
 }
 
 export default function PushNotificationSettings({ currentUser, onToast }) {
