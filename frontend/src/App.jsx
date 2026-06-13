@@ -1521,6 +1521,19 @@ function App() {
       }
     });
 
+    // Real-time read receipt: the other party opened our message. Flip the
+    // matching outgoing bubble to "seen" instantly (no refetch). Same event
+    // the website emits, so read receipts work across web and app.
+    socket.on("message_seen", (payload) => {
+      const messageId = payload?.messageId;
+      if (messageId == null) return;
+      setMessages((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(messageId) ? { ...item, seen: true } : item
+        )
+      );
+    });
+
     socket.on("receive_notification", (notification) => {
       if (!notification) return;
       // Don't notify the sender about their own message — only append
@@ -2255,6 +2268,15 @@ const fetchBarbers = async () => {
       const next = Array.isArray(data) ? data : [];
       setMessages(next);
       writeStored("messages", scope, next);
+      // Opening the thread = reading it: tell each sender their incoming
+      // message was seen so their bubble flips to "Seen" in real time. Keyed
+      // by stable username; only for messages addressed to us and not own.
+      const me = currentUser?.username;
+      if (socketRef.current && me) {
+        next
+          .filter((item) => item?.sender && String(item.sender) !== String(me) && !item.seen && item.id != null)
+          .forEach((item) => socketRef.current.emit("message_seen", { to: item.sender, messageId: item.id }));
+      }
     } catch {
       setMessages(readStored("messages", scope, []));
     }
