@@ -1,61 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  BriefcaseBusiness,
-  Camera,
-  Car,
-  Droplets,
-  GraduationCap,
-  HeartPulse,
-  Home,
-  MapPin,
-  Navigation,
-  Scissors,
-  Sparkles,
-  Wrench,
-} from "lucide-react";
-
-const ICONS = {
-  beauty: Sparkles,
-  salon: Scissors,
-  barber: Scissors,
-  grooming: Sparkles,
-
-  "home-services": Home,
-  home: Home,
-
-  "auto-services": Car,
-  auto: Car,
-  mechanics: Car,
-  transport: Car,
-
-  "events-photography": Camera,
-  events: Camera,
-  photography: Camera,
-
-  "education-tutoring": GraduationCap,
-  education: GraduationCap,
-  tutoring: GraduationCap,
-
-  "health-fitness": HeartPulse,
-  health: HeartPulse,
-  fitness: HeartPulse,
-
-  "repairs-maintenance": Wrench,
-  repairs: Wrench,
-  maintenance: Wrench,
-
-  "business-services": BriefcaseBusiness,
-  business: BriefcaseBusiness,
-
-  "cleaning-services": Droplets,
-  cleaning: Droplets,
-
-  "delivery-errands": Navigation,
-  delivery: Navigation,
-  errands: Navigation,
-
-  default: MapPin,
-};
+import { getCategoryDef, CATEGORY_FALLBACK } from "../../utils/categoryRegistry.jsx";
 
 function MultiServiceIcon(props) {
   return (
@@ -76,7 +20,7 @@ function MultiServiceIcon(props) {
 
 export function getCategoryIconComponent(iconType = "default") {
   if (iconType === "multi" || iconType === "multi-service") return MultiServiceIcon;
-  return ICONS[iconType] || ICONS.default;
+  return getCategoryDef(iconType).Icon || CATEGORY_FALLBACK.Icon;
 }
 
 export function ServiceMapMarker({

@@ -1,30 +1,6 @@
-import {
-  FiActivity,
-  FiBookOpen,
-  FiBriefcase,
-  FiCamera,
-  FiDroplet,
-  FiGrid,
-  FiHome,
-  FiNavigation,
-  FiTool,
-  FiTruck,
-  FiZap,
-} from "react-icons/fi";
+import { FiGrid } from "react-icons/fi";
 import { MARKETPLACE_CATEGORIES } from "../utils/serviceCatalog.js";
-
-const ICONS = {
-  sparkles: FiZap,
-  home: FiHome,
-  truck: FiTruck,
-  camera: FiCamera,
-  book: FiBookOpen,
-  activity: FiActivity,
-  tool: FiTool,
-  briefcase: FiBriefcase,
-  droplet: FiDroplet,
-  navigation: FiNavigation,
-};
+import { getCategoryDef } from "../utils/categoryRegistry.jsx";
 
 export default function CategoriesPage({ selectedCategory, setSelectedCategory, onOpenCategory }) {
   const categories = Array.isArray(MARKETPLACE_CATEGORIES) ? MARKETPLACE_CATEGORIES.filter((item) => item.active) : [];
@@ -41,19 +17,35 @@ export default function CategoriesPage({ selectedCategory, setSelectedCategory, 
 
       <div className="queless-category-page-grid">
         {categories.map((category) => {
-          const Icon = ICONS[category.icon] || FiGrid;
+          const def = getCategoryDef(category.id);
+          const { Icon, primaryColor, softBg, borderColor } = def;
           const active = selectedCategory === category.name;
           return (
             <button
               type="button"
               key={category.id}
               className={active ? "queless-category-page-card active" : "queless-category-page-card"}
+              style={{ "--category-start": primaryColor, "--category-end": softBg, "--category-border": borderColor }}
               onClick={() => {
                 setSelectedCategory(category.name);
                 onOpenCategory?.(category.name);
               }}
             >
-              <span><Icon /></span>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 42,
+                  height: 42,
+                  borderRadius: "50%",
+                  background: softBg,
+                  border: `1.5px solid ${borderColor}`,
+                  flexShrink: 0,
+                }}
+              >
+                <Icon size={20} style={{ color: primaryColor }} aria-hidden="true" />
+              </span>
               <strong>{category.name}</strong>
               <small>{category.description}</small>
             </button>

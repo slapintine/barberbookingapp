@@ -11,6 +11,19 @@
   padding: 0 !important;
   top: 0 !important;
   align-items: stretch !important;
+  /* Solid surface on the full-screen wrapper so the card's slide-in never
+     exposes the dark body behind it (no transparent/dark flash during the
+     transition, in either theme). */
+  background: var(--surface, #fff8f3);
+}
+.dark .barber-profile-sheet-v4.pps-no-pad {
+  background: var(--bg-card, #1c1426);
+}
+
+/* Skeleton appears in place (no slide) so swapping it for the real sheet,
+   which slides within the now-cream wrapper, produces no double-slide jump. */
+.barber-profile-card-v4.pps-full-page.pps-skeleton-card {
+  animation: none !important;
 }
 
 .barber-profile-card-v4.pps-full-page {
@@ -451,6 +464,7 @@ body[data-theme="light"] .pps-tabs {
 .pps-tab-panel {
   flex: 1;
   min-height: 0;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ── Overview panel ───────────────────────────────────────── */
@@ -467,10 +481,17 @@ body[data-theme="light"] .pps-tabs {
   gap: 10px;
 }
 
+/* flex (not a fixed 2-col grid) so a lone Message button fills the row
+   and the pair stacks instead of crushing on very narrow screens */
 .pps-cta-row {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+.pps-cta-row > button {
+  flex: 1 1 130px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .pps-btn-primary {
@@ -545,18 +566,20 @@ body[data-theme="light"] .pps-btn-secondary {
   transition: transform 0.15s ease;
 }
 
+/* Explicit high-contrast secondary style (never inherits a parent text color)
+   — purple-tinted fill, strong purple text, purple border. */
 .light .pps-btn-tertiary,
 body[data-theme="light"] .pps-btn-tertiary {
-  background: #fff;
-  color: #2b0038;
-  border: 1.5px solid rgba(43, 0, 56, 0.14);
+  background: #f2e9ff;
+  color: #3d075f;
+  border: 1.5px solid #6f1d8f;
   box-shadow: 0 2px 8px rgba(43, 0, 56, 0.06);
 }
 
 .dark .pps-btn-tertiary {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(139, 92, 246, 0.14);
   color: #e9d5ff;
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border: 1.5px solid rgba(139, 92, 246, 0.4);
 }
 
 .pps-btn-tertiary:active {
@@ -641,7 +664,9 @@ body[data-theme="light"] .pps-info-icon-wrap {
 .pps-info-val {
   font-size: 13.5px;
   font-weight: 900;
-  line-height: 1.2;
+  line-height: 1.35;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .pps-info-sub {
@@ -827,7 +852,7 @@ body[data-theme="light"] .pps-owner-status {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 14px 8px;
+  padding: 14px 6px;
   border: 0;
   background: none;
   font: inherit;
@@ -837,6 +862,16 @@ body[data-theme="light"] .pps-owner-status {
   color: inherit;
   opacity: 0.8;
   transition: opacity 0.15s ease, background 0.15s ease;
+  min-width: 0;
+}
+
+/* labels may wrap to a controlled second line, never mid-word */
+.pps-owner-action-btn span {
+  text-align: center;
+  line-height: 1.25;
+  word-break: normal;
+  overflow-wrap: normal;
+  max-width: 100%;
 }
 
 .pps-owner-action-btn:active {
@@ -1658,94 +1693,6 @@ body[data-theme="light"] .pps-trust-full-card {
   max-width: 240px;
 }
 
-/* ── Sticky bottom bar ────────────────────────────────────── */
-
-.pps-sticky-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 25;
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 10px;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid rgba(43, 0, 56, 0.08);
-  flex-shrink: 0;
-}
-
-.light .pps-sticky-bar,
-body[data-theme="light"] .pps-sticky-bar {
-  background: rgba(255, 253, 250, 0.98);
-}
-
-.dark .pps-sticky-bar {
-  background: rgba(18, 0, 28, 0.98);
-  border-top-color: rgba(255, 255, 255, 0.07);
-}
-
-.pps-sticky-owner {
-  grid-template-columns: 1fr 1fr !important;
-}
-
-.pps-sticky-primary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 52px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 16px;
-  font: inherit;
-  font-size: 14.5px;
-  font-weight: 900;
-  cursor: pointer;
-  background: #2b0038;
-  color: #fff;
-  box-shadow: 0 8px 20px rgba(43, 0, 56, 0.28);
-  transition: transform 0.15s ease;
-}
-
-.dark .pps-sticky-primary {
-  background: #6b21a8;
-  box-shadow: 0 8px 20px rgba(107, 33, 168, 0.35);
-}
-
-.pps-sticky-primary:active {
-  transform: scale(0.97);
-}
-
-.pps-sticky-secondary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 52px;
-  padding: 0 14px;
-  border-radius: 16px;
-  font: inherit;
-  font-size: 14.5px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: transform 0.15s ease;
-}
-
-.light .pps-sticky-secondary,
-body[data-theme="light"] .pps-sticky-secondary {
-  background: rgba(43, 0, 56, 0.07);
-  color: #2b0038;
-  border: 1.5px solid rgba(43, 0, 56, 0.12);
-}
-
-.dark .pps-sticky-secondary {
-  background: rgba(139, 92, 246, 0.12);
-  color: #d8b4fe;
-  border: 1.5px solid rgba(139, 92, 246, 0.2);
-}
-
-.pps-sticky-secondary:active {
-  transform: scale(0.97);
-}
-
 /* ── Star row ─────────────────────────────────────────────── */
 
 .pps-star-row {
@@ -1771,11 +1718,20 @@ body[data-theme="light"] .pps-sticky-secondary {
   to   { transform: translateY(0);   opacity: 1; }
 }
 
+/* fill-mode backwards (not both): a lingering transform on this scroll
+   container would break position:sticky for the tabs inside it */
 .barber-profile-card-v4.pps-full-page {
-  animation: pps-slide-in 0.35s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: pps-slide-in 0.35s cubic-bezier(0.32, 0.72, 0, 1) backwards;
 }
 
 /* ── Responsive adjustments ───────────────────────────────── */
+
+/* 2x2 owner-action grid on narrow phones so labels stay readable */
+@media (max-width: 400px) {
+  .pps-owner-action-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 
 @media (max-width: 380px) {
   .pps-hero {
@@ -1817,4 +1773,185 @@ body[data-theme="light"] .pps-sticky-secondary {
 
 .dark .pps-rating-big {
   color: #e9d5ff;
+}
+
+/* ── Provider profile loading skeleton ────────────────────────
+   Shown while the (lazy) provider chunk/data loads. Always on the
+   normal cream/surface so navigation never blanks to dark purple. */
+.pps-skeleton-card {
+  background: var(--surface, #ffffff);
+}
+.dark .pps-skeleton-card {
+  background: var(--bg-card, #1c1426);
+}
+.pps-skel-hero {
+  position: relative;
+  height: 200px;
+  background: rgba(82, 43, 91, 0.10);
+  overflow: hidden;
+}
+.dark .pps-skel-hero { background: rgba(255, 255, 255, 0.05); }
+.pps-skel-avatar {
+  position: absolute;
+  left: 20px;
+  bottom: -36px;
+  width: 84px;
+  height: 84px;
+  border-radius: 24px;
+  overflow: hidden;
+  background: rgba(82, 43, 91, 0.16);
+  border: 4px solid var(--surface, #fff);
+}
+.dark .pps-skel-avatar {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--bg-card, #1c1426);
+}
+.pps-skel-body {
+  padding: 52px 18px 24px;
+  display: grid;
+  gap: 14px;
+}
+.pps-skel-line {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(82, 43, 91, 0.10);
+  overflow: hidden;
+}
+.dark .pps-skel-line { background: rgba(255, 255, 255, 0.06); }
+.pps-skel-line--title { width: 60%; height: 22px; }
+.pps-skel-line--sub { width: 42%; }
+.pps-skel-line--row { width: 50%; }
+.pps-skel-line--row-sub { width: 72%; height: 11px; }
+.pps-skel-actions { display: flex; gap: 10px; margin-top: 6px; }
+.pps-skel-btn {
+  position: relative;
+  flex: 1;
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(82, 43, 91, 0.10);
+  overflow: hidden;
+}
+.dark .pps-skel-btn { background: rgba(255, 255, 255, 0.06); }
+.pps-skel-card {
+  margin-top: 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(82, 43, 91, 0.10);
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+.dark .pps-skel-card { border-color: rgba(255, 255, 255, 0.07); }
+.pps-skel-row {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+.pps-skel-icon {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: rgba(82, 43, 91, 0.12);
+  overflow: hidden;
+}
+.dark .pps-skel-icon { background: rgba(255, 255, 255, 0.07); }
+.pps-skel-row-text { display: grid; gap: 7px; }
+.pps-skel-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  background-size: 200% 100%;
+  animation: pps-skel-shimmer 1.3s ease-in-out infinite;
+}
+.dark .pps-skel-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.10), transparent);
+  background-size: 200% 100%;
+}
+@keyframes pps-skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Overlay chunk-load error state ───────────────────────────
+   Shown if a lazy overlay's JS chunk fails to download. Cream card,
+   Retry + Close, never a dark blank or native alert. Same z-tier as
+   the sheet so it sits above the app shell. */
+.overlay-error-v1 {
+  position: fixed;
+  inset: 0;
+  z-index: 1492; /* above the map overlay (.qmm, 1400), matching the sheet stack */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface, #fff8f3);
+}
+.dark .overlay-error-v1 { background: var(--bg-card, #1c1426); }
+.overlay-error-card-v1 {
+  max-width: 340px;
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.overlay-error-icon-v1 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
+  margin-bottom: 4px;
+}
+.dark .overlay-error-icon-v1 { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
+.overlay-error-title-v1 {
+  font-size: 17px;
+  font-weight: 900;
+  color: #2b0038;
+}
+.dark .overlay-error-title-v1 { color: #f3e8ff; }
+.overlay-error-text-v1 {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: rgba(43, 0, 56, 0.66);
+  margin: 0;
+}
+.dark .overlay-error-text-v1 { color: rgba(243, 232, 255, 0.7); }
+.overlay-error-actions-v1 {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+}
+.overlay-error-retry-v1,
+.overlay-error-close-v1 {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 900;
+  cursor: pointer;
+  border: 0;
+}
+.overlay-error-retry-v1 {
+  background: #2b0038;
+  color: #fff;
+}
+.dark .overlay-error-retry-v1 { background: #6b21a8; }
+.overlay-error-close-v1 {
+  background: rgba(43, 0, 56, 0.07);
+  color: #2b0038;
+  border: 1.5px solid rgba(43, 0, 56, 0.12);
+}
+.dark .overlay-error-close-v1 {
+  background: rgba(139, 92, 246, 0.12);
+  color: #d8b4fe;
+  border-color: rgba(139, 92, 246, 0.2);
 }

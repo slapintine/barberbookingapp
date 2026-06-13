@@ -1,14 +1,26 @@
-/* Queless mobile "View Map" — scoped under .qmm. Purple + cream theme. */
+/* ─────────────────────────────────────────────────────────
+   Queless Mobile Map View  ·  .qmm scope
+   Purple + cream brand theme. Matches reference design.
+───────────────────────────────────────────────────────── */
 .qmm {
-  --qmm-purple: #5b21b6;
-  --qmm-purple-deep: #3b0d73;
-  --qmm-purple-soft: #efe7fc;
-  --qmm-cream: #faf6f1;
-  --qmm-surface: #ffffff;
-  --qmm-ink: #1f1235;
-  --qmm-muted: #6b6480;
-  --qmm-line: #ece7f3;
-  --qmm-shadow: 0 12px 30px rgba(47, 7, 85, 0.16);
+  --qmm-purple:       #5b21b6;
+  --qmm-purple-deep:  #3b0d73;
+  --qmm-purple-mid:   #6d28d9;
+  --qmm-purple-soft:  #ede9fe;
+  --qmm-purple-ghost: #f5f0ff;
+  --qmm-cream:        #faf7f4;
+  --qmm-surface:      #ffffff;
+  --qmm-ink:          #1f1235;
+  --qmm-muted:        #8a7ea8;
+  --qmm-line:         #ece7f3;
+  --qmm-green:        #16a34a;
+  --qmm-red:          #dc2626;
+  --qmm-gold:         #d97706;
+  --qmm-nav-h:        68px;
+  --qmm-header-h:     78px;
+  --qmm-shadow-sm:    0 2px 10px rgba(47, 7, 85, 0.10);
+  --qmm-shadow-md:    0 6px 22px rgba(47, 7, 85, 0.15);
+  --qmm-shadow-lg:    0 14px 40px rgba(47, 7, 85, 0.22);
 
   position: fixed;
   inset: 0;
@@ -26,50 +38,310 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px 10px;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--qmm-surface);
+  border-bottom: 1px solid var(--qmm-line);
+  z-index: 20;
+}
+
+.qmm-logo-btn {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+.qmm-logo-img {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* ── Location pill + dropdown wrapper ────────────────── */
+.qmm-loc-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+}
+
+.qmm-location-pill {
+  width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--qmm-line);
   background: var(--qmm-cream);
-}
-.qmm-title {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 800;
   color: var(--qmm-ink);
-  letter-spacing: -0.01em;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--qmm-shadow-sm);
+  font-family: inherit;
 }
-.qmm-round-btn {
-  width: 44px;
-  height: 44px;
+.qmm-loc-pin {
+  width: 15px;
+  height: 15px;
+  color: var(--qmm-purple);
+  flex: 0 0 auto;
+  stroke-width: 2.4;
+}
+.qmm-loc-text {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.qmm-loc-chevron {
+  width: 15px;
+  height: 15px;
+  color: var(--qmm-muted);
+  flex: 0 0 auto;
+}
+
+/* ── Location dropdown menu ──────────────────────────── */
+.qmm-loc-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 80;
+  background: var(--qmm-surface);
+  border: 1.5px solid var(--qmm-line);
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(47, 7, 85, 0.18);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.qmm-loc-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 0;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+  text-align: left;
+}
+.qmm-loc-menu-btn--gps {
+  background: var(--qmm-purple);
+  color: #fff;
+}
+.qmm-loc-menu-btn--gps:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.qmm-loc-menu-btn--gps svg {
+  color: #fff;
+}
+.qmm-loc-menu-btn--clear {
+  background: transparent;
+  color: var(--qmm-muted);
+  border: 1px solid var(--qmm-line);
+}
+.qmm-loc-manual-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--qmm-cream);
+  border: 1.5px solid var(--qmm-line);
+  border-radius: 10px;
+  padding: 0 8px 0 12px;
+}
+.qmm-loc-manual-icon {
+  color: var(--qmm-muted);
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+}
+.qmm-loc-manual-input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--qmm-ink);
+  padding: 10px 0;
+  outline: none;
+}
+.qmm-loc-manual-input::placeholder {
+  color: var(--qmm-muted);
+}
+.qmm-loc-manual-save {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 0;
+  background: var(--qmm-purple);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+}
+.qmm-loc-msg {
+  font-size: 12px;
+  color: var(--qmm-muted);
+  margin: 2px 4px 0;
+  line-height: 1.4;
+}
+
+.qmm-close-btn {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
   border: 0;
-  background: var(--qmm-surface);
-  color: var(--qmm-purple);
+  background: var(--qmm-cream);
+  color: var(--qmm-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(47, 7, 85, 0.1);
-  flex: 0 0 auto;
+  box-shadow: var(--qmm-shadow-sm);
 }
-.qmm-round-btn svg {
-  width: 20px;
-  height: 20px;
+.qmm-close-btn svg {
+  width: 18px;
+  height: 18px;
   stroke-width: 2.4;
 }
-.qmm-round-btn.is-active {
-  background: var(--qmm-purple);
+
+/* ── Scrollable body ────────────────────────────────── */
+.qmm-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: none;
+}
+.qmm-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Search row ─────────────────────────────────────── */
+.qmm-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 4px;
+}
+.qmm-search-wrap {
+  flex: 1 1 auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.qmm-search-icon {
+  position: absolute;
+  left: 14px;
+  width: 17px;
+  height: 17px;
+  color: var(--qmm-muted);
+  pointer-events: none;
+  stroke-width: 2.4;
+  flex: 0 0 auto;
+}
+.qmm-search-input {
+  width: 100%;
+  height: 48px;
+  border-radius: 999px;
+  border: 1.5px solid var(--qmm-line);
+  background: var(--qmm-surface);
+  color: var(--qmm-ink);
+  font-size: 14.5px;
+  font-weight: 500;
+  padding: 0 40px 0 44px;
+  outline: none;
+  box-shadow: var(--qmm-shadow-sm);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+  font-family: inherit;
+}
+.qmm-search-input::placeholder {
+  color: var(--qmm-muted);
+  font-weight: 400;
+}
+.qmm-search-input:focus {
+  border-color: var(--qmm-purple);
+  box-shadow: 0 0 0 3px rgba(91, 33, 182, 0.12);
+}
+.qmm-search-clear {
+  position: absolute;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--qmm-line);
+  color: var(--qmm-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.qmm-search-clear svg {
+  width: 12px;
+  height: 12px;
+}
+
+.qmm-smart-btn {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(135deg, #7c3aed, #db2777);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.42);
+  flex-shrink: 0;
+}
+.qmm-smart-icon {
+  width: 20px;
+  height: 20px;
   color: #fff;
 }
 
 /* ── Category chips ─────────────────────────────────── */
-.qmm-chips {
+.qmm-chips-wrap {
+  position: relative;
   flex: 0 0 auto;
+}
+/* Fade-out "peek" on the right edge so scrollability is obvious */
+.qmm-chips-wrap::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  background: linear-gradient(to right, transparent, var(--qmm-surface));
+  pointer-events: none;
+  z-index: 2;
+}
+.qmm-chips {
   display: flex;
-  gap: 9px;
-  padding: 4px 16px 12px;
+  gap: 7px;
+  padding: 8px 14px 10px;
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* leave room for right peek */
+  padding-right: 30px;
 }
 .qmm-chips::-webkit-scrollbar {
   display: none;
@@ -78,34 +350,68 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 16px;
+  gap: 6px;
+  padding: 6px 12px 6px 8px;
   border-radius: 999px;
   border: 1.5px solid var(--qmm-line);
   background: var(--qmm-surface);
   color: var(--qmm-ink);
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 130ms ease;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  box-shadow: var(--qmm-shadow-sm);
+  white-space: nowrap;
 }
-.qmm-chip svg {
-  width: 16px;
-  height: 16px;
-  color: var(--qmm-purple);
-  stroke-width: 2.3;
+.qmm-chip-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+  flex: 0 0 auto;
+  transition: background 120ms ease, color 120ms ease;
 }
-.qmm-chip.is-active {
-  background: var(--qmm-purple-soft);
-  border-color: var(--qmm-purple);
-  color: var(--qmm-purple-deep);
+.qmm-chip-icon-wrap svg {
+  width: 11px;
+  height: 11px;
 }
 
-/* ── Map ────────────────────────────────────────────── */
-.qmm-map-area {
+/* Registry-driven chip colors via CSS variables set in JSX */
+.qmm-chip .qmm-chip-icon-wrap {
+  background: var(--chip-bg, var(--qmm-purple-soft));
+  color: var(--chip-color, var(--qmm-purple));
+}
+.qmm-chip.is-active {
+  background: var(--chip-bg, var(--qmm-purple-soft));
+  border-color: var(--chip-color, var(--qmm-purple));
+  color: var(--chip-color, var(--qmm-purple));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--chip-color, #522B5B) 25%, transparent);
+}
+/* "All" active gets the deep purple solid treatment */
+.qmm-chip--all.is-active {
+  background: var(--qmm-purple-deep);
+  border-color: var(--qmm-purple-deep);
+  color: #fff;
+}
+.qmm-chip--all.is-active .qmm-chip-icon-wrap {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.qmm-chip--all .qmm-chip-icon-wrap {
+  background: var(--qmm-purple-soft);
+  color: var(--qmm-purple);
+}
+
+/* ── Map zone ────────────────────────────────────────── */
+.qmm-map-zone {
   position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
+  height: clamp(260px, 40vh, 420px);
+  flex: 0 0 auto;
+  margin: 0;
+  border-radius: 0;
+  overflow: hidden;
 }
 .qmm-map {
   position: absolute;
@@ -114,312 +420,560 @@
   height: 100%;
 }
 .leaflet-container.qmm-map {
-  background: #f3eee9;
+  background: #f0ebe3;
 }
 
-.qmm-locate {
+/* Soften and warm the OSM tiles to remove harsh green */
+.qmm-map .leaflet-tile-pane {
+  filter: saturate(0.62) brightness(1.05) sepia(0.12) hue-rotate(-4deg);
+}
+
+/* ── Right controls panel ───────────────────────────── */
+.qmm-map-controls {
   position: absolute;
-  right: 16px;
-  bottom: 232px;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 500;
-  width: 50px;
-  height: 50px;
-  border-radius: 999px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  background: var(--qmm-surface);
+  border-radius: 18px;
+  box-shadow: var(--qmm-shadow-md);
+  overflow: hidden;
+  border: 1px solid var(--qmm-line);
+}
+.qmm-ctrl-btn {
+  width: 46px;
+  height: 46px;
   border: 0;
   background: var(--qmm-surface);
-  color: var(--qmm-purple);
+  color: var(--qmm-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: var(--qmm-shadow);
+  transition: background 120ms ease;
 }
-.qmm-locate svg {
-  width: 21px;
-  height: 21px;
+.qmm-ctrl-btn:hover {
+  background: var(--qmm-purple-ghost);
+}
+.qmm-ctrl-btn svg {
+  width: 18px;
+  height: 18px;
   stroke-width: 2.4;
 }
-.qmm-locate:disabled {
-  opacity: 0.6;
-  cursor: default;
+.qmm-ctrl-btn:first-child {
+  color: var(--qmm-purple);
+}
+.qmm-ctrl-sep {
+  width: 28px;
+  height: 1px;
+  background: var(--qmm-line);
+  margin: 0 auto;
 }
 
-/* ── Bottom sheet ───────────────────────────────────── */
-.qmm-sheet {
+/* ── Floating action buttons ────────────────────────── */
+.qmm-fab {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  z-index: 600;
-  background: var(--qmm-surface);
-  border-radius: 26px;
-  padding: 10px 16px 16px;
-  box-shadow: 0 -6px 26px rgba(47, 7, 85, 0.16);
-}
-.qmm-handle {
-  display: block;
-  width: 42px;
-  height: 5px;
+  bottom: 14px;
+  z-index: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
   border-radius: 999px;
-  background: #e2dced;
-  margin: 0 auto 12px;
+  border: 1.5px solid var(--qmm-line);
+  background: var(--qmm-surface);
+  color: var(--qmm-ink);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--qmm-shadow-md);
+}
+.qmm-fab svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.3;
+  flex: 0 0 auto;
+}
+.qmm-fab--left {
+  left: 14px;
+}
+.qmm-fab--right {
+  right: 14px;
 }
 
-.qmm-sheet-body {
+/* ── Nearby providers ───────────────────────────────── */
+.qmm-nearby {
+  padding: 18px 0 6px;
+  background: var(--qmm-cream);
+}
+.qmm-nearby-header {
   display: flex;
-  gap: 14px;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 12px;
 }
-.qmm-thumb {
-  position: relative;
-  flex: 0 0 auto;
-  width: 96px;
-  height: 96px;
-  border-radius: 18px;
-  overflow: hidden;
+.qmm-nearby-header strong {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--qmm-ink);
+}
+.qmm-see-all {
   border: 0;
-  padding: 0;
-  background: var(--qmm-purple-soft);
+  background: transparent;
+  color: var(--qmm-purple);
+  font-size: 13.5px;
+  font-weight: 700;
   cursor: pointer;
+  padding: 0;
 }
-.qmm-thumb img {
+
+.qmm-nearby-rail {
+  display: flex;
+  gap: 12px;
+  padding: 0 16px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.qmm-nearby-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.qmm-nearby-card {
+  flex: 0 0 auto;
+  width: 168px;
+  border-radius: 20px;
+  background: var(--qmm-surface);
+  box-shadow: var(--qmm-shadow-sm);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+  border: 1px solid var(--qmm-line);
+}
+.qmm-nearby-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--qmm-shadow-md);
+}
+.qmm-nearby-img {
+  position: relative;
+  width: 100%;
+  height: 110px;
+  background: var(--qmm-purple-soft);
+  overflow: hidden;
+}
+.qmm-nearby-img img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.qmm-thumb-fav {
+.qmm-nearby-top-badge {
   position: absolute;
-  top: 7px;
-  left: 7px;
-  width: 28px;
-  height: 28px;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #8a7fa3;
+  background: rgba(30, 10, 60, 0.72);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  backdrop-filter: blur(6px);
+}
+.qmm-nearby-fav {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.92);
+  color: #8a7ea8;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 3px 8px rgba(47, 7, 85, 0.18);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(47, 7, 85, 0.16);
 }
-.qmm-thumb-fav svg {
+.qmm-nearby-fav svg {
   width: 14px;
   height: 14px;
+  stroke-width: 2.2;
 }
-.qmm-thumb-fav.is-active {
-  color: #e1306c;
+.qmm-nearby-fav.is-active {
+  color: #e11d48;
 }
-.qmm-thumb-fav.is-active svg {
+.qmm-nearby-fav.is-active svg {
   fill: currentColor;
 }
 
-.qmm-sheet-info {
-  flex: 1 1 auto;
-  min-width: 0;
+.qmm-nearby-info {
+  padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
-.qmm-sheet-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-.qmm-sheet-name {
-  font-size: 18px;
+.qmm-nearby-name {
+  font-size: 13.5px;
   font-weight: 800;
   color: var(--qmm-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
 }
-.qmm-kebab {
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-  color: var(--qmm-muted);
-  cursor: pointer;
-  padding: 2px;
+.qmm-nearby-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--qmm-purple);
 }
-.qmm-kebab svg {
-  width: 20px;
-  height: 20px;
+.qmm-nearby-stats {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--qmm-ink);
+}
+.qmm-nearby-stats b {
+  font-weight: 800;
 }
 
-.qmm-tag {
-  align-self: flex-start;
+/* ── Shared elements ────────────────────────────────── */
+.qmm-star-icon {
+  width: 13px;
+  height: 13px;
+  color: #f59e0b;
+  fill: #f59e0b;
+  flex: 0 0 auto;
+}
+.qmm-dot {
+  color: var(--qmm-muted);
+}
+.qmm-muted {
+  color: var(--qmm-muted);
+}
+.qmm-open-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.qmm-closed-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.qmm-link {
+  border: 0;
+  background: transparent;
+  color: var(--qmm-purple);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.qmm-nearby-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--qmm-muted);
+  font-size: 14px;
+}
+.qmm-nearby-empty p {
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+
+.qmm-body-end {
+  height: 12px;
+}
+
+/* ── Provider bottom sheet ──────────────────────────── */
+.qmm-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 900;
+  transform: translateY(105%);
+  transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+  max-height: calc(100vh - var(--qmm-header-h) - 20px);
+}
+.qmm-sheet.is-open {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.qmm-sheet-inner {
+  background: var(--qmm-surface);
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -8px 40px rgba(47, 7, 85, 0.22);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+}
+
+.qmm-handle-row {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 6px;
+  flex: 0 0 auto;
+}
+.qmm-handle {
+  display: block;
+  width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--qmm-line);
+}
+
+/* Cover image */
+.qmm-sheet-cover {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  flex: 0 0 auto;
+  background: var(--qmm-purple-soft);
+  overflow: hidden;
+}
+.qmm-sheet-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.qmm-sheet-cover-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, rgba(20, 5, 40, 0.38) 100%);
+  pointer-events: none;
+}
+.qmm-tier-badge {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.qmm-tier-badge--premium {
+  background: #0d9488;
+  color: #fff;
+}
+.qmm-tier-badge--platinum {
+  background: #d97706;
+  color: #fff;
+}
+.qmm-status-pill {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+.qmm-status-pill--open {
+  background: #dcfce7;
+  color: #15803d;
+}
+.qmm-status-pill--closed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.qmm-sheet-fav {
+  position: absolute;
+  bottom: 10px;
+  right: 50px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.92);
+  color: #8a7ea8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(47, 7, 85, 0.2);
+}
+.qmm-sheet-fav svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
+}
+.qmm-sheet-fav.is-active {
+  color: #e11d48;
+}
+.qmm-sheet-fav.is-active svg {
+  fill: currentColor;
+}
+.qmm-sheet-dismiss {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--qmm-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(47, 7, 85, 0.2);
+}
+.qmm-sheet-dismiss svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.4;
+}
+
+/* Sheet body */
+.qmm-sheet-body {
+  padding: 14px 16px 20px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+.qmm-sheet-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.qmm-sheet-name {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--qmm-ink);
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qmm-verified-dot {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #0d9488;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.qmm-verified-dot svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3;
+}
+.qmm-sheet-cat {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 11px;
+  padding: 4px 12px;
   border-radius: 999px;
   background: var(--qmm-purple-soft);
   color: var(--qmm-purple-deep);
   font-size: 12.5px;
   font-weight: 700;
+  margin-bottom: 8px;
 }
-.qmm-tag svg {
-  width: 13px;
-  height: 13px;
-}
-
-.qmm-rating-row {
+.qmm-sheet-stats {
   display: flex;
   align-items: center;
   gap: 5px;
   font-size: 14px;
   color: var(--qmm-ink);
+  margin-bottom: 8px;
 }
-.qmm-rating-row b {
+.qmm-sheet-stats b {
   font-weight: 800;
 }
-.qmm-star {
-  width: 15px;
-  height: 15px;
-  color: #f5b301;
-  fill: #f5b301;
-}
-.qmm-reviews {
-  color: var(--qmm-muted);
-  font-weight: 600;
-}
-.qmm-dot {
-  color: var(--qmm-muted);
-}
-.qmm-distance {
-  color: var(--qmm-muted);
-  font-weight: 600;
-}
-
-.qmm-location {
-  margin: 0;
+.qmm-sheet-loc {
+  margin: 0 0 4px;
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--qmm-muted);
 }
-.qmm-location svg {
-  width: 14px;
-  height: 14px;
-  color: var(--qmm-purple);
+.qmm-sheet-loc svg {
+  width: 13px;
+  height: 13px;
   flex: 0 0 auto;
 }
 
-.qmm-verified {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: var(--qmm-purple-soft);
-  color: var(--qmm-purple-deep);
-  font-size: 12px;
-  font-weight: 700;
-}
-.qmm-verified svg {
-  width: 13px;
-  height: 13px;
-  stroke-width: 3;
-}
-
-.qmm-cta {
-  margin-top: 14px;
-  width: 100%;
-  height: 54px;
-  display: inline-flex;
+/* CTA buttons */
+.qmm-btn-primary {
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border: 0;
+  width: 100%;
+  height: 52px;
   border-radius: 16px;
+  border: 0;
   background: var(--qmm-purple);
   color: #fff;
   font-size: 16px;
   font-weight: 800;
   cursor: pointer;
-  position: relative;
-  box-shadow: 0 10px 22px rgba(91, 33, 182, 0.32);
+  margin-top: 14px;
+  box-shadow: 0 8px 22px rgba(91, 33, 182, 0.34);
+  transition: background 140ms ease;
+  font-family: inherit;
 }
-.qmm-cta svg {
-  position: absolute;
-  right: 18px;
-  width: 20px;
-  height: 20px;
-}
-.qmm-cta:hover {
+.qmm-btn-primary:hover {
   background: var(--qmm-purple-deep);
 }
-.qmm-cta--ghost {
-  background: var(--qmm-purple-soft);
-  color: var(--qmm-purple-deep);
-  box-shadow: none;
-  height: 46px;
-  font-size: 14px;
-}
-
-.qmm-empty {
-  text-align: center;
-  padding: 8px 8px 4px;
-}
-.qmm-empty strong {
-  display: block;
-  font-size: 16px;
-  color: var(--qmm-ink);
-  margin-bottom: 4px;
-}
-.qmm-empty p {
-  margin: 0;
-  font-size: 13.5px;
-  color: var(--qmm-muted);
-}
-
-/* ── Bottom navigation ──────────────────────────────── */
-.qmm-bottomnav {
-  flex: 0 0 auto;
+.qmm-sheet-secondary {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  align-items: center;
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
-  background: var(--qmm-surface);
-  border-top: 1px solid var(--qmm-line);
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
 }
-.qmm-navitem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  border: 0;
-  background: transparent;
-  color: var(--qmm-muted);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 4px 0;
-}
-.qmm-navicon {
+.qmm-btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 30px;
-  border-radius: 999px;
-}
-.qmm-navicon svg {
-  width: 21px;
-  height: 21px;
-  stroke-width: 2.2;
-}
-.qmm-navitem.is-active {
+  gap: 6px;
+  height: 44px;
+  border-radius: 13px;
+  border: 1.5px solid var(--qmm-line);
+  background: var(--qmm-surface);
   color: var(--qmm-purple-deep);
-  font-weight: 800;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 130ms ease, border-color 130ms ease;
+  font-family: inherit;
 }
-.qmm-navitem.is-active .qmm-navicon {
-  background: var(--qmm-purple-soft);
-  color: var(--qmm-purple);
+.qmm-btn-ghost svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.3;
 }
-.qmm-navitem.is-active .qmm-navicon svg {
-  fill: rgba(91, 33, 182, 0.12);
+.qmm-btn-ghost:hover {
+  background: var(--qmm-purple-ghost);
+  border-color: var(--qmm-purple-soft);
 }
+

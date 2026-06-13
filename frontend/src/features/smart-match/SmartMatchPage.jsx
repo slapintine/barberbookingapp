@@ -453,8 +453,8 @@ export default function SmartMatchPage({
                 const Icon = item.icon;
                 const active = state.selectedService?.key === item.key;
                 return (
-                  <button type="button" key={item.key} className={active ? "smart-match-tile is-selected" : "smart-match-tile"} onClick={() => updateState({ selectedService: item })}>
-                    <span className="smart-match-icon-box"><Icon /></span>
+                  <button type="button" key={item.key} className={active ? "smart-match-tile is-selected" : "smart-match-tile"} style={{ "--cat-color": item.primaryColor, "--cat-bg": item.softBg }} onClick={() => updateState({ selectedService: item })}>
+                    <span className="smart-match-icon-box" style={{ background: item.softBg, color: item.primaryColor }}><Icon /></span>
                     <span className="smart-match-label">{item.label}</span>
                     {active ? <FiCheck className="smart-match-check" /> : null}
                   </button>

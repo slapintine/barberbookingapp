@@ -10,22 +10,32 @@ import {
   FiStar,
   FiZap,
 } from "react-icons/fi";
-import { FaBroom, FaCut, FaDumbbell, FaGraduationCap, FaSpa, FaStethoscope, FaTools, FaUtensils } from "react-icons/fa";
 import { resolveProviderImage, getProviderInitials, buildInitialsAvatar } from "../utils/providerImage.js";
+import { getCategoryDef } from "../utils/categoryRegistry.jsx";
 import heroProfessional from "../assets/queless-hero-service-professional.png";
 
-const CATEGORY_CHIPS = [
-  { label: "Barber", icon: FaCut, category: "Barber", colors: ["#522B5B", "#FBE4D8"] },
-  { label: "Beauty", icon: FaSpa, category: "Beauty", colors: ["#c53d8c", "#fff0f8"] },
-  { label: "Tutor", icon: FaGraduationCap, category: "Tutor / Lessons", colors: ["#2B79C2", "#edf6ff"] },
-  { label: "Health", icon: FaStethoscope, category: "Health & Fitness", colors: ["#854F6C", "#fbe4d8"] },
-  { label: "Food", icon: FaUtensils, category: "Catering & Food Services", colors: ["#c7682b", "#fff1e6"] },
-  { label: "Repair", icon: FaTools, category: "Repairs & Maintenance", colors: ["#d89b16", "#fff5d9"] },
-  { label: "Cleaning", icon: FaBroom, category: "Cleaning Services", colors: ["#1d9f72", "#e7fff4"] },
-  { label: "Fitness", icon: FaDumbbell, category: "Health & Fitness", colors: ["#2B124C", "#f1e8ff"] },
-  { label: "Professional", icon: FiBriefcase, category: "Business Services", colors: ["#522B5B", "#fbe4d8"] },
-  { label: "Other", icon: FaTools, category: "All", colors: ["#854F6C", "#fbe4d8"] },
+// Homepage category chips — registry-driven so icons/colors stay in sync with the rest of the app
+const HOME_CHIP_IDS = [
+  { id: "barber",                  category: "Barber" },
+  { id: "beauty",                  category: "Beauty" },
+  { id: "education-tutoring",      category: "Tutor / Lessons" },
+  { id: "health-fitness",          category: "Health & Fitness" },
+  { id: "catering-food-services",  category: "Catering & Food Services" },
+  { id: "repairs-maintenance",     category: "Repairs & Maintenance" },
+  { id: "cleaning-services",       category: "Cleaning Services" },
+  { id: "health-fitness",          category: "Health & Fitness", labelOverride: "Fitness" },
+  { id: "business-services",       category: "Business Services", labelOverride: "Professional" },
 ];
+
+const CATEGORY_CHIPS = HOME_CHIP_IDS.map(({ id, category, labelOverride }) => {
+  const def = getCategoryDef(id);
+  return {
+    label: labelOverride || def.shortLabel,
+    icon: def.Icon,
+    category,
+    colors: [def.primaryColor, def.softBg],
+  };
+});
 
 const TRUST_BADGES = [
   {

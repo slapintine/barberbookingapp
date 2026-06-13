@@ -1019,6 +1019,33 @@ export async function initDb() {
       )
     `);
 
+    // Subscription reminder event tracking (migration 033)
+    await run(`
+      CREATE TABLE IF NOT EXISTS subscription_reminder_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        account_scope TEXT NOT NULL DEFAULT 'provider',
+        subscription_id INTEGER DEFAULT NULL,
+        event_type TEXT NOT NULL,
+        sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expiry_snapshot TEXT DEFAULT NULL,
+        metadata TEXT DEFAULT '{}'
+      )
+    `);
+    await run(`CREATE INDEX IF NOT EXISTS idx_sub_reminders_user_scope_event ON subscription_reminder_events(user_id, account_scope, event_type)`);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS subscription_job_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_name TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        finished_at TEXT DEFAULT NULL,
+        records_processed INTEGER DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'running',
+        error_message TEXT DEFAULT NULL
+      )
+    `);
+
     await run(`
       CREATE TABLE IF NOT EXISTS barber_team_members (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

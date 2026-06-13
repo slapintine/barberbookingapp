@@ -27,6 +27,7 @@ import {
   startCustomerSubscriptionUpgrade,
   verifyCustomerSubscriptionUpgrade,
 } from "./api/customerSubscriptionsApi.js";
+import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
 import { getCustomerWallet, getMyWallet, requestWalletWithdrawal } from "./api/walletApi.js";
 import AppHeader from "./components/ui/AppHeader.jsx";
 import AccountMenu from "./components/ui/AccountMenu.jsx";
@@ -34,6 +35,8 @@ import BottomNav from "./components/ui/BottomNav.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import PaymentFlowModal from "./components/payments/PaymentFlowModal.jsx";
 import MarketplaceMapOverlay from "./components/marketplace/MarketplaceMapOverlay.jsx";
+import ProviderProfileSkeleton from "./features/barbers/ProviderProfileSkeleton.jsx";
+import OverlayErrorBoundary from "./components/OverlayErrorBoundary.jsx";
 import { NotificationSheet, NotificationToast } from "./features/notifications/Notifications.jsx";
 import { apiFetch, getAuthToken, SOCKET_URL } from "./config/api.js";
 import { listenForForegroundNotifications } from "./pushNotifications.js";
@@ -66,7 +69,9 @@ import { isBookingPaymentMethodEnabled, isOnlinePaymentMethod } from "./utils/pa
 import { DEFAULT_CUSTOMER_SUBSCRIPTION_STATE, isCustomerPremiumActive } from "./utils/customerPremium.js";
 import { isPublicMarketplaceProvider } from "./utils/marketplaceServices.js";
 
-const BarberProfileSheet = lazy(() => import("./features/barbers/BarberProfileSheet.jsx"));
+// Provider profile is created as a retryable lazy inside the component (keyed by
+// a retry counter) so a failed chunk import can be re-attempted in place.
+const importBarberProfileSheet = () => import("./features/barbers/BarberProfileSheet.jsx");
 const AuthScreen = lazy(() => import("./features/auth/AuthScreen.jsx"));
 const HomeScreen = lazy(() => import("./pages/HomePage.jsx"));
 const CategoriesScreen = lazy(() => import("./pages/CategoriesPage.jsx"));
@@ -1044,6 +1049,7 @@ function App() {
   const [subscriptionReady, setSubscriptionReady] = useState(false);
   const [subscriptionMessage, setSubscriptionMessage] = useState("");
   const [pendingSubscriptionPayment, setPendingSubscriptionPayment] = useState(null);
+  const [subscriptionSummary, setSubscriptionSummary] = useState(null);
   const [customerSubscriptionState, setCustomerSubscriptionState] = useState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
   const [customerSubscriptionPlan, setCustomerSubscriptionPlan] = useState(null);
   const [customerSubscriptionLoading, setCustomerSubscriptionLoading] = useState(false);
@@ -1068,6 +1074,13 @@ function App() {
   const [smartMatchInitial, setSmartMatchInitial] = useState({});
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showBarberProfile, setShowBarberProfile] = useState(false);
+  const [providerChunkAttempt, setProviderChunkAttempt] = useState(0);
+  // Recreate the lazy on each retry so a failed dynamic import is re-attempted
+  // rather than re-subscribing to the cached rejected promise.
+  const ProviderProfileLazy = useMemo(
+    () => lazy(importBarberProfileSheet),
+    [providerChunkAttempt]
+  );
   const [showRegisterBarber, setShowRegisterBarber] = useState(false);
   const [showEditBarber, setShowEditBarber] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -1080,8 +1093,9 @@ function App() {
   const [dismissedToastIds, setDismissedToastIds] = useState([]);
 
   useEffect(() => {
-    const hideTimer = window.setTimeout(() => setInitialLoadingStage("hiding"), 5000);
-    const removeTimer = window.setTimeout(() => setInitialLoadingStage("hidden"), 5560);
+    // Launch splash: brief brand moment on initial boot only.
+    const hideTimer = window.setTimeout(() => setInitialLoadingStage("hiding"), 1600);
+    const removeTimer = window.setTimeout(() => setInitialLoadingStage("hidden"), 2160);
 
     return () => {
       window.clearTimeout(hideTimer);
@@ -1507,8 +1521,33 @@ function App() {
       }
     });
 
+    // Real-time read receipt: the other party opened our message. Flip the
+    // matching outgoing bubble to "seen" instantly (no refetch). Same event
+    // the website emits, so read receipts work across web and app.
+    socket.on("message_seen", (payload) => {
+      const messageId = payload?.messageId;
+      if (messageId == null) return;
+      setMessages((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(messageId) ? { ...item, seen: true } : item
+        )
+      );
+    });
+
     socket.on("receive_notification", (notification) => {
       if (!notification) return;
+      // Don't notify the sender about their own message — only append
+      // notifications actually addressed to this user.
+      const me = String(currentUser?.username || "");
+      if (
+        notification.type === "message" &&
+        me &&
+        notification.user &&
+        String(notification.user) !== me &&
+        !String(notification.user).startsWith("barber-")
+      ) {
+        return;
+      }
       appendNotificationSafely(notification);
     });
 
@@ -1623,6 +1662,11 @@ function App() {
 
     fetchCustomerSubscription();
   }, [currentUser?.username, effectiveIsBarber, isAdmin]);
+
+  useEffect(() => {
+    if (!currentUser?.username) { setSubscriptionSummary(null); return; }
+    fetchSubscriptionSummary();
+  }, [currentUser?.username]);
 
   useEffect(() => {
     if (!pendingSubscriptionPayment?.reference || !currentUser?.username) return;
@@ -2181,6 +2225,14 @@ const fetchBarbers = async () => {
     }
   };
 
+  const fetchSubscriptionSummary = async () => {
+    if (!currentUser?.username) { setSubscriptionSummary(null); return; }
+    try {
+      const data = await getSubscriptionSummary();
+      if (data?.success) setSubscriptionSummary(data);
+    } catch { /* non-fatal — existing per-role fetches remain source of truth */ }
+  };
+
   const fetchCustomerSubscription = async () => {
     if (!currentUser?.username || effectiveIsBarber || isAdmin) {
       setCustomerSubscriptionState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
@@ -2216,6 +2268,15 @@ const fetchBarbers = async () => {
       const next = Array.isArray(data) ? data : [];
       setMessages(next);
       writeStored("messages", scope, next);
+      // Opening the thread = reading it: tell each sender their incoming
+      // message was seen so their bubble flips to "Seen" in real time. Keyed
+      // by stable username; only for messages addressed to us and not own.
+      const me = currentUser?.username;
+      if (socketRef.current && me) {
+        next
+          .filter((item) => item?.sender && String(item.sender) !== String(me) && !item.seen && item.id != null)
+          .forEach((item) => socketRef.current.emit("message_seen", { to: item.sender, messageId: item.id }));
+      }
     } catch {
       setMessages(readStored("messages", scope, []));
     }
@@ -4420,7 +4481,9 @@ const updateBarberStand = async (payload) => {
     setShowBookingModal(false);
     setShowQuoteModal(false);
     setShowChat(false);
-    setMapState((prev) => ({ ...prev, show: false }));
+    // Keep the map mounted underneath (profile sheet sits above it via z-index)
+    // so there's no blank/dark gap while the profile loads and closing the
+    // profile returns to the same map position + filters.
   };
 
   const openSearchResults = (value, locationOverride) => {
@@ -4701,7 +4764,21 @@ const updateBarberStand = async (payload) => {
 
       {activeTab === "inbox" && (
         <div className="tab-scene-v5">
-          <InboxScreen messages={messages} />
+          <InboxScreen
+            currentUserId={currentUser?.id}
+            onOpenConversation={({ barberId, customerUsername, title }) => {
+              const barber = barbers.find((b) => String(b.id) === String(barberId));
+              if (!barber) {
+                setGlobalError("This provider is no longer available.");
+                return;
+              }
+              openConversation({
+                barber,
+                customerUsername: customerUsername || currentUser?.username || "",
+                targetName: title,
+              });
+            }}
+          />
         </div>
       )}
 
@@ -4724,6 +4801,7 @@ const updateBarberStand = async (payload) => {
           pendingSubscriptionPayment={pendingSubscriptionPayment}
           onUpgradeSubscription={startCurrentSubscriptionUpgrade}
           onVerifySubscription={verifyCurrentSubscription}
+          subscriptionSummary={subscriptionSummary}
           customerSubscriptionState={customerSubscriptionState}
           customerSubscriptionPlan={customerSubscriptionPlan}
           customerSubscriptionLoading={customerSubscriptionLoading}
@@ -4954,6 +5032,7 @@ const updateBarberStand = async (payload) => {
       <MarketplaceMapOverlay
         show={mapState.show}
         theme={theme}
+        setTheme={setTheme}
         currentUser={currentUser}
         category={mapState.category}
         providers={mapState.category && mapState.category !== "All" ? enrichedBarbers.filter(isPublicProvider) : filteredBarbers.length ? filteredBarbers : enrichedBarbers.filter(isPublicProvider)}
@@ -4975,6 +5054,7 @@ const updateBarberStand = async (payload) => {
         onNavigate={navigateFromMap}
         onUseCurrentLocation={requestLocation}
         onManualLocation={changeLocation}
+        onClearLocation={clearLocation}
         onRefreshProviders={fetchBarbers}
         onOpenProvider={openProviderProfile}
         onMessageProvider={(provider) =>
@@ -4992,7 +5072,25 @@ const updateBarberStand = async (payload) => {
         }}
       />
 
-      <BarberProfileSheet
+      {/* Conditionally mounted so the provider chunk loads on first open (not at
+          boot) and the Suspense/skeleton exist only while open. Its OWN Suspense
+          means a slow chunk shows the cream skeleton here — never the app-wide
+          dark fallback. The error boundary catches a failed chunk download and
+          shows a cream Retry/Close card instead of an infinite skeleton. */}
+      {showBarberProfile && (
+      <OverlayErrorBoundary
+        key={providerChunkAttempt}
+        title="Couldn't open this provider"
+        message="We couldn't load this provider. Check your connection and try again."
+        testId="provider-profile-error"
+        onRetry={() => setProviderChunkAttempt((n) => n + 1)}
+        onClose={() => {
+          setReviewNotice({ message: "", tone: "info" });
+          setShowBarberProfile(false);
+        }}
+      >
+      <Suspense fallback={<ProviderProfileSkeleton />}>
+      <ProviderProfileLazy
         show={showBarberProfile}
         barber={selectedBarber ? { ...selectedBarber, reviews: reviewsByBarber[selectedBarber.id] || [], reviewCount: (reviewsByBarber[selectedBarber.id] || []).length, rating: getAverageRating(reviewsByBarber[selectedBarber.id] || []) } : selectedBarber}
         reviewBlockUsage={selectedBarber ? reviewBlockUsageByBarber[selectedBarber.id] : null}
@@ -5047,7 +5145,15 @@ const updateBarberStand = async (payload) => {
           openMarketplaceMap(myBarberProfile?.business_type || "All");
         }}
       />
+      </Suspense>
+      </OverlayErrorBoundary>
+      )}
 
+      {/* Shared scoped boundary for the remaining lazy overlays: a slow/late
+          chunk shows nothing (null) instead of blanking the whole app with the
+          dark app-wide fallback. They return null when closed, so null is the
+          correct fallback. */}
+      <Suspense fallback={null}>
       <BookingModal
         show={showBookingModal}
         barber={selectedBarber}
@@ -5208,6 +5314,7 @@ const updateBarberStand = async (payload) => {
           }}
         />
       )}
+      </Suspense>
 
       {deleteStandConfirmOpen ? (
         <>
@@ -5248,7 +5355,14 @@ const updateBarberStand = async (payload) => {
     <div className={`app-wrap-v4 ${theme} ${isAuthScreen ? "app-auth-v4" : ""}`}>
       <div className={`phone-frame-v4 ${isAuthScreen ? "phone-frame-auth-v4" : ""}`}>
         <div className={`screen-v4 ${isAuthScreen ? "screen-auth-v4" : ""}`}>
-          <Suspense fallback={<div className="content-v4 app-page-v4">Loading...</div>}>
+          <Suspense
+            fallback={
+              <div className="route-fallback-v4" role="status" aria-label="Loading">
+                <span className="route-fallback-spinner" aria-hidden="true" />
+                <span className="route-fallback-text">Loading…</span>
+              </div>
+            }
+          >
             {screen === "login" ? (
               <AuthScreen
                 authMode={authMode}

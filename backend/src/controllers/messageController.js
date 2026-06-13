@@ -1,5 +1,5 @@
 import db from "../config/db.js";
-import { sendPushToUser } from "./pushController.js";
+import { sendNotificationToUser } from "../services/notificationService.js";
 
 function getBarberById(barberId) {
   return new Promise((resolve, reject) => {
@@ -368,7 +368,6 @@ export async function sendMessage(req, res, next) {
 
         try {
           const recipientUserId = isCustomer ? barber.owner_user_id : customer.id;
-          const recipient = await getUserById(recipientUserId);
 
           await markOldMessageNotificationsRead(
             recipientUserId,
@@ -381,24 +380,23 @@ export async function sendMessage(req, res, next) {
           // the notification and push entirely so users never see
           // "SI-World sent you a message" when they ARE SI-World.
           if (Number(recipientUserId) !== Number(req.user.id)) {
-            await addNotification(recipientUserId, {
-              title: "New message",
-              type: "message",
-              message: `${isCustomer ? customer.username : barber.business_name}: ${text.trim()}`,
-              barberId: barber.id,
-              customerUserId: customer.id,
-              customerUsername: customer.username,
-              barberOwnerUsername: barberOwner?.username || "",
-            });
-
-            if (recipient?.username) {
-              await sendPushToUser(recipient.username, {
-                title: "New message",
-                body: `${barber.business_name}: ${text.trim()}`,
-                url: "/",
-                tag: `message-${barber.id}-${customer.id}`,
-              });
-            }
+            // One call: persists the in-app notification AND delivers it via
+            // Firebase FCM to the recipient's registered devices. Push failure
+            // is non-fatal — the in-app notification is still written.
+            const senderLabel = isCustomer ? customer.username : barber.business_name;
+            await sendNotificationToUser(
+              recipientUserId,
+              "New message",
+              `${senderLabel}: ${text.trim()}`,
+              {
+                type: "message",
+                barberId: barber.id,
+                customerUserId: customer.id,
+                customerUsername: customer.username,
+                barberOwnerUsername: barberOwner?.username || "",
+                route: "/",
+              }
+            ).catch(() => {});
           }
 
           db.get(

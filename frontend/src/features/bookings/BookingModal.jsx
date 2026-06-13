@@ -282,18 +282,20 @@ export default function BookingModal({
           onClick={onClose}
           aria-label="Close booking modal"
         />
-        <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
-          <div className="booking-modal-card-v4 booking-modal-clean-v5">
+        <div className={show ? "booking-modal-v4 bk-fullpage open" : "booking-modal-v4 bk-fullpage"}>
+          <div className="booking-modal-card-v4 booking-modal-clean-v5 bk-shell">
             <div className="booking-modal-shell-v5">
-              <div className="bk-topbar">
-                <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
-                  <FiX />
-                </button>
-                <div className="bk-topbar-copy">
-                  <strong>No bookable services</strong>
-                  <span>This provider has not added services yet.</span>
+              <div className="booking-modal-scroll-v5 bk-scroll">
+                <div className="bk-topbar">
+                  <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Back">
+                    <FiArrowLeft />
+                  </button>
+                  <div className="bk-topbar-copy">
+                    <strong>No bookable services</strong>
+                    <span>This provider has not added services yet.</span>
+                  </div>
+                  <span className="bk-icon-btn bk-icon-btn-ghost" aria-hidden="true" />
                 </div>
-                <span className="bk-icon-btn bk-icon-btn-ghost" aria-hidden="true" />
               </div>
             </div>
           </div>
@@ -384,13 +386,12 @@ export default function BookingModal({
           onClick={onClose}
           aria-label="Close booking modal"
         />
-        <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
-          <div className="booking-modal-card-v4 booking-modal-clean-v5">
-            <div className="booking-sheet-handle-v5" />
+        <div className={show ? "booking-modal-v4 bk-fullpage open" : "booking-modal-v4 bk-fullpage"}>
+          <div className="booking-modal-card-v4 booking-modal-clean-v5 bk-shell">
             <div className="booking-modal-shell-v5">
-              <div className="booking-modal-scroll-v5">
+              <div className="booking-modal-scroll-v5 bk-scroll">
                 <div className="bk-topbar">
-                  <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
+                  <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Back">
                     <FiArrowLeft />
                   </button>
                   <div className="bk-topbar-copy">
@@ -434,29 +435,55 @@ export default function BookingModal({
     );
   }
 
-  const onPaymentStep = step === 1;
-  const footerLabel = onPaymentStep
-    ? creatingBooking
-      ? "Booking..."
-      : "Confirm Booking"
-    : isQuoteService
-    ? "Request Quote"
-    : "Continue Booking";
-  const footerDisabled = onPaymentStep ? isBlocked : isQuoteService ? !selectedService : !bookReady;
+  // Fixed-price bookings use a 4-step wizard: 0 Service → 1 Date & time →
+  // 2 Location → 3 Review & pay. Quote services keep a single page that hands
+  // off to the full-page QuoteRequestModal. Every advance reuses the existing
+  // validation, and the final confirm is still gated on !isBlocked, so the
+  // wizard cannot let an incomplete booking through.
+  const isWizard = !isQuoteService;
+  const WIZARD_STEPS = ["Service", "Date & time", "Location", "Review"];
+  const onPaymentStep = isWizard && step === 3; // the review + payment step
+
+  const canAdvance = (() => {
+    if (!isWizard) return Boolean(selectedService);
+    if (step === 0) return Boolean(selectedService) && (!requiresTeamMember || Boolean(selectedTeamMember));
+    if (step === 1) return Boolean(selectedDate) && Boolean(selectedTime);
+    if (step === 2) return locationValid;
+    return !isBlocked; // step 3 → confirm
+  })();
+
+  const footerLabel = !isWizard
+    ? "Send Quote Request"
+    : step === 0 || step === 1
+    ? "Continue"
+    : step === 2
+    ? "Continue to Payment"
+    : creatingBooking
+    ? "Confirming booking…"
+    : "Confirm Booking";
+  const footerDisabled = !canAdvance;
 
   const handlePrimary = () => {
-    if (!onPaymentStep) {
-      if (isQuoteService) {
-        onRequestQuote?.();
-        return;
-      }
-      setStep(1);
+    if (!isWizard) {
+      onRequestQuote?.();
+      return;
+    }
+    if (step < 3) {
+      if (canAdvance) setStep(step + 1);
       return;
     }
     onConfirm?.({
       bookingDetails: isTutorService ? { type: "tutor_lesson", ...tutorDetails } : null,
     });
   };
+
+  const handleBack = () => {
+    if (isWizard && step > 0) setStep(step - 1);
+    else onClose?.();
+  };
+
+  // which detail sections show for the current wizard step (quote shows all)
+  const showStep = (n) => !isWizard || step === n;
 
   return (
     <>
@@ -466,23 +493,43 @@ export default function BookingModal({
         onClick={onClose}
         aria-label="Close booking modal"
       />
-      <div className={show ? "booking-modal-v4 open" : "booking-modal-v4"}>
+      <div className={show ? "booking-modal-v4 bk-fullpage open" : "booking-modal-v4 bk-fullpage"} data-testid="booking-page">
         <div className="booking-modal-card-v4 booking-modal-clean-v5 bk-shell">
-          <div className="booking-sheet-handle-v5" />
           <div className="booking-modal-shell-v5">
             <div className="booking-modal-scroll-v5 bk-scroll">
               <div className="bk-topbar">
-                <button type="button" className="bk-icon-btn" onClick={onPaymentStep ? () => setStep(0) : onClose} aria-label={onPaymentStep ? "Back" : "Close"}>
-                  {onPaymentStep ? <FiArrowLeft /> : <FiX />}
+                <button type="button" className="bk-icon-btn" onClick={handleBack} aria-label="Back">
+                  <FiArrowLeft />
                 </button>
                 <div className="bk-topbar-copy">
-                  <strong>{onPaymentStep ? "Payment" : "Book service"}</strong>
+                  <strong>{isQuoteService ? "Request a Quote" : "Book Service"}</strong>
                   <span>{barber.business_name}</span>
                 </div>
                 <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
                   <FiX />
                 </button>
               </div>
+
+              {isWizard ? (
+                <ol className="bk-stepper" aria-label="Booking steps">
+                  {WIZARD_STEPS.map((label, index) => (
+                    <li
+                      key={label}
+                      className={
+                        index === step
+                          ? "bk-step is-current"
+                          : index < step
+                          ? "bk-step is-done"
+                          : "bk-step"
+                      }
+                      aria-current={index === step ? "step" : undefined}
+                    >
+                      <span className="bk-step-dot">{index < step ? <FiCheck /> : index + 1}</span>
+                      <span className="bk-step-label">{label}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
 
               {onPaymentStep ? (
                 <>
@@ -535,8 +582,8 @@ export default function BookingModal({
                   <div className="bk-summary-card">
                     <div className="bk-summary-head">
                       <div>
-                        <strong>Booking summary</strong>
-                        <span>Review before you confirm</span>
+                        <strong>{isQuoteService ? "Quote Request Summary" : "Booking summary"}</strong>
+                        <span>{isQuoteService ? "The provider will reply with pricing" : "Review before you confirm"}</span>
                       </div>
                       <div className="bk-summary-total">{totalLabel}</div>
                     </div>
@@ -587,7 +634,7 @@ export default function BookingModal({
                     </div>
                   </div>
 
-                  {services.length > 1 ? (
+                  {showStep(0) && services.length > 1 ? (
                     <div className="bk-service-switch">
                       <button type="button" className="bk-service-switch-btn" onClick={() => setShowServicePicker((value) => !value)}>
                         <FiScissors /> {showServicePicker ? "Hide services" : "Change service"} <FiChevronDown className={showServicePicker ? "bk-rot" : ""} />
@@ -618,7 +665,7 @@ export default function BookingModal({
                   ) : null}
 
                   {/* Recent work */}
-                  {workImages.length ? (
+                  {showStep(0) && workImages.length ? (
                     <div className="bk-section bk-section-flat">
                       <div className="bk-section-head">
                         <h3>Recent work</h3>
@@ -639,6 +686,7 @@ export default function BookingModal({
                   ) : null}
 
                   {/* Quick info chips */}
+                  {showStep(0) && (
                   <div className="bk-chips">
                     <div className="bk-chip">
                       <span className="bk-chip-icon"><FiClock /></span>
@@ -657,9 +705,10 @@ export default function BookingModal({
                       <div><strong>{reviewCount ? `${reviewCount}+` : "New"}</strong><small>Bookings</small></div>
                     </div>
                   </div>
+                  )}
 
                   {/* Team picker */}
-                  {requiresTeamMember ? (
+                  {showStep(0) && requiresTeamMember ? (
                     <div className="bk-section">
                       <div className="bk-section-head">
                         <h3><FiUsers /> Choose provider</h3>
@@ -685,7 +734,7 @@ export default function BookingModal({
                   ) : null}
 
                   {/* Tutor details */}
-                  {isTutorService ? (
+                  {showStep(2) && isTutorService ? (
                     <div className="bk-section">
                       <div className="bk-section-head">
                         <h3>Lesson details</h3>
@@ -711,6 +760,7 @@ export default function BookingModal({
                     </div>
                   ) : null}
 
+                  {showStep(1) && (<>
                   {/* Select date */}
                   <div className="bk-section bk-section-flat">
                     <div className="bk-section-head">
@@ -771,8 +821,10 @@ export default function BookingModal({
                       </div>
                     )}
                   </div>
+                  </>)}
 
                   {/* Location */}
+                  {showStep(2) && (
                   <div className="bk-section">
                     <div className="bk-section-head">
                       <h3>Location</h3>
@@ -826,8 +878,10 @@ export default function BookingModal({
                       </div>
                     )}
                   </div>
+                  )}
 
                   {/* Booking summary */}
+                  {showStep(2) && (
                   <div className="bk-summary-card">
                     <div className="bk-summary-head">
                       <div>
@@ -851,6 +905,7 @@ export default function BookingModal({
                       <strong>{totalLabel}</strong>
                     </div>
                   </div>
+                  )}
                 </>
               )}
             </div>

@@ -41,22 +41,19 @@ export default function QuoteRequestModal({ show, provider, onClose, onSubmit })
   return (
     <>
       <button type="button" className="booking-overlay-v4 open" onClick={onClose} aria-label="Close quote request" />
-      <div className="booking-modal-v4 open">
-        <div className="booking-modal-card-v4 booking-modal-clean-v5">
-          <div className="booking-sheet-handle-v5" />
+      <div className="booking-modal-v4 bk-fullpage open" data-testid="quote-page">
+        <div className="booking-modal-card-v4 booking-modal-clean-v5 bk-shell">
           <div className="booking-modal-shell-v5">
-            <div className="booking-modal-scroll-v5">
+            <div className="booking-modal-scroll-v5 bk-scroll">
               <div className="booking-header-v5">
-                <button type="button" className="profile-back-btn-v4" onClick={onClose}>
+                <button type="button" className="profile-back-btn-v4" onClick={onClose} aria-label="Back">
                   <FiArrowLeft />
                 </button>
                 <div className="booking-header-copy-v5">
-                  <div className="booking-header-title-v5">Request quote</div>
+                  <div className="booking-header-title-v5">Request a Quote</div>
                   <div className="booking-header-subtitle-v5">{provider.business_name}</div>
                 </div>
-                <button type="button" className="profile-back-btn-v4" onClick={onClose}>
-                  <FiX />
-                </button>
+                <span className="profile-back-btn-v4" aria-hidden="true" style={{ visibility: "hidden" }} />
               </div>
 
               <div className="booking-section-v5">
@@ -125,11 +122,11 @@ export default function QuoteRequestModal({ show, provider, onClose, onSubmit })
               </label>
             </div>
 
-            <div className="booking-footer-v5">
-              <button className="primary-btn-v4 booking-cta-v5" type="button" disabled={!canSubmit} onClick={submit}>
-                <FiSend /> Submit quote request
+            <div className="booking-footer-v5 bk-footer">
+              <button className="primary-btn-v4 booking-cta-v5 bk-cta-primary" type="button" disabled={!canSubmit} onClick={submit}>
+                <FiSend /> Send Quote Request
               </button>
-              <div className="booking-note-v5">The provider can respond with price, availability, and next steps.</div>
+              <div className="booking-note-v5">The provider will reply with price, availability, and next steps.</div>
             </div>
           </div>
         </div>
