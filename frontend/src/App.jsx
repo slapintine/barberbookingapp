@@ -5335,8 +5335,9 @@ const updateBarberStand = async (payload) => {
         <div className={`screen-v4 ${isAuthScreen ? "screen-auth-v4" : ""}`}>
           <Suspense
             fallback={
-              <div className="route-fallback-v4" role="status" aria-label="Loading page">
+              <div className="route-fallback-v4" role="status" aria-label="Loading">
                 <span className="route-fallback-spinner" aria-hidden="true" />
+                <span className="route-fallback-text">Loading…</span>
               </div>
             }
           >
