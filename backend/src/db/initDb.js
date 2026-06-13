@@ -456,7 +456,7 @@ async function migrateExistingSchema() {
   await addColumnIfMissing(
     "barber_services",
     "duration_minutes",
-    `duration_minutes INTEGER NOT NULL DEFAULT 30`
+    `duration_minutes INTEGER NOT NULL DEFAULT 0`
   );
   await addColumnIfMissing(
     "barber_services",
@@ -998,7 +998,7 @@ export async function initDb() {
         min_price REAL DEFAULT NULL,
         max_price REAL DEFAULT NULL,
         starting_price REAL DEFAULT NULL,
-        duration_minutes INTEGER NOT NULL DEFAULT 30,
+        duration_minutes INTEGER NOT NULL DEFAULT 0,
         location_type TEXT NOT NULL DEFAULT 'provider_location',
         description TEXT DEFAULT '',
         is_available INTEGER NOT NULL DEFAULT 1,

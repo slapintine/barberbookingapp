@@ -427,7 +427,10 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1)
     const minPrice = normalizeOptionalMoneyAmount(service.min_price ?? service.minPrice ?? 0, "Minimum service price");
     const maxPrice = normalizeOptionalMoneyAmount(service.max_price ?? service.maxPrice ?? 0, "Maximum service price");
     const startingPrice = normalizeOptionalMoneyAmount(service.starting_price ?? service.startingPrice ?? 0, "Starting service price");
-    const durationMinutes = Number(service.duration_minutes || service.durationMinutes || 30);
+    const rawDuration = service.duration_minutes ?? service.durationMinutes;
+    const durationMinutes = rawDuration === undefined || rawDuration === null || rawDuration === ""
+      ? 0
+      : Number(rawDuration);
     const rawLocationType = String(service.location_type || service.locationType || "provider_location").trim().toLowerCase();
     const locationType = ["provider_location", "customer_location"].includes(rawLocationType)
       ? rawLocationType
@@ -443,7 +446,7 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1)
     if (normalizedPricingType === "starting_from" && startingPrice <= 0) {
       throw validationError("Please enter a valid price.");
     }
-    if (!Number.isFinite(durationMinutes) || durationMinutes < 5 || durationMinutes > 1440) {
+    if (!Number.isFinite(durationMinutes) || (durationMinutes !== 0 && (durationMinutes < 5 || durationMinutes > 1440))) {
       throw validationError("Service duration must be between 5 minutes and 24 hours.");
     }
 

@@ -72,7 +72,7 @@ function createBlankService(category = SERVICE_CATEGORIES[0]) {
     starting_price: "",
     pricing_type: "fixed",
     location_type: "provider_location",
-    duration_minutes: 30,
+    duration_minutes: "",
     description: "",
     is_available: true,
     image: "",
@@ -1111,7 +1111,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       <span className="service-summary-copy-v10">
                         <strong>{service.service_name || service.category || "Service"}</strong>
                         <small>{service.category || "Service"} - {formatServicePrice(service)}</small>
-                        <em>{service.duration_minutes || 30} mins - {getServiceLocationLabel(service)}</em>
+                        <em>{Number(service.duration_minutes || 0) > 0 ? `${service.duration_minutes} mins - ` : ""}{getServiceLocationLabel(service)}</em>
                       </span>
                       <span className={getServiceReadiness(service) === "Ready" ? "service-ready-pill-v10 ready" : "service-ready-pill-v10"}>
                         {getServiceReadiness(service)}
@@ -1139,7 +1139,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       <div>
                         <span>Customer sees</span>
                         <strong>{activeService.service_name || "Service title"}</strong>
-                        <small>{formatServicePrice(activeService)} - {activeService.duration_minutes || 30} mins - {getServiceLocationLabel(activeService)}</small>
+                        <small>{formatServicePrice(activeService)}{Number(activeService.duration_minutes || 0) > 0 ? ` - ${activeService.duration_minutes} mins` : ""} - {getServiceLocationLabel(activeService)}</small>
                       </div>
                       <em>{activePricingType === "quote" ? "Quote flow" : "Direct booking"}</em>
                     </div>
@@ -1223,7 +1223,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                           <button
                             type="button"
                             key={minutes}
-                            className={Number(activeService.duration_minutes || 30) === minutes ? "duration-chip-v10 active" : "duration-chip-v10"}
+                            className={Number(activeService.duration_minutes || 0) === minutes ? "duration-chip-v10 active" : "duration-chip-v10"}
                             onClick={() => updateService(activeServiceIndex, { duration_minutes: minutes })}
                           >
                             {minutes}m
@@ -1236,8 +1236,8 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                           className="field-input-v4 profile-input-v4"
                           type="number"
                           min="5"
-                          value={activeService.duration_minutes || 30}
-                          onChange={(e) => updateService(activeServiceIndex, { duration_minutes: Number(e.target.value || 30) })}
+                          value={activeService.duration_minutes || ""}
+                          onChange={(e) => updateService(activeServiceIndex, { duration_minutes: e.target.value ? Number(e.target.value) : "" })}
                         />
                       </label>
                     </div>

@@ -653,7 +653,7 @@ export default function BookingModal({
                               >
                                 <span className="bk-service-option-copy">
                                   <strong>{item.service_name}</strong>
-                                  <small>{item.duration_minutes} min</small>
+                                  {Number(item.duration_minutes || 0) > 0 && <small>{item.duration_minutes} min</small>}
                                 </span>
                                 <span className="bk-service-option-price">{itemPrice.label}</span>
                               </button>
@@ -688,10 +688,10 @@ export default function BookingModal({
                   {/* Quick info chips */}
                   {showStep(0) && (
                   <div className="bk-chips">
-                    <div className="bk-chip">
+                    {Number(serviceObj?.duration_minutes || 0) > 0 && <div className="bk-chip">
                       <span className="bk-chip-icon"><FiClock /></span>
-                      <div><strong>{serviceObj?.duration_minutes || 30} min</strong><small>Duration</small></div>
-                    </div>
+                      <div><strong>{serviceObj.duration_minutes} min</strong><small>Duration</small></div>
+                    </div>}
                     <div className="bk-chip">
                       <span className="bk-chip-icon"><FiMapPin /></span>
                       <div><strong>{getLocationChipLabel(serviceObj, barber)}</strong><small>Location</small></div>

@@ -82,7 +82,7 @@ function normalizeService(row = {}) {
     min_price: row.min_price ?? null,
     max_price: row.max_price ?? null,
     starting_price: row.starting_price ?? null,
-    duration_minutes: Number(row.duration_minutes || 30),
+    duration_minutes: Number(row.duration_minutes || 0),
     location_type: row.location_type || "provider_location",
     images: row.image ? [row.image] : [],
     is_featured: Boolean(row.is_featured),

@@ -128,13 +128,14 @@ function getPopularityTags(service = {}, index = 0, totalRating = 0, reviewCount
   const tags = [];
   if (index === 0 && reviewCount >= 10 && totalRating >= 4.5) tags.push("High demand", "Popular");
   else if (index === 1 && totalRating >= 4.5) tags.push("Top rated");
-  else if (Number(service.duration_minutes || 30) <= 20) tags.push("Quick service");
+  else if (Number(service.duration_minutes || 0) > 0 && Number(service.duration_minutes) <= 20) tags.push("Quick service");
   else tags.push("Usually available");
   return tags;
 }
 
 function fmtDuration(mins) {
-  const m = Number(mins || 30);
+  const m = Number(mins || 0);
+  if (!Number.isFinite(m) || m <= 0) return "";
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60);
   const r = m % 60;
@@ -221,9 +222,9 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
       <div className="pps-svc-price-col">
         <span className="pps-svc-from">Starting from</span>
         <strong className="pps-svc-price">{priceLabel}</strong>
-        <span className="pps-svc-duration">
+        {duration && <span className="pps-svc-duration">
           <FiClock size={11} /> {duration}
-        </span>
+        </span>}
         {!isOwner && !currentUserIsBarber && (
           <button type="button" className="pps-svc-action-btn" onClick={handleAction}>
             {isQuote ? "Quote" : "Select"}

@@ -12,3 +12,9 @@ test("provider navigation has a cream fallback and stays above the map", () => {
   assert.match(css, /#fff8f4/);
   assert.match(css, /z-index: 1491/);
 });
+
+test("provider profile hides unspecified service duration", () => {
+  const profile = fs.readFileSync(new URL("./features/barbers/BarberProfileSheet.jsx", import.meta.url), "utf8");
+  assert.match(profile, /if \(!Number\.isFinite\(m\) \|\| m <= 0\) return ""/);
+  assert.match(profile, /\{duration && <span className="pps-svc-duration">/);
+});
