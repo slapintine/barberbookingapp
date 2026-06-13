@@ -32,10 +32,15 @@ export function getProviderImageCandidates(provider = {}) {
   return [
     provider.coverImage,
     provider.cover_image,
+    // Business logo is a real uploaded image too. Keep this list in sync with
+    // getProviderImageUrl in providerImage.js so the normalized record and the
+    // image helper never disagree for a logo-only stand.
+    provider.logo,
     provider.profileImage,
     provider.profile_image,
     provider.profilePhoto,
     provider.profile_photo,
+    provider.photo,
     provider.image,
     provider.image_url,
     ...gallery,
