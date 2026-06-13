@@ -1,0 +1,36 @@
+/* Final cascade guard for lazy provider navigation. */
+.pps-skeleton-sheet,
+.pps-skeleton-card,
+.overlay-error-surface,
+[data-testid="provider-profile-error"] {
+  background: #fff8f4 !important;
+  color: #2b193d;
+}
+
+.profile-overlay-v4,
+.booking-overlay-v4 {
+  z-index: 1490 !important;
+}
+
+.barber-profile-sheet-v4,
+.pps-skeleton-sheet {
+  z-index: 1491 !important;
+  min-height: 100dvh;
+  background: #fff8f4 !important;
+}
+
+.barber-profile-card-v4,
+.pps-skeleton-card {
+  z-index: 1492 !important;
+  min-height: 100dvh;
+  background: #fff8f4 !important;
+}
+
+.tab-scene-v5:empty::before {
+  content: "Loading Queless...";
+  display: grid;
+  min-height: 60dvh;
+  place-items: center;
+  color: #6f5b78;
+  background: #fff8f4;
+}

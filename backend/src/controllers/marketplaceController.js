@@ -1,6 +1,7 @@
 import { all, get, run } from "../db/query.js";
 import { MARKETPLACE_CATEGORIES } from "../data/marketplaceCategories.js";
 import { publicBusinessParams, publicBusinessWhere } from "../services/businessVisibility.js";
+import { withCanonicalProviderFields } from "../services/providerResponse.js";
 
 const SUPPORT_TOPICS = new Set([
   "Contact Support",
@@ -32,7 +33,7 @@ function isReachableContact(value) {
 }
 
 function normalizeProvider(row = {}) {
-  return {
+  return withCanonicalProviderFields({
     id: row.id,
     user_id: row.owner_user_id,
     business_name: row.business_name,
@@ -48,6 +49,9 @@ function normalizeProvider(row = {}) {
     email: row.email || "",
     profile_image: row.image || "",
     cover_image: row.cover_image || row.image || "",
+    price_from: Number(row.price_from || 0),
+    pricing_mode: row.pricing_mode || "fixed",
+    requires_quote: Boolean(row.requires_quote),
     is_verified: String(row.verified_status || "").toLowerCase() === "verified",
     subscription_plan: row.subscription_tier || "LOCKED",
     subscription_tier: row.subscription_tier || "",
@@ -63,7 +67,7 @@ function normalizeProvider(row = {}) {
     rating: Number(row.rating || 0),
     total_reviews: Number(row.total_reviews || 0),
     created_at: row.created_at,
-  };
+  });
 }
 
 function normalizeService(row = {}) {

@@ -16,6 +16,7 @@
     "cleanup:paid-features": "node src/scripts/auditPaidFeatureEntitlements.js --remediate --confirm-paid-feature-cleanup",
     "audit:provider-readiness": "node src/scripts/providerPublicationReadiness.js",
     "audit:demo-businesses": "node src/scripts/cleanupDemoBusinesses.js",
+    "migrate:provider-images": "node src/scripts/migrateProviderImages.js",
     "cleanup:demo-businesses": "node src/scripts/cleanupDemoBusinesses.js --delete --confirm-demo-cleanup",
     "qa:seed-plans": "node src/scripts/seedPlanQaFixtures.js",
     "qa:verify-plans": "node src/scripts/verifyPlanQaFixtures.js",

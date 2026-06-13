@@ -38,6 +38,7 @@ import { createRequestLogger, logger } from "./config/logger.js";
 import db from "./config/db.js";
 import { initDb } from "./db/initDb.js";
 import { runExpiryReminderJob, runPendingPaymentCheck } from "./services/subscriptionReminderService.js";
+import { providerImageStorageRoot } from "./services/providerImageStorage.js";
 
 const app = express();
 
@@ -54,6 +55,10 @@ app.use("/api", apiRateLimiter);
 
 app.use(express.json({ limit: "150mb" }));
 app.use(express.urlencoded({ extended: true, limit: "150mb" }));
+app.use("/api/uploads", express.static(providerImageStorageRoot, {
+  immutable: true,
+  maxAge: "1y",
+}));
 
 app.use((req, res, next) => {
   req.id = req.get("x-request-id") || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;

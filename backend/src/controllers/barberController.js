@@ -12,6 +12,8 @@ import {
   publicBusinessParams,
   publicBusinessWhere,
 } from "../services/businessVisibility.js";
+import { materializeProviderImages } from "../services/providerImageStorage.js";
+import { withCanonicalProviderFields } from "../services/providerResponse.js";
 
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -54,6 +56,8 @@ function getBarberByOwnerUserId(ownerUserId) {
       b.latitude,
       b.longitude,
       b.price_from,
+      b.pricing_mode,
+      b.requires_quote,
       b.verified_status,
       b.verification_document_name,
       b.verification_document_url,
@@ -629,10 +633,18 @@ export async function registerBarber(req, res, next) {
       plan,
       submit_intent = "draft",
     } = req.body;
+    const requestedImage = image || req.body.cover_image || req.body.coverImage || req.body.profile_image || req.body.profileImage || "";
+    const requestedBusinessType = req.body.category || business_type;
+    const requestedIntroText = req.body.description || intro_text;
+    const requestedPortfolio = req.body.gallery_images || req.body.galleryImages || portfolio;
     const normalizedStandType = normalizeStandType(stand_type);
-    const normalizedBusinessType = normalizeBusinessType(business_type);
+    const normalizedBusinessType = normalizeBusinessType(requestedBusinessType);
     const normalizedMapIconType = normalizeMapIconType(map_icon_type, normalizedBusinessType);
-    const normalizedPortfolio = normalizePortfolioItems(portfolio);
+    const normalizedPortfolio = normalizePortfolioItems(
+      Array.isArray(requestedPortfolio)
+        ? requestedPortfolio.map((item) => typeof item === "string" ? { afterImage: item } : item)
+        : requestedPortfolio
+    );
     const normalizedTeamMembers = normalizedStandType === "shop" ? normalizeTeamMembers(team_members) : [];
     const normalizedVerificationDocumentName = normalizeVerificationDocumentName(
       verification_document_name || document_name || documentName
@@ -643,7 +655,7 @@ export async function registerBarber(req, res, next) {
     const planConfig = getSubscriptionTierConfig(selected_plan || plan || "FREE");
     assertProviderImageLimits({
       planConfig,
-      businessImage: image || "",
+      businessImage: requestedImage,
       services: Array.isArray(services) ? services : [],
       portfolio: normalizedPortfolio,
       teamMembers: normalizedTeamMembers,
@@ -707,7 +719,15 @@ export async function registerBarber(req, res, next) {
     const selectedPlanConfig = getSubscriptionTierConfig(selectedPlan || "FREE");
     assertProviderImageLimits({
       planConfig: selectedPlanConfig,
-      businessImage: image || "",
+      businessImage: requestedImage,
+      services: Array.isArray(services) ? services : [],
+      portfolio: normalizedPortfolio,
+      teamMembers: normalizedTeamMembers,
+    });
+
+    const storedImages = await materializeProviderImages({
+      ownerId: req.user.id,
+      businessImage: requestedImage,
       services: Array.isArray(services) ? services : [],
       portfolio: normalizedPortfolio,
       teamMembers: normalizedTeamMembers,
@@ -734,8 +754,8 @@ export async function registerBarber(req, res, next) {
     const subscriptionStatus = freeActivation ? "active" : wantsPayment ? "pending_payment" : "none";
     const insertResult = await run(
       `INSERT INTO barbers
-       (owner_user_id, business_name, normalized_business_name, location, latitude, longitude, price_from, image, accepts_wallet, accepts_cash, stand_type, business_type, map_icon_type, home_service_enabled, intro_text, portfolio_json, verified_status, verification_document_name, verification_submitted_at, subscription_tier, selected_plan, subscription_status, subscription_expires_at, business_status, is_published, trial_plan, trial_started_at, trial_ends_at, trial_status, used_trials, review_status, is_verified, is_suspended, is_banned)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (owner_user_id, business_name, normalized_business_name, location, latitude, longitude, price_from, pricing_mode, requires_quote, image, accepts_wallet, accepts_cash, stand_type, business_type, map_icon_type, home_service_enabled, intro_text, portfolio_json, verified_status, verification_document_name, verification_submitted_at, subscription_tier, selected_plan, subscription_status, subscription_expires_at, business_status, is_published, trial_plan, trial_started_at, trial_ends_at, trial_status, used_trials, review_status, is_verified, is_suspended, is_banned)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         business_name,
@@ -744,15 +764,17 @@ export async function registerBarber(req, res, next) {
         latitude,
         longitude,
         normalizeOptionalMoneyAmount(price_from, "Base service price"),
-        validateImageReference(image || "", "Business image") || null,
+        String(req.body.pricing_mode || (req.body.requires_quote ? "quote" : "fixed")).toLowerCase(),
+        req.body.requires_quote ? 1 : 0,
+        storedImages.businessImage || null,
         accepts_wallet ? 1 : 0,
         1,
         normalizedStandType,
         normalizedBusinessType,
         normalizedMapIconType,
         home_service_enabled ? 1 : 0,
-        String(intro_text || "").trim(),
-        JSON.stringify(normalizedPortfolio),
+        String(requestedIntroText || "").trim(),
+        JSON.stringify(storedImages.portfolio),
         verificationStatus,
         normalizedVerificationDocumentName,
         verificationSubmittedAt,
@@ -785,10 +807,10 @@ export async function registerBarber(req, res, next) {
       );
     }
 
-    if (Array.isArray(services) && services.length) {
-      await replaceBarberServices(barberId, services, selectedPlanConfig.serviceLimit);
+    if (storedImages.services.length) {
+      await replaceBarberServices(barberId, storedImages.services, selectedPlanConfig.serviceLimit);
     }
-    await replaceTeamMembers(barberId, normalizedTeamMembers);
+    await replaceTeamMembers(barberId, storedImages.teamMembers);
 
     await seedDefaultWeeklySchedule(barberId);
     await updateUserRole(req.user.id, "provider");
@@ -812,13 +834,17 @@ export async function registerBarber(req, res, next) {
       next_step: freeActivation ? "active" : wantsPayment ? "payment_pending" : "draft",
       barber: {
         ...barber,
+        ...withCanonicalProviderFields(barber, {
+          services: barberServices,
+          portfolio: parseJsonArray(barber.portfolio_json, storedImages.portfolio),
+        }),
         image: barber.image || null,
         document_name: barber.verification_document_name || "",
         business_type: barber.business_type || normalizedBusinessType,
         map_icon_type: barber.map_icon_type || normalizedMapIconType,
         home_service_enabled: Number(barber.home_service_enabled || 0),
         intro_text: barber.intro_text || "",
-        portfolio: parseJsonArray(barber.portfolio_json, normalizedPortfolio),
+        portfolio: parseJsonArray(barber.portfolio_json, storedImages.portfolio),
         subscription: buildSubscriptionMetadata(barber, latestSubscription),
         services: barberServices,
         team_members: teamMembers,
@@ -895,6 +921,8 @@ export async function getAllBarbers(req, res, next) {
         b.latitude,
         b.longitude,
         b.price_from,
+        b.pricing_mode,
+        b.requires_quote,
         b.verified_status,
         b.image,
         b.availability_start,
@@ -936,6 +964,8 @@ export async function getAllBarbers(req, res, next) {
         b.latitude,
         b.longitude,
         b.price_from,
+        b.pricing_mode,
+        b.requires_quote,
         b.verified_status,
         b.image,
         b.availability_start,
@@ -989,6 +1019,10 @@ export async function getAllBarbers(req, res, next) {
 
       result.push({
         ...barber,
+        ...withCanonicalProviderFields(barber, {
+          services,
+          portfolio: parseJsonArray(barber.portfolio_json, []),
+        }),
         image: barber.image || null,
         avg_rating: Number(barber.avg_rating || 0).toFixed(1),
         total_reviews: Number(barber.total_reviews || 0),
@@ -1058,6 +1092,10 @@ export async function getMyBarberProfile(req, res, next) {
       success: true,
       barber: {
         ...barber,
+        ...withCanonicalProviderFields(barber, {
+          services,
+          portfolio: parseJsonArray(barber.portfolio_json, []),
+        }),
         image: barber.image || null,
         document_name: barber.verification_document_name || "",
         business_type: barber.business_type || "Services",
@@ -1116,10 +1154,18 @@ export async function updateMyBarberProfile(req, res, next) {
       Object.prototype.hasOwnProperty.call(req.body, "verification_document_name") ||
       Object.prototype.hasOwnProperty.call(req.body, "document_name") ||
       Object.prototype.hasOwnProperty.call(req.body, "documentName");
+    const requestedImage = req.body.image || req.body.cover_image || req.body.coverImage || req.body.profile_image || req.body.profileImage;
+    const requestedBusinessType = req.body.category || business_type;
+    const requestedIntroText = req.body.description || intro_text;
+    const requestedPortfolio = req.body.gallery_images || req.body.galleryImages || portfolio;
     const normalizedStandType = normalizeStandType(stand_type);
-    const normalizedBusinessType = normalizeBusinessType(business_type);
+    const normalizedBusinessType = normalizeBusinessType(requestedBusinessType);
     const normalizedMapIconType = normalizeMapIconType(map_icon_type, normalizedBusinessType);
-    const normalizedPortfolio = normalizePortfolioItems(portfolio);
+    const normalizedPortfolio = normalizePortfolioItems(
+      Array.isArray(requestedPortfolio)
+        ? requestedPortfolio.map((item) => typeof item === "string" ? { afterImage: item } : item)
+        : requestedPortfolio
+    );
     const normalizedTeamMembers = normalizedStandType === "shop" ? normalizeTeamMembers(team_members) : [];
     const existingVerificationDocumentName = barber.verification_document_name || "";
     const nextVerificationDocumentName = hasVerificationDocumentUpdate
@@ -1142,7 +1188,7 @@ export async function updateMyBarberProfile(req, res, next) {
     const nextVerificationReviewedBy = verificationDocumentChanged ? null : barber.verification_reviewed_by || null;
     const nextVerificationNotes = verificationDocumentChanged ? "" : barber.verification_notes || "";
 
-    const incomingImage = req.body.image;
+    const incomingImage = requestedImage;
     const finalImage =
       typeof incomingImage === "string" && incomingImage.trim() !== ""
         ? validateImageReference(incomingImage, "Business image")
@@ -1189,6 +1235,14 @@ export async function updateMyBarberProfile(req, res, next) {
       teamMembers: normalizedTeamMembers,
     });
 
+    const storedImages = await materializeProviderImages({
+      ownerId: req.user.id,
+      businessImage: finalImage || "",
+      services: Array.isArray(services) ? services : [],
+      portfolio: normalizedPortfolio,
+      teamMembers: normalizedTeamMembers,
+    });
+
     await run(
       `UPDATE barbers
        SET business_name = ?,
@@ -1197,6 +1251,8 @@ export async function updateMyBarberProfile(req, res, next) {
            latitude = ?,
            longitude = ?,
            price_from = ?,
+           pricing_mode = ?,
+           requires_quote = ?,
            image = ?,
            accepts_wallet = ?,
            accepts_cash = ?,
@@ -1220,15 +1276,17 @@ export async function updateMyBarberProfile(req, res, next) {
         latitude,
         longitude,
         normalizeOptionalMoneyAmount(price_from, "Base service price"),
-        finalImage,
+        String(req.body.pricing_mode || (req.body.requires_quote ? "quote" : barber.pricing_mode || "fixed")).toLowerCase(),
+        req.body.requires_quote === undefined ? Number(barber.requires_quote || 0) : req.body.requires_quote ? 1 : 0,
+        storedImages.businessImage || finalImage,
         accepts_wallet ? 1 : 0,
         1,
         normalizedStandType,
         normalizedBusinessType,
         normalizedMapIconType,
         home_service_enabled ? 1 : 0,
-        String(intro_text || "").trim(),
-        JSON.stringify(normalizedPortfolio),
+        String(requestedIntroText || "").trim(),
+        JSON.stringify(storedImages.portfolio),
         nextVerificationDocumentName,
         nextVerificationStatus,
         nextVerificationSubmittedAt,
@@ -1240,10 +1298,10 @@ export async function updateMyBarberProfile(req, res, next) {
     );
 
     if (Array.isArray(services)) {
-      await replaceBarberServices(barber.id, services, planConfig.serviceLimit);
+      await replaceBarberServices(barber.id, storedImages.services, planConfig.serviceLimit);
     }
     if (Array.isArray(team_members)) {
-      await replaceTeamMembers(barber.id, normalizedTeamMembers);
+      await replaceTeamMembers(barber.id, storedImages.teamMembers);
     }
 
     await logAudit(req.user.id, `Updated provider profile #${barber.id}`);
@@ -1259,13 +1317,17 @@ export async function updateMyBarberProfile(req, res, next) {
       message: "Provider profile updated successfully.",
       barber: {
         ...updatedBarber,
+        ...withCanonicalProviderFields(updatedBarber, {
+          services: updatedServices,
+          portfolio: parseJsonArray(updatedBarber.portfolio_json, storedImages.portfolio),
+        }),
         image: updatedBarber.image || null,
         document_name: updatedBarber.verification_document_name || "",
         business_type: updatedBarber.business_type || normalizedBusinessType,
         map_icon_type: updatedBarber.map_icon_type || normalizedMapIconType,
         home_service_enabled: Number(updatedBarber.home_service_enabled || 0),
         intro_text: updatedBarber.intro_text || "",
-        portfolio: parseJsonArray(updatedBarber.portfolio_json, normalizedPortfolio),
+        portfolio: parseJsonArray(updatedBarber.portfolio_json, storedImages.portfolio),
         subscription: buildSubscriptionMetadata(updatedBarber, latestSubscription),
         services: updatedServices,
         team_members: teamMembers,

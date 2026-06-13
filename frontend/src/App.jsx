@@ -28,6 +28,7 @@ import {
   verifyCustomerSubscriptionUpgrade,
 } from "./api/customerSubscriptionsApi.js";
 import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
+import { normalizeProviderData } from "./utils/providerData.js";
 import { getCustomerWallet, getMyWallet, requestWalletWithdrawal } from "./api/walletApi.js";
 import AppHeader from "./components/ui/AppHeader.jsx";
 import AccountMenu from "./components/ui/AccountMenu.jsx";
@@ -209,34 +210,8 @@ function getBarberStableKey(barber = {}) {
   ].join("|");
 }
 
-function mergeBarberListsPreservingLocal(serverBarbers = [], localBarbers = []) {
-  const localMap = new Map(
-    (localBarbers || []).map((item) => [getBarberStableKey(item), normalizeBarber(item)])
-  );
-
-  const merged = (serverBarbers || []).map((serverItem, index) => {
-    const normalizedServer = normalizeBarber(serverItem, index);
-    const localItem =
-      localMap.get(getBarberStableKey(normalizedServer)) ||
-      (localBarbers || []).find(
-        (item) =>
-          String(item?.id || "") === String(normalizedServer.id || "") ||
-          (String(item?.ownerUsername || "") &&
-            String(item?.ownerUsername || "") === String(normalizedServer.ownerUsername || ""))
-      );
-
-    return normalizeBarber(
-      {
-        ...normalizedServer,
-        image: normalizedServer.image || localItem?.image || "",
-        availability: normalizedServer.availability || localItem?.availability,
-        phone: normalizedServer.phone || localItem?.phone || "",
-      },
-      index
-    );
-  });
-
-  return uniqueById(merged);
+function mergeBarberListsPreservingLocal(serverBarbers = []) {
+  return uniqueById((serverBarbers || []).map(normalizeBarber));
 }
 
 
@@ -765,6 +740,11 @@ function mapServerNotification(item) {
 }
 
 function normalizeBarber(barber, index) {
+  const canonical = normalizeProviderData(barber, {
+    defaultLatitude: DEFAULT_CENTER[0],
+    defaultLongitude: DEFAULT_CENTER[1],
+  });
+  barber = canonical;
   const fallback = {
     id: barber?.id ?? index + 1,
     ownerUsername: null,
@@ -1217,6 +1197,7 @@ function App() {
   const confirmPasswordRef = useRef(null);
   const loginRequestRef = useRef(false);
   const socketRef = useRef(null);
+  const providerOpenRef = useRef({ id: null, at: 0 });
   const typingTimeoutRef = useRef(null);
   const chatThreadRef = useRef(null);
   const notificationAudioRef = useRef(null);
@@ -4468,6 +4449,10 @@ const updateBarberStand = async (payload) => {
 
   const openProviderProfile = (provider) => {
     if (!provider) return;
+    const providerId = String(provider.id || provider.owner_user_id || provider.business_name || "");
+    const now = Date.now();
+    if (providerId && providerOpenRef.current.id === providerId && now - providerOpenRef.current.at < 500) return;
+    providerOpenRef.current = { id: providerId, at: now };
     const isOwner = currentUser?.username && String(provider.ownerUsername || "") === String(currentUser.username);
     if (!isOwner && !isPublicProvider(provider)) {
       setGlobalError("This business is not available yet.");
@@ -4952,7 +4937,6 @@ const updateBarberStand = async (payload) => {
           onVerifyPremium={(reference) => verifyCurrentCustomerPremium(reference)}
           onContinueManualSearch={() => setActiveTab("searchResults")}
           onOpenProvider={(provider) => {
-            setActiveTab(previousMobileView === "smartMatch" ? "home" : previousMobileView || "home");
             openProviderProfile(provider);
           }}
         />

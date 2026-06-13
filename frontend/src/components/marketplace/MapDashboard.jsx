@@ -30,6 +30,7 @@ import {
   isProviderVerified,
 } from "../../utils/marketplaceServices.js";
 import { resolveProviderImage, handleProviderImageError } from "../../utils/providerImage.js";
+import { formatProviderPrice } from "../../utils/providerData.js";
 import {
   ClusteredProviderMarkers,
   GAYAZA_CENTER,
@@ -83,7 +84,7 @@ function priceRangeLabel(provider = {}) {
   const to = Number(provider.price_to || 0);
   if (from > 0 && to > 0) return `UGX ${from.toLocaleString()} – ${to.toLocaleString()}`;
   if (from > 0) return `From UGX ${from.toLocaleString()}`;
-  return "";
+  return formatProviderPrice(provider);
 }
 
 function responseTimeLabel(provider = {}) {

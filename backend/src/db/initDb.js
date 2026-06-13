@@ -968,6 +968,8 @@ export async function initDb() {
     await addColumnIfMissing("barbers", "selected_plan", `selected_plan TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "deleted_at", `deleted_at TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "map_icon_type", `map_icon_type TEXT DEFAULT ''`);
+    await addColumnIfMissing("barbers", "pricing_mode", `pricing_mode TEXT NOT NULL DEFAULT 'fixed'`);
+    await addColumnIfMissing("barbers", "requires_quote", `requires_quote INTEGER NOT NULL DEFAULT 0`);
     await addColumnIfMissing("barbers", "verification_document_name", `verification_document_name TEXT DEFAULT ''`);
     await addColumnIfMissing("barbers", "verification_document_url", `verification_document_url TEXT DEFAULT ''`);
     await addColumnIfMissing("barbers", "verification_notes", `verification_notes TEXT DEFAULT ''`);
