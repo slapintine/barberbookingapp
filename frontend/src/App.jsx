@@ -38,6 +38,7 @@ import PaymentFlowModal from "./components/payments/PaymentFlowModal.jsx";
 import MarketplaceMapOverlay from "./components/marketplace/MarketplaceMapOverlay.jsx";
 import ProviderProfileSkeleton from "./features/barbers/ProviderProfileSkeleton.jsx";
 import OverlayErrorBoundary from "./components/OverlayErrorBoundary.jsx";
+import PageErrorBoundary from "./components/PageErrorBoundary.jsx";
 import { NotificationSheet, NotificationToast } from "./features/notifications/Notifications.jsx";
 import { apiFetch, getAuthToken, SOCKET_URL } from "./config/api.js";
 import { listenForForegroundNotifications } from "./pushNotifications.js";
@@ -5365,7 +5366,9 @@ const updateBarberStand = async (payload) => {
                 clearAuthMessages={clearAuthMessages}
               />
             ) : (
-              appContent
+              <PageErrorBoundary onGoHome={() => setActiveTab("home")}>
+                {appContent}
+              </PageErrorBoundary>
             )}
           </Suspense>
           {showInitialLoadingScreen ? <LoadingScreen visible={initialLoadingStage === "visible"} /> : null}

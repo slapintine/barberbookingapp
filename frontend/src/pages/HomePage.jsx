@@ -96,17 +96,28 @@ function getPopularItemTitle(item = {}) {
   );
 }
 
+// Category may arrive as a plain string OR as a normalized object
+// ({ id, name }) depending on the data source. Always coerce to a string so it
+// is safe to render directly — rendering the raw object crashes React with
+// "Objects are not valid as a React child".
+function categoryToText(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") return String(value.name || value.label || value.title || "");
+  return String(value);
+}
+
 function getPopularItemCategory(item = {}) {
   const service = getFirstService(item);
   return (
-    item.category ||
-    item.category_name ||
-    item.business_type ||
-    item.businessType ||
-    item.serviceType ||
-    service.category ||
-    service.category_name ||
-    service.serviceType ||
+    categoryToText(item.category) ||
+    categoryToText(item.category_name) ||
+    categoryToText(item.business_type) ||
+    categoryToText(item.businessType) ||
+    categoryToText(item.serviceType) ||
+    categoryToText(service.category) ||
+    categoryToText(service.category_name) ||
+    categoryToText(service.serviceType) ||
     ""
   );
 }
