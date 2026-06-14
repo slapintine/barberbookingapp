@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const IMAGE_TYPES = {
   png: "png",
@@ -9,9 +10,20 @@ const IMAGE_TYPES = {
   webp: "webp",
 };
 
-export const providerImageStorageRoot = path.resolve(
-  process.env.IMAGE_STORAGE_DIR || path.join(process.cwd(), "uploads")
-);
+// The backend dir (…/backend), derived from this module's location so the
+// uploads root is the SAME folder whether the server is launched from the repo
+// root or from backend/. Previously this used process.cwd(), so a launch from
+// the wrong directory served /api/uploads from a folder with no files (uploaded
+// images 404'd even though they existed on disk).
+const backendDir = path.resolve(fileURLToPath(import.meta.url), "../../..");
+
+export const providerImageStorageRoot = (() => {
+  const configured = process.env.IMAGE_STORAGE_DIR;
+  if (configured && path.isAbsolute(configured)) return path.resolve(configured);
+  // A relative IMAGE_STORAGE_DIR (e.g. "./uploads") or no value resolves
+  // against the backend dir, not the volatile process working directory.
+  return path.resolve(backendDir, configured || "uploads");
+})();
 
 export function parseImageDataUrl(value) {
   const match = String(value || "").trim().match(/^data:image\/(png|jpe?g|webp);base64,([a-z0-9+/=\s]+)$/i);
