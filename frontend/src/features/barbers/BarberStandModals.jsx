@@ -119,8 +119,12 @@ function cleanPricingForMode(service = {}, pricingType = "fixed") {
   return next;
 }
 
+// In the wizard we keep user-cleared service titles empty (preserveEmptyTitle)
+// so the controlled title input can be fully deleted/replaced without
+// "General service" snapping back on every render.
 function normalizeFormServices(value, fallbackToDefaults = false) {
-  if (Array.isArray(value) && value.length) return value.map(normalizeServiceForBooking);
+  const opts = { preserveEmptyTitle: true };
+  if (Array.isArray(value) && value.length) return value.map((item, idx) => normalizeServiceForBooking(item, idx, opts));
   if (typeof value === "string" && value.trim()) {
     return value
       .split(",")
@@ -128,34 +132,30 @@ function normalizeFormServices(value, fallbackToDefaults = false) {
         const value = item.trim();
         return value ? [value] : [];
       })
-      .map(normalizeServiceForBooking);
+      .map((item, idx) => normalizeServiceForBooking(item, idx, opts));
   }
-  return fallbackToDefaults ? DEFAULT_SERVICE_TYPES.map(normalizeServiceForBooking) : [];
+  return fallbackToDefaults ? DEFAULT_SERVICE_TYPES.map((item, idx) => normalizeServiceForBooking(item, idx, opts)) : [];
 }
 
-function splitProfileName(profile = {}) {
-  const firstName = String(profile.firstName || profile.first_name || "").trim();
-  const lastName = String(profile.lastName || profile.last_name || "").trim();
-  if (firstName || lastName) return { firstName, lastName };
+// Maps a validation field key to the wizard step that owns it, so the single
+// validation summary can jump the user straight to the relevant step.
+const FIELD_TO_STEP = {
+  businessName: 1,
+  businessType: 1,
+  phone: 1,
+  location: 2,
+  services: 4,
+};
 
-  const parts = String(profile.fullName || profile.full_name || profile.name || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  return {
-    firstName: parts[0] || "",
-    lastName: parts.length > 1 ? parts.slice(1).join(" ") : "",
-  };
-}
-
-export function validateBusinessStand(data = {}, profile = {}) {
+// A business stand is created against the authenticated account id. We do NOT
+// require the account owner's personal first/last name — many real accounts have
+// no personal name set, and the wizard never collects one. Validation covers
+// only the business information the wizard actually gathers.
+export function validateBusinessStand(data = {}) {
   const form = data && typeof data === "object" ? data : {};
-  const { firstName, lastName } = splitProfileName(profile);
   const services = normalizeFormServices(form.services);
   const missing = [];
 
-  if (!firstName) missing.push({ key: "firstName", label: "First name is required" });
-  if (!lastName) missing.push({ key: "lastName", label: "Last name is required" });
   if (!String(form.businessName || "").trim()) missing.push({ key: "businessName", label: "Business name is required" });
   if (!String(form.businessType || "").trim()) missing.push({ key: "businessType", label: "Business category is required" });
   if (!String(form.phone || "").trim()) missing.push({ key: "phone", label: "Phone number is required" });
@@ -769,7 +769,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
       if (draftMissing.length) {
         setCurrentStep(draftMissing[0].key === "businessName" ? 1 : 2);
         setMissingFields(draftMissing);
-        setError("Your draft needs these details before it can be saved.");
+        setError("");
         return;
       }
     } else {
@@ -782,11 +782,13 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
           return;
         }
       }
-      const missing = validateBusinessStand({ ...form, services }, profile);
+      const missing = validateBusinessStand({ ...form, services });
       if (missing.length) {
         setCurrentStep(TOTAL_STEPS);
         setMissingFields(missing);
-        setError("Your business stand is not complete yet.");
+        // Single source of truth: the validation summary renders the headline +
+        // list. Do not also set `error` or the same message shows twice.
+        setError("");
         return;
       }
     }
@@ -839,21 +841,34 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
             {error ? (
               <div className="auth-error business-wizard-error-v10">
                 <strong>{error}</strong>
-                {missingFields.length ? (
-                  <>
-                    <span>Please complete the following before continuing:</span>
-                    <ul>
-                      {missingFields.map((item) => (
-                        <li key={`${item.key}-${item.label}`}>{item.label}</li>
-                      ))}
-                    </ul>
-                  </>
-                ) : null}
                 {error.toLowerCase().includes("business with this name already exists") ? (
                   <button type="button" className="mini-action-btn-v4" onClick={() => setError("Claim/report request noted. Admin review will be available from the support workflow.")}>
                     This is my business / Claim or report
                   </button>
                 ) : null}
+              </div>
+            ) : null}
+
+            {/* Single source of truth for field-completeness validation. Rendered
+                once here (not per-step, not duplicated in the banner). Each item
+                jumps to the step that owns the field. */}
+            {missingFields.length ? (
+              <div className="business-missing-summary-v10" role="alert" aria-live="polite">
+                <strong>A few details still need attention</strong>
+                <span>Complete the following before continuing:</span>
+                <ul>
+                  {missingFields.map((item) => (
+                    <li key={`${item.key}-${item.label}`}>
+                      <button
+                        type="button"
+                        className="business-missing-jump-v10"
+                        onClick={() => setCurrentStep(FIELD_TO_STEP[item.key] || currentStep)}
+                      >
+                        {item.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : null}
 
@@ -1359,17 +1374,6 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
             {currentStep === 6 ? (
               <section className="business-step-card-v10">
                 <WizardNotice>Review everything before creating your business profile.</WizardNotice>
-                {missingFields.length ? (
-                  <div className="business-missing-summary-v10">
-                    <strong>Your business stand is not complete yet.</strong>
-                    <span>Please complete the following before continuing:</span>
-                    <ul>
-                      {missingFields.map((item) => (
-                        <li key={`${item.key}-${item.label}`}>{item.label}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
                 <div className="payment-config-v5 business-mini-card-v10">
                   <div className="payment-config-title-v5"><FiCreditCard /> Provider plan</div>
                   {PROVIDER_PLANS.map((plan) => (
