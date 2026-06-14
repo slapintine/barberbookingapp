@@ -404,8 +404,10 @@ const LEGACY_ICON_KEY_MAP = {
   "📷": "events-photography",
   // common misspellings/variants
   grooming: "barber",
+  barbers: "barber",
   "hair-cut": "barber",
   haircut: "barber",
+  "hair-salon": "salon",
   makeup: "beauty",
   nails: "beauty",
   "health-and-fitness": "health-fitness",
@@ -415,6 +417,8 @@ const LEGACY_ICON_KEY_MAP = {
   education: "education-tutoring",
   tutoring: "education-tutoring",
   auto: "auto-services",
+  automotive: "auto-services",
+  "automotive-services": "auto-services",
   mechanics: "auto-services",
   photography: "events-photography",
   events: "events-photography",
@@ -426,6 +430,10 @@ const LEGACY_ICON_KEY_MAP = {
   maintenance: "repairs-maintenance",
   food: "catering-food-services",
   catering: "catering-food-services",
+  "food-and-catering": "catering-food-services",
+  "food-catering": "catering-food-services",
+  "professional-services": "business-services",
+  professional: "business-services",
   "real-estate": "real-estate-services",
   construction: "construction-renovation",
   renovation: "construction-renovation",
@@ -457,30 +465,57 @@ const LEGACY_ICON_KEY_MAP = {
 };
 
 /**
+ * Normalizes category labels, ids, and legacy backend icon values to one
+ * lookup shape. Keeping this here means the mobile app and website resolve
+ * aliases identically instead of maintaining separate name maps.
+ */
+export function normalizeCategoryLookupKey(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+const CATEGORY_ID_BY_LABEL = new Map(
+  Object.values(CATEGORY_REGISTRY).map((definition) => [
+    normalizeCategoryLookupKey(definition.label),
+    definition.id,
+  ])
+);
+
+/**
  * Returns the registry entry for a category id, with safe fallback.
  * Handles legacy icon keys, label-based lookups, and unknown values.
  */
 export function getCategoryDef(idOrKey = "") {
   if (!idOrKey) return CATEGORY_FALLBACK;
-  const key = String(idOrKey).trim().toLowerCase();
+  const key = normalizeCategoryLookupKey(idOrKey);
 
   // Direct match
   if (CATEGORY_REGISTRY[key]) return CATEGORY_REGISTRY[key];
+
+  // Exact display-label match after punctuation/spacing normalization.
+  const labelMatch = CATEGORY_ID_BY_LABEL.get(key);
+  if (labelMatch) return CATEGORY_REGISTRY[labelMatch];
 
   // Legacy key lookup
   const resolved = LEGACY_ICON_KEY_MAP[key];
   if (resolved && CATEGORY_REGISTRY[resolved]) return CATEGORY_REGISTRY[resolved];
 
-  // Try normalizing (remove special chars)
-  const normalized = key.replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-  if (CATEGORY_REGISTRY[normalized]) return CATEGORY_REGISTRY[normalized];
-
   // Substring match as last resort
   for (const [id, def] of Object.entries(CATEGORY_REGISTRY)) {
-    if (id.includes(normalized) || normalized.includes(id)) return def;
+    const labelKey = normalizeCategoryLookupKey(def.label);
+    if (id.includes(key) || key.includes(id) || labelKey.includes(key) || key.includes(labelKey)) return def;
   }
 
   return CATEGORY_FALLBACK;
+}
+
+/** Returns the exact Lucide icon component used by the Queless app. */
+export function getCategoryIcon(categoryName = "") {
+  return getCategoryDef(categoryName).Icon;
 }
 
 /**
