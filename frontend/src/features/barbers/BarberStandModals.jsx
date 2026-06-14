@@ -16,7 +16,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { DEFAULT_SERVICE_TYPES, SERVICE_CATEGORIES, formatServicePrice, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
-import { MULTI_SERVICE_MAP_ICON_TYPE, getMapIconOption, getMapIconTypeForCategory, getMapIconTypeForSelectedCategories } from "../../utils/mapIconCategories.js";
+import { getMapIconOption, getMapIconTypeForCategory } from "../../utils/mapIconCategories.js";
 import { getCategoryDef, getCategoryList, CategorySelectorItem } from "../../utils/categoryRegistry.jsx";
 import { getGeolocationErrorMessage, reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
 import {
@@ -577,14 +577,15 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
       })),
     [selectedCategories]
   );
-  const selectedMapIconType = useMemo(() => getMapIconTypeForSelectedCategories(selectedCategories), [selectedCategories]);
-  const selectedMapIconOption = selectedMapIconType ? getMapIconOption(selectedMapIconType) : null;
-  const effectiveMapIconType = selectedMapIconType || form.mapIconType || getMapIconTypeForCategory(form.businessType);
-  const mapPreviewTitle = selectedMapIconOption?.label || "No map icon selected";
-  const mapPreviewText = !selectedMapIconOption
-    ? "Choose at least one service category to set your map icon."
-    : selectedMapIconType === MULTI_SERVICE_MAP_ICON_TYPE
-    ? "This icon will appear when your business spans several service categories."
+  // Single source of truth for the map icon: the manual selection made in
+  // Step 1 (form.mapIconType), falling back to a sensible default derived from
+  // the main category until the user picks one. Service-category chips in
+  // Step 3 no longer change this value; they only drive discoverability.
+  const effectiveMapIconType = form.mapIconType || getMapIconTypeForCategory(form.businessType);
+  const effectiveMapIconOption = effectiveMapIconType ? getMapIconOption(effectiveMapIconType) : null;
+  const mapPreviewTitle = effectiveMapIconOption?.label || "No map icon selected";
+  const mapPreviewText = !effectiveMapIconOption
+    ? "Pick your map icon in Step 1 (Business basics)."
     : "This icon will appear on the Queless map.";
   const canSubmit = true;
   const missingFieldKeys = useMemo(() => new Set(missingFields.map((item) => item.key)), [missingFields]);
@@ -644,11 +645,12 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
         ? current.filter((service) => service.category !== category)
         : [...current, createBlankService(category)];
       const nextCategories = [...new Set(nextServices.flatMap((service) => (service.category ? [service.category] : [])))];
-      const nextMapIconType = getMapIconTypeForSelectedCategories(nextCategories);
+      // The map icon is chosen manually in Step 1 and is NOT overwritten here.
+      // Toggling service categories only updates the service list (and the main
+      // category default), so a user's Step 1 icon pick is preserved.
       return {
         ...prev,
         businessType: nextCategories[0] || prev.businessType,
-        mapIconType: nextMapIconType,
         services: nextServices,
       };
     });
@@ -803,7 +805,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
         selectedCategories: selectedCategoryItems,
         primaryCategory: selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : null,
         businessType: selectedCategories[0] || form.businessType,
-        mapIconType: selectedMapIconType,
+        mapIconType: effectiveMapIconType,
         services,
       });
       if (saved === false) {
@@ -1090,9 +1092,9 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                   <strong>{selectedCategories.length}</strong>
                   <span>{selectedCategories.length === 1 ? "category selected" : "categories selected"}</span>
                 </div>
-                <div className={selectedMapIconOption ? "map-icon-preview-v10" : "map-icon-preview-v10 empty"}>
-                  {selectedMapIconOption ? (
-                    <span dangerouslySetInnerHTML={{ __html: selectedMapIconOption.svg }} />
+                <div className={effectiveMapIconOption ? "map-icon-preview-v10" : "map-icon-preview-v10 empty"}>
+                  {effectiveMapIconOption ? (
+                    <span dangerouslySetInnerHTML={{ __html: effectiveMapIconOption.svg }} />
                   ) : (
                     <span><FiMapPin /></span>
                   )}
