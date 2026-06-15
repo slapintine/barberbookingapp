@@ -4,6 +4,7 @@ import { findSmartMatches } from "../../api/smartMatchApi.js";
 import logo from "../../assets/queless-logo-full.png";
 import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
 import { reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
+import { CUSTOMER_PREMIUM_PLAN } from "../../utils/subscriptionPlans.js";
 import {
   AI_REASON_SETS,
   LOCATION_OPTIONS,
@@ -435,7 +436,7 @@ export default function SmartMatchPage({
                 <span key={item}><FiCheck /> {item}</span>
               ))}
             </div>
-            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX 10,000/month</div>
+            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX {CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month</div>
             {customerSubscriptionMessage ? <div className="smart-match-error">{customerSubscriptionMessage}</div> : null}
           </section>
         ) : null}

@@ -6,16 +6,18 @@ import "./App.css";
 import logo from "./assets/queless-logo-icon.png";
 import { resolveProviderImage, NEUTRAL_PLACEHOLDER } from "./utils/providerImage.js";
 import { sanitizeErrorMessage } from "./utils/errorMessages.js";
-import { confirmPasswordReset, loginUser, registerUser, requestPasswordReset, updateAccount } from "./api/authApi.js";
+import { confirmPasswordReset, loginUser, logoutUser, registerUser, requestPasswordReset, updateAccount } from "./api/authApi.js";
 import { deleteMyBarberStand, getBarbers, getMyBarberStand, publishMyBarberStand, registerBarberStand, updateMyBarberStand } from "./api/barbersApi.js";
 import {
   confirmCashPaymentRequest,
   createBookingRequest,
   getMyBookings,
+  rescheduleBookingRequest,
   updateBookingStatusRequest,
   verifyBookingPaymentRequest,
 } from "./api/bookingsApi.js";
 import { createMessage, getMessages } from "./api/chatApi.js";
+import { createQuoteRequest } from "./api/marketplaceApi.js";
 import { addFavorite, getFavorites as getFavoriteRows, removeFavorite } from "./api/favoritesApi.js";
 import { getNotifications, markNotificationReadRequest } from "./api/notificationsApi.js";
 import { getProfile, saveProfileRequest } from "./api/profilesApi.js";
@@ -40,7 +42,7 @@ import ProviderProfileSkeleton from "./features/barbers/ProviderProfileSkeleton.
 import OverlayErrorBoundary from "./components/OverlayErrorBoundary.jsx";
 import PageErrorBoundary from "./components/PageErrorBoundary.jsx";
 import { NotificationSheet, NotificationToast } from "./features/notifications/Notifications.jsx";
-import { apiFetch, getAuthToken, SOCKET_URL } from "./config/api.js";
+import { apiFetch, getAuthToken, getRefreshToken, SOCKET_URL } from "./config/api.js";
 import { listenForForegroundNotifications } from "./pushNotifications.js";
 import useAutoScrollToBottom from "./hooks/useAutoScrollToBottom.js";
 import useAvailableTimeSlots from "./hooks/useAvailableTimeSlots.js";
@@ -70,6 +72,7 @@ import {
 import { isBookingPaymentMethodEnabled, isOnlinePaymentMethod } from "./utils/paymentLabels.js";
 import { DEFAULT_CUSTOMER_SUBSCRIPTION_STATE, isCustomerPremiumActive } from "./utils/customerPremium.js";
 import { isPublicMarketplaceProvider } from "./utils/marketplaceServices.js";
+import { CUSTOMER_PREMIUM_PLAN } from "./utils/subscriptionPlans.js";
 
 // Provider profile is created as a retryable lazy inside the component (keyed by
 // a retry counter) so a failed chunk import can be re-attempted in place.
@@ -953,15 +956,17 @@ function getLoginErrorMessage(error) {
   );
 }
 
-function saveAuthSession(token, user, { rememberMe = true } = {}) {
+function saveAuthSession(token, user, { rememberMe = true, refreshToken = "" } = {}) {
   const storage = rememberMe ? localStorage : sessionStorage;
   const otherStorage = rememberMe ? sessionStorage : localStorage;
 
   storage.setItem("lineup_token", token || "");
   storage.setItem("lineup_user", JSON.stringify(user));
+  storage.setItem("lineup_refresh_token", refreshToken);
   otherStorage.removeItem("lineup_token");
   otherStorage.removeItem("lineup_user");
   otherStorage.removeItem("lineup_token_expires_at");
+  otherStorage.removeItem("lineup_refresh_token");
 
   const expiry = readSessionExpiry(token);
   if (expiry) {
@@ -975,11 +980,13 @@ function clearAuthSession() {
   localStorage.removeItem("lineup_token");
   localStorage.removeItem("lineup_user");
   localStorage.removeItem("lineup_token_expires_at");
+  localStorage.removeItem("lineup_refresh_token");
   localStorage.removeItem("cutz_token");
   localStorage.removeItem("cutz_user");
   sessionStorage.removeItem("lineup_token");
   sessionStorage.removeItem("lineup_user");
   sessionStorage.removeItem("lineup_token_expires_at");
+  sessionStorage.removeItem("lineup_refresh_token");
   sessionStorage.removeItem("cutz_token");
   sessionStorage.removeItem("cutz_user");
 }
@@ -1054,6 +1061,9 @@ function App() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [smartMatchInitial, setSmartMatchInitial] = useState({});
   const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [quoteSubmitting, setQuoteSubmitting] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
+  const quoteIdempotencyRef = useRef("");
   const [showBarberProfile, setShowBarberProfile] = useState(false);
   const [providerChunkAttempt, setProviderChunkAttempt] = useState(0);
   // Recreate the lazy on each retry so a failed dynamic import is re-attempted
@@ -2405,9 +2415,14 @@ const fetchBarbers = async () => {
     try {
       setAuthLoading(true);
       const data = await registerUser({ username, email, password, role: "customer" });
-
-      setAuthSuccess(data?.message || "Account created. You can now log in.");
-      setAuthMode("login");
+      const nextToken = data.token || "";
+      saveAuthSession(nextToken, data.user, { rememberMe: true, refreshToken: data.refreshToken });
+      setSessionExpiresAt(readSessionExpiry(nextToken));
+      setToken(nextToken);
+      setCurrentUser(data.user);
+      setActiveTab("home");
+      setScreen("app");
+      setAuthSuccess(data?.message || "Account created.");
       if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
     } catch (error) {
       setAuthError(error.message || "Could not create your account. Please check your connection and try again.");
@@ -2442,7 +2457,7 @@ const fetchBarbers = async () => {
       setAuthLoading(true);
       const data = await loginUser({ username, password });
       const nextToken = data.token || "";
-      saveAuthSession(nextToken, data.user, { rememberMe });
+      saveAuthSession(nextToken, data.user, { rememberMe, refreshToken: data.refreshToken });
       setSessionExpiresAt(readSessionExpiry(nextToken));
       setToken(data.token || "");
       setCurrentUser(data.user);
@@ -2663,7 +2678,7 @@ const fetchBarbers = async () => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           };
-          let nextLabel = "";
+          let nextLabel;
           try {
             nextLabel = await reverseGeocodeCoordinates(nextLocation);
           } catch {
@@ -2703,7 +2718,7 @@ const fetchBarbers = async () => {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         };
-        let nextLabel = "";
+        let nextLabel;
         try {
           nextLabel = await reverseGeocodeCoordinates(nextLocation);
         } catch {
@@ -2794,7 +2809,7 @@ const registerBarber = async (payload) => {
       return false;
     }
 
-    let data = null;
+    let data;
     try {
       data = await registerBarberStand({
         business_name: payload.businessName,
@@ -3720,8 +3735,9 @@ const updateBarberStand = async (payload) => {
     setTimeout(() => setReviewSuccess(""), 2200);
   };
 
-  const sendMessage = async () => {
-    if (!selectedBarber?.id || !chatText.trim() || !currentUser?.username || !chatCustomerUsername) {
+  const sendMessage = async (retryMessage = null) => {
+    const messageText = String(retryMessage?.text || chatText || "").trim();
+    if (!selectedBarber?.id || !messageText || !currentUser?.username || !chatCustomerUsername) {
       return;
     }
 
@@ -3736,23 +3752,31 @@ const updateBarberStand = async (payload) => {
     }
 
     const scope = `${selectedBarber.id}:${chatCustomerUsername}`;
+    const clientMessageId = retryMessage?.clientMessageId || retryMessage?.client_message_id || makeId("client-message");
 
     try {
       setChatError("");
-      setChatStatus("Sending...");
+      setChatStatus(retryMessage ? "Retrying..." : "Sending...");
+      if (retryMessage) {
+        setMessages((current) => current.map((item) => item.id === retryMessage.id ? { ...item, failed: false, pending: true } : item));
+      }
 
       const data = await createMessage({
         barberId: selectedBarber.id,
         barberName: selectedBarber.business_name,
         customerUsername: chatCustomerUsername,
         sender: currentUser.username,
-        text: chatText.trim(),
+        text: messageText,
+        clientMessageId,
+        client_message_id: clientMessageId,
       });
 
-      const next = [...messages, data];
+      const next = retryMessage
+        ? messages.map((item) => item.id === retryMessage.id ? data : item)
+        : [...messages, data];
       setMessages(next);
       writeStored("messages", scope, next);
-      setChatText("");
+      if (!retryMessage) setChatText("");
       setChatStatus("Sent ✓");
       emitTyping("");
       vibrate(8);
@@ -3814,78 +3838,37 @@ const updateBarberStand = async (payload) => {
       }, 1600);
     } catch (error) {
       const localMessage = {
-        id: makeId("msg"),
+        id: retryMessage?.id || `failed-${clientMessageId}`,
         barberId: selectedBarber.id,
         barberName: selectedBarber.business_name,
         customerUsername: chatCustomerUsername,
         sender: currentUser.username,
-        text: chatText.trim(),
+        text: messageText,
+        clientMessageId,
+        client_message_id: clientMessageId,
+        pending: false,
+        failed: true,
         createdAt: new Date().toISOString(),
       };
-      const next = uniqueById([...messages, localMessage]).sort(
+      const next = uniqueById(retryMessage
+        ? messages.map((item) => item.id === retryMessage.id ? localMessage : item)
+        : [...messages, localMessage]).sort(
         (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)
       );
       setMessages(next);
       writeStored("messages", scope, next);
 
-      const recipient =
-        effectiveIsBarber
-          ? chatCustomerUsername
-          : selectedBarber.ownerUsername || chatCustomerUsername;
-
-      const notificationPayload = {
-        id: makeId("ntf"),
-        user: recipient,
-        type: "message",
-        barberId: selectedBarber.id,
-        barberName: selectedBarber.business_name,
-        barberOwnerUsername: selectedBarber.ownerUsername || "",
-        customerUsername: chatCustomerUsername,
-        customerName:
-          effectiveIsBarber
-            ? chatTargetName || chatCustomerUsername
-            : profile.fullName || currentUser.username,
-        targetName: selectedBarber.business_name,
-        title: "New message",
-        message:
-          effectiveIsBarber
-            ? `${selectedBarber.business_name} sent you a message.`
-            : `${currentUser.username} sent you a message.`,
-        createdAt: localMessage.createdAt,
-        read: false,
-      };
-
-      if (selectedBarber.ownerUsername && currentUser.username !== selectedBarber.ownerUsername) {
-        appendStored("notifications", `barber-${selectedBarber.id}`, notificationPayload);
-      } else {
-        appendStored("notifications", chatCustomerUsername, notificationPayload);
-      }
-
-      if (socketRef.current) {
-        socketRef.current.emit("send_message", {
-          to: recipient,
-          message: {
-            ...localMessage,
-            barberOwnerUsername: selectedBarber.ownerUsername || "",
-            customerName:
-              effectiveIsBarber
-                ? chatTargetName || chatCustomerUsername
-                : profile.fullName || currentUser.username,
-          },
-        });
-        socketRef.current.emit("send_notification", {
-          to: recipient,
-          notification: notificationPayload,
-        });
-      }
-      setChatText("");
-      setChatStatus("Sent ✓");
-      fetchMessages(selectedBarber.id, chatCustomerUsername);
-      setTimeout(() => setChatStatus(""), 1600);
+      // A failed API request is not a delivered message. Keep it locally only
+      // so the user can retry with the same idempotency key.
+      if (!retryMessage) setChatText("");
+      setChatStatus("");
+      setChatError(error.message || "Could not send that message. Retry when the connection is available.");
     }
   };
 
   const logout = (message = "") => {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) logoutUser(refreshToken).catch(() => {});
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -3934,21 +3917,18 @@ const updateBarberStand = async (payload) => {
 
     const expiry = readSessionExpiry(token);
     setSessionExpiresAt(expiry);
-
-    if (!expiry) return undefined;
-
-    const msUntilExpiry = new Date(expiry).getTime() - Date.now();
-    if (msUntilExpiry <= 0) {
-      logout("Session expired. Please log in again.");
-      return undefined;
-    }
-
-    const timer = window.setTimeout(() => {
-      logout("Session expired. Please log in again.");
-    }, msUntilExpiry);
-
-    return () => window.clearTimeout(timer);
+    return undefined;
   }, [token]);
+
+  useEffect(() => {
+    const refreshedListener = (event) => {
+      const nextToken = event?.detail?.token || getAuthToken();
+      setToken(nextToken);
+      setSessionExpiresAt(readSessionExpiry(nextToken));
+    };
+    window.addEventListener("lineup:session-refreshed", refreshedListener);
+    return () => window.removeEventListener("lineup:session-refreshed", refreshedListener);
+  }, []);
 
   const enrichedBarbers = useMemo(() => {
     const seen = new Set();
@@ -4422,30 +4402,61 @@ const updateBarberStand = async (payload) => {
     setActiveTab(fallbackTab);
   };
 
-  const submitQuoteRequest = (payload) => {
+  const submitQuoteRequest = async (payload) => {
     if (!currentUser?.username || !selectedBarber) return;
-    const quoteRequest = {
-      id: makeId("quote"),
-      customerUsername: currentUser.username,
-      providerId: selectedBarber.id,
-      providerName: selectedBarber.business_name,
-      serviceId: payload.serviceId,
-      serviceName: payload.serviceName,
-      description: payload.description,
-      budget: payload.budget,
-      preferredDate: payload.preferredDate,
-      location: payload.location,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-    appendStored("quote_requests", currentUser.username, quoteRequest);
-    if (selectedBarber.ownerUsername) {
-      appendStored("quote_requests", selectedBarber.ownerUsername, quoteRequest);
+    if (!quoteIdempotencyRef.current) quoteIdempotencyRef.current = makeId("quote-request");
+    setQuoteSubmitting(true);
+    setQuoteError("");
+    try {
+      await createQuoteRequest({
+        ...payload,
+        providerId: selectedBarber.id,
+        idempotencyKey: quoteIdempotencyRef.current,
+      });
+      showSystemToast("Quote request sent", `${selectedBarber.business_name} can respond in this conversation.`, "booking");
+      setShowQuoteModal(false);
+      setShowBarberProfile(false);
+      openConversation({
+        barber: selectedBarber,
+        customerUsername: currentUser.username,
+        targetName: selectedBarber.business_name,
+      });
+      quoteIdempotencyRef.current = "";
+    } catch (error) {
+      setQuoteError(error.message || "Could not send this quote request. Please retry.");
+      throw error;
+    } finally {
+      setQuoteSubmitting(false);
     }
-    showSystemToast("Quote request sent", `${selectedBarber.business_name} can respond with price and availability.`, "booking");
-    setShowQuoteModal(false);
-    setShowBarberProfile(false);
-    setActiveTab("bookings");
+  };
+
+  const rescheduleBooking = async (bookingId, schedule) => {
+    const existingBooking = bookings.find((item) => String(item.id) === String(bookingId));
+    if (!existingBooking) throw new Error("Booking not found.");
+
+    try {
+      const data = await rescheduleBookingRequest(bookingId, schedule);
+      const updatedBooking = mapServerBooking({
+        ...data.booking,
+        business_name: existingBooking.barberName,
+        location: existingBooking.location,
+        customer_username: existingBooking.customerUsername,
+        customer_full_name: existingBooking.customerName,
+      });
+      setBookings((prev) => prev.map((item) => String(item.id) === String(bookingId) ? updatedBooking : item));
+      writeStored(
+        "bookings",
+        "global",
+        readStored("bookings", "global", []).map((item) => String(item.id) === String(bookingId) ? updatedBooking : item)
+      );
+      notifyBookingUpdate(updatedBooking);
+      showSystemToast("Booking rescheduled", "The new time is pending provider confirmation.", "booking");
+      fetchNotifications();
+      return updatedBooking;
+    } catch (error) {
+      setGlobalError(error.message || "Could not reschedule booking.");
+      throw error;
+    }
   };
 
   const openProviderProfile = (provider) => {
@@ -4733,6 +4744,7 @@ const updateBarberStand = async (payload) => {
           completeBooking={(id) => updateBookingStatus(id, "completed")}
           approveBooking={(id) => updateBookingStatus(id, "confirmed")}
           rejectBooking={(id) => updateBookingStatus(id, "rejected")}
+          rescheduleBooking={rescheduleBooking}
           cancelBooking={cancelBooking}
           confirmCashPayment={confirmCashPayment}
           myBarberProfile={myBarberProfile}
@@ -5105,6 +5117,8 @@ const updateBarberStand = async (payload) => {
           setShowQuoteModal(false);
         }}
         onRequestQuote={() => {
+          quoteIdempotencyRef.current = makeId("quote-request");
+          setQuoteError("");
           setShowQuoteModal(true);
           setShowBookingModal(false);
           setShowChat(false);
@@ -5164,6 +5178,8 @@ const updateBarberStand = async (payload) => {
         locationDetecting={bookingLocationDetecting}
         onUseCurrentLocation={useCurrentLocationForBooking}
         onRequestQuote={() => {
+          quoteIdempotencyRef.current = makeId("quote-request");
+          setQuoteError("");
           setShowQuoteModal(true);
           setShowBookingModal(false);
         }}
@@ -5193,6 +5209,8 @@ const updateBarberStand = async (payload) => {
         provider={selectedBarber}
         onClose={() => setShowQuoteModal(false)}
         onSubmit={submitQuoteRequest}
+        submitting={quoteSubmitting}
+        error={quoteError}
       />
 
       <ChatSheet
@@ -5208,6 +5226,7 @@ const updateBarberStand = async (payload) => {
         typingState={typingState}
         onTyping={emitTyping}
         onSend={sendMessage}
+        onRetry={sendMessage}
         chatThreadRef={chatThreadRef}
         onClose={() => {
           setShowChat(false);
@@ -5247,8 +5266,8 @@ const updateBarberStand = async (payload) => {
         show={customerPremiumPaymentOpen && !customerPremiumActive}
         title="Customer Premium"
         subtitle="Choose how you want to pay for Smart Match access."
-        amountLabel="Premium: UGX 10,000/month"
-        amount={Math.max(10000, Number(customerSubscriptionPlan?.monthlyPrice || 10000))}
+        amountLabel={`Premium: UGX ${CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month`}
+        amount={Math.max(CUSTOMER_PREMIUM_PLAN.monthlyPrice, Number(customerSubscriptionPlan?.monthlyPrice || CUSTOMER_PREMIUM_PLAN.monthlyPrice))}
         defaultPhone={profile.phone || currentUser?.phone || ""}
         loading={customerSubscriptionLoading}
         message={customerSubscriptionMessage}

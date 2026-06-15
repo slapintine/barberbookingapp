@@ -1,5 +1,14 @@
 export const BILLING_CYCLES = ["monthly", "annual"];
 
+export const CUSTOMER_PREMIUM_PLAN = {
+  tier: "PREMIUM",
+  id: "customer-premium",
+  name: "Customer Premium",
+  monthlyPrice: 10000,
+  annualPrice: 120000,
+  currency: "UGX",
+};
+
 export const PROVIDER_PLANS = [
   {
     tier: "FREE",

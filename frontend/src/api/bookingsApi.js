@@ -33,6 +33,13 @@ export function updateBookingStatusRequest(bookingId, status) {
   });
 }
 
+export function rescheduleBookingRequest(bookingId, { date, time }) {
+  return apiFetch(`/api/bookings/${bookingId}/reschedule`, {
+    method: "PATCH",
+    body: JSON.stringify({ booking_date: date, booking_time: time }),
+  });
+}
+
 export function confirmCashPaymentRequest(bookingId) {
   return apiFetch(`/api/bookings/${bookingId}/payment/cash`, {
     method: "PATCH",

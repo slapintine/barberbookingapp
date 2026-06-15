@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getMapIconTypeForCategory, getMapIconTypeForSelectedCategories } from "./mapIconCategories.js";
 
-test("derives signup map icon from the current selected categories", () => {
+test("category helpers can suggest icons without controlling the registration wizard", () => {
   assert.equal(getMapIconTypeForSelectedCategories(["Barber"]), "barber");
   assert.equal(getMapIconTypeForSelectedCategories(["Beauty", "Repairs & Maintenance"]), "multi");
   assert.equal(getMapIconTypeForSelectedCategories(["Beauty"]), "beauty");

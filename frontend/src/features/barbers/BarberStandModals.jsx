@@ -41,7 +41,7 @@ const DEFAULT_FORM = {
   phone: "",
   documentName: "",
   businessType: "Home Services",
-  mapIconType: "home-services",
+  mapIconType: "",
   location: "",
   services: [],
   pricing: "20000",
@@ -577,11 +577,8 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
       })),
     [selectedCategories]
   );
-  // Single source of truth for the map icon: the manual selection made in
-  // Step 1 (form.mapIconType), falling back to a sensible default derived from
-  // the main category until the user picks one. Service-category chips in
-  // Step 3 no longer change this value; they only drive discoverability.
-  const effectiveMapIconType = form.mapIconType || getMapIconTypeForCategory(form.businessType);
+  // The Step 1 manual choice is the only source of truth for the map marker.
+  const effectiveMapIconType = form.mapIconType;
   const effectiveMapIconOption = effectiveMapIconType ? getMapIconOption(effectiveMapIconType) : null;
   const mapPreviewTitle = effectiveMapIconOption?.label || "No map icon selected";
   const mapPreviewText = !effectiveMapIconOption
@@ -696,6 +693,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     if (step === 1) {
       if (!form.businessName?.trim()) return "Please enter your business name.";
       if (!form.businessType?.trim()) return "Please select your main business category.";
+      if (!form.mapIconType?.trim()) return "Please select the map icon customers should see.";
       if (!form.phone?.trim()) return "Please add a business phone number.";
       if (String(form.documentName || "").trim().length > 120 || /[<>]/.test(String(form.documentName || ""))) {
         return "Verification document reference must be 120 characters or fewer and cannot contain HTML.";
@@ -905,7 +903,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                     <select
                       className="field-input-v4 profile-input-v4"
                       value={form.businessType}
-                      onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value, mapIconType: prev.mapIconType || getMapIconTypeForCategory(e.target.value) }))}
+                      onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value }))}
                     >
                       {SERVICE_CATEGORIES.map((category) => (
                         <option key={category} value={category}>{category}</option>
@@ -1488,7 +1486,7 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
         ? barber.services.map(normalizeServiceForBooking)
         : DEFAULT_SERVICE_TYPES.map(normalizeServiceForBooking),
       businessType: barber.business_type || barber.businessType || "Home Services",
-      mapIconType: barber.map_icon_type || barber.mapIconType || getMapIconTypeForCategory(barber.business_type || barber.businessType || "Home Services"),
+      mapIconType: barber.map_icon_type || barber.mapIconType || "",
       pricing: String(barber.price_from || ""),
       scheduleStart: barber.availability?.start || "08:00",
       scheduleEnd: barber.availability?.end || "20:00",

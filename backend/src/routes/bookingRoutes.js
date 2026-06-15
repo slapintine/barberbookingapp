@@ -7,6 +7,7 @@ import {
   getBarberDayAvailability,
   getMyBookings,
   payBookingWithWallet,
+  rescheduleBooking,
   verifyBookingPayment,
   updateBookingStatus
 } from "../controllers/bookingController.js";
@@ -19,6 +20,7 @@ router.get("/me", protect, getMyBookings);
 router.patch("/:id/payment/cash", protect, confirmCashPayment);
 router.post("/:id/pay-with-wallet", protect, requireRole("customer"), payBookingWithWallet);
 router.post("/:id/payment/verify", protect, requireRole("customer"), verifyBookingPayment);
+router.patch("/:id/reschedule", protect, rescheduleBooking);
 router.patch("/:id/status", protect, updateBookingStatus);
 
 export default router;

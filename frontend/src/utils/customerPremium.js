@@ -1,3 +1,5 @@
+import { CUSTOMER_PREMIUM_PLAN } from "./subscriptionPlans.js";
+
 export const DEFAULT_CUSTOMER_SUBSCRIPTION_STATE = {
   tier: "FREE",
   name: "Free",
@@ -25,7 +27,9 @@ export function isCustomerPremiumActive(subscription) {
 }
 
 export function formatCustomerPremiumPrice(plan, billingCycle = "monthly") {
-  const fallbackAmount = billingCycle === "annual" ? 120000 : 10000;
+  const fallbackAmount = billingCycle === "annual"
+    ? CUSTOMER_PREMIUM_PLAN.annualPrice
+    : CUSTOMER_PREMIUM_PLAN.monthlyPrice;
   const configuredAmount = billingCycle === "annual" ? Number(plan?.annualPrice || fallbackAmount) : Number(plan?.monthlyPrice || fallbackAmount);
   const amount = Math.max(fallbackAmount, configuredAmount);
   const currency = String(plan?.currency || "UGX").toUpperCase();

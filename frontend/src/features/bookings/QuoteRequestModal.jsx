@@ -7,7 +7,7 @@ function getProviderServices(provider) {
   return services.length ? services : [normalizeServiceForBooking("General service")];
 }
 
-export default function QuoteRequestModal({ show, provider, onClose, onSubmit }) {
+export default function QuoteRequestModal({ show, provider, onClose, onSubmit, submitting = false, error = "" }) {
   const services = useMemo(() => getProviderServices(provider), [provider]);
   const [serviceId, setServiceId] = useState("");
   const [description, setDescription] = useState("");
@@ -20,22 +20,26 @@ export default function QuoteRequestModal({ show, provider, onClose, onSubmit })
   const selectedService = services.find((service) => String(service.id) === String(serviceId)) || services[0];
   const canSubmit = description.trim().length >= 8 && location.trim().length >= 2;
 
-  const submit = () => {
-    if (!canSubmit) return;
-    onSubmit?.({
-      providerId: provider.id,
-      serviceId: selectedService?.id,
-      serviceName: selectedService?.service_name || selectedService?.title || "Service",
-      description,
-      budget,
-      preferredDate,
-      location,
-    });
-    setDescription("");
-    setBudget("");
-    setPreferredDate("");
-    setLocation("");
-    setServiceId("");
+  const submit = async () => {
+    if (!canSubmit || submitting) return;
+    try {
+      await onSubmit?.({
+        providerId: provider.id,
+        serviceId: selectedService?.id,
+        serviceName: selectedService?.service_name || selectedService?.title || "Service",
+        description,
+        budget,
+        preferredDate,
+        location,
+      });
+      setDescription("");
+      setBudget("");
+      setPreferredDate("");
+      setLocation("");
+      setServiceId("");
+    } catch {
+      // Keep the form intact so Retry repeats the same real request.
+    }
   };
 
   return (
@@ -123,8 +127,9 @@ export default function QuoteRequestModal({ show, provider, onClose, onSubmit })
             </div>
 
             <div className="booking-footer-v5 bk-footer">
-              <button className="primary-btn-v4 booking-cta-v5 bk-cta-primary" type="button" disabled={!canSubmit} onClick={submit}>
-                <FiSend /> Send Quote Request
+              {error ? <div className="chat-error-v4" role="alert">{error}</div> : null}
+              <button className="primary-btn-v4 booking-cta-v5 bk-cta-primary" type="button" disabled={!canSubmit || submitting} onClick={submit}>
+                <FiSend /> {submitting ? "Sending..." : error ? "Retry Quote Request" : "Send Quote Request"}
               </button>
               <div className="booking-note-v5">The provider will reply with price, availability, and next steps.</div>
             </div>

@@ -25,6 +25,7 @@ JWT_SECRET=replace-with-a-32-plus-character-random-secret
 DB_CLIENT=postgres
 DATABASE_URL=postgresql://USERNAME:PASSWORD@HOST:5432/DATABASE_NAME
 DATABASE_SSL=true
+IMAGE_STORAGE_DIR=/var/www/queless.org/shared/uploads
 FIREBASE_SERVICE_ACCOUNT_JSON=
 AFRICASTALKING_USERNAME=
 AFRICASTALKING_API_KEY=
@@ -188,6 +189,7 @@ curl -i https://queless.org/api/barbers
 Before deploy:
 
 - back up PostgreSQL
+- archive `/var/www/queless.org/shared/uploads`
 - back up the old SQLite file if importing
 - keep the previous PM2 release path or Git commit available
 - keep the previous frontend `dist` available
@@ -200,3 +202,4 @@ Rollback:
 3. Restart PM2.
 4. Reload Nginx only after `sudo nginx -t`.
 5. If database migration caused the incident, restore from PostgreSQL backup instead of hand-editing production rows.
+6. If an upload migration caused the incident, restore the shared uploads archive before restarting PM2.

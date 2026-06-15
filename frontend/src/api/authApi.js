@@ -14,6 +14,14 @@ export function loginUser({ username, password }) {
   });
 }
 
+export function logoutUser(refreshToken) {
+  return apiFetch("/api/auth/logout", {
+    method: "POST",
+    skipAuthRefresh: true,
+    body: JSON.stringify({ refreshToken }),
+  });
+}
+
 export function updateAccount({ username, currentPassword, newPassword }) {
   return apiFetch("/api/auth/me", {
     method: "PATCH",

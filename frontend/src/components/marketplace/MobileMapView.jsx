@@ -13,6 +13,7 @@ import {
   FiNavigation,
   FiPlus,
   FiSearch,
+  FiScissors,
   FiSliders,
   FiStar,
   FiX,
@@ -135,7 +136,7 @@ function ProviderSheet({ marker, isOwner, isFavorite, onOpenProvider, onToggleFa
         </div>
 
         <span className="qmm-sheet-cat">
-          <Scissors size={13} style={{ flexShrink: 0 }} />
+          <FiScissors size={13} style={{ flexShrink: 0 }} />
           {marker.category || marker.title || "Local services"}
         </span>
 

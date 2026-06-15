@@ -187,20 +187,25 @@ Use this layout on the VPS:
 ```text
 /var/www/queless.org/
 |-- current/
-|   |-- backend/
-|   |   |-- .env
-|   |   |-- package.json
-|   |   `-- src/
-|   |-- frontend/
-|   |   |-- .env.production
-|   |   |-- dist/
-|   |   `-- src/
-|   |-- deploy/
-|   |-- ecosystem.config.cjs
-|   `-- package.json
+|   |-- barber-booking-app/
+|   |   |-- backend/
+|   |   |-- frontend/
+|   |   |-- deploy/
+|   |   `-- ecosystem.config.cjs
+|   `-- line-up-barber-website/
+|       `-- dist/
 `-- shared/
-    `-- logs/
-        `-- pm2/
+    |-- uploads/
+    `-- logs/pm2/
+```
+
+Set `IMAGE_STORAGE_DIR=/var/www/queless.org/shared/uploads` in the backend
+production environment. This keeps real provider images outside replaceable
+release checkouts. Before the first release using the shared path, copy any
+existing files without deleting either source:
+
+```bash
+rsync -a /var/www/queless.org/current/barber-booking-app/backend/uploads/ /var/www/queless.org/shared/uploads/
 ```
 
 ## Production Environment Files
@@ -349,7 +354,7 @@ sudo npm install -g pm2
 #### 2. Create app directories
 
 ```bash
-sudo mkdir -p /var/www/queless.org/shared/logs/pm2
+sudo mkdir -p /var/www/queless.org/shared/logs/pm2 /var/www/queless.org/shared/uploads
 sudo mkdir -p /var/www/certbot
 sudo chown -R $USER:$USER /var/www/queless.org
 sudo chown -R $USER:$USER /var/www/certbot

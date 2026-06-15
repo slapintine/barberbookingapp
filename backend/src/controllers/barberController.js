@@ -642,7 +642,7 @@ export async function registerBarber(req, res, next) {
     const requestedPortfolio = req.body.gallery_images || req.body.galleryImages || portfolio;
     const normalizedStandType = normalizeStandType(stand_type);
     const normalizedBusinessType = normalizeBusinessType(requestedBusinessType);
-    const normalizedMapIconType = normalizeMapIconType(map_icon_type, normalizedBusinessType);
+    const normalizedMapIconType = normalizeMapIconType(map_icon_type);
     const normalizedPortfolio = normalizePortfolioItems(
       Array.isArray(requestedPortfolio)
         ? requestedPortfolio.map((item) => typeof item === "string" ? { afterImage: item } : item)
@@ -812,6 +812,9 @@ export async function registerBarber(req, res, next) {
 
     if (storedImages.services.length) {
       await replaceBarberServices(barberId, storedImages.services, selectedPlanConfig.serviceLimit);
+    }
+    if (wantsPayment && !normalizedMapIconType) {
+      return res.status(400).json({ success: false, message: "Select a map icon in Business Basics before continuing." });
     }
     await replaceTeamMembers(barberId, storedImages.teamMembers);
 
@@ -1030,7 +1033,7 @@ export async function getAllBarbers(req, res, next) {
         avg_rating: Number(barber.avg_rating || 0).toFixed(1),
         total_reviews: Number(barber.total_reviews || 0),
         business_type: barber.business_type || "Services",
-        map_icon_type: barber.map_icon_type || normalizeMapIconType(barber.business_type, "Services"),
+        map_icon_type: barber.map_icon_type || "",
         home_service_enabled: Number(barber.home_service_enabled || 0),
         intro_text: barber.intro_text || "",
         portfolio: parseJsonArray(barber.portfolio_json, []),
@@ -1102,7 +1105,7 @@ export async function getMyBarberProfile(req, res, next) {
         image: barber.image || null,
         document_name: barber.verification_document_name || "",
         business_type: barber.business_type || "Services",
-        map_icon_type: barber.map_icon_type || normalizeMapIconType(barber.business_type, "Services"),
+        map_icon_type: barber.map_icon_type || "",
         home_service_enabled: Number(barber.home_service_enabled || 0),
         intro_text: barber.intro_text || "",
         portfolio: parseJsonArray(barber.portfolio_json, []),
@@ -1163,7 +1166,7 @@ export async function updateMyBarberProfile(req, res, next) {
     const requestedPortfolio = req.body.gallery_images || req.body.galleryImages || portfolio;
     const normalizedStandType = normalizeStandType(stand_type);
     const normalizedBusinessType = normalizeBusinessType(requestedBusinessType);
-    const normalizedMapIconType = normalizeMapIconType(map_icon_type, normalizedBusinessType);
+    const normalizedMapIconType = normalizeMapIconType(map_icon_type);
     const normalizedPortfolio = normalizePortfolioItems(
       Array.isArray(requestedPortfolio)
         ? requestedPortfolio.map((item) => typeof item === "string" ? { afterImage: item } : item)
@@ -1202,6 +1205,9 @@ export async function updateMyBarberProfile(req, res, next) {
         success: false,
         message: "Business name and location are required."
       });
+    }
+    if (!normalizedMapIconType) {
+      return res.status(400).json({ success: false, message: "Select a map icon in Business Basics before saving the stand." });
     }
 
     const safeBusinessName = String(business_name || "").trim();
@@ -1353,6 +1359,12 @@ export async function publishMyBarberStand(req, res, next) {
       return res.status(400).json({
         success: false,
         message: "Your stand needs a business name and location before it can be published.",
+      });
+    }
+    if (!String(barber.map_icon_type || "").trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Select a map icon in Business Basics before publishing your stand.",
       });
     }
     const currentStatus = String(barber.business_status || "").toLowerCase();

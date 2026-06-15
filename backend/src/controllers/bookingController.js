@@ -1462,6 +1462,112 @@ export async function getBarberDayAvailability(req, res, next) {
 
 /* ================= UPDATE BOOKING STATUS ================= */
 
+export async function rescheduleBooking(req, res, next) {
+  try {
+    const bookingId = toPositiveInteger(req.params.id, "booking_id");
+    const bookingDate = requireIsoDate(req.body.booking_date || req.body.date, "booking_date");
+    const bookingTime = requireClockTime(
+      normalizeTimeInput(req.body.booking_time || req.body.time),
+      "booking_time"
+    );
+    const today = new Date().toISOString().split("T")[0];
+    if (bookingDate < today) throw httpError(400, "Cannot reschedule to a past date.");
+    if (bookingDate === today) {
+      const now = new Date();
+      if (toMinutes(bookingTime) <= now.getHours() * 60 + now.getMinutes()) {
+        throw httpError(400, "Selected time has already passed.");
+      }
+    }
+
+    const { original, mappedBooking, isBarberOwner } = await transaction(async (client) => {
+      const booking = await getBookingById(bookingId, client);
+      if (!booking) throw httpError(404, "Booking not found.");
+
+      const myBarber = await getMyOwnedBarber(req.user.id, client);
+      const ownsStand = myBarber && Number(myBarber.id) === Number(booking.barber_id);
+      const ownsBooking = Number(booking.customer_user_id) === Number(req.user.id);
+      if (!ownsStand && !ownsBooking) throw httpError(403, "Not allowed to reschedule this booking.");
+      if (!["pending", "confirmed"].includes(String(booking.status || "").toLowerCase())) {
+        throw httpError(400, "Only pending or confirmed bookings can be rescheduled.");
+      }
+
+      const barber = await getBarberById(booking.barber_id, client);
+      if (!barber || Number(barber.is_suspended || 0) === 1 || Number(barber.is_banned || 0) === 1) {
+        throw httpError(403, "This business is not available for rescheduling.");
+      }
+      if (booking.team_member_id) {
+        const teamMember = await getTeamMemberById(booking.team_member_id, booking.barber_id, client);
+        if (!teamMember) throw httpError(400, "Selected provider is no longer available on this stand.");
+      }
+
+      const durationMinutes = Number(booking.service_duration_minutes || 30);
+      const schedule = await getBarberScheduleForDay(booking.barber_id, getDayOfWeek(bookingDate), client);
+      const workingWindow = resolveWorkingWindow(barber, schedule);
+      if (!isWithinSchedule(workingWindow, bookingTime, durationMinutes)) {
+        throw httpError(
+          400,
+          `Outside working hours. Barber works ${workingWindow?.start || "--:--"} to ${workingWindow?.end || "--:--"}.`
+        );
+      }
+
+      const existing = await getActiveBookingsForBarberOnDate(
+        booking.barber_id,
+        bookingDate,
+        booking.team_member_id || null,
+        client
+      );
+      const conflicts = existing.filter((item) => Number(item.id) !== Number(bookingId));
+      if (hasOverlap(conflicts, bookingTime, durationMinutes)) {
+        throw httpError(409, "Time slot already booked.");
+      }
+
+      await client.run(
+        `UPDATE bookings
+         SET booking_date = ?, booking_time = ?, status = 'pending', updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [bookingDate, bookingTime, bookingId]
+      );
+      await client.run(
+        `INSERT INTO booking_events (booking_id, actor_user_id, event_type, event_note)
+         VALUES (?, ?, 'rescheduled', ?)`,
+        [bookingId, req.user.id, `Rescheduled from ${booking.booking_date} ${booking.booking_time} to ${bookingDate} ${bookingTime}`]
+      );
+
+      const updated = await getBookingById(bookingId, client);
+      return {
+        original: booking,
+        mappedBooking: await mapBookingRow(updated),
+        isBarberOwner: Boolean(ownsStand),
+      };
+    });
+
+    const barber = isBarberOwner ? null : await getBarberById(original.barber_id);
+    const recipientUserId = isBarberOwner ? original.customer_user_id : barber?.owner_user_id || null;
+    if (recipientUserId) {
+      const body = `Booking moved to ${mappedBooking.booking_date} at ${mappedBooking.booking_time}. Please confirm the new time.`;
+      await addNotification(recipientUserId, {
+        title: "Booking rescheduled",
+        type: "booking",
+        message: body,
+      }).catch(() => {});
+      await sendBookingNotification({
+        booking: mappedBooking,
+        recipientUserId,
+        title: "Booking rescheduled",
+        body,
+        status: "pending",
+      }, { persist: false }).catch(() => {});
+    }
+
+    await logAudit(req.user.id, `Rescheduled booking #${bookingId} to ${mappedBooking.booking_date} ${mappedBooking.booking_time}`);
+    return res.status(200).json({ success: true, booking: mappedBooking });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* ================= UPDATE BOOKING STATUS ================= */
+
 export async function updateBookingStatus(req, res, next) {
   try {
     const bookingId = req.params.id;
