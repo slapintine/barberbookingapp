@@ -16,6 +16,10 @@ function cleanUrl(value) {
   return String(value || "").trim().replace(/\/$/, "");
 }
 
+function cleanFilesystemPath(value) {
+  return String(value || "").trim().replace(/\\/g, "/").replace(/\/$/, "");
+}
+
 function parseOrigin(value) {
   try {
     return new URL(value).origin;
@@ -286,6 +290,14 @@ export async function getEnvironmentReadinessChecks() {
       "Set CLIENT_URL=https://queless.org,https://www.queless.org and keep DEV_CLIENT_URL empty with ALLOW_LOCAL_DEV_ORIGINS=false."
     ),
     status("database", "Production database", env.nodeEnv !== "production" || (env.dbClient === "postgres" && present(env.databaseUrl)), env.dbClient === "postgres" ? "PostgreSQL configured" : `using ${env.dbClient}`, "blocker", "Use DB_CLIENT=postgres and DATABASE_URL for production."),
+    status(
+      "durable_uploads",
+      "Durable provider uploads",
+      env.nodeEnv !== "production" || cleanFilesystemPath(env.imageStorageDir) === "/var/www/queless.org/shared/uploads",
+      env.imageStorageDir ? `IMAGE_STORAGE_DIR=${cleanFilesystemPath(env.imageStorageDir)}` : "IMAGE_STORAGE_DIR is missing",
+      "blocker",
+      "Set IMAGE_STORAGE_DIR=/var/www/queless.org/shared/uploads so releases do not replace uploaded provider images."
+    ),
     status(
       "payments_mode",
       "Online booking payments",

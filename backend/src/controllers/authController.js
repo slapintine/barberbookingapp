@@ -1,14 +1,27 @@
 import bcrypt from "bcryptjs";
 import db from "../config/db.js";
 import { run, get } from "../db/query.js";
-import { generateToken } from "../utils/generateToken.js";
 import { otpEmail, passwordResetEmail, sendEmail } from "../services/emailService.js";
 import { normalizePhoneNumber, sendOtpSms } from "../services/smsService.js";
+import {
+  createAuthSession,
+  refreshAccessToken,
+  revokeAllUserSessions,
+  revokeAuthSession,
+  rotateAuthSession,
+} from "../services/authSessionService.js";
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 64;
 const EMAIL_OTP_COOLDOWN_SECONDS = 60;
 const EMAIL_OTP_MAX_SENDS_PER_HOUR = 5;
+
+function sessionRequest(req) {
+  return {
+    userAgent: req.get("user-agent") || "",
+    ipAddress: req.ip || req.socket?.remoteAddress || "",
+  };
+}
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -292,17 +305,12 @@ export async function registerUser(req, res, next) {
     const user = await createUser(normalizedUsername, passwordHash);
     await createEmptyProfile(user.id, email);
 
-    const token = generateToken({
-      userId: user.id,
-      username: user.username,
-      role: user.role
-    });
+    const session = await createAuthSession(user, sessionRequest(req));
 
     return res.status(201).json({
       success: true,
       message: "Account created successfully.",
-      token,
-      user
+      ...session,
     });
   } catch (error) {
     next(error);
@@ -343,26 +351,12 @@ export async function loginUser(req, res, next) {
       return authError(res, 401, "INVALID_PASSWORD", "Incorrect username/email or password.");
     }
 
-    const token = generateToken({
-      userId: user.id,
-      username: user.username,
-      role: user.role
-    });
+    const session = await createAuthSession(user, sessionRequest(req));
 
     return res.status(200).json({
       success: true,
       message: "Login successful.",
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        plan: user.plan || "free",
-        email: user.email || "",
-        emailVerified: Boolean(user.email_verified_at),
-        email_verified: Boolean(user.email_verified_at),
-        created_at: user.created_at
-      }
+      ...session,
     });
   } catch (error) {
     error.publicMessage = "Login failed. Please try again.";
@@ -457,11 +451,7 @@ export async function updateAccount(req, res, next) {
       role: currentUser.role,
       created_at: currentUser.created_at
     };
-    const token = generateToken({
-      userId: user.id,
-      username: user.username,
-      role: user.role
-    });
+    const token = refreshAccessToken(user, req.authSessionId);
 
     return res.status(200).json({
       success: true,
@@ -703,18 +693,38 @@ export async function confirmPasswordReset(req, res, next) {
       role: row.role,
       created_at: row.created_at,
     };
-    const token = generateToken({
-      userId: user.id,
-      username: user.username,
-      role: user.role,
-    });
+    await revokeAllUserSessions(user.id);
+    const session = await createAuthSession({ ...row, ...user }, sessionRequest(req));
 
     return res.status(200).json({
       success: true,
       message: "Password reset complete.",
-      token,
-      user,
+      ...session,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function refreshSession(req, res, next) {
+  try {
+    const refreshToken = String(req.body.refreshToken || req.body.refresh_token || "").trim();
+    if (!refreshToken) {
+      return res.status(401).json({ success: false, message: "Refresh token is required." });
+    }
+    const session = await rotateAuthSession(refreshToken);
+    return res.status(200).json({ success: true, message: "Session refreshed.", ...session });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    next(error);
+  }
+}
+
+export async function logoutSession(req, res, next) {
+  try {
+    const refreshToken = String(req.body.refreshToken || req.body.refresh_token || "").trim();
+    await revokeAuthSession({ refreshToken });
+    return res.status(200).json({ success: true, message: "Logged out." });
   } catch (error) {
     next(error);
   }

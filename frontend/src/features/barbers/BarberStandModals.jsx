@@ -16,7 +16,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { DEFAULT_SERVICE_TYPES, SERVICE_CATEGORIES, formatServicePrice, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
-import { MULTI_SERVICE_MAP_ICON_TYPE, getMapIconOption, getMapIconTypeForCategory, getMapIconTypeForSelectedCategories } from "../../utils/mapIconCategories.js";
+import { getMapIconOption, getMapIconTypeForCategory } from "../../utils/mapIconCategories.js";
 import { getCategoryDef, getCategoryList, CategorySelectorItem } from "../../utils/categoryRegistry.jsx";
 import { getGeolocationErrorMessage, reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
 import {
@@ -41,7 +41,7 @@ const DEFAULT_FORM = {
   phone: "",
   documentName: "",
   businessType: "Home Services",
-  mapIconType: "home-services",
+  mapIconType: "",
   location: "",
   services: [],
   pricing: "20000",
@@ -119,8 +119,12 @@ function cleanPricingForMode(service = {}, pricingType = "fixed") {
   return next;
 }
 
+// In the wizard we keep user-cleared service titles empty (preserveEmptyTitle)
+// so the controlled title input can be fully deleted/replaced without
+// "General service" snapping back on every render.
 function normalizeFormServices(value, fallbackToDefaults = false) {
-  if (Array.isArray(value) && value.length) return value.map(normalizeServiceForBooking);
+  const opts = { preserveEmptyTitle: true };
+  if (Array.isArray(value) && value.length) return value.map((item, idx) => normalizeServiceForBooking(item, idx, opts));
   if (typeof value === "string" && value.trim()) {
     return value
       .split(",")
@@ -128,34 +132,30 @@ function normalizeFormServices(value, fallbackToDefaults = false) {
         const value = item.trim();
         return value ? [value] : [];
       })
-      .map(normalizeServiceForBooking);
+      .map((item, idx) => normalizeServiceForBooking(item, idx, opts));
   }
-  return fallbackToDefaults ? DEFAULT_SERVICE_TYPES.map(normalizeServiceForBooking) : [];
+  return fallbackToDefaults ? DEFAULT_SERVICE_TYPES.map((item, idx) => normalizeServiceForBooking(item, idx, opts)) : [];
 }
 
-function splitProfileName(profile = {}) {
-  const firstName = String(profile.firstName || profile.first_name || "").trim();
-  const lastName = String(profile.lastName || profile.last_name || "").trim();
-  if (firstName || lastName) return { firstName, lastName };
+// Maps a validation field key to the wizard step that owns it, so the single
+// validation summary can jump the user straight to the relevant step.
+const FIELD_TO_STEP = {
+  businessName: 1,
+  businessType: 1,
+  phone: 1,
+  location: 2,
+  services: 4,
+};
 
-  const parts = String(profile.fullName || profile.full_name || profile.name || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  return {
-    firstName: parts[0] || "",
-    lastName: parts.length > 1 ? parts.slice(1).join(" ") : "",
-  };
-}
-
-export function validateBusinessStand(data = {}, profile = {}) {
+// A business stand is created against the authenticated account id. We do NOT
+// require the account owner's personal first/last name — many real accounts have
+// no personal name set, and the wizard never collects one. Validation covers
+// only the business information the wizard actually gathers.
+export function validateBusinessStand(data = {}) {
   const form = data && typeof data === "object" ? data : {};
-  const { firstName, lastName } = splitProfileName(profile);
   const services = normalizeFormServices(form.services);
   const missing = [];
 
-  if (!firstName) missing.push({ key: "firstName", label: "First name is required" });
-  if (!lastName) missing.push({ key: "lastName", label: "Last name is required" });
   if (!String(form.businessName || "").trim()) missing.push({ key: "businessName", label: "Business name is required" });
   if (!String(form.businessType || "").trim()) missing.push({ key: "businessType", label: "Business category is required" });
   if (!String(form.phone || "").trim()) missing.push({ key: "phone", label: "Phone number is required" });
@@ -577,14 +577,12 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
       })),
     [selectedCategories]
   );
-  const selectedMapIconType = useMemo(() => getMapIconTypeForSelectedCategories(selectedCategories), [selectedCategories]);
-  const selectedMapIconOption = selectedMapIconType ? getMapIconOption(selectedMapIconType) : null;
-  const effectiveMapIconType = selectedMapIconType || form.mapIconType || getMapIconTypeForCategory(form.businessType);
-  const mapPreviewTitle = selectedMapIconOption?.label || "No map icon selected";
-  const mapPreviewText = !selectedMapIconOption
-    ? "Choose at least one service category to set your map icon."
-    : selectedMapIconType === MULTI_SERVICE_MAP_ICON_TYPE
-    ? "This icon will appear when your business spans several service categories."
+  // The Step 1 manual choice is the only source of truth for the map marker.
+  const effectiveMapIconType = form.mapIconType;
+  const effectiveMapIconOption = effectiveMapIconType ? getMapIconOption(effectiveMapIconType) : null;
+  const mapPreviewTitle = effectiveMapIconOption?.label || "No map icon selected";
+  const mapPreviewText = !effectiveMapIconOption
+    ? "Pick your map icon in Step 1 (Business basics)."
     : "This icon will appear on the Queless map.";
   const canSubmit = true;
   const missingFieldKeys = useMemo(() => new Set(missingFields.map((item) => item.key)), [missingFields]);
@@ -644,11 +642,12 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
         ? current.filter((service) => service.category !== category)
         : [...current, createBlankService(category)];
       const nextCategories = [...new Set(nextServices.flatMap((service) => (service.category ? [service.category] : [])))];
-      const nextMapIconType = getMapIconTypeForSelectedCategories(nextCategories);
+      // The map icon is chosen manually in Step 1 and is NOT overwritten here.
+      // Toggling service categories only updates the service list (and the main
+      // category default), so a user's Step 1 icon pick is preserved.
       return {
         ...prev,
         businessType: nextCategories[0] || prev.businessType,
-        mapIconType: nextMapIconType,
         services: nextServices,
       };
     });
@@ -694,6 +693,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     if (step === 1) {
       if (!form.businessName?.trim()) return "Please enter your business name.";
       if (!form.businessType?.trim()) return "Please select your main business category.";
+      if (!form.mapIconType?.trim()) return "Please select the map icon customers should see.";
       if (!form.phone?.trim()) return "Please add a business phone number.";
       if (String(form.documentName || "").trim().length > 120 || /[<>]/.test(String(form.documentName || ""))) {
         return "Verification document reference must be 120 characters or fewer and cannot contain HTML.";
@@ -769,7 +769,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
       if (draftMissing.length) {
         setCurrentStep(draftMissing[0].key === "businessName" ? 1 : 2);
         setMissingFields(draftMissing);
-        setError("Your draft needs these details before it can be saved.");
+        setError("");
         return;
       }
     } else {
@@ -782,11 +782,13 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
           return;
         }
       }
-      const missing = validateBusinessStand({ ...form, services }, profile);
+      const missing = validateBusinessStand({ ...form, services });
       if (missing.length) {
         setCurrentStep(TOTAL_STEPS);
         setMissingFields(missing);
-        setError("Your business stand is not complete yet.");
+        // Single source of truth: the validation summary renders the headline +
+        // list. Do not also set `error` or the same message shows twice.
+        setError("");
         return;
       }
     }
@@ -801,7 +803,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
         selectedCategories: selectedCategoryItems,
         primaryCategory: selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : null,
         businessType: selectedCategories[0] || form.businessType,
-        mapIconType: selectedMapIconType,
+        mapIconType: effectiveMapIconType,
         services,
       });
       if (saved === false) {
@@ -839,21 +841,34 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
             {error ? (
               <div className="auth-error business-wizard-error-v10">
                 <strong>{error}</strong>
-                {missingFields.length ? (
-                  <>
-                    <span>Please complete the following before continuing:</span>
-                    <ul>
-                      {missingFields.map((item) => (
-                        <li key={`${item.key}-${item.label}`}>{item.label}</li>
-                      ))}
-                    </ul>
-                  </>
-                ) : null}
                 {error.toLowerCase().includes("business with this name already exists") ? (
                   <button type="button" className="mini-action-btn-v4" onClick={() => setError("Claim/report request noted. Admin review will be available from the support workflow.")}>
                     This is my business / Claim or report
                   </button>
                 ) : null}
+              </div>
+            ) : null}
+
+            {/* Single source of truth for field-completeness validation. Rendered
+                once here (not per-step, not duplicated in the banner). Each item
+                jumps to the step that owns the field. */}
+            {missingFields.length ? (
+              <div className="business-missing-summary-v10" role="alert" aria-live="polite">
+                <strong>A few details still need attention</strong>
+                <span>Complete the following before continuing:</span>
+                <ul>
+                  {missingFields.map((item) => (
+                    <li key={`${item.key}-${item.label}`}>
+                      <button
+                        type="button"
+                        className="business-missing-jump-v10"
+                        onClick={() => setCurrentStep(FIELD_TO_STEP[item.key] || currentStep)}
+                      >
+                        {item.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : null}
 
@@ -888,7 +903,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                     <select
                       className="field-input-v4 profile-input-v4"
                       value={form.businessType}
-                      onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value, mapIconType: prev.mapIconType || getMapIconTypeForCategory(e.target.value) }))}
+                      onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value }))}
                     >
                       {SERVICE_CATEGORIES.map((category) => (
                         <option key={category} value={category}>{category}</option>
@@ -1075,9 +1090,9 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                   <strong>{selectedCategories.length}</strong>
                   <span>{selectedCategories.length === 1 ? "category selected" : "categories selected"}</span>
                 </div>
-                <div className={selectedMapIconOption ? "map-icon-preview-v10" : "map-icon-preview-v10 empty"}>
-                  {selectedMapIconOption ? (
-                    <span dangerouslySetInnerHTML={{ __html: selectedMapIconOption.svg }} />
+                <div className={effectiveMapIconOption ? "map-icon-preview-v10" : "map-icon-preview-v10 empty"}>
+                  {effectiveMapIconOption ? (
+                    <span dangerouslySetInnerHTML={{ __html: effectiveMapIconOption.svg }} />
                   ) : (
                     <span><FiMapPin /></span>
                   )}
@@ -1359,17 +1374,6 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
             {currentStep === 6 ? (
               <section className="business-step-card-v10">
                 <WizardNotice>Review everything before creating your business profile.</WizardNotice>
-                {missingFields.length ? (
-                  <div className="business-missing-summary-v10">
-                    <strong>Your business stand is not complete yet.</strong>
-                    <span>Please complete the following before continuing:</span>
-                    <ul>
-                      {missingFields.map((item) => (
-                        <li key={`${item.key}-${item.label}`}>{item.label}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
                 <div className="payment-config-v5 business-mini-card-v10">
                   <div className="payment-config-title-v5"><FiCreditCard /> Provider plan</div>
                   {PROVIDER_PLANS.map((plan) => (
@@ -1482,7 +1486,7 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
         ? barber.services.map(normalizeServiceForBooking)
         : DEFAULT_SERVICE_TYPES.map(normalizeServiceForBooking),
       businessType: barber.business_type || barber.businessType || "Home Services",
-      mapIconType: barber.map_icon_type || barber.mapIconType || getMapIconTypeForCategory(barber.business_type || barber.businessType || "Home Services"),
+      mapIconType: barber.map_icon_type || barber.mapIconType || "",
       pricing: String(barber.price_from || ""),
       scheduleStart: barber.availability?.start || "08:00",
       scheduleEnd: barber.availability?.end || "20:00",

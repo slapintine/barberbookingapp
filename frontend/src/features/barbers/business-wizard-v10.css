@@ -186,6 +186,23 @@ body[data-theme="dark"] .wizard-note-v10,
   overflow-wrap: break-word;
 }
 
+.business-missing-jump-v10 {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.business-missing-jump-v10:hover,
+.business-missing-jump-v10:focus-visible {
+  opacity: 0.85;
+  outline: none;
+}
+
 .label-v4.missing-v10 .field-input-v4,
 .label-v4.missing-v10 .profile-input-v4,
 .label-v4.missing-v10 .textarea-v4,

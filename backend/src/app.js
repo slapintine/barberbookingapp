@@ -4,10 +4,10 @@ import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
 
 import { env, validateEnv } from "./config/env.js";
+import { authenticateAccessToken } from "./services/authSessionService.js";
 import {
   buildCorsOptions,
   securityHeaders,
@@ -177,13 +177,7 @@ function attachSocketServer(server) {
         return next(new Error("Unauthorized"));
       }
 
-      const decoded = jwt.verify(token, env.jwtSecret);
-      const user = await findUserById(decoded.userId);
-
-      if (!user) {
-        return next(new Error("Unauthorized"));
-      }
-
+      const { user } = await authenticateAccessToken(token);
       socket.user = user;
       next();
     } catch {

@@ -9,6 +9,7 @@ export function getMessages({ barberId, customerUsername }) {
 export function createMessage(payload) {
   return apiFetch("/api/messages", {
     method: "POST",
+    headers: payload.clientMessageId ? { "Idempotency-Key": payload.clientMessageId } : {},
     body: JSON.stringify(payload),
   });
 }

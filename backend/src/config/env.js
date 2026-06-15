@@ -53,7 +53,8 @@ export const env = {
   host: (process.env.HOST || "127.0.0.1").trim(),
   logLevel: (process.env.LOG_LEVEL || (process.env.NODE_ENV === "production" ? "info" : "debug")).trim().toLowerCase(),
   jwtSecret: process.env.JWT_SECRET,
-  jwtExpiresIn: (process.env.JWT_EXPIRES_IN || "7d").trim(),
+  jwtExpiresIn: (process.env.JWT_EXPIRES_IN || "15m").trim(),
+  refreshTokenDays: Math.max(1, Number(process.env.REFRESH_TOKEN_DAYS || 30)),
   clientUrls: configuredClientUrls,
   devClientUrls: parseList(process.env.DEV_CLIENT_URL || process.env.VITE_DEV_CLIENT_URL),
   allowLocalDevOrigins: String(process.env.ALLOW_LOCAL_DEV_ORIGINS || "").trim().toLowerCase() === "true",
@@ -63,6 +64,7 @@ export const env = {
   dbPath: process.env.DB_PATH || "./src/db/barber_app.sqlite",
   databaseUrl: (process.env.DATABASE_URL || "").trim(),
   databaseSsl: String(process.env.DATABASE_SSL || "").toLowerCase() === "true",
+  imageStorageDir: (process.env.IMAGE_STORAGE_DIR || "").trim(),
   firebaseServiceAccountJson: (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || "").trim(),
   resendApiKey: (process.env.RESEND_API_KEY || "").trim(),
   emailFrom: (process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "Queless <info@queless.org>").trim(),
@@ -254,6 +256,10 @@ export function validateEnv() {
 
   if (env.nodeEnv === "production" && /USERNAME:PASSWORD|HOST:5432|DATABASE_NAME/i.test(env.databaseUrl)) {
     missing.push("replace the placeholder DATABASE_URL with the real production PostgreSQL connection string");
+  }
+
+  if (env.nodeEnv === "production" && !env.imageStorageDir) {
+    missing.push("IMAGE_STORAGE_DIR for durable provider uploads");
   }
 
   if (["sandbox", "provider", "live", "auto"].includes(env.mobileMoneyMode)) {

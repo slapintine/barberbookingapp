@@ -1,4 +1,4 @@
-import { all, get, run } from "../db/query.js";
+import { all, get, run, transaction } from "../db/query.js";
 import { MARKETPLACE_CATEGORIES } from "../data/marketplaceCategories.js";
 import { publicBusinessParams, publicBusinessWhere } from "../services/businessVisibility.js";
 import { withCanonicalProviderFields } from "../services/providerResponse.js";
@@ -32,7 +32,19 @@ function isReachableContact(value) {
   return looksLikeEmail || looksLikePhone;
 }
 
-function normalizeProvider(row = {}) {
+function parseJsonArray(value, fallback = []) {
+  if (Array.isArray(value)) return value;
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeProvider(row = {}, services = []) {
+  const portfolio = parseJsonArray(row.portfolio_json, []);
   return withCanonicalProviderFields({
     id: row.id,
     user_id: row.owner_user_id,
@@ -67,7 +79,7 @@ function normalizeProvider(row = {}) {
     rating: Number(row.rating || 0),
     total_reviews: Number(row.total_reviews || 0),
     created_at: row.created_at,
-  });
+  }, { services, portfolio });
 }
 
 function normalizeService(row = {}) {
@@ -115,7 +127,27 @@ export async function getProviders(req, res, next) {
        ORDER BY b.id DESC`,
       publicBusinessParams(now)
     );
-    res.json({ success: true, providers: rows.map(normalizeProvider) });
+    const providerIds = rows.map((row) => Number(row.id)).filter(Boolean);
+    const services = providerIds.length
+      ? await all(
+        `SELECT barber_id, image
+         FROM barber_services
+         WHERE barber_id IN (${providerIds.map(() => "?").join(", ")})
+           AND COALESCE(is_available, 1) = 1`,
+        providerIds
+      )
+      : [];
+    const servicesByProvider = services.reduce((grouped, service) => {
+      const providerId = Number(service.barber_id);
+      if (!grouped.has(providerId)) grouped.set(providerId, []);
+      grouped.get(providerId).push(service);
+      return grouped;
+    }, new Map());
+
+    res.json({
+      success: true,
+      providers: rows.map((row) => normalizeProvider(row, servicesByProvider.get(Number(row.id)) || [])),
+    });
   } catch (error) {
     next(error);
   }
@@ -150,9 +182,15 @@ export async function createQuoteRequest(req, res, next) {
     const budget = req.body.budget === undefined || req.body.budget === "" ? null : Number(req.body.budget);
     const preferredDate = req.body.preferred_date || req.body.preferredDate || null;
     const location = String(req.body.location || "").trim();
+    const idempotencyKey = String(
+      req.body.idempotencyKey || req.body.idempotency_key || req.get("Idempotency-Key") || ""
+    ).trim().slice(0, 120);
 
     if (!providerId || description.length < 8) {
       return res.status(400).json({ success: false, message: "Provider and description are required." });
+    }
+    if (budget !== null && (!Number.isFinite(budget) || budget < 0)) {
+      return res.status(400).json({ success: false, message: "Budget must be a valid non-negative amount." });
     }
 
     const provider = await get(
@@ -165,33 +203,117 @@ export async function createQuoteRequest(req, res, next) {
     if (!provider) {
       return res.status(404).json({ success: false, message: "This business is not available yet." });
     }
+    if (Number(provider.owner_user_id) === Number(req.user.id)) {
+      return res.status(400).json({ success: false, message: "You cannot request a quote from your own business." });
+    }
 
-    const result = await run(
-      `INSERT INTO quote_requests
-       (customer_id, provider_id, service_id, description, budget, preferred_date, location, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-      [req.user.id, providerId, serviceId, description, budget, preferredDate, location]
-    );
+    const service = serviceId
+      ? await get(
+          `SELECT id, service_name FROM barber_services WHERE id = ? AND barber_id = ?`,
+          [serviceId, providerId]
+        )
+      : null;
+    if (serviceId && !service) {
+      return res.status(400).json({ success: false, message: "Select a service offered by this provider." });
+    }
 
-    await run(
-      `INSERT INTO notifications (user_id, title, type, message, barber_id, customer_user_id, read)
-       VALUES (?, 'New quote request', 'quote', ?, ?, ?, 0)`,
-      [provider.owner_user_id, `A customer requested a quote for ${provider.business_name}.`, providerId, req.user.id]
-    ).catch(() => {});
+    let outcome;
+    try {
+      outcome = await transaction(async (client) => {
+      if (idempotencyKey) {
+        const existing = await client.get(
+          `SELECT * FROM quote_requests WHERE customer_id = ? AND idempotency_key = ? LIMIT 1`,
+          [req.user.id, idempotencyKey]
+        );
+        if (existing) {
+          const existingMessage = existing.conversation_message_id
+            ? await client.get(`SELECT * FROM messages WHERE id = ?`, [existing.conversation_message_id])
+            : null;
+          return { quoteRequest: existing, message: existingMessage, reused: true };
+        }
+      }
 
-    res.status(201).json({
-      success: true,
-      quote_request: {
-        id: result.lastID,
-        customer_id: req.user.id,
-        provider_id: providerId,
-        service_id: serviceId,
+      const quoteInsert = await client.run(
+        `INSERT INTO quote_requests
+         (customer_id, provider_id, service_id, description, budget, preferred_date, location, status, idempotency_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        [req.user.id, providerId, serviceId, description, budget, preferredDate, location, idempotencyKey]
+      );
+      const quoteRequestId = quoteInsert.lastID;
+      const details = [
+        `Quote request: ${service?.service_name || "Service"}`,
         description,
-        budget,
-        preferred_date: preferredDate,
-        location,
-        status: "pending",
-      },
+        budget !== null ? `Budget: UGX ${Math.round(budget).toLocaleString("en-US")}` : "",
+        preferredDate ? `Preferred date: ${preferredDate}` : "",
+        location ? `Location: ${location}` : "",
+      ].filter(Boolean).join("\n");
+      const messageClientId = idempotencyKey ? `quote:${idempotencyKey}` : "";
+      const messageInsert = await client.run(
+        `INSERT INTO messages
+         (barber_id, customer_user_id, sender_user_id, text, seen, client_message_id, created_at)
+         VALUES (?, ?, ?, ?, 0, ?, CURRENT_TIMESTAMP)`,
+        [providerId, req.user.id, req.user.id, details, messageClientId]
+      );
+      await client.run(
+        `UPDATE quote_requests SET conversation_message_id = ? WHERE id = ?`,
+        [messageInsert.lastID, quoteRequestId]
+      );
+      await client.run(
+        `INSERT INTO notifications (user_id, title, type, message, barber_id, customer_user_id, customer_username, read)
+         VALUES (?, 'New quote request', 'quote', ?, ?, ?, ?, 0)`,
+        [provider.owner_user_id, `A customer requested a quote for ${provider.business_name}.`, providerId, req.user.id, req.user.username]
+      );
+
+      return {
+        quoteRequest: {
+          id: quoteRequestId,
+          customer_id: req.user.id,
+          provider_id: providerId,
+          service_id: serviceId,
+          description,
+          budget,
+          preferred_date: preferredDate,
+          location,
+          status: "pending",
+          idempotency_key: idempotencyKey,
+          conversation_message_id: messageInsert.lastID,
+        },
+        message: {
+          id: messageInsert.lastID,
+          barberId: providerId,
+          barberName: provider.business_name,
+          customerUserId: req.user.id,
+          customerUsername: req.user.username,
+          sender_user_id: req.user.id,
+          sender: req.user.username,
+          text: details,
+          body: details,
+          seen: false,
+          clientMessageId: messageClientId,
+          createdAt: new Date().toISOString(),
+        },
+        reused: false,
+      };
+      });
+    } catch (error) {
+      if (!idempotencyKey || !/unique|constraint/i.test(String(error?.message || ""))) throw error;
+      const existing = await get(
+        `SELECT * FROM quote_requests WHERE customer_id = ? AND idempotency_key = ? LIMIT 1`,
+        [req.user.id, idempotencyKey]
+      );
+      if (!existing) throw error;
+      const existingMessage = existing.conversation_message_id
+        ? await get(`SELECT * FROM messages WHERE id = ?`, [existing.conversation_message_id])
+        : null;
+      outcome = { quoteRequest: existing, message: existingMessage, reused: true };
+    }
+
+    res.status(outcome.reused ? 200 : 201).json({
+      success: true,
+      quote_request: outcome.quoteRequest,
+      message: outcome.message,
+      conversation_id: `${providerId}:${req.user.username}`,
+      reused: outcome.reused,
     });
   } catch (error) {
     next(error);

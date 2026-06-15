@@ -1,11 +1,11 @@
 import http from "http";
-import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
 import app from "./app.js";
 import { env, validateEnv } from "./config/env.js";
 import { initDb } from "./db/initDb.js";
 import db from "./config/db.js";
 import { logger } from "./config/logger.js";
+import { authenticateAccessToken } from "./services/authSessionService.js";
 
 validateEnv();
 
@@ -61,13 +61,7 @@ io.use(async (socket, next) => {
       return next(new Error("Unauthorized"));
     }
 
-    const decoded = jwt.verify(token, env.jwtSecret);
-    const user = await findUserById(decoded.userId);
-
-    if (!user) {
-      return next(new Error("Unauthorized"));
-    }
-
+    const { user } = await authenticateAccessToken(token);
     socket.user = user;
     next();
   } catch (error) {

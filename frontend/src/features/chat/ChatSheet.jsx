@@ -13,6 +13,7 @@ export default function ChatSheet({
   typingState,
   onTyping,
   onSend,
+  onRetry,
   onClose,
   chatThreadRef,
 }) {
@@ -63,7 +64,12 @@ export default function ChatSheet({
                   >
                     <div className="chat-bubble-text-v4">{item.text}</div>
                     {isMine ? (
-                      <div className="tiny-meta-v4">{item.seen ? "Seen" : "Sent"}</div>
+                      <div className="tiny-meta-v4">{item.failed ? "Not sent" : item.seen ? "Seen" : "Sent"}</div>
+                    ) : null}
+                    {isMine && item.failed ? (
+                      <button type="button" className="chat-retry-v4" onClick={() => onRetry?.(item)}>
+                        Retry
+                      </button>
                     ) : null}
                   </div>
                 );

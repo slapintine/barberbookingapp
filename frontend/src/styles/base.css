@@ -19,6 +19,15 @@ body[data-lineup-theme="light"] {
 }
 
 :root {
+  /* Bottom navigation + device safe area (Samsung/Android system nav bar).
+     --device-safe-bottom defaults to the real inset (0 on desktop, no gap).
+     A mobile media query below raises the floor to 16px so Android browsers
+     that report 0 still clear the system nav. The floating pill nav and page
+     bottom paddings build on these so nothing hides behind the system bar. */
+  --bottom-nav-height: 68px;
+  --bottom-nav-float-gap: 12px;
+  --device-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bottom-nav-total-height: calc(var(--bottom-nav-height) + var(--bottom-nav-float-gap) + var(--device-safe-bottom));
   --bg-dark: linear-gradient(180deg, #18051f 0%, #2b124c 60%, #522b5b 100%);
   --bg-light: linear-gradient(180deg, #fff8f4 0%, #f7ede8 100%);
   --screen-dark: #14071b;
@@ -1754,4 +1763,12 @@ img {
   font-size: 0.92rem;
 }
 
+/* Mobile only: guarantee a minimum safe-area floor so Android browsers that
+   report env(safe-area-inset-bottom)=0 still clear the system nav bar. Desktop
+   keeps the raw inset (0) so no blank gap is added under the phone frame. */
+@media (max-width: 768px) {
+  :root {
+    --device-safe-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  }
+}
 

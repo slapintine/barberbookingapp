@@ -1,6 +1,15 @@
 import { env } from "../config/env.js";
 
 const rateStores = new Map();
+const rateStoreCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const store of rateStores.values()) {
+    for (const [key, record] of store.entries()) {
+      if (record.resetAt <= now) store.delete(key);
+    }
+  }
+}, 60 * 1000);
+rateStoreCleanup.unref?.();
 
 function isLoopbackOrigin(origin) {
   try {
