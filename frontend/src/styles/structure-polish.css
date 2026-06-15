@@ -2683,7 +2683,7 @@ body[data-lineup-theme="light"] #root {
 .bottom-nav-v4 {
   left: 12px !important;
   right: 12px !important;
-  bottom: 12px !important;
+  bottom: calc(12px + var(--device-safe-bottom)) !important;
   width: auto !important;
   height: 66px !important;
   border-radius: 22px !important;
@@ -3371,7 +3371,7 @@ body[data-lineup-theme="dark"] .screen-v4 {
 .bottom-nav-v4 {
   left: 12px !important;
   right: 12px !important;
-  bottom: 12px !important;
+  bottom: calc(12px + var(--device-safe-bottom)) !important;
   width: auto !important;
   height: 68px !important;
   padding: 7px !important;
@@ -3459,7 +3459,7 @@ body[data-lineup-theme="dark"] .screen-v4 {
 .bottom-nav-v4 {
     left: 10px !important;
     right: 10px !important;
-    bottom: 10px !important;
+    bottom: calc(10px + var(--device-safe-bottom)) !important;
   }
 }
 
