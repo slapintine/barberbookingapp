@@ -54,6 +54,18 @@ export function getAuthToken() {
   );
 }
 
+export function clearStoredAuth() {
+  if (typeof window === "undefined") return;
+  for (const storage of [localStorage, sessionStorage]) {
+    storage.removeItem("lineup_token");
+    storage.removeItem("lineup_user");
+    storage.removeItem("lineup_token_expires_at");
+    storage.removeItem("cutz_token");
+    storage.removeItem("cutz_user");
+    storage.removeItem("cutz_token_expires_at");
+  }
+}
+
 function broadcastUnauthorized(message) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
@@ -133,15 +145,26 @@ export async function apiFetch(url, options = {}) {
     // Final guard: never let a raw HTML / proxy error page reach the UI, no matter
     // what the backend or reverse proxy returned.
     const message = sanitizeErrorMessage(rawMessage);
-    if (response.status === 401 && tokenValue) {
-      broadcastUnauthorized(message);
+    const isAuthError = response.status === 401;
+    // Only force a logout/redirect when a token was actually sent — a 401 on a
+    // background request made without a token just means "guest", not "expired".
+    // Silent callers (e.g. boot session validation) opt out via suppressAuthBroadcast.
+    // Never forward the raw backend phrasing ("No token provided.") to the UI.
+    if (isAuthError && tokenValue && !options.suppressAuthBroadcast) {
+      clearStoredAuth();
+      broadcastUnauthorized("Session expired. Please log in again.");
     }
     const error = new Error(message);
     error.status = response.status;
     error.payload = data;
     error.serverUnavailable = isServerUnavailable;
+    error.isAuthError = isAuthError;
     error.code = data?.code || "";
-    error.userMessage = sanitizeErrorMessage(data?.message || message);
+    // Never surface raw backend auth phrasing (e.g. "Not authorized. No token
+    // provided.") in the UI — callers decide whether to prompt a login.
+    error.userMessage = isAuthError
+      ? "Please log in to continue."
+      : sanitizeErrorMessage(data?.message || message);
     error.retryAfter = response.headers.get("Retry-After") || "";
     throw error;
   }

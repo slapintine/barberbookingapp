@@ -14,6 +14,11 @@ export function loginUser({ username, password }) {
   });
 }
 
+export function getMe() {
+  // Silent boot validation: a 401 here must not trigger a global logout banner.
+  return apiFetch("/api/auth/me", { suppressAuthBroadcast: true });
+}
+
 export function updateAccount({ username, currentPassword, newPassword }) {
   return apiFetch("/api/auth/me", {
     method: "PATCH",

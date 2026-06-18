@@ -6,7 +6,7 @@ import "./App.css";
 import logo from "./assets/queless-logo-icon.png";
 import { resolveProviderImage, NEUTRAL_PLACEHOLDER } from "./utils/providerImage.js";
 import { sanitizeErrorMessage } from "./utils/errorMessages.js";
-import { confirmPasswordReset, loginUser, registerUser, requestPasswordReset, updateAccount } from "./api/authApi.js";
+import { confirmPasswordReset, getMe, loginUser, registerUser, requestPasswordReset, updateAccount } from "./api/authApi.js";
 import { deleteMyBarberStand, getBarbers, getMyBarberStand, publishMyBarberStand, registerBarberStand, updateMyBarberStand } from "./api/barbersApi.js";
 import {
   confirmCashPaymentRequest,
@@ -950,6 +950,7 @@ function readSessionExpiry(token) {
 const LOGIN_ERROR_MESSAGES = {
   USER_NOT_FOUND: "No account found with that username or email.",
   INVALID_PASSWORD: "Incorrect username/email or password.",
+  INVALID_CREDENTIALS: "Incorrect username/email or password.",
   ACCOUNT_INACTIVE: "This account is not active. Please contact support or verify your account.",
   ACCOUNT_UNVERIFIED: "This account is not active. Please contact support or verify your account.",
   VALIDATION_ERROR: "",
@@ -1008,6 +1009,9 @@ function App() {
   const [sessionExpiresAt, setSessionExpiresAt] = useState(
     () => localStorage.getItem("lineup_token_expires_at") || sessionStorage.getItem("lineup_token_expires_at") || readSessionExpiry(getAuthToken())
   );
+  // False until a stored token has been validated against /auth/me on boot.
+  // With no token there is nothing to check, so guests are ready immediately.
+  const [sessionChecked, setSessionChecked] = useState(() => !getAuthToken());
 
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname, readAuthUser()));
   const initialSearchRoute = readSearchRouteParams();
@@ -1564,17 +1568,68 @@ function App() {
 
   useEffect(() => {
     fetchBarbers();
-  }, [currentUser?.username, currentUser?.role]);
+  }, [currentUser?.username, currentUser?.role, sessionChecked]);
 
   useEffect(() => {
-    if (!currentUser?.username) return;
+    // Protected loaders must only run for a genuinely authenticated session.
+    // A stale stored user with no token must stay in guest mode (no auth calls),
+    // and we wait for the boot session check so an invalid token is cleared first.
+    if (!currentUser?.username || !getAuthToken() || !sessionChecked) return;
     fetchProfile(currentUser.username);
     fetchFavorites(currentUser.username);
     fetchBookings(currentUser.username, effectiveIsBarber ? "barber" : "customer");
     fetchMyReviews(currentUser.username);
     fetchNotifications();
     fetchWallet();
-  }, [currentUser?.username, currentUser?.role, effectiveIsBarber, barbers.length]);
+  }, [currentUser?.username, currentUser?.role, effectiveIsBarber, barbers.length, sessionChecked]);
+
+  // Reconcile the stored session once on load. This keeps guests in guest mode
+  // and silently clears stale/expired credentials without any warning toast.
+  useEffect(() => {
+    const dropToGuest = () => {
+      clearAuthSession();
+      setToken("");
+      setSessionExpiresAt(null);
+      setCurrentUser(null);
+    };
+
+    const authToken = getAuthToken();
+    if (!authToken) {
+      // A stored user with no token is a stale session — return to guest mode.
+      if (currentUser) dropToGuest();
+      setSessionChecked(true);
+      return undefined;
+    }
+
+    let cancelled = false;
+    getMe()
+      .then((data) => {
+        if (cancelled) return;
+        const freshUser = data?.user || data;
+        if (freshUser?.username) {
+          setCurrentUser((prev) => ({ ...(prev || {}), ...freshUser }));
+          const storage = localStorage.getItem("lineup_token") ? localStorage : sessionStorage;
+          storage.setItem("lineup_user", JSON.stringify(freshUser));
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        // Only clear on an explicit auth rejection. Tolerate offline/network
+        // failures so a flaky connection never logs the user out.
+        if (error?.status === 401 || error?.status === 403) {
+          dropToGuest();
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSessionChecked(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // Run once on mount; later session changes are handled by login/logout flows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!pendingBookingPayment?.bookingId || !currentUser?.username) return;
@@ -1609,9 +1664,10 @@ function App() {
       return;
     }
 
+    if (!sessionChecked) return;
     setSubscriptionReady(false);
     fetchSubscription();
-  }, [currentUser?.username, effectiveIsBarber, isAdmin]);
+  }, [currentUser?.username, effectiveIsBarber, isAdmin, sessionChecked]);
 
   useEffect(() => {
     if (!currentUser?.username || effectiveIsBarber || isAdmin) {
@@ -1621,8 +1677,9 @@ function App() {
       return;
     }
 
+    if (!sessionChecked) return;
     fetchCustomerSubscription();
-  }, [currentUser?.username, effectiveIsBarber, isAdmin]);
+  }, [currentUser?.username, effectiveIsBarber, isAdmin, sessionChecked]);
 
   useEffect(() => {
     if (!pendingSubscriptionPayment?.reference || !currentUser?.username) return;
@@ -1890,9 +1947,11 @@ function App() {
   };
 
   useEffect(() => {
-    if (globalError) {
-      showSystemToast("Something needs attention", globalError, "system");
-    }
+    if (!globalError) return;
+    // Never surface raw auth/session errors as a global toast on public pages.
+    // Login prompts are handled at the point of the intentional protected action.
+    if (/not authorized|no token|please log in|session expired/i.test(globalError)) return;
+    showSystemToast("Something needs attention", globalError, "system");
   }, [globalError]);
 
   useEffect(() => {
@@ -1912,9 +1971,10 @@ const fetchBarbers = async () => {
     setBarbersError("");
     setGlobalError("");
 
+    const canLoadMine = Boolean(currentUser?.username && getAuthToken() && sessionChecked);
     const [res, mineResult] = await Promise.all([
       getBarbers(),
-      currentUser?.username ? getMyBarberStand().catch(() => null) : Promise.resolve(null),
+      canLoadMine ? getMyBarberStand().catch(() => null) : Promise.resolve(null),
     ]);
 
     const incoming = Array.isArray(res?.barbers)
@@ -1955,6 +2015,7 @@ const fetchBarbers = async () => {
   };
 
   const fetchFavorites = async (username) => {
+    if (!getAuthToken()) return;
     try {
       const data = await getFavoriteRows();
       const ids = Array.isArray(data)
@@ -1966,12 +2027,15 @@ const fetchBarbers = async () => {
       setFavorites(ids);
       writeStored("favorites", username, ids);
     } catch (error) {
+      // Favorites are a background load — never surface an auth/connection error
+      // as a global toast. Fall back to the empty list silently.
       setFavorites([]);
-      setGlobalError(error?.userMessage || "We couldn't load your favorites. Please try again.");
+      if (error?.isAuthError || error?.status === 401) return;
     }
   };
 
   const fetchBookings = async (username, role, options = {}) => {
+    if (!getAuthToken()) return false;
     const now = Date.now();
     const refreshState = bookingRefreshStateRef.current;
 
@@ -2103,7 +2167,7 @@ const fetchBarbers = async () => {
   };
 
   useEffect(() => {
-    if (!currentUser?.username || screen !== "app") return undefined;
+    if (!currentUser?.username || !getAuthToken() || !sessionChecked || screen !== "app") return undefined;
 
     fetchNotifications();
     const interval = window.setInterval(fetchNotifications, 20000);
@@ -2118,7 +2182,7 @@ const fetchBarbers = async () => {
       window.removeEventListener("focus", fetchNotifications);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [currentUser?.username, screen]);
+  }, [currentUser?.username, screen, sessionChecked]);
 
   const fetchWallet = async () => {
     if (!currentUser?.username) return;
@@ -2211,6 +2275,10 @@ const fetchBarbers = async () => {
 
   const fetchMessages = async (barberId, customerUsername) => {
     const scope = `${barberId}:${customerUsername}`;
+    if (!getAuthToken()) {
+      setMessages(readStored("messages", scope, []));
+      return;
+    }
     try {
       const data = await getMessages({ barberId, customerUsername });
       const next = Array.isArray(data) ? data : [];
