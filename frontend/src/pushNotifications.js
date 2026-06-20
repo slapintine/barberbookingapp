@@ -28,7 +28,12 @@ function workerUrl() {
   const params = new URLSearchParams(
     Object.fromEntries(Object.entries(config).filter(([, value]) => Boolean(value)))
   );
-  return `${import.meta.env.BASE_URL || "/"}firebase-messaging-sw.js?${params.toString()}`;
+  return `${getFirebaseServiceWorkerPath()}firebase-messaging-sw.js?${params.toString()}`;
+}
+
+export function getFirebaseServiceWorkerPath() {
+  const baseUrl = String(import.meta.env.BASE_URL || "/");
+  return baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 }
 
 export function getNotificationSupportState() {
@@ -36,6 +41,7 @@ export function getNotificationSupportState() {
   const browserState = getBrowserNotificationState({
     hasNotification: "Notification" in window,
     hasServiceWorker: "serviceWorker" in navigator,
+    hasPushManager: "PushManager" in window,
     permission: "Notification" in window ? Notification.permission : "default",
   });
   if (browserState !== "granted") return browserState;
@@ -48,7 +54,8 @@ export function getNotificationSupportState() {
 export async function registerFirebaseServiceWorker() {
   if (!("serviceWorker" in navigator)) return null;
   return navigator.serviceWorker.register(workerUrl(), {
-    scope: import.meta.env.BASE_URL || "/",
+    scope: getFirebaseServiceWorkerPath(),
+    updateViaCache: "none",
   });
 }
 
@@ -60,7 +67,7 @@ export async function enableFirebaseNotifications() {
 
   if (getFirebaseClientConfigIssues().length || !firebaseClientConfigured() || !firebaseVapidKey) {
     debugPush("Push delivery configuration is incomplete; in-app notifications remain available.", {
-      issueCount: getFirebaseClientConfigIssues().length,
+      issues: getFirebaseClientConfigIssues(),
       hasVapidKey: Boolean(firebaseVapidKey),
     });
     return { success: false, reason: "delivery_unavailable" };
@@ -86,22 +93,40 @@ export async function enableFirebaseNotifications() {
     return { success: false, reason: "service_worker" };
   }
 
-  const token = await getToken(messaging, {
-    vapidKey: firebaseVapidKey,
-    serviceWorkerRegistration: registration || undefined,
-  });
+  let token;
+  try {
+    token = await getToken(messaging, {
+      vapidKey: firebaseVapidKey,
+      serviceWorkerRegistration: registration || undefined,
+    });
+  } catch (error) {
+    debugPush("Firebase could not create a browser notification token.", {
+      name: error?.name || "Error",
+      code: error?.code || "",
+    });
+    return { success: false, reason: "token_registration" };
+  }
 
-  if (!token) return { success: false, reason: "no_token" };
+  if (!token) return { success: false, reason: "token_registration" };
 
-  const result = await apiFetch("/api/notifications/register-token", {
-    method: "POST",
-    body: JSON.stringify({
-      token,
-      platform: "web",
-      browser: browserLabel(),
-      deviceLabel: `${browserLabel()} on ${navigator.platform || "this device"}`,
-    }),
-  });
+  let result;
+  try {
+    result = await apiFetch("/api/notifications/register-token", {
+      method: "POST",
+      body: JSON.stringify({
+        token,
+        platform: "web",
+        browser: browserLabel(),
+        deviceLabel: `${browserLabel()} on ${navigator.platform || "this device"}`,
+      }),
+    });
+  } catch (error) {
+    debugPush("The browser token could not be saved by the API.", {
+      status: Number(error?.status || 0),
+      serverUnavailable: Boolean(error?.serverUnavailable),
+    });
+    return { success: false, reason: "token_registration" };
+  }
 
   localStorage.setItem("queless_fcm_token", token);
   return { success: true, token, result };

@@ -21,7 +21,7 @@ const STATE_COPY = {
   },
   unsupported: {
     label: "Notifications not supported",
-    text: `Push notifications aren't supported on this browser. ${IN_APP_NOTE}`,
+    text: `Notifications are not supported on this device or browser. ${IN_APP_NOTE}`,
   },
   delivery_unavailable: {
     label: "Device alerts aren't ready yet",
@@ -30,6 +30,10 @@ const STATE_COPY = {
   service_worker: {
     label: "Notifications temporarily unavailable",
     text: `Device notifications couldn't start in this browser right now. Please try again later. ${IN_APP_NOTE}`,
+  },
+  token_registration: {
+    label: "Notifications need another try",
+    text: `Browser permission is on, but this device couldn't be registered for alerts. Please retry. ${IN_APP_NOTE}`,
   },
   default: {
     label: "Turn on notifications",
@@ -55,7 +59,14 @@ export default function PushNotificationSettings({ currentUser, onToast }) {
   const [message, setMessage] = useState("");
 
   const copy = useMemo(() => STATE_COPY[state] || STATE_COPY.default, [state]);
-  const canEnable = currentUser?.id && ["default", "granted"].includes(state);
+  const retryable = ["service_worker", "token_registration", "delivery_unavailable"].includes(state);
+  const canEnable = currentUser?.id && [
+    "default",
+    "granted",
+    "service_worker",
+    "token_registration",
+    "delivery_unavailable",
+  ].includes(state);
   const enabled = state === "granted";
 
   const enableNotifications = async () => {
@@ -68,17 +79,19 @@ export default function PushNotificationSettings({ currentUser, onToast }) {
     setMessage("");
     try {
       const result = await enableFirebaseNotifications();
-      const nextState = getNotificationSupportState();
-      setState(nextState);
       if (result.success) {
+        setState("granted");
         setMessage(result.result?.firebaseReady === false
-    ? "Notifications are saved for this device. Alerts may appear once push delivery is fully available."
+          ? "Notifications are saved for this device. Alerts may appear once push delivery is fully available."
           : "Notifications enabled on this device.");
         onToast?.("Notifications enabled", "This device is registered for Queless alerts.", "system");
       } else {
+        setState(result.reason || getNotificationSupportState());
         setMessage(STATE_COPY[result.reason]?.text || "Notifications could not be enabled.");
       }
     } catch (error) {
+      const browserState = getNotificationSupportState();
+      setState(browserState === "granted" ? "token_registration" : browserState);
       if (import.meta.env.DEV) {
         console.warn("[Queless notifications] Device registration failed; in-app alerts remain active.", {
           status: Number(error?.status || 0),
@@ -108,12 +121,12 @@ export default function PushNotificationSettings({ currentUser, onToast }) {
           onClick={enableNotifications}
           disabled={!canEnable || loading}
         >
-          <FiBell /> {loading ? "Processing..." : enabled ? "Update notifications" : "Enable notifications"}
+          <FiBell /> {loading ? "Processing..." : enabled ? "Update notifications" : retryable ? "Retry notifications" : "Enable notifications"}
         </button>
       </div>
 
       {message ? (
-        <div className={message.toLowerCase().includes("could not") || message.toLowerCase().includes("blocked") ? "auth-error" : "auth-success"}>
+        <div className={enabled ? "auth-success" : "auth-error"}>
           {message}
         </div>
       ) : null}
