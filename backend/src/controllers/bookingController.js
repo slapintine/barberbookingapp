@@ -581,6 +581,29 @@ async function mapBookingRow(row) {
   };
 }
 
+function isAdminRole(user = {}) {
+  return ["admin", "superadmin", "super_admin", "super-admin"].includes(String(user.role || "").trim().toLowerCase());
+}
+
+function isProviderViewer(booking = {}, user = {}) {
+  return (
+    String(booking.barber_owner_username || booking.barberOwnerUsername || "") &&
+    String(booking.barber_owner_username || booking.barberOwnerUsername) === String(user.username || "")
+  );
+}
+
+function serializeBookingForViewer(booking = {}, user = {}) {
+  const safe = { ...booking };
+  const canSeeProviderMoney = isAdminRole(user) || isProviderViewer(safe, user);
+  if (!canSeeProviderMoney) {
+    delete safe.commission_amount;
+    delete safe.commissionAmount;
+    delete safe.barber_amount;
+    delete safe.barberAmount;
+  }
+  return safe;
+}
+
 async function sendBookingConfirmationEmails(booking) {
   const barber = await getBarberById(booking.barber_id);
   const customerProfile = await getProfileByUserId(booking.customer_user_id);
@@ -1167,15 +1190,13 @@ export async function createBooking(req, res, next) {
 
     return res.status(201).json({
       success: true,
-      booking: mappedBooking,
+      booking: serializeBookingForViewer(mappedBooking, req.user),
       payment: payment && isMobileMoneyPayment(payment.provider)
         ? {
             reference: payment.internal_reference,
             provider: payment.provider,
             status: payment.status,
             gross_amount: Number(payment.gross_amount || 0),
-            commission_amount: Number(payment.commission_amount || 0),
-            barber_amount: Number(payment.net_amount || 0),
             payer_phone: payment.payer_phone || "",
             instructions: `Approve the ${getMobileMoneyProviderLabel(payment.provider)} prompt on your phone to confirm the booking.`,
           }
@@ -1219,7 +1240,7 @@ export async function getMyBookings(req, res, next) {
 
     const bookings = [];
     for (const row of rows) {
-      bookings.push(await mapBookingRow(row));
+      bookings.push(serializeBookingForViewer(await mapBookingRow(row), req.user));
     }
 
     return res.status(200).json({
@@ -1395,7 +1416,7 @@ export async function payBookingWithWallet(req, res, next) {
     res.status(200).json({
       success: true,
       already_paid: Boolean(result.alreadyPaid),
-      booking: result.mappedBooking,
+      booking: serializeBookingForViewer(result.mappedBooking, req.user),
       message: result.alreadyPaid ? "Booking is already paid." : "Booking paid with wallet.",
     });
   } catch (error) {
@@ -1618,7 +1639,7 @@ export async function updateBookingStatus(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      booking: mappedBooking
+      booking: serializeBookingForViewer(mappedBooking, req.user)
     });
   } catch (error) {
     next(error);
@@ -1702,7 +1723,7 @@ export async function confirmCashPayment(req, res, next) {
     res.status(200).json({
       success: true,
       message: "Cash payment confirmed.",
-      booking: mappedBooking
+      booking: serializeBookingForViewer(mappedBooking, req.user)
     });
   } catch (error) {
     next(error);
@@ -1779,7 +1800,7 @@ export async function verifyBookingPayment(req, res, next) {
     res.status(200).json({
       success: true,
       message: result.alreadyProcessed ? "Payment was already confirmed." : "Payment confirmed and booking secured.",
-      booking: result.booking,
+      booking: serializeBookingForViewer(result.booking, req.user),
       disbursement: result.disbursement || null,
     });
   } catch (error) {
@@ -1800,8 +1821,7 @@ export async function handleBookingPaymentWebhook(req, res, next) {
       req.query.token ||
       ""
     ).trim();
-    const isExactMtnCallbackRoute = String(req.path || req.originalUrl || "").split("?")[0] === "/mtn/callback";
-    if (env.mobileMoneyWebhookToken && !isExactMtnCallbackRoute && providedToken !== env.mobileMoneyWebhookToken) {
+    if (env.mobileMoneyWebhookToken && providedToken !== env.mobileMoneyWebhookToken) {
       return res.status(401).json({
         success: false,
         message: "Invalid webhook token.",

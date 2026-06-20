@@ -85,6 +85,34 @@ function isSuccessfulStatus(value) {
   return ["successful", "success", "completed", "paid"].includes(String(value || "").trim().toLowerCase());
 }
 
+function serializeCheckoutBooking(booking = null) {
+  if (!booking) return null;
+  return {
+    id: booking.id,
+    status: booking.status,
+    paymentStatus: booking.payment_status,
+    payment_status: booking.payment_status,
+    paymentProvider: booking.payment_provider || booking.payment_method || "",
+    payment_provider: booking.payment_provider || booking.payment_method || "",
+    paymentReference: booking.payment_reference || "",
+    payment_reference: booking.payment_reference || "",
+    paid: String(booking.payment_status || "").toLowerCase() === "paid",
+  };
+}
+
+function serializeCheckoutPayment(payment = null) {
+  if (!payment) return null;
+  return {
+    reference: payment.internal_reference,
+    status: payment.status || "unknown",
+    provider: payment.provider || "",
+    amount: Number(payment.gross_amount || 0),
+    currency: payment.currency || "UGX",
+    bookingId: payment.booking_id || null,
+    booking_id: payment.booking_id || null,
+  };
+}
+
 function payoutVerificationMatches({ verification, payoutRequest, expectedStatus }) {
   const status = normalizeMomoStatus(verification?.status);
   const verifiedAmount = Number(verification?.amount || 0);
@@ -774,8 +802,8 @@ export async function checkout(req, res, next) {
       return res.status(result.statusCode || 502).json({
         success: false,
         message: result.message || "Mobile money could not send the payment request. Please try again later.",
-        booking: result.booking,
-        payment: result.payment,
+        booking: serializeCheckoutBooking(result.booking),
+        payment: serializeCheckoutPayment(result.payment),
       });
     }
 
@@ -788,8 +816,8 @@ export async function checkout(req, res, next) {
         : result.alreadyStarted
         ? "Payment request is already pending. Please approve the prompt on your phone."
         : "Payment request sent. Please approve the prompt on your phone.",
-      booking: result.booking,
-      payment: result.payment,
+      booking: serializeCheckoutBooking(result.booking),
+      payment: serializeCheckoutPayment(result.payment),
     });
   } catch (error) {
     next(error);
@@ -838,9 +866,7 @@ export async function verify(req, res, next) {
 async function handleMobileMoneyWebhook(req, res, next, providerKey) {
   try {
     const providedToken = readWebhookToken(req);
-    const routePath = String(req.path || req.originalUrl || "").split("?")[0];
-    const isProviderCallbackRoute = ["/mtn/callback", "/airtel/callback"].includes(routePath);
-    if (env.mobileMoneyWebhookToken && !isProviderCallbackRoute && providedToken !== env.mobileMoneyWebhookToken) {
+    if (env.mobileMoneyWebhookToken && providedToken !== env.mobileMoneyWebhookToken) {
       return res.status(401).json({
         success: false,
         message: "Invalid webhook token.",

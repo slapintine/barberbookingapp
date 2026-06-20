@@ -15,15 +15,15 @@ import {
 
 const router = express.Router();
 
-router.get("/me", protect, getMyWallet);
+router.get("/me", protect, requireRole("barber"), getMyWallet);
 router.get("/customer", protect, requireRole("customer"), getCustomerWallet);
 router.get("/customer/transactions", protect, requireRole("customer"), getCustomerWalletTransactions);
 router.post("/customer/topup/initiate", protect, requireRole("customer"), walletTopupRateLimiter, initiateCustomerWalletTopup);
 router.get("/customer/topup/status/:reference", protect, requireRole("customer"), getCustomerWalletTopupStatus);
 router.post("/top-up/initiate", protect, requireRole("customer"), walletTopupRateLimiter, initiateCustomerWalletTopup);
 router.get("/top-up/status/:reference", protect, requireRole("customer"), getCustomerWalletTopupStatus);
-router.post("/top-up", protect, walletTopupRateLimiter, topUpMyWallet);
-router.post("/top-up/verify", protect, walletTopupRateLimiter, verifyWalletTopUp);
-router.post("/withdraw", protect, requestWithdrawal);
+router.post("/top-up", protect, requireRole("customer"), walletTopupRateLimiter, topUpMyWallet);
+router.post("/top-up/verify", protect, requireRole("customer"), walletTopupRateLimiter, verifyWalletTopUp);
+router.post("/withdraw", protect, requireRole("barber"), requestWithdrawal);
 
 export default router;

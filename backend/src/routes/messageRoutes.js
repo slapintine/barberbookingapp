@@ -1,5 +1,6 @@
 import express from "express";
 import { protect } from "../middleware/authMiddleware.js";
+import { messageRateLimiter } from "../middleware/securityMiddleware.js";
 import {
   getConversation,
   getConversationById,
@@ -13,11 +14,11 @@ import {
 const router = express.Router();
 
 router.get("/conversations", protect, getConversations);
-router.post("/start", protect, startConversation);
+router.post("/start", protect, messageRateLimiter, startConversation);
 router.get("/conversations/:conversationId", protect, getConversationById);
-router.post("/conversations/:conversationId", protect, sendMessageToConversation);
+router.post("/conversations/:conversationId", protect, messageRateLimiter, sendMessageToConversation);
 router.patch("/conversations/:conversationId/read", protect, markConversationRead);
-router.post("/", protect, sendMessage);
+router.post("/", protect, messageRateLimiter, sendMessage);
 router.get("/", protect, getConversation);
 
 export default router;

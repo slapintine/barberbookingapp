@@ -109,6 +109,18 @@ export const bookingRateLimiter = rateLimit({
   max: 80,
 });
 
+export const messageRateLimiter = rateLimit({
+  name: "message",
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+});
+
+export const searchRateLimiter = rateLimit({
+  name: "search",
+  windowMs: 60 * 1000,
+  max: 120,
+});
+
 export const walletTopupRateLimiter = rateLimit({
   name: "wallet-topup",
   windowMs: 15 * 60 * 1000,

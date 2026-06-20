@@ -34,7 +34,6 @@ function isReachableContact(value) {
 function normalizeProvider(row = {}) {
   return {
     id: row.id,
-    user_id: row.owner_user_id,
     business_name: row.business_name,
     category_id: row.business_type || "",
     category_name: row.business_type || "",
@@ -44,8 +43,6 @@ function normalizeProvider(row = {}) {
     latitude: row.latitude,
     longitude: row.longitude,
     service_area: row.location || "",
-    phone: row.phone || "",
-    email: row.email || "",
     profile_image: row.image || "",
     cover_image: row.cover_image || row.image || "",
     is_verified: String(row.verified_status || "").toLowerCase() === "verified",
@@ -101,12 +98,9 @@ export async function getProviders(req, res, next) {
     const rows = await all(
       `SELECT
          b.*,
-         p.phone,
-         p.email,
          (SELECT COALESCE(AVG(r.rating), 0) FROM reviews r WHERE r.barber_id = b.id AND COALESCE(r.blocked_from_public, 0) = 0) AS rating,
          (SELECT COUNT(*) FROM reviews r WHERE r.barber_id = b.id AND COALESCE(r.blocked_from_public, 0) = 0) AS total_reviews
        FROM barbers b
-       LEFT JOIN profiles p ON p.user_id = b.owner_user_id
        WHERE ${publicBusinessWhere("b")}
        ORDER BY b.id DESC`,
       publicBusinessParams(now)

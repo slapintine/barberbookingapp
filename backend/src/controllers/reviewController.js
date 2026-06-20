@@ -24,6 +24,17 @@ function serializeReview(row = {}) {
   };
 }
 
+function serializePublicReview(row = {}) {
+  return {
+    id: row.id,
+    barber_id: row.barber_id,
+    rating: Number(row.rating || 0),
+    review_text: row.review_text || "",
+    username: row.username || "Customer",
+    created_at: row.created_at || null,
+  };
+}
+
 async function getBookingById(bookingId) {
   return get(`SELECT * FROM bookings WHERE id = ?`, [bookingId]);
 }
@@ -137,12 +148,14 @@ export async function getReviewsForBarber(req, res, next) {
     const { barberId } = req.params;
     const rows = await all(
       `SELECT
-        r.*,
-        u.username,
-        p.full_name
+        r.id,
+        r.barber_id,
+        r.rating,
+        r.review_text,
+        r.created_at,
+        u.username
        FROM reviews r
        JOIN users u ON u.id = r.user_id
-       LEFT JOIN profiles p ON p.user_id = u.id
        WHERE r.barber_id = ?
          AND COALESCE(r.blocked_from_public, 0) = 0
        ORDER BY r.id DESC`,
@@ -151,7 +164,7 @@ export async function getReviewsForBarber(req, res, next) {
 
     res.status(200).json({
       success: true,
-      reviews: rows.map(serializeReview),
+      reviews: rows.map(serializePublicReview),
     });
   } catch (error) {
     next(error);

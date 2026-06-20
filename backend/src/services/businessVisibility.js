@@ -54,7 +54,12 @@ export function isBusinessPubliclyVisible(business = {}, latestSubscription = nu
   const plan = normalizeProviderPlan(latestSubscription?.tier || business.subscription_tier || business.plan || "FREE");
   const businessStatus = String(business.business_status || business.status || "").trim().toLowerCase();
   const subscriptionStatus = String(latestSubscription?.status || business.subscription_status || "").trim().toLowerCase();
+  const subscriptionExpiresAt = latestSubscription?.expires_at || business.subscription_expires_at || null;
   const isPublished = Number(business.is_published ?? business.isPublished ?? 0) === 1 || business.isPublished === true;
+  const hasValidSubscriptionAccess =
+    plan === "FREE"
+      ? ["", "active", "manual_approved", "free"].includes(subscriptionStatus)
+      : subscriptionStatus === "active" && isFutureDate(subscriptionExpiresAt, now);
 
   // A published, live/active stand is publicly visible.
   // Subscription tier controls features (badges, analytics, coach) — NOT public visibility.
@@ -64,7 +69,8 @@ export function isBusinessPubliclyVisible(business = {}, latestSubscription = nu
     VALID_PUBLIC_STATUSES.has(businessStatus) &&
     isPublished &&
     !isDemoLikeBusiness(business) &&
-    !BLOCKED_SUBSCRIPTION_STATUSES.has(subscriptionStatus)
+    !BLOCKED_SUBSCRIPTION_STATUSES.has(subscriptionStatus) &&
+    hasValidSubscriptionAccess
   );
 }
 
@@ -103,7 +109,6 @@ export function publicBusinessWhere(alias = "b") {
     ${publicDemoNameExclusion(`${prefix}business_name`)}
     AND LOWER(COALESCE(${prefix}image, '')) NOT LIKE '%placeholder%'
     AND LOWER(COALESCE(${prefix}location, '')) NOT IN ('test location', 'demo location', 'sample location')
-    AND COALESCE(${prefix}subscription_tier, 'FREE') IN ('FREE', 'PREMIUM', 'PLATINUM')
     AND LOWER(COALESCE(${prefix}subscription_status, 'active')) NOT IN (
       'cancelled',
       'expired',
@@ -113,6 +118,18 @@ export function publicBusinessWhere(alias = "b") {
       'suspended',
       'trial_expired',
       'subscription_expired'
+    )
+    AND (
+      (
+        COALESCE(${prefix}subscription_tier, 'FREE') = 'FREE'
+        AND LOWER(COALESCE(${prefix}subscription_status, 'active')) IN ('active', 'manual_approved', 'free')
+      )
+      OR (
+        COALESCE(${prefix}subscription_tier, 'FREE') IN ('PREMIUM', 'PLATINUM')
+        AND LOWER(COALESCE(${prefix}subscription_status, '')) = 'active'
+        AND ${prefix}subscription_expires_at IS NOT NULL
+        AND ${prefix}subscription_expires_at > CURRENT_TIMESTAMP
+      )
     )
   `;
 }

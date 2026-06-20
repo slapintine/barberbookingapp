@@ -283,6 +283,14 @@ export function validateEnv() {
     missing.push("MTN_CALLBACK_URL or MOBILE_MONEY_CALLBACK_URL for public MTN callbacks");
   }
 
+  if (
+    env.nodeEnv === "production" &&
+    (env.bookingOnlinePaymentsEnabled || ["sandbox", "provider", "live", "auto"].includes(env.mobileMoneyMode)) &&
+    !env.mobileMoneyWebhookToken
+  ) {
+    missing.push("MOBILE_MONEY_WEBHOOK_TOKEN for public payment callbacks");
+  }
+
   if (env.nodeEnv === "production" && env.africasTalkingLifecycleSmsEnabled) {
     if (!env.africasTalkingUsername) missing.push("AFRICASTALKING_USERNAME for lifecycle SMS fallback");
     if (!env.africasTalkingApiKey) missing.push("AFRICASTALKING_API_KEY for lifecycle SMS fallback");

@@ -355,6 +355,54 @@ function validationError(message) {
   return error;
 }
 
+function normalizeScheduleTime(value, fallback = null) {
+  const normalized = String(value || fallback || "").trim();
+  if (!normalized) return null;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(normalized)) {
+    throw validationError("Schedule times must use HH:MM format.");
+  }
+  return normalized;
+}
+
+function normalizeScheduleRows(schedule = []) {
+  const seenDays = new Set();
+  return schedule.map((day) => {
+    const dayOfWeek = Number(day.day_of_week ?? day.dayOfWeek);
+    if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+      throw validationError("Schedule day must be between 0 and 6.");
+    }
+    if (seenDays.has(dayOfWeek)) {
+      throw validationError("Schedule can only include each day once.");
+    }
+    seenDays.add(dayOfWeek);
+
+    const isOpen = day.is_open === true || day.isOpen === true || Number(day.is_open ?? day.isOpen ?? 0) === 1;
+    const startTime = normalizeScheduleTime(day.start_time ?? day.startTime, "08:00");
+    const endTime = normalizeScheduleTime(day.end_time ?? day.endTime, "20:00");
+    const breakStart = normalizeScheduleTime(day.break_start ?? day.breakStart, null);
+    const breakEnd = normalizeScheduleTime(day.break_end ?? day.breakEnd, null);
+
+    if (isOpen && endTime <= startTime) {
+      throw validationError("Schedule end time must be after start time.");
+    }
+    if ((breakStart && !breakEnd) || (!breakStart && breakEnd)) {
+      throw validationError("Schedule breaks require both start and end times.");
+    }
+    if (breakStart && breakEnd && (breakEnd <= breakStart || breakStart < startTime || breakEnd > endTime)) {
+      throw validationError("Schedule break must be inside working hours.");
+    }
+
+    return {
+      dayOfWeek,
+      isOpen,
+      startTime,
+      endTime,
+      breakStart,
+      breakEnd,
+    };
+  });
+}
+
 function isVerificationApprovedStatus(value) {
   return ["approved", "verified", "complete", "completed"].includes(String(value || "").trim().toLowerCase());
 }
@@ -987,8 +1035,10 @@ export async function getAllBarbers(req, res, next) {
           ? "affordable"
           : "new";
 
+      const { owner_user_id, ...publicBarber } = barber;
+
       result.push({
-        ...barber,
+        ...publicBarber,
         image: barber.image || null,
         avg_rating: Number(barber.avg_rating || 0).toFixed(1),
         total_reviews: Number(barber.total_reviews || 0),
@@ -1411,7 +1461,7 @@ export async function updateMyBarberSchedule(req, res, next) {
       });
     }
 
-    const schedule = Array.isArray(req.body.schedule) ? req.body.schedule : [];
+    const schedule = Array.isArray(req.body.schedule) ? normalizeScheduleRows(req.body.schedule) : [];
 
     if (!schedule.length) {
       return res.status(400).json({
@@ -1429,12 +1479,12 @@ export async function updateMyBarberSchedule(req, res, next) {
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           barber.id,
-          Number(day.day_of_week),
-          day.is_open ? 1 : 0,
-          day.start_time || "08:00",
-          day.end_time || "20:00",
-          day.break_start || null,
-          day.break_end || null
+          day.dayOfWeek,
+          day.isOpen ? 1 : 0,
+          day.startTime,
+          day.endTime,
+          day.breakStart,
+          day.breakEnd
         ]
       );
     }

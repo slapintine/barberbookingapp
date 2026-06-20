@@ -106,6 +106,33 @@ function parseConversationId(conversationId = "") {
   };
 }
 
+function normalizeMessageText(value) {
+  return String(value || "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+    .trim()
+    .slice(0, 2000);
+}
+
+function normalizePositiveId(value, fieldName) {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) {
+    const error = new Error(`${fieldName} must be a positive integer.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return id;
+}
+
+function normalizeUsername(value) {
+  const username = String(value || "").trim();
+  if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
+    const error = new Error("Customer username is invalid.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return username;
+}
+
 function serializeMessage(row = {}) {
   return {
     id: row.id,
@@ -319,12 +346,14 @@ function addNotification(
 
 export async function sendMessage(req, res, next) {
   try {
-    const { barberId, customerUsername, text } = req.body;
+    const barberId = normalizePositiveId(req.body.barberId, "barberId");
+    const customerUsername = normalizeUsername(req.body.customerUsername);
+    const text = normalizeMessageText(req.body.text);
 
-    if (!barberId || !customerUsername || !text?.trim()) {
+    if (!text) {
       return res.status(400).json({
         success: false,
-        message: "barberId, customerUsername, and text are required.",
+        message: "Message text is required.",
       });
     }
 
@@ -362,7 +391,7 @@ export async function sendMessage(req, res, next) {
       `INSERT INTO messages
        (barber_id, customer_user_id, sender_user_id, text, created_at)
        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [barberId, customer.id, req.user.id, text.trim()],
+      [barberId, customer.id, req.user.id, text],
       async function afterInsert(err) {
         if (err) return next(err);
 
@@ -384,7 +413,7 @@ export async function sendMessage(req, res, next) {
             await addNotification(recipientUserId, {
               title: "New message",
               type: "message",
-              message: `${isCustomer ? customer.username : barber.business_name}: ${text.trim()}`,
+              message: `${isCustomer ? customer.username : barber.business_name}: ${text}`,
               barberId: barber.id,
               customerUserId: customer.id,
               customerUsername: customer.username,
@@ -394,7 +423,7 @@ export async function sendMessage(req, res, next) {
             if (recipient?.username) {
               await sendPushToUser(recipient.username, {
                 title: "New message",
-                body: `${barber.business_name}: ${text.trim()}`,
+                body: `${barber.business_name}: ${text}`,
                 url: "/",
                 tag: `message-${barber.id}-${customer.id}`,
               });
@@ -438,14 +467,8 @@ export async function sendMessage(req, res, next) {
 
 export async function getConversation(req, res, next) {
   try {
-    const { barberId, customerUsername } = req.query;
-
-    if (!barberId || !customerUsername) {
-      return res.status(400).json({
-        success: false,
-        message: "barberId and customerUsername are required.",
-      });
-    }
+    const barberId = normalizePositiveId(req.query.barberId, "barberId");
+    const customerUsername = normalizeUsername(req.query.customerUsername);
 
     await ensureMessagesTable();
 
@@ -555,7 +578,7 @@ export async function getConversations(req, res, next) {
 export async function startConversation(req, res, next) {
   try {
     await ensureMessagesTable();
-    const barberId = req.body.barberId || req.body.barber_id || req.body.providerId || req.body.provider_id;
+    const barberId = normalizePositiveId(req.body.barberId || req.body.barber_id || req.body.providerId || req.body.provider_id, "barberId");
     let customerUsername = String(req.body.customerUsername || req.body.customer_username || "").trim();
 
     const barber = await getBarberById(barberId);
@@ -570,12 +593,7 @@ export async function startConversation(req, res, next) {
       customerUsername = req.user.username;
     }
 
-    if (!barberId || !customerUsername) {
-      return res.status(400).json({
-        success: false,
-        message: "barberId and customerUsername are required.",
-      });
-    }
+    customerUsername = normalizeUsername(customerUsername);
 
     const rows = await getConversationRows({ barberId, customerUsername, user: req.user });
     const conversation = rows.length

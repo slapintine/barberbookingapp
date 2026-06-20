@@ -51,7 +51,7 @@ export function isActiveCustomerPremium(subscription, now = new Date()) {
   if (tier !== CUSTOMER_PREMIUM_TIER) return false;
   // If expires_at is present, require it to be in the future.
   // If missing (data gap / admin provision), trust status + payment_status.
-  if (subscription.expires_at && !isFutureDate(subscription.expires_at, now)) return false;
+  if (!isFutureDate(subscription.expires_at, now)) return false;
   if (status === "active") return PAID_PAYMENT_STATUSES.has(paymentStatus);
   if (status === "trialing") return TRIAL_PAYMENT_STATUSES.has(paymentStatus);
   return false;

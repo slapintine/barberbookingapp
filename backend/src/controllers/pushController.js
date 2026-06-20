@@ -53,12 +53,13 @@ export async function getPushPublicKey(req, res) {
 
 export async function savePushSubscription(req, res, next) {
   try {
-    const { username, subscription } = req.body;
+    const username = req.user?.username;
+    const { subscription } = req.body;
 
     if (!username || !subscription) {
       return res.status(400).json({
         success: false,
-        message: "username and subscription are required.",
+        message: "A valid session and subscription are required.",
       });
     }
 
@@ -87,12 +88,12 @@ export async function savePushSubscription(req, res, next) {
 
 export async function removePushSubscription(req, res, next) {
   try {
-    const { username } = req.body;
+    const username = req.user?.username;
 
     if (!username) {
       return res.status(400).json({
         success: false,
-        message: "username is required.",
+        message: "A valid session is required.",
       });
     }
 

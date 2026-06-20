@@ -328,19 +328,14 @@ export async function loginUser(req, res, next) {
 
     const user = await findUserByUsernameOrEmail(username);
 
-    if (!user) {
-      return authError(res, 404, "USER_NOT_FOUND", "No account found with that username or email.");
+    const passwordMatches = user ? await bcrypt.compare(password, user.password_hash) : false;
+    if (!user || !passwordMatches) {
+      return authError(res, 401, "INVALID_CREDENTIALS", "Incorrect username/email or password.");
     }
 
     const inactiveCode = getInactiveAccountCode(user);
     if (inactiveCode) {
       return authError(res, 403, inactiveCode, "This account is not active. Please contact support or verify your account.");
-    }
-
-    const passwordMatches = await bcrypt.compare(password, user.password_hash);
-
-    if (!passwordMatches) {
-      return authError(res, 401, "INVALID_PASSWORD", "Incorrect username/email or password.");
     }
 
     const token = generateToken({

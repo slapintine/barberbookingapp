@@ -16,7 +16,7 @@ const router = express.Router();
 router.post("/", protect, requireRole("customer"), createBooking);
 router.get("/availability", protect, getBarberDayAvailability);
 router.get("/me", protect, getMyBookings);
-router.patch("/:id/payment/cash", protect, confirmCashPayment);
+router.patch("/:id/payment/cash", protect, requireRole("barber"), confirmCashPayment);
 router.post("/:id/pay-with-wallet", protect, requireRole("customer"), payBookingWithWallet);
 router.post("/:id/payment/verify", protect, requireRole("customer"), verifyBookingPayment);
 router.patch("/:id/status", protect, updateBookingStatus);

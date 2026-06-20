@@ -1,4 +1,5 @@
 import express from "express";
+import { protect } from "../middleware/authMiddleware.js";
 import {
   getPushPublicKey,
   savePushSubscription,
@@ -8,7 +9,7 @@ import {
 const router = express.Router();
 
 router.get("/public-key", getPushPublicKey);
-router.post("/subscribe", savePushSubscription);
-router.post("/unsubscribe", removePushSubscription);
+router.post("/subscribe", protect, savePushSubscription);
+router.post("/unsubscribe", protect, removePushSubscription);
 
 export default router;
