@@ -2,6 +2,7 @@ import AfricasTalking from "africastalking";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { env } from "../config/env.js";
+import { logger } from "../config/logger.js";
 import { get, run } from "../db/query.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -12,6 +13,31 @@ let africasTalkingClient = null;
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+// Local-dev safety: only send real SMS in non-production when explicitly opted in.
+function devLiveSendAllowed() {
+  return String(process.env.AFRICASTALKING_ALLOW_LIVE_SEND || "").trim().toLowerCase() === "true";
+}
+
+// Partially mask a recipient for safe logging (never log the full number or body).
+function maskPhone(phone) {
+  const value = String(phone || "");
+  if (value.length <= 5) return "***";
+  return `${value.slice(0, 5)}***${value.slice(-2)}`;
+}
+
+// Minimal Africa's Talking-shaped success response so callers/loggers behave the
+// same in mock mode as for a real send (without contacting the provider).
+function buildMockResponse(phoneNumber) {
+  return {
+    SMSMessageData: {
+      Message: "Sent to 1/1 (mock)",
+      Recipients: [
+        { number: phoneNumber, status: "Success", statusCode: 101, messageId: `mock-${Date.now()}`, cost: "0" },
+      ],
+    },
+  };
 }
 
 export function normalizePhoneNumber(phone) {
@@ -30,12 +56,17 @@ export function getSmsConfig() {
   const shortcode = env.africasTalkingShortcode;
   const smsEnv = env.africasTalkingEnv || "sandbox";
   const configured = Boolean(username && apiKey);
+  const usingSandbox = smsEnv === "sandbox" || username === "sandbox";
+  // In non-production with LIVE credentials, do not hit the real provider unless
+  // explicitly allowed. Sandbox creds still use Africa's Talking's safe simulator.
+  const mock = env.nodeEnv !== "production" && configured && !usingSandbox && !devLiveSendAllowed();
   return {
     provider: "africastalking",
     username,
     shortcode,
     env: smsEnv,
     configured,
+    mock,
     enabled: configured && (env.nodeEnv !== "production" || smsEnv === "production" || username !== "sandbox"),
     lifecycleSmsEnabled: Boolean(env.africasTalkingLifecycleSmsEnabled),
     autoReplyEnabled: Boolean(env.africasTalkingSmsAutoReplyEnabled),
@@ -72,6 +103,24 @@ export async function sendSms({ to, message, metadata = {} }) {
   if (text.length > 918) throw Object.assign(new Error("SMS message is too long."), { statusCode: 400 });
 
   const config = getSmsConfig();
+
+  // Local-dev safety: do not contact the real provider. Log only a masked
+  // recipient + length + source — never the message body (it may contain an OTP).
+  if (config.mock) {
+    logger.info(
+      { to: maskPhone(phoneNumber), length: text.length, source: metadata?.source || "" },
+      "SMS mock mode (non-production): message not sent. Set AFRICASTALKING_ALLOW_LIVE_SEND=true to send real SMS locally."
+    );
+    return {
+      provider: "africastalking",
+      to: phoneNumber,
+      message: text,
+      response: buildMockResponse(phoneNumber),
+      metadata,
+      mock: true,
+    };
+  }
+
   const sms = getClient().SMS;
   const options = {
     to: [phoneNumber],
@@ -319,7 +368,7 @@ export function sendAutoReply({ to, message }) {
 }
 
 export function generateOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 async function enforceOtpSendLimit(phoneNumber, purpose) {
