@@ -20,7 +20,7 @@ let app;
 let db;
 let initDb;
 let run;
-let generateToken;
+let createAuthSession;
 let server;
 let baseUrl;
 let fixtures;
@@ -84,11 +84,11 @@ async function seed() {
     tokens: {},
   };
   for (const user of [customerOne, customerTwo, providerOne, providerTwo, admin]) {
-    fixtures.tokens[user.username] = generateToken({
-      userId: user.id,
-      username: user.username,
-      role: user.role,
+    const session = await createAuthSession(user, {
+      userAgent: "Queless security integration test",
+      ipAddress: "127.0.0.1",
     });
+    fixtures.tokens[user.username] = session.token;
   }
 }
 
@@ -113,7 +113,7 @@ test.before(async () => {
   ({ default: db } = await import("./config/db.js"));
   ({ initDb } = await import("./db/initDb.js"));
   ({ run } = await import("./db/query.js"));
-  ({ generateToken } = await import("./utils/generateToken.js"));
+  ({ createAuthSession } = await import("./services/authSessionService.js"));
 
   await initDb();
   await seed();

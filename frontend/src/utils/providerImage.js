@@ -6,6 +6,7 @@
 //   3. Otherwise show a clean initials avatar.
 //   4. Otherwise a neutral placeholder icon.
 // NEVER fall back to the Queless logo and NEVER use unrelated stock photos.
+import { normalizeProviderImageReference } from "./providerData.js";
 
 const AVATAR_PALETTE = [
   ["#0EA5A5", "#0B1D3A"],
@@ -76,22 +77,22 @@ export function getProviderImageUrl(provider = {}, service = {}) {
     .flatMap((item) => [item?.afterImage, item?.beforeImage, item?.image].filter(Boolean))
     .find(Boolean);
   const galleryImage = (Array.isArray(provider.gallery) ? provider.gallery : []).find(Boolean);
-  return (
-    service?.image ||
-    service?.image_url ||
-    service?.photo ||
-    provider.cover_image ||
-    provider.logo ||
-    provider.profilePhoto ||
-    provider.profile_photo ||
-    provider.profile_image ||
-    provider.image ||
-    provider.image_url ||
-    provider.photo ||
-    portfolioImage ||
-    galleryImage ||
-    ""
-  );
+  return [
+    service?.image,
+    service?.image_url,
+    service?.photo,
+    provider.cover_image,
+    provider.coverImage,
+    provider.logo,
+    provider.profilePhoto,
+    provider.profile_photo,
+    provider.profile_image,
+    provider.image,
+    provider.image_url,
+    provider.photo,
+    portfolioImage,
+    galleryImage,
+  ].map(normalizeProviderImageReference).find(Boolean) || "";
 }
 
 /**

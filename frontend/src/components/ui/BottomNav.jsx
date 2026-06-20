@@ -4,8 +4,9 @@ const CUSTOMER_ROLES = new Set(["customer", "user", "client"]);
 const PROVIDER_ROLES = new Set(["barber", "provider", "business", "salon", "spa"]);
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin", "super-admin"]);
 
-function getRoleValue(user = {}) {
-  return String(user.role || user.accountType || user.account_type || user.userType || user.user_type || "")
+function getRoleValue(user) {
+  const u = user || {};
+  return String(u.role || u.accountType || u.account_type || u.userType || u.user_type || "")
     .trim()
     .toLowerCase();
 }

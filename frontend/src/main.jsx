@@ -6,7 +6,7 @@ import App from './App.jsx'
 import { getFirebaseAnalyticsIfSupported } from './firebase.js'
 
 if (typeof document !== 'undefined') {
-  let savedTheme = 'light'
+  let savedTheme
   try {
     const userSetTheme = localStorage.getItem('queless-theme-user-set') === 'true'
     const storedTheme = localStorage.getItem('queless-theme')

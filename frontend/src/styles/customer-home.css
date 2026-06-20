@@ -1284,6 +1284,12 @@ body[data-theme="dark"] .customer-home-category-card .customer-home-icon-bubble 
     0 10px 22px rgba(0, 0, 0, 0.24);
 }
 
+body[data-theme="dark"] .customer-home-category-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
 body[data-theme="dark"] .customer-home-category-card strong {
   color: #fff7ff;
 }

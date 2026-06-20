@@ -185,7 +185,7 @@
 }
 
 .queless-map-stage .leaflet-control-attribution {
-  display: none;
+  display: block;
 }
 
 .queless-map-stage .leaflet-control-zoom {

@@ -1,61 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  BriefcaseBusiness,
-  Camera,
-  Car,
-  Droplets,
-  GraduationCap,
-  HeartPulse,
-  Home,
-  MapPin,
-  Navigation,
-  Scissors,
-  Sparkles,
-  Wrench,
-} from "lucide-react";
-
-const ICONS = {
-  beauty: Sparkles,
-  salon: Scissors,
-  barber: Scissors,
-  grooming: Sparkles,
-
-  "home-services": Home,
-  home: Home,
-
-  "auto-services": Car,
-  auto: Car,
-  mechanics: Car,
-  transport: Car,
-
-  "events-photography": Camera,
-  events: Camera,
-  photography: Camera,
-
-  "education-tutoring": GraduationCap,
-  education: GraduationCap,
-  tutoring: GraduationCap,
-
-  "health-fitness": HeartPulse,
-  health: HeartPulse,
-  fitness: HeartPulse,
-
-  "repairs-maintenance": Wrench,
-  repairs: Wrench,
-  maintenance: Wrench,
-
-  "business-services": BriefcaseBusiness,
-  business: BriefcaseBusiness,
-
-  "cleaning-services": Droplets,
-  cleaning: Droplets,
-
-  "delivery-errands": Navigation,
-  delivery: Navigation,
-  errands: Navigation,
-
-  default: MapPin,
-};
+import { getCategoryDef, CATEGORY_FALLBACK } from "../../utils/categoryRegistry.jsx";
 
 function MultiServiceIcon(props) {
   return (
@@ -76,14 +20,37 @@ function MultiServiceIcon(props) {
 
 export function getCategoryIconComponent(iconType = "default") {
   if (iconType === "multi" || iconType === "multi-service") return MultiServiceIcon;
-  return ICONS[iconType] || ICONS.default;
+  return getCategoryDef(iconType).Icon || CATEGORY_FALLBACK.Icon;
+}
+
+function CrownBadge() {
+  return (
+    <span className="service-map-marker__tier-badge service-map-marker__tier-badge--crown" aria-hidden="true">
+      <svg viewBox="0 0 20 18" focusable="false">
+        <path d="M2 5.5 6.2 9 10 2.5 13.8 9 18 5.5 16.4 15H3.6L2 5.5Z" />
+        <circle cx="2" cy="4.5" r="1.4" />
+        <circle cx="10" cy="1.8" r="1.4" />
+        <circle cx="18" cy="4.5" r="1.4" />
+      </svg>
+    </span>
+  );
+}
+
+function DiamondBadge() {
+  return (
+    <span className="service-map-marker__tier-badge service-map-marker__tier-badge--diamond" aria-hidden="true">
+      <svg viewBox="0 0 20 18" focusable="false">
+        <path d="m10 1 7 6-7 10L3 7l7-6Z" />
+        <path d="m3 7 7 2 7-2M10 1v16" />
+      </svg>
+    </span>
+  );
 }
 
 export function ServiceMapMarker({
   iconType = "default",
   selected = false,
   tier = "FREE",
-  verified = false,
   closed = false,
   own = false,
 }) {
@@ -105,9 +72,9 @@ export function ServiceMapMarker({
       <span className="service-map-marker__tail" />
       <span className="service-map-marker__bubble">
         <Icon className="service-map-marker__icon" />
-        {tierKey === "platinum" ? <span className="service-map-marker__crown">★</span> : null}
       </span>
-      {verified ? <span className="service-map-marker__verified" aria-hidden="true">✓</span> : null}
+      {tierKey === "premium" ? <CrownBadge /> : null}
+      {tierKey === "platinum" ? <DiamondBadge /> : null}
     </div>
   );
 }
@@ -137,7 +104,6 @@ export function renderServiceMarkerHtml(iconType, selected = false, status = {})
       iconType={iconType || "default"}
       selected={selected}
       tier={status.tier}
-      verified={status.verified}
       closed={status.closed}
       own={status.own}
     />

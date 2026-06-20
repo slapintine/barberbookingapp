@@ -110,6 +110,4 @@ body[data-theme="dark"] .queless-category-page-card small {
 
 body[data-theme="dark"] .service-map-marker__bubble {
   color: #ffffff;
-  background: linear-gradient(135deg, #2b124c, #522b5b 55%, #854f6c);
-  border-color: rgba(251, 228, 216, 0.35);
 }

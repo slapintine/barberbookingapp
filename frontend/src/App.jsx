@@ -6,16 +6,18 @@ import "./App.css";
 import logo from "./assets/queless-logo-icon.png";
 import { resolveProviderImage, NEUTRAL_PLACEHOLDER } from "./utils/providerImage.js";
 import { sanitizeErrorMessage } from "./utils/errorMessages.js";
-import { confirmPasswordReset, getMe, loginUser, registerUser, requestPasswordReset, updateAccount } from "./api/authApi.js";
+import { confirmPasswordReset, getMe, loginUser, logoutUser, registerUser, requestPasswordReset, updateAccount } from "./api/authApi.js";
 import { deleteMyBarberStand, getBarbers, getMyBarberStand, publishMyBarberStand, registerBarberStand, updateMyBarberStand } from "./api/barbersApi.js";
 import {
   confirmCashPaymentRequest,
   createBookingRequest,
   getMyBookings,
+  rescheduleBookingRequest,
   updateBookingStatusRequest,
   verifyBookingPaymentRequest,
 } from "./api/bookingsApi.js";
 import { createMessage, getMessages } from "./api/chatApi.js";
+import { createQuoteRequest } from "./api/marketplaceApi.js";
 import { addFavorite, getFavorites as getFavoriteRows, removeFavorite } from "./api/favoritesApi.js";
 import { getNotifications, markNotificationReadRequest } from "./api/notificationsApi.js";
 import { getProfile, saveProfileRequest } from "./api/profilesApi.js";
@@ -27,6 +29,8 @@ import {
   startCustomerSubscriptionUpgrade,
   verifyCustomerSubscriptionUpgrade,
 } from "./api/customerSubscriptionsApi.js";
+import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
+import { normalizeProviderData } from "./utils/providerData.js";
 import { getCustomerWallet, getMyWallet, requestWalletWithdrawal } from "./api/walletApi.js";
 import AppHeader from "./components/ui/AppHeader.jsx";
 import AccountMenu from "./components/ui/AccountMenu.jsx";
@@ -34,9 +38,13 @@ import BottomNav from "./components/ui/BottomNav.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import PaymentFlowModal from "./components/payments/PaymentFlowModal.jsx";
 import MarketplaceMapOverlay from "./components/marketplace/MarketplaceMapOverlay.jsx";
+import ProviderProfileSkeleton from "./features/barbers/ProviderProfileSkeleton.jsx";
+import OverlayErrorBoundary from "./components/OverlayErrorBoundary.jsx";
+import PageErrorBoundary from "./components/PageErrorBoundary.jsx";
 import { NotificationSheet, NotificationToast } from "./features/notifications/Notifications.jsx";
-import { apiFetch, getAuthToken, SOCKET_URL } from "./config/api.js";
+import { apiFetch, getAuthToken, getRefreshToken, SOCKET_URL } from "./config/api.js";
 import { listenForForegroundNotifications } from "./pushNotifications.js";
+import { getMtnReadiness, getMtnUnavailableMessage } from "./utils/paymentReadiness.js";
 import useAutoScrollToBottom from "./hooks/useAutoScrollToBottom.js";
 import useAvailableTimeSlots from "./hooks/useAvailableTimeSlots.js";
 import useBookingAvailability from "./hooks/useBookingAvailability.js";
@@ -65,8 +73,11 @@ import {
 import { isBookingPaymentMethodEnabled, isOnlinePaymentMethod } from "./utils/paymentLabels.js";
 import { DEFAULT_CUSTOMER_SUBSCRIPTION_STATE, isCustomerPremiumActive } from "./utils/customerPremium.js";
 import { isPublicMarketplaceProvider } from "./utils/marketplaceServices.js";
+import { CUSTOMER_PREMIUM_PLAN } from "./utils/subscriptionPlans.js";
 
-const BarberProfileSheet = lazy(() => import("./features/barbers/BarberProfileSheet.jsx"));
+// Provider profile is created as a retryable lazy inside the component (keyed by
+// a retry counter) so a failed chunk import can be re-attempted in place.
+const importBarberProfileSheet = () => import("./features/barbers/BarberProfileSheet.jsx");
 const AuthScreen = lazy(() => import("./features/auth/AuthScreen.jsx"));
 const HomeScreen = lazy(() => import("./pages/HomePage.jsx"));
 const CategoriesScreen = lazy(() => import("./pages/CategoriesPage.jsx"));
@@ -204,34 +215,8 @@ function getBarberStableKey(barber = {}) {
   ].join("|");
 }
 
-function mergeBarberListsPreservingLocal(serverBarbers = [], localBarbers = []) {
-  const localMap = new Map(
-    (localBarbers || []).map((item) => [getBarberStableKey(item), normalizeBarber(item)])
-  );
-
-  const merged = (serverBarbers || []).map((serverItem, index) => {
-    const normalizedServer = normalizeBarber(serverItem, index);
-    const localItem =
-      localMap.get(getBarberStableKey(normalizedServer)) ||
-      (localBarbers || []).find(
-        (item) =>
-          String(item?.id || "") === String(normalizedServer.id || "") ||
-          (String(item?.ownerUsername || "") &&
-            String(item?.ownerUsername || "") === String(normalizedServer.ownerUsername || ""))
-      );
-
-    return normalizeBarber(
-      {
-        ...normalizedServer,
-        image: normalizedServer.image || localItem?.image || "",
-        availability: normalizedServer.availability || localItem?.availability,
-        phone: normalizedServer.phone || localItem?.phone || "",
-      },
-      index
-    );
-  });
-
-  return uniqueById(merged);
+function mergeBarberListsPreservingLocal(serverBarbers = []) {
+  return uniqueById((serverBarbers || []).map(normalizeBarber));
 }
 
 
@@ -760,6 +745,11 @@ function mapServerNotification(item) {
 }
 
 function normalizeBarber(barber, index) {
+  const canonical = normalizeProviderData(barber, {
+    defaultLatitude: DEFAULT_CENTER[0],
+    defaultLongitude: DEFAULT_CENTER[1],
+  });
+  barber = canonical;
   const fallback = {
     id: barber?.id ?? index + 1,
     ownerUsername: null,
@@ -968,15 +958,17 @@ function getLoginErrorMessage(error) {
   );
 }
 
-function saveAuthSession(token, user, { rememberMe = true } = {}) {
+function saveAuthSession(token, user, { rememberMe = true, refreshToken = "" } = {}) {
   const storage = rememberMe ? localStorage : sessionStorage;
   const otherStorage = rememberMe ? sessionStorage : localStorage;
 
   storage.setItem("lineup_token", token || "");
   storage.setItem("lineup_user", JSON.stringify(user));
+  storage.setItem("lineup_refresh_token", refreshToken);
   otherStorage.removeItem("lineup_token");
   otherStorage.removeItem("lineup_user");
   otherStorage.removeItem("lineup_token_expires_at");
+  otherStorage.removeItem("lineup_refresh_token");
 
   const expiry = readSessionExpiry(token);
   if (expiry) {
@@ -990,11 +982,13 @@ function clearAuthSession() {
   localStorage.removeItem("lineup_token");
   localStorage.removeItem("lineup_user");
   localStorage.removeItem("lineup_token_expires_at");
+  localStorage.removeItem("lineup_refresh_token");
   localStorage.removeItem("cutz_token");
   localStorage.removeItem("cutz_user");
   sessionStorage.removeItem("lineup_token");
   sessionStorage.removeItem("lineup_user");
   sessionStorage.removeItem("lineup_token_expires_at");
+  sessionStorage.removeItem("lineup_refresh_token");
   sessionStorage.removeItem("cutz_token");
   sessionStorage.removeItem("cutz_user");
 }
@@ -1048,6 +1042,7 @@ function App() {
   const [subscriptionReady, setSubscriptionReady] = useState(false);
   const [subscriptionMessage, setSubscriptionMessage] = useState("");
   const [pendingSubscriptionPayment, setPendingSubscriptionPayment] = useState(null);
+  const [subscriptionSummary, setSubscriptionSummary] = useState(null);
   const [customerSubscriptionState, setCustomerSubscriptionState] = useState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
   const [customerSubscriptionPlan, setCustomerSubscriptionPlan] = useState(null);
   const [customerSubscriptionLoading, setCustomerSubscriptionLoading] = useState(false);
@@ -1071,7 +1066,17 @@ function App() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [smartMatchInitial, setSmartMatchInitial] = useState({});
   const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [quoteSubmitting, setQuoteSubmitting] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
+  const quoteIdempotencyRef = useRef("");
   const [showBarberProfile, setShowBarberProfile] = useState(false);
+  const [providerChunkAttempt, setProviderChunkAttempt] = useState(0);
+  // Recreate the lazy on each retry so a failed dynamic import is re-attempted
+  // rather than re-subscribing to the cached rejected promise.
+  const ProviderProfileLazy = useMemo(
+    () => lazy(importBarberProfileSheet),
+    [providerChunkAttempt]
+  );
   const [showRegisterBarber, setShowRegisterBarber] = useState(false);
   const [showEditBarber, setShowEditBarber] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -1084,8 +1089,9 @@ function App() {
   const [dismissedToastIds, setDismissedToastIds] = useState([]);
 
   useEffect(() => {
-    const hideTimer = window.setTimeout(() => setInitialLoadingStage("hiding"), 5000);
-    const removeTimer = window.setTimeout(() => setInitialLoadingStage("hidden"), 5560);
+    // Launch splash: brief brand moment on initial boot only.
+    const hideTimer = window.setTimeout(() => setInitialLoadingStage("hiding"), 1600);
+    const removeTimer = window.setTimeout(() => setInitialLoadingStage("hidden"), 2160);
 
     return () => {
       window.clearTimeout(hideTimer);
@@ -1132,13 +1138,17 @@ function App() {
     async function loadPaymentReadiness() {
       try {
         const health = await apiFetch("/api/payments/mtn/health");
-        const ready =
-          Boolean(health?.credentialsLoaded) &&
-          Boolean(health?.callbackConfigured) &&
-          String(health?.authStatus || "").toLowerCase() === "success";
+        const readiness = getMtnReadiness(health);
+        const ready = readiness.ready;
         if (cancelled) return;
-        const unavailableMessage =
-          health?.sanitizedError || "MTN Mobile Money is currently unavailable. Wallet top-up cannot be completed on this deployment.";
+        const unavailableMessage = getMtnUnavailableMessage(readiness.reasonCode);
+        if (import.meta.env.DEV && !ready) {
+          console.warn("[Queless payments] MTN readiness check did not pass.", {
+            apiBaseConfigured: Boolean(import.meta.env.VITE_API_URL),
+            reasonCode: readiness.reasonCode,
+            serverReachable: health?.serverReachable !== false,
+          });
+        }
         setWalletTopupReady(ready);
         setWalletTopupReadinessMessage(
           ready ? "MTN Mobile Money is ready for wallet top-ups." : unavailableMessage
@@ -1146,7 +1156,7 @@ function App() {
 
         if (!BOOKING_ONLINE_PAYMENTS_ENABLED) {
           setBookingOnlinePaymentsReady(false);
-          setBookingPaymentReadinessMessage("MTN Mobile Money booking checkout is not enabled for this deployment.");
+          setBookingPaymentReadinessMessage(getMtnUnavailableMessage("PROVIDER_DISABLED"));
           return;
         }
 
@@ -1154,14 +1164,19 @@ function App() {
         setBookingPaymentReadinessMessage(
           ready
             ? "MTN Mobile Money is ready."
-            : health?.sanitizedError || "MTN Mobile Money is not ready yet. Cash remains available."
+            : unavailableMessage
         );
       } catch (error) {
         if (cancelled) return;
-        const offlineMessage =
-          typeof navigator !== "undefined" && navigator.onLine === false
-            ? "You are offline. Live payments are disabled until your connection returns."
-            : "The Queless server is not reachable yet. Live payments are disabled; cash booking can still be prepared where available.";
+        const offlineMessage = getMtnUnavailableMessage("SERVER_UNREACHABLE");
+        if (import.meta.env.DEV) {
+          console.warn("[Queless payments] Payment status endpoint could not be reached.", {
+            apiBaseConfigured: Boolean(import.meta.env.VITE_API_URL),
+            browserOffline: typeof navigator !== "undefined" && navigator.onLine === false,
+            status: Number(error?.status || 0),
+            serverUnavailable: Boolean(error?.serverUnavailable),
+          });
+        }
         setWalletTopupReady(false);
         setWalletTopupReadinessMessage(offlineMessage);
         setBookingOnlinePaymentsReady(false);
@@ -1207,6 +1222,7 @@ function App() {
   const confirmPasswordRef = useRef(null);
   const loginRequestRef = useRef(false);
   const socketRef = useRef(null);
+  const providerOpenRef = useRef({ id: null, at: 0 });
   const typingTimeoutRef = useRef(null);
   const chatThreadRef = useRef(null);
   const notificationAudioRef = useRef(null);
@@ -1511,8 +1527,33 @@ function App() {
       }
     });
 
+    // Real-time read receipt: the other party opened our message. Flip the
+    // matching outgoing bubble to "seen" instantly (no refetch). Same event
+    // the website emits, so read receipts work across web and app.
+    socket.on("message_seen", (payload) => {
+      const messageId = payload?.messageId;
+      if (messageId == null) return;
+      setMessages((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(messageId) ? { ...item, seen: true } : item
+        )
+      );
+    });
+
     socket.on("receive_notification", (notification) => {
       if (!notification) return;
+      // Don't notify the sender about their own message — only append
+      // notifications actually addressed to this user.
+      const me = String(currentUser?.username || "");
+      if (
+        notification.type === "message" &&
+        me &&
+        notification.user &&
+        String(notification.user) !== me &&
+        !String(notification.user).startsWith("barber-")
+      ) {
+        return;
+      }
       appendNotificationSafely(notification);
     });
 
@@ -1680,6 +1721,11 @@ function App() {
     if (!sessionChecked) return;
     fetchCustomerSubscription();
   }, [currentUser?.username, effectiveIsBarber, isAdmin, sessionChecked]);
+
+  useEffect(() => {
+    if (!currentUser?.username) { setSubscriptionSummary(null); return; }
+    fetchSubscriptionSummary();
+  }, [currentUser?.username]);
 
   useEffect(() => {
     if (!pendingSubscriptionPayment?.reference || !currentUser?.username) return;
@@ -2245,6 +2291,14 @@ const fetchBarbers = async () => {
     }
   };
 
+  const fetchSubscriptionSummary = async () => {
+    if (!currentUser?.username) { setSubscriptionSummary(null); return; }
+    try {
+      const data = await getSubscriptionSummary();
+      if (data?.success) setSubscriptionSummary(data);
+    } catch { /* non-fatal — existing per-role fetches remain source of truth */ }
+  };
+
   const fetchCustomerSubscription = async () => {
     if (!currentUser?.username || effectiveIsBarber || isAdmin) {
       setCustomerSubscriptionState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
@@ -2284,6 +2338,15 @@ const fetchBarbers = async () => {
       const next = Array.isArray(data) ? data : [];
       setMessages(next);
       writeStored("messages", scope, next);
+      // Opening the thread = reading it: tell each sender their incoming
+      // message was seen so their bubble flips to "Seen" in real time. Keyed
+      // by stable username; only for messages addressed to us and not own.
+      const me = currentUser?.username;
+      if (socketRef.current && me) {
+        next
+          .filter((item) => item?.sender && String(item.sender) !== String(me) && !item.seen && item.id != null)
+          .forEach((item) => socketRef.current.emit("message_seen", { to: item.sender, messageId: item.id }));
+      }
     } catch {
       setMessages(readStored("messages", scope, []));
     }
@@ -2430,9 +2493,14 @@ const fetchBarbers = async () => {
     try {
       setAuthLoading(true);
       const data = await registerUser({ username, email, password, role: "customer" });
-
-      setAuthSuccess(data?.message || "Account created. You can now log in.");
-      setAuthMode("login");
+      const nextToken = data.token || "";
+      saveAuthSession(nextToken, data.user, { rememberMe: true, refreshToken: data.refreshToken });
+      setSessionExpiresAt(readSessionExpiry(nextToken));
+      setToken(nextToken);
+      setCurrentUser(data.user);
+      setActiveTab("home");
+      setScreen("app");
+      setAuthSuccess(data?.message || "Account created.");
       if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
     } catch (error) {
       setAuthError(error.message || "Could not create your account. Please check your connection and try again.");
@@ -2467,7 +2535,7 @@ const fetchBarbers = async () => {
       setAuthLoading(true);
       const data = await loginUser({ username, password });
       const nextToken = data.token || "";
-      saveAuthSession(nextToken, data.user, { rememberMe });
+      saveAuthSession(nextToken, data.user, { rememberMe, refreshToken: data.refreshToken });
       setSessionExpiresAt(readSessionExpiry(nextToken));
       setToken(data.token || "");
       setCurrentUser(data.user);
@@ -2688,7 +2756,7 @@ const fetchBarbers = async () => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           };
-          let nextLabel = "";
+          let nextLabel;
           try {
             nextLabel = await reverseGeocodeCoordinates(nextLocation);
           } catch {
@@ -2728,7 +2796,7 @@ const fetchBarbers = async () => {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         };
-        let nextLabel = "";
+        let nextLabel;
         try {
           nextLabel = await reverseGeocodeCoordinates(nextLocation);
         } catch {
@@ -2819,7 +2887,7 @@ const registerBarber = async (payload) => {
       return false;
     }
 
-    let data = null;
+    let data;
     try {
       data = await registerBarberStand({
         business_name: payload.businessName,
@@ -3745,8 +3813,9 @@ const updateBarberStand = async (payload) => {
     setTimeout(() => setReviewSuccess(""), 2200);
   };
 
-  const sendMessage = async () => {
-    if (!selectedBarber?.id || !chatText.trim() || !currentUser?.username || !chatCustomerUsername) {
+  const sendMessage = async (retryMessage = null) => {
+    const messageText = String(retryMessage?.text || chatText || "").trim();
+    if (!selectedBarber?.id || !messageText || !currentUser?.username || !chatCustomerUsername) {
       return;
     }
 
@@ -3761,23 +3830,31 @@ const updateBarberStand = async (payload) => {
     }
 
     const scope = `${selectedBarber.id}:${chatCustomerUsername}`;
+    const clientMessageId = retryMessage?.clientMessageId || retryMessage?.client_message_id || makeId("client-message");
 
     try {
       setChatError("");
-      setChatStatus("Sending...");
+      setChatStatus(retryMessage ? "Retrying..." : "Sending...");
+      if (retryMessage) {
+        setMessages((current) => current.map((item) => item.id === retryMessage.id ? { ...item, failed: false, pending: true } : item));
+      }
 
       const data = await createMessage({
         barberId: selectedBarber.id,
         barberName: selectedBarber.business_name,
         customerUsername: chatCustomerUsername,
         sender: currentUser.username,
-        text: chatText.trim(),
+        text: messageText,
+        clientMessageId,
+        client_message_id: clientMessageId,
       });
 
-      const next = [...messages, data];
+      const next = retryMessage
+        ? messages.map((item) => item.id === retryMessage.id ? data : item)
+        : [...messages, data];
       setMessages(next);
       writeStored("messages", scope, next);
-      setChatText("");
+      if (!retryMessage) setChatText("");
       setChatStatus("Sent ✓");
       emitTyping("");
       vibrate(8);
@@ -3839,78 +3916,37 @@ const updateBarberStand = async (payload) => {
       }, 1600);
     } catch (error) {
       const localMessage = {
-        id: makeId("msg"),
+        id: retryMessage?.id || `failed-${clientMessageId}`,
         barberId: selectedBarber.id,
         barberName: selectedBarber.business_name,
         customerUsername: chatCustomerUsername,
         sender: currentUser.username,
-        text: chatText.trim(),
+        text: messageText,
+        clientMessageId,
+        client_message_id: clientMessageId,
+        pending: false,
+        failed: true,
         createdAt: new Date().toISOString(),
       };
-      const next = uniqueById([...messages, localMessage]).sort(
+      const next = uniqueById(retryMessage
+        ? messages.map((item) => item.id === retryMessage.id ? localMessage : item)
+        : [...messages, localMessage]).sort(
         (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)
       );
       setMessages(next);
       writeStored("messages", scope, next);
 
-      const recipient =
-        effectiveIsBarber
-          ? chatCustomerUsername
-          : selectedBarber.ownerUsername || chatCustomerUsername;
-
-      const notificationPayload = {
-        id: makeId("ntf"),
-        user: recipient,
-        type: "message",
-        barberId: selectedBarber.id,
-        barberName: selectedBarber.business_name,
-        barberOwnerUsername: selectedBarber.ownerUsername || "",
-        customerUsername: chatCustomerUsername,
-        customerName:
-          effectiveIsBarber
-            ? chatTargetName || chatCustomerUsername
-            : profile.fullName || currentUser.username,
-        targetName: selectedBarber.business_name,
-        title: "New message",
-        message:
-          effectiveIsBarber
-            ? `${selectedBarber.business_name} sent you a message.`
-            : `${currentUser.username} sent you a message.`,
-        createdAt: localMessage.createdAt,
-        read: false,
-      };
-
-      if (selectedBarber.ownerUsername && currentUser.username !== selectedBarber.ownerUsername) {
-        appendStored("notifications", `barber-${selectedBarber.id}`, notificationPayload);
-      } else {
-        appendStored("notifications", chatCustomerUsername, notificationPayload);
-      }
-
-      if (socketRef.current) {
-        socketRef.current.emit("send_message", {
-          to: recipient,
-          message: {
-            ...localMessage,
-            barberOwnerUsername: selectedBarber.ownerUsername || "",
-            customerName:
-              effectiveIsBarber
-                ? chatTargetName || chatCustomerUsername
-                : profile.fullName || currentUser.username,
-          },
-        });
-        socketRef.current.emit("send_notification", {
-          to: recipient,
-          notification: notificationPayload,
-        });
-      }
-      setChatText("");
-      setChatStatus("Sent ✓");
-      fetchMessages(selectedBarber.id, chatCustomerUsername);
-      setTimeout(() => setChatStatus(""), 1600);
+      // A failed API request is not a delivered message. Keep it locally only
+      // so the user can retry with the same idempotency key.
+      if (!retryMessage) setChatText("");
+      setChatStatus("");
+      setChatError(error.message || "Could not send that message. Retry when the connection is available.");
     }
   };
 
   const logout = (message = "") => {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) logoutUser(refreshToken).catch(() => {});
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -3959,21 +3995,18 @@ const updateBarberStand = async (payload) => {
 
     const expiry = readSessionExpiry(token);
     setSessionExpiresAt(expiry);
-
-    if (!expiry) return undefined;
-
-    const msUntilExpiry = new Date(expiry).getTime() - Date.now();
-    if (msUntilExpiry <= 0) {
-      logout("Session expired. Please log in again.");
-      return undefined;
-    }
-
-    const timer = window.setTimeout(() => {
-      logout("Session expired. Please log in again.");
-    }, msUntilExpiry);
-
-    return () => window.clearTimeout(timer);
+    return undefined;
   }, [token]);
+
+  useEffect(() => {
+    const refreshedListener = (event) => {
+      const nextToken = event?.detail?.token || getAuthToken();
+      setToken(nextToken);
+      setSessionExpiresAt(readSessionExpiry(nextToken));
+    };
+    window.addEventListener("lineup:session-refreshed", refreshedListener);
+    return () => window.removeEventListener("lineup:session-refreshed", refreshedListener);
+  }, []);
 
   const enrichedBarbers = useMemo(() => {
     const seen = new Set();
@@ -4447,34 +4480,69 @@ const updateBarberStand = async (payload) => {
     setActiveTab(fallbackTab);
   };
 
-  const submitQuoteRequest = (payload) => {
+  const submitQuoteRequest = async (payload) => {
     if (!currentUser?.username || !selectedBarber) return;
-    const quoteRequest = {
-      id: makeId("quote"),
-      customerUsername: currentUser.username,
-      providerId: selectedBarber.id,
-      providerName: selectedBarber.business_name,
-      serviceId: payload.serviceId,
-      serviceName: payload.serviceName,
-      description: payload.description,
-      budget: payload.budget,
-      preferredDate: payload.preferredDate,
-      location: payload.location,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-    appendStored("quote_requests", currentUser.username, quoteRequest);
-    if (selectedBarber.ownerUsername) {
-      appendStored("quote_requests", selectedBarber.ownerUsername, quoteRequest);
+    if (!quoteIdempotencyRef.current) quoteIdempotencyRef.current = makeId("quote-request");
+    setQuoteSubmitting(true);
+    setQuoteError("");
+    try {
+      await createQuoteRequest({
+        ...payload,
+        providerId: selectedBarber.id,
+        idempotencyKey: quoteIdempotencyRef.current,
+      });
+      showSystemToast("Quote request sent", `${selectedBarber.business_name} can respond in this conversation.`, "booking");
+      setShowQuoteModal(false);
+      setShowBarberProfile(false);
+      openConversation({
+        barber: selectedBarber,
+        customerUsername: currentUser.username,
+        targetName: selectedBarber.business_name,
+      });
+      quoteIdempotencyRef.current = "";
+    } catch (error) {
+      setQuoteError(error.message || "Could not send this quote request. Please retry.");
+      throw error;
+    } finally {
+      setQuoteSubmitting(false);
     }
-    showSystemToast("Quote request sent", `${selectedBarber.business_name} can respond with price and availability.`, "booking");
-    setShowQuoteModal(false);
-    setShowBarberProfile(false);
-    setActiveTab("bookings");
+  };
+
+  const rescheduleBooking = async (bookingId, schedule) => {
+    const existingBooking = bookings.find((item) => String(item.id) === String(bookingId));
+    if (!existingBooking) throw new Error("Booking not found.");
+
+    try {
+      const data = await rescheduleBookingRequest(bookingId, schedule);
+      const updatedBooking = mapServerBooking({
+        ...data.booking,
+        business_name: existingBooking.barberName,
+        location: existingBooking.location,
+        customer_username: existingBooking.customerUsername,
+        customer_full_name: existingBooking.customerName,
+      });
+      setBookings((prev) => prev.map((item) => String(item.id) === String(bookingId) ? updatedBooking : item));
+      writeStored(
+        "bookings",
+        "global",
+        readStored("bookings", "global", []).map((item) => String(item.id) === String(bookingId) ? updatedBooking : item)
+      );
+      notifyBookingUpdate(updatedBooking);
+      showSystemToast("Booking rescheduled", "The new time is pending provider confirmation.", "booking");
+      fetchNotifications();
+      return updatedBooking;
+    } catch (error) {
+      setGlobalError(error.message || "Could not reschedule booking.");
+      throw error;
+    }
   };
 
   const openProviderProfile = (provider) => {
     if (!provider) return;
+    const providerId = String(provider.id || provider.owner_user_id || provider.business_name || "");
+    const now = Date.now();
+    if (providerId && providerOpenRef.current.id === providerId && now - providerOpenRef.current.at < 500) return;
+    providerOpenRef.current = { id: providerId, at: now };
     const isOwner = currentUser?.username && String(provider.ownerUsername || "") === String(currentUser.username);
     if (!isOwner && !isPublicProvider(provider)) {
       setGlobalError("This business is not available yet.");
@@ -4488,7 +4556,9 @@ const updateBarberStand = async (payload) => {
     setShowBookingModal(false);
     setShowQuoteModal(false);
     setShowChat(false);
-    setMapState((prev) => ({ ...prev, show: false }));
+    // Keep the map mounted underneath (profile sheet sits above it via z-index)
+    // so there's no blank/dark gap while the profile loads and closing the
+    // profile returns to the same map position + filters.
   };
 
   const openSearchResults = (value, locationOverride) => {
@@ -4752,6 +4822,7 @@ const updateBarberStand = async (payload) => {
           completeBooking={(id) => updateBookingStatus(id, "completed")}
           approveBooking={(id) => updateBookingStatus(id, "confirmed")}
           rejectBooking={(id) => updateBookingStatus(id, "rejected")}
+          rescheduleBooking={rescheduleBooking}
           cancelBooking={cancelBooking}
           confirmCashPayment={confirmCashPayment}
           myBarberProfile={myBarberProfile}
@@ -4769,7 +4840,22 @@ const updateBarberStand = async (payload) => {
 
       {activeTab === "inbox" && (
         <div className="tab-scene-v5">
-          <InboxScreen messages={messages} />
+          <InboxScreen
+            currentUserId={currentUser?.id}
+            onExploreServices={() => setActiveTab("categories")}
+            onOpenConversation={({ barberId, customerUsername, title }) => {
+              const barber = barbers.find((b) => String(b.id) === String(barberId));
+              if (!barber) {
+                setGlobalError("This provider is no longer available.");
+                return;
+              }
+              openConversation({
+                barber,
+                customerUsername: customerUsername || currentUser?.username || "",
+                targetName: title,
+              });
+            }}
+          />
         </div>
       )}
 
@@ -4792,6 +4878,7 @@ const updateBarberStand = async (payload) => {
           pendingSubscriptionPayment={pendingSubscriptionPayment}
           onUpgradeSubscription={startCurrentSubscriptionUpgrade}
           onVerifySubscription={verifyCurrentSubscription}
+          subscriptionSummary={subscriptionSummary}
           customerSubscriptionState={customerSubscriptionState}
           customerSubscriptionPlan={customerSubscriptionPlan}
           customerSubscriptionLoading={customerSubscriptionLoading}
@@ -4942,7 +5029,6 @@ const updateBarberStand = async (payload) => {
           onVerifyPremium={(reference) => verifyCurrentCustomerPremium(reference)}
           onContinueManualSearch={() => setActiveTab("searchResults")}
           onOpenProvider={(provider) => {
-            setActiveTab(previousMobileView === "smartMatch" ? "home" : previousMobileView || "home");
             openProviderProfile(provider);
           }}
         />
@@ -5022,6 +5108,7 @@ const updateBarberStand = async (payload) => {
       <MarketplaceMapOverlay
         show={mapState.show}
         theme={theme}
+        setTheme={setTheme}
         currentUser={currentUser}
         category={mapState.category}
         providers={mapState.category && mapState.category !== "All" ? enrichedBarbers.filter(isPublicProvider) : filteredBarbers.length ? filteredBarbers : enrichedBarbers.filter(isPublicProvider)}
@@ -5043,6 +5130,7 @@ const updateBarberStand = async (payload) => {
         onNavigate={navigateFromMap}
         onUseCurrentLocation={requestLocation}
         onManualLocation={changeLocation}
+        onClearLocation={clearLocation}
         onRefreshProviders={fetchBarbers}
         onOpenProvider={openProviderProfile}
         onMessageProvider={(provider) =>
@@ -5060,7 +5148,25 @@ const updateBarberStand = async (payload) => {
         }}
       />
 
-      <BarberProfileSheet
+      {/* Conditionally mounted so the provider chunk loads on first open (not at
+          boot) and the Suspense/skeleton exist only while open. Its OWN Suspense
+          means a slow chunk shows the cream skeleton here — never the app-wide
+          dark fallback. The error boundary catches a failed chunk download and
+          shows a cream Retry/Close card instead of an infinite skeleton. */}
+      {showBarberProfile && (
+      <OverlayErrorBoundary
+        key={providerChunkAttempt}
+        title="Couldn't open this provider"
+        message="We couldn't load this provider. Check your connection and try again."
+        testId="provider-profile-error"
+        onRetry={() => setProviderChunkAttempt((n) => n + 1)}
+        onClose={() => {
+          setReviewNotice({ message: "", tone: "info" });
+          setShowBarberProfile(false);
+        }}
+      >
+      <Suspense fallback={<ProviderProfileSkeleton />}>
+      <ProviderProfileLazy
         show={showBarberProfile}
         barber={selectedBarber ? { ...selectedBarber, reviews: reviewsByBarber[selectedBarber.id] || [], reviewCount: (reviewsByBarber[selectedBarber.id] || []).length, rating: getAverageRating(reviewsByBarber[selectedBarber.id] || []) } : selectedBarber}
         reviewBlockUsage={selectedBarber ? reviewBlockUsageByBarber[selectedBarber.id] : null}
@@ -5090,6 +5196,8 @@ const updateBarberStand = async (payload) => {
           setShowQuoteModal(false);
         }}
         onRequestQuote={() => {
+          quoteIdempotencyRef.current = makeId("quote-request");
+          setQuoteError("");
           setShowQuoteModal(true);
           setShowBookingModal(false);
           setShowChat(false);
@@ -5115,7 +5223,15 @@ const updateBarberStand = async (payload) => {
           openMarketplaceMap(myBarberProfile?.business_type || "All");
         }}
       />
+      </Suspense>
+      </OverlayErrorBoundary>
+      )}
 
+      {/* Shared scoped boundary for the remaining lazy overlays: a slow/late
+          chunk shows nothing (null) instead of blanking the whole app with the
+          dark app-wide fallback. They return null when closed, so null is the
+          correct fallback. */}
+      <Suspense fallback={null}>
       <BookingModal
         show={showBookingModal}
         barber={selectedBarber}
@@ -5141,6 +5257,8 @@ const updateBarberStand = async (payload) => {
         locationDetecting={bookingLocationDetecting}
         onUseCurrentLocation={useCurrentLocationForBooking}
         onRequestQuote={() => {
+          quoteIdempotencyRef.current = makeId("quote-request");
+          setQuoteError("");
           setShowQuoteModal(true);
           setShowBookingModal(false);
         }}
@@ -5170,6 +5288,8 @@ const updateBarberStand = async (payload) => {
         provider={selectedBarber}
         onClose={() => setShowQuoteModal(false)}
         onSubmit={submitQuoteRequest}
+        submitting={quoteSubmitting}
+        error={quoteError}
       />
 
       <ChatSheet
@@ -5185,6 +5305,7 @@ const updateBarberStand = async (payload) => {
         typingState={typingState}
         onTyping={emitTyping}
         onSend={sendMessage}
+        onRetry={sendMessage}
         chatThreadRef={chatThreadRef}
         onClose={() => {
           setShowChat(false);
@@ -5224,8 +5345,8 @@ const updateBarberStand = async (payload) => {
         show={customerPremiumPaymentOpen && !customerPremiumActive}
         title="Customer Premium"
         subtitle="Choose how you want to pay for Smart Match access."
-        amountLabel="Premium: UGX 10,000/month"
-        amount={Math.max(10000, Number(customerSubscriptionPlan?.monthlyPrice || 10000))}
+        amountLabel={`Premium: UGX ${CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month`}
+        amount={Math.max(CUSTOMER_PREMIUM_PLAN.monthlyPrice, Number(customerSubscriptionPlan?.monthlyPrice || CUSTOMER_PREMIUM_PLAN.monthlyPrice))}
         defaultPhone={profile.phone || currentUser?.phone || ""}
         loading={customerSubscriptionLoading}
         message={customerSubscriptionMessage}
@@ -5276,6 +5397,7 @@ const updateBarberStand = async (payload) => {
           }}
         />
       )}
+      </Suspense>
 
       {deleteStandConfirmOpen ? (
         <>
@@ -5316,7 +5438,14 @@ const updateBarberStand = async (payload) => {
     <div className={`app-wrap-v4 ${theme} ${isAuthScreen ? "app-auth-v4" : ""}`}>
       <div className={`phone-frame-v4 ${isAuthScreen ? "phone-frame-auth-v4" : ""}`}>
         <div className={`screen-v4 ${isAuthScreen ? "screen-auth-v4" : ""}`}>
-          <Suspense fallback={<div className="content-v4 app-page-v4">Loading...</div>}>
+          <Suspense
+            fallback={
+              <div className="route-fallback-v4" role="status" aria-label="Loading">
+                <span className="route-fallback-spinner" aria-hidden="true" />
+                <span className="route-fallback-text">Loading…</span>
+              </div>
+            }
+          >
             {screen === "login" ? (
               <AuthScreen
                 authMode={authMode}
@@ -5335,7 +5464,9 @@ const updateBarberStand = async (payload) => {
                 clearAuthMessages={clearAuthMessages}
               />
             ) : (
-              appContent
+              <PageErrorBoundary onGoHome={() => setActiveTab("home")}>
+                {appContent}
+              </PageErrorBoundary>
             )}
           </Suspense>
           {showInitialLoadingScreen ? <LoadingScreen visible={initialLoadingStage === "visible"} /> : null}

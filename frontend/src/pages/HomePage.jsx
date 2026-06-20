@@ -10,22 +10,20 @@ import {
   FiStar,
   FiZap,
 } from "react-icons/fi";
-import { FaBroom, FaCut, FaDumbbell, FaGraduationCap, FaSpa, FaStethoscope, FaTools, FaUtensils } from "react-icons/fa";
 import { resolveProviderImage, getProviderInitials, buildInitialsAvatar } from "../utils/providerImage.js";
+import { getCategoryDef, HOME_CATEGORY_IDS } from "../utils/categoryRegistry.jsx";
 import heroProfessional from "../assets/queless-hero-service-professional.png";
 
-const CATEGORY_CHIPS = [
-  { label: "Barber", icon: FaCut, category: "Barber", colors: ["#522B5B", "#FBE4D8"] },
-  { label: "Beauty", icon: FaSpa, category: "Beauty", colors: ["#c53d8c", "#fff0f8"] },
-  { label: "Tutor", icon: FaGraduationCap, category: "Tutor / Lessons", colors: ["#2B79C2", "#edf6ff"] },
-  { label: "Health", icon: FaStethoscope, category: "Health & Fitness", colors: ["#854F6C", "#fbe4d8"] },
-  { label: "Food", icon: FaUtensils, category: "Catering & Food Services", colors: ["#c7682b", "#fff1e6"] },
-  { label: "Repair", icon: FaTools, category: "Repairs & Maintenance", colors: ["#d89b16", "#fff5d9"] },
-  { label: "Cleaning", icon: FaBroom, category: "Cleaning Services", colors: ["#1d9f72", "#e7fff4"] },
-  { label: "Fitness", icon: FaDumbbell, category: "Health & Fitness", colors: ["#2B124C", "#f1e8ff"] },
-  { label: "Professional", icon: FiBriefcase, category: "Business Services", colors: ["#522B5B", "#fbe4d8"] },
-  { label: "Other", icon: FaTools, category: "All", colors: ["#854F6C", "#fbe4d8"] },
-];
+// Homepage category chips — registry-driven so icons/colors stay in sync with the rest of the app
+const CATEGORY_CHIPS = HOME_CATEGORY_IDS.map(({ id, category, labelOverride }) => {
+  const def = getCategoryDef(id);
+  return {
+    label: labelOverride || def.shortLabel,
+    icon: def.Icon,
+    category,
+    colors: [def.primaryColor, def.softBg],
+  };
+});
 
 const TRUST_BADGES = [
   {
@@ -86,17 +84,28 @@ function getPopularItemTitle(item = {}) {
   );
 }
 
+// Category may arrive as a plain string OR as a normalized object
+// ({ id, name }) depending on the data source. Always coerce to a string so it
+// is safe to render directly — rendering the raw object crashes React with
+// "Objects are not valid as a React child".
+function categoryToText(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") return String(value.name || value.label || value.title || "");
+  return String(value);
+}
+
 function getPopularItemCategory(item = {}) {
   const service = getFirstService(item);
   return (
-    item.category ||
-    item.category_name ||
-    item.business_type ||
-    item.businessType ||
-    item.serviceType ||
-    service.category ||
-    service.category_name ||
-    service.serviceType ||
+    categoryToText(item.category) ||
+    categoryToText(item.category_name) ||
+    categoryToText(item.business_type) ||
+    categoryToText(item.businessType) ||
+    categoryToText(item.serviceType) ||
+    categoryToText(service.category) ||
+    categoryToText(service.category_name) ||
+    categoryToText(service.serviceType) ||
     ""
   );
 }
@@ -143,7 +152,9 @@ function getReviewCount(item = {}) {
 }
 
 function isVerifiedProvider(item = {}) {
-  return Boolean(item.verified || item.isVerified || item.is_verified || item.verified_badge);
+  if (item.isVerified === true || item.is_verified === true || item.is_verified === 1 || item.verified_badge === true) return true;
+  const status = String(item.verified_status || item.verification_status || item.verified || "").trim().toLowerCase();
+  return ["verified", "approved", "certified", "complete", "completed"].includes(status);
 }
 
 function hasRealProviderMarker(item = {}) {

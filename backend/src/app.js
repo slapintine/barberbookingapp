@@ -4,10 +4,10 @@ import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
 
 import { env, validateEnv } from "./config/env.js";
+import { authenticateAccessToken } from "./services/authSessionService.js";
 import {
   buildCorsOptions,
   securityHeaders,
@@ -25,7 +25,6 @@ import favouriteRoutes from "./routes/favouriteRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
-import pushRoutes from "./routes/pushRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import customerSubscriptionRoutes from "./routes/customerSubscriptionRoutes.js";
@@ -38,6 +37,8 @@ import { notFoundHandler, errorHandler } from "./middleware/errorMiddleware.js";
 import { createRequestLogger, logger } from "./config/logger.js";
 import db from "./config/db.js";
 import { initDb } from "./db/initDb.js";
+import { runExpiryReminderJob, runPendingPaymentCheck } from "./services/subscriptionReminderService.js";
+import { providerImageStorageRoot } from "./services/providerImageStorage.js";
 
 const app = express();
 
@@ -54,6 +55,10 @@ app.use("/api", apiRateLimiter);
 
 app.use(express.json({ limit: "150mb" }));
 app.use(express.urlencoded({ extended: true, limit: "150mb" }));
+app.use("/api/uploads", express.static(providerImageStorageRoot, {
+  immutable: true,
+  maxAge: "1y",
+}));
 
 app.use((req, res, next) => {
   req.id = req.get("x-request-id") || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -109,7 +114,6 @@ app.use("/api/favorites", favouriteRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/messages", messageRoutes);
-app.use("/api/push", pushRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/customer-subscriptions", customerSubscriptionRoutes);
@@ -173,13 +177,7 @@ function attachSocketServer(server) {
         return next(new Error("Unauthorized"));
       }
 
-      const decoded = jwt.verify(token, env.jwtSecret);
-      const user = await findUserById(decoded.userId);
-
-      if (!user) {
-        return next(new Error("Unauthorized"));
-      }
-
+      const { user } = await authenticateAccessToken(token);
       socket.user = user;
       next();
     } catch {
@@ -322,6 +320,18 @@ export async function startServer() {
       "Server running"
     );
   });
+
+  // Subscription expiry reminder job — runs every 4 hours.
+  // First run is deferred 2 minutes after startup to let DB settle.
+  const REMINDER_INTERVAL_MS = 4 * 60 * 60 * 1000;
+  setTimeout(() => {
+    runExpiryReminderJob().catch((error) => logger.error({ err: error }, "Reminder job error"));
+    runPendingPaymentCheck().catch((error) => logger.error({ err: error }, "Pending payment check error"));
+    setInterval(() => {
+      runExpiryReminderJob().catch((error) => logger.error({ err: error }, "Reminder job error"));
+      runPendingPaymentCheck().catch((error) => logger.error({ err: error }, "Pending payment check error"));
+    }, REMINDER_INTERVAL_MS);
+  }, 2 * 60 * 1000);
 
   return server;
 }

@@ -1,0 +1,163 @@
+/* ================================================================
+   QUELESS MEMBERSHIP BADGES
+   Dynamic account-type badges shown in profile header and dashboard.
+
+   Variants:
+     .membership-badge--premium-customer   purple/pink for Customer Premium
+     .membership-badge--customer-free      neutral for free customers
+     .membership-badge--provider-platinum  refined lavender-platinum
+     .membership-badge--provider-premium   rich purple provider
+     .membership-badge--provider-free      neutral provider
+     .membership-badge--skeleton           loading skeleton
+   ================================================================ */
+
+.membership-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* The profile header gives this row both .profile-sub-v4 and
+   .profile-membership-badges. booking.css forces .profile-sub-v4 to
+   nowrap/ellipsis (correct for a text subtitle, wrong for badges).
+   This equal-specificity rule, imported after booking.css, restores wrapping
+   so Premium Customer + Provider badges sit cleanly without overlap. */
+.profile-main-copy-v4 .profile-membership-badges {
+  display: flex;
+  flex-wrap: wrap;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  gap: 6px;
+  row-gap: 6px;
+  min-width: 0;
+}
+
+.membership-badge-row--loading {
+  pointer-events: none;
+}
+
+/* ── Base pill ──────────────────────────────────────────────── */
+
+.membership-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: opacity 0.2s;
+  user-select: none;
+}
+
+/* ── Customer Premium — purple/pink gradient ────────────────── */
+
+.membership-badge--premium-customer {
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 60%, #ec4899 100%);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.18);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+}
+
+/* ── Free customer — neutral soft ──────────────────────────── */
+
+.membership-badge--customer-free {
+  background: rgb(var(--bg-soft-rgb, 80 43 107) / 0.38);
+  color: var(--text-secondary, #DFB6B2);
+  border-color: rgb(var(--highlight-rgb, 254 228 216) / 0.12);
+}
+
+/* ── Provider Premium — rich purple ────────────────────────── */
+
+.membership-badge--provider-premium {
+  background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 100%);
+  color: #f3e8ff;
+  border-color: rgba(167, 139, 250, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* ── Provider Platinum — refined lavender, no cheap gold ─────── */
+
+.membership-badge--provider-platinum {
+  background: linear-gradient(135deg, #4c1d95 0%, #6d28d9 45%, #8b5cf6 80%, #a78bfa 100%);
+  color: #ede9fe;
+  border-color: rgba(196, 181, 253, 0.35);
+  box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Provider Free / basic ──────────────────────────────────── */
+
+.membership-badge--provider-free {
+  background: rgb(var(--bg-soft-rgb, 80 43 107) / 0.3);
+  color: var(--text-secondary, #DFB6B2);
+  border-color: rgb(var(--highlight-rgb, 254 228 216) / 0.1);
+}
+
+/* ── Skeleton loading ───────────────────────────────────────── */
+
+.membership-badge--skeleton {
+  width: 120px;
+  height: 22px;
+  background: linear-gradient(90deg,
+    rgb(var(--bg-soft-rgb, 80 43 107) / 0.4) 0%,
+    rgb(var(--bg-soft-rgb, 80 43 107) / 0.7) 50%,
+    rgb(var(--bg-soft-rgb, 80 43 107) / 0.4) 100%
+  );
+  border-radius: 20px;
+  animation: membershipBadgePulse 1.6s ease-in-out infinite;
+}
+
+@keyframes membershipBadgePulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
+}
+
+/* ── Manage link ────────────────────────────────────────────── */
+
+.membership-manage-link {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--accent, #8B4F8C);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.membership-manage-link:hover,
+.membership-manage-link:focus {
+  opacity: 1;
+  outline: none;
+}
+
+/* ── Light theme overrides ─────────────────────────────────── */
+
+html[data-theme="light"] .membership-badge--customer-free,
+body[data-theme="light"] .membership-badge--customer-free {
+  background: rgba(109, 40, 217, 0.08);
+  color: #5b21b6;
+  border-color: rgba(109, 40, 217, 0.15);
+}
+
+html[data-theme="light"] .membership-badge--provider-free,
+body[data-theme="light"] .membership-badge--provider-free {
+  background: rgba(109, 40, 217, 0.06);
+  color: #6d28d9;
+  border-color: rgba(109, 40, 217, 0.12);
+}
+
+html[data-theme="light"] .membership-manage-link,
+body[data-theme="light"] .membership-manage-link {
+  color: #7c3aed;
+}

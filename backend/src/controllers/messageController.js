@@ -1,5 +1,5 @@
 import db from "../config/db.js";
-import { sendPushToUser } from "./pushController.js";
+import { sendNotificationToUser } from "../services/notificationService.js";
 
 function getBarberById(barberId) {
   return new Promise((resolve, reject) => {
@@ -56,6 +56,7 @@ async function ensureMessagesTable() {
       sender_user_id INTEGER NOT NULL,
       text TEXT NOT NULL,
       seen INTEGER NOT NULL DEFAULT 0,
+      client_message_id TEXT DEFAULT '',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
       FOREIGN KEY (customer_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -70,10 +71,14 @@ async function ensureMessagesTable() {
     if (!columnNames.has("seen")) {
       await dbRun("ALTER TABLE messages ADD COLUMN seen INTEGER NOT NULL DEFAULT 0");
     }
+    if (!columnNames.has("client_message_id")) {
+      await dbRun("ALTER TABLE messages ADD COLUMN client_message_id TEXT DEFAULT ''");
+    }
     return;
   }
 
   await dbRun("ALTER TABLE messages ADD COLUMN IF NOT EXISTS seen INTEGER DEFAULT 0").catch(() => {});
+  await dbRun("ALTER TABLE messages ADD COLUMN IF NOT EXISTS client_message_id TEXT DEFAULT ''").catch(() => {});
 }
 
 function dbAll(sql, params = []) {
@@ -92,6 +97,34 @@ function dbRun(sql, params = []) {
       else resolve({ changes: this.changes, lastID: this.lastID });
     });
   });
+}
+
+async function getMessageByClientId(senderUserId, clientMessageId) {
+  if (!clientMessageId) return null;
+  const rows = await dbAll(
+    `SELECT
+      m.id,
+      m.barber_id AS barberId,
+      b.business_name AS barberName,
+      bu.username AS barberOwnerUsername,
+      m.customer_user_id AS customerUserId,
+      cu.username AS customerUsername,
+      m.sender_user_id,
+      su.username AS sender,
+      m.text,
+      m.seen,
+      m.client_message_id AS clientMessageId,
+      m.created_at AS createdAt
+     FROM messages m
+     JOIN users su ON su.id = m.sender_user_id
+     JOIN barbers b ON b.id = m.barber_id
+     JOIN users bu ON bu.id = b.owner_user_id
+     JOIN users cu ON cu.id = m.customer_user_id
+     WHERE m.sender_user_id = ? AND m.client_message_id = ?
+     LIMIT 1`,
+    [senderUserId, clientMessageId]
+  );
+  return rows[0] || null;
 }
 
 function conversationIdFor(row = {}) {
@@ -158,6 +191,8 @@ function serializeMessage(row = {}) {
     },
     body: row.text,
     text: row.text,
+    clientMessageId: row.clientMessageId || row.client_message_id || "",
+    client_message_id: row.clientMessageId || row.client_message_id || "",
     seen: Boolean(row.seen),
     readAt: row.seen ? row.createdAt : null,
     createdAt: row.createdAt,
@@ -251,6 +286,7 @@ async function getConversationRows({ barberId, customerUsername, user }) {
       su.username AS sender,
       m.text,
       m.seen,
+      m.client_message_id AS clientMessageId,
       m.created_at AS createdAt
      FROM messages m
      JOIN users su ON su.id = m.sender_user_id
@@ -349,6 +385,9 @@ export async function sendMessage(req, res, next) {
     const barberId = normalizePositiveId(req.body.barberId, "barberId");
     const customerUsername = normalizeUsername(req.body.customerUsername);
     const text = normalizeMessageText(req.body.text);
+    const clientMessageId = String(
+      req.body.clientMessageId || req.body.client_message_id || req.get("Idempotency-Key") || ""
+    ).trim().slice(0, 120);
 
     if (!text) {
       return res.status(400).json({
@@ -387,17 +426,27 @@ export async function sendMessage(req, res, next) {
       });
     }
 
+    if (clientMessageId) {
+      const existing = await getMessageByClientId(req.user.id, clientMessageId);
+      if (existing) return res.status(200).json(existing);
+    }
+
     db.run(
       `INSERT INTO messages
-       (barber_id, customer_user_id, sender_user_id, text, created_at)
-       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [barberId, customer.id, req.user.id, text],
+       (barber_id, customer_user_id, sender_user_id, text, client_message_id, created_at)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [barberId, customer.id, req.user.id, text, clientMessageId],
       async function afterInsert(err) {
-        if (err) return next(err);
+        if (err) {
+          if (clientMessageId && /unique|constraint/i.test(String(err.message || ""))) {
+            const existing = await getMessageByClientId(req.user.id, clientMessageId).catch(() => null);
+            if (existing) return res.status(200).json(existing);
+          }
+          return next(err);
+        }
 
         try {
           const recipientUserId = isCustomer ? barber.owner_user_id : customer.id;
-          const recipient = await getUserById(recipientUserId);
 
           await markOldMessageNotificationsRead(
             recipientUserId,
@@ -410,24 +459,23 @@ export async function sendMessage(req, res, next) {
           // the notification and push entirely so users never see
           // "SI-World sent you a message" when they ARE SI-World.
           if (Number(recipientUserId) !== Number(req.user.id)) {
-            await addNotification(recipientUserId, {
-              title: "New message",
-              type: "message",
-              message: `${isCustomer ? customer.username : barber.business_name}: ${text}`,
-              barberId: barber.id,
-              customerUserId: customer.id,
-              customerUsername: customer.username,
-              barberOwnerUsername: barberOwner?.username || "",
-            });
-
-            if (recipient?.username) {
-              await sendPushToUser(recipient.username, {
-                title: "New message",
-                body: `${barber.business_name}: ${text}`,
-                url: "/",
-                tag: `message-${barber.id}-${customer.id}`,
-              });
-            }
+            // One call: persists the in-app notification AND delivers it via
+            // Firebase FCM to the recipient's registered devices. Push failure
+            // is non-fatal — the in-app notification is still written.
+            const senderLabel = isCustomer ? customer.username : barber.business_name;
+            await sendNotificationToUser(
+              recipientUserId,
+              "New message",
+              `${senderLabel}: ${text.trim()}`,
+              {
+                type: "message",
+                barberId: barber.id,
+                customerUserId: customer.id,
+                customerUsername: customer.username,
+                barberOwnerUsername: barberOwner?.username || "",
+                route: "/",
+              }
+            ).catch(() => {});
           }
 
           db.get(
@@ -442,6 +490,7 @@ export async function sendMessage(req, res, next) {
               su.username AS sender,
               m.text,
               m.seen,
+              m.client_message_id AS clientMessageId,
               m.created_at AS createdAt
              FROM messages m
              JOIN users su ON su.id = m.sender_user_id
@@ -510,6 +559,7 @@ export async function getConversation(req, res, next) {
         su.username AS sender,
         m.text,
         m.seen,
+        m.client_message_id AS clientMessageId,
         m.created_at AS createdAt
        FROM messages m
        JOIN users su ON su.id = m.sender_user_id
@@ -547,6 +597,7 @@ export async function getConversations(req, res, next) {
         su.username AS sender,
         m.text,
         m.seen,
+        m.client_message_id AS clientMessageId,
         m.created_at AS createdAt
        FROM messages m
        JOIN users su ON su.id = m.sender_user_id

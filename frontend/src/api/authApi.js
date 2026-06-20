@@ -19,6 +19,14 @@ export function getMe() {
   return apiFetch("/api/auth/me", { suppressAuthBroadcast: true });
 }
 
+export function logoutUser(refreshToken) {
+  return apiFetch("/api/auth/logout", {
+    method: "POST",
+    skipAuthRefresh: true,
+    body: JSON.stringify({ refreshToken }),
+  });
+}
+
 export function updateAccount({ username, currentPassword, newPassword }) {
   return apiFetch("/api/auth/me", {
     method: "PATCH",

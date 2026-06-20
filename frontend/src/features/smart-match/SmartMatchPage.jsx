@@ -4,6 +4,7 @@ import { findSmartMatches } from "../../api/smartMatchApi.js";
 import logo from "../../assets/queless-logo-full.png";
 import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
 import { reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
+import { CUSTOMER_PREMIUM_PLAN } from "../../utils/subscriptionPlans.js";
 import {
   AI_REASON_SETS,
   LOCATION_OPTIONS,
@@ -435,7 +436,7 @@ export default function SmartMatchPage({
                 <span key={item}><FiCheck /> {item}</span>
               ))}
             </div>
-            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX 10,000/month</div>
+            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX {CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month</div>
             {customerSubscriptionMessage ? <div className="smart-match-error">{customerSubscriptionMessage}</div> : null}
           </section>
         ) : null}
@@ -453,8 +454,8 @@ export default function SmartMatchPage({
                 const Icon = item.icon;
                 const active = state.selectedService?.key === item.key;
                 return (
-                  <button type="button" key={item.key} className={active ? "smart-match-tile is-selected" : "smart-match-tile"} onClick={() => updateState({ selectedService: item })}>
-                    <span className="smart-match-icon-box"><Icon /></span>
+                  <button type="button" key={item.key} className={active ? "smart-match-tile is-selected" : "smart-match-tile"} style={{ "--cat-color": item.primaryColor, "--cat-bg": item.softBg }} onClick={() => updateState({ selectedService: item })}>
+                    <span className="smart-match-icon-box" style={{ background: item.softBg, color: item.primaryColor }}><Icon /></span>
                     <span className="smart-match-label">{item.label}</span>
                     {active ? <FiCheck className="smart-match-check" /> : null}
                   </button>

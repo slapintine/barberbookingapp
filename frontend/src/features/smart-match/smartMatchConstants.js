@@ -1,23 +1,13 @@
 import {
-  FiActivity,
-  FiBookOpen,
-  FiBriefcase,
   FiCalendar,
-  FiCamera,
   FiClock,
-  FiDroplet,
   FiHome,
   FiMapPin,
-  FiMoreHorizontal,
   FiNavigation,
-  FiScissors,
-  FiTruck,
-  FiSettings,
-  FiTool,
   FiZap,
 } from "react-icons/fi";
-import { FaSpa } from "react-icons/fa";
 import { MARKETPLACE_CATEGORIES } from "../../utils/serviceCatalog.js";
+import { getCategoryDef } from "../../utils/categoryRegistry.jsx";
 
 export const SMART_MATCH_STEPS = [
   { key: "need", label: "Need" },
@@ -26,28 +16,19 @@ export const SMART_MATCH_STEPS = [
   { key: "matches", label: "Matches" },
 ];
 
-const CATEGORY_ICON_COMPONENTS = {
-  activity: FiActivity,
-  book: FiBookOpen,
-  briefcase: FiBriefcase,
-  camera: FiCamera,
-  droplet: FiDroplet,
-  home: FiHome,
-  navigation: FiNavigation,
-  scissors: FiScissors,
-  sparkles: FiZap,
-  tool: FiTool,
-  truck: FiTruck,
-};
-
 export const SERVICE_CATEGORIES = MARKETPLACE_CATEGORIES
   .filter((category) => category.active !== false)
-  .map((category) => ({
-    key: category.id,
-    label: category.name,
-    helper: category.description,
-    icon: category.id === "spa" ? FaSpa : CATEGORY_ICON_COMPONENTS[category.icon] || FiMoreHorizontal,
-  }));
+  .map((category) => {
+    const def = getCategoryDef(category.id);
+    return {
+      key: category.id,
+      label: category.name,
+      helper: category.description,
+      icon: def.Icon,
+      primaryColor: def.primaryColor,
+      softBg: def.softBg,
+    };
+  });
 
 export const WHEN_OPTIONS = [
   { key: "now", label: "Now", helper: "Best for urgent needs", icon: FiZap },

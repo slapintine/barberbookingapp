@@ -7,6 +7,12 @@ import PushNotificationSettings from "../features/notifications/PushNotification
 import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
 import { formatPlanName, formatSubscriptionPrice, PROVIDER_PLANS } from "../utils/subscriptionPlans.js";
 import { formatCustomerPremiumPrice, isCustomerPremiumActive } from "../utils/customerPremium.js";
+import MembershipBadge from "../components/ui/MembershipBadge.jsx";
+import {
+  getBadgesFromSubscriptionStates,
+  getAccountStatusStripText,
+  getPrimaryMembershipLabel,
+} from "../utils/membershipDisplay.js";
 
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
@@ -49,6 +55,7 @@ export default function ProfilePage({
   pendingSubscriptionPayment,
   onUpgradeSubscription,
   onVerifySubscription,
+  subscriptionSummary,
   customerSubscriptionState,
   customerSubscriptionPlan,
   customerSubscriptionLoading,
@@ -369,7 +376,17 @@ export default function ProfilePage({
     { label: "Email", value: profile.email || currentUser?.email || "Email not added", icon: FiMail, cta: profile.email ? (verifiedChannels.email ? "Verified" : "Update email") : "Update email" },
     { label: "Phone", value: profile.phone || "Phone not added", icon: FiSmartphone, cta: profile.phone ? (verifiedChannels.phone ? "Verified" : "Verify phone") : "Add phone number" },
     { label: "Address", value: profile.address || profile.location || currentUser?.location || "Address not added", icon: FiMapPin, cta: profile.address || profile.location || currentUser?.location ? "" : "Add address" },
-    { label: "Account type", value: isProviderAccount ? "Service provider" : "Customer", icon: FiShield, cta: isProviderAccount ? "Provider account" : "Customer account" },
+    {
+      label: "Account type",
+      value: (() => {
+        const badges = subscriptionSummary
+          ? (subscriptionSummary.badges || []).map((b) => ({ tier: b.tier, label: b.label }))
+          : getBadgesFromSubscriptionStates(customerSubscriptionState, subscriptionState, Boolean(myBarberProfile));
+        return getPrimaryMembershipLabel(badges);
+      })(),
+      icon: FiShield,
+      cta: "",
+    },
     { label: "Joined", value: joinedDate ? new Date(joinedDate).toLocaleDateString() : "Date unavailable", icon: FiCheckCircle, cta: "" },
     ...(isProviderAccount ? [{ label: "Business", value: myBarberProfile?.business_name || myBarberProfile?.businessName || "Business profile not completed", icon: FiBriefcase, cta: myBarberProfile ? "Provider profile" : "Create business profile" }] : []),
   ];
@@ -563,7 +580,15 @@ export default function ProfilePage({
           />
           <div className="profile-main-copy-v4">
             <div className="profile-title-v4">{profile.fullName || currentUser?.username || "User"}</div>
-            <div className="profile-sub-v4">{isProviderAccount ? "Service provider account" : "Customer account"}</div>
+            <MembershipBadge
+              summary={subscriptionSummary || undefined}
+              customerSub={subscriptionSummary ? undefined : customerSubscriptionState}
+              providerSub={subscriptionSummary ? undefined : subscriptionState}
+              hasProviderProfile={Boolean(myBarberProfile)}
+              loading={!subscriptionSummary && (customerSubscriptionLoading && subscriptionLoading)}
+              showManageLink={false}
+              className="profile-sub-v4 profile-membership-badges"
+            />
           </div>
           <button className="fav-btn-v4 small" type="button" onClick={() => setEditing(true)}>
             <FiEdit2 />
@@ -1130,7 +1155,7 @@ export default function ProfilePage({
         <div className="profile-status-strip-v17">
           <span>{verifiedChannels.email ? "Email verified" : "Email needs verification"}</span>
           <span>{verifiedChannels.phone ? "Phone verified" : profile.phone ? "Verify phone" : "Add phone number"}</span>
-          <span>{isProviderAccount ? businessStatusText : "Customer Free"}</span>
+          <span>{getAccountStatusStripText(customerSubscriptionState, subscriptionState, Boolean(myBarberProfile), isProviderAccount)}</span>
         </div>
         {verifyStatus ? <div className="auth-success">{verifyStatus}</div> : null}
         {verifyError ? <div className="auth-error">{verifyError}</div> : null}

@@ -10,10 +10,23 @@ import {
   FiZap,
 } from "react-icons/fi";
 import { buildInitialsAvatar } from "../utils/providerImage.js";
+import { getCategoryDef } from "../utils/categoryRegistry.jsx";
 import VerificationBadge from "../components/ui/VerificationBadge.jsx";
 import { buildCategoryServices } from "../utils/marketplaceServices.js";
 
 const FILTERS = ["All", "Barber", "Beauty", "Salon", "Spa", "Cleaning Services", "Home Services", "Repairs & Maintenance", "Tutor / Lessons"];
+
+// Maps filter label → registry category id for icon lookup
+const FILTER_CATEGORY_ID = {
+  Barber: "barber",
+  Beauty: "beauty",
+  Salon: "salon",
+  Spa: "spa",
+  "Cleaning Services": "cleaning-services",
+  "Home Services": "home-services",
+  "Repairs & Maintenance": "repairs-maintenance",
+  "Tutor / Lessons": "education-tutoring",
+};
 const SORT_OPTIONS = ["Top rated", "Nearest", "Price", "Available today"];
 const CATEGORY_FILTER_TERMS = {
   Barber: ["barber", "grooming", "haircut", "beard", "shave"],
@@ -203,16 +216,24 @@ export default function SearchResultsPage({ query = "", location = "", providers
       ) : null}
 
       <div className="queless-filter-chips" aria-label="Category filters">
-        {FILTERS.map((category) => (
-          <button
-            type="button"
-            key={category}
-            className={activeCategory === category ? "active" : ""}
-            onClick={() => setActiveCategory(category)}
-          >
-            {category === "All" ? "All" : category.replace(" Services", "")}
-          </button>
-        ))}
+        {FILTERS.map((category) => {
+          const catId = FILTER_CATEGORY_ID[category];
+          const def = catId ? getCategoryDef(catId) : null;
+          const Icon = def?.Icon;
+          const active = activeCategory === category;
+          return (
+            <button
+              type="button"
+              key={category}
+              className={active ? "active" : ""}
+              style={def ? { "--chip-color": def.primaryColor, "--chip-bg": def.softBg } : undefined}
+              onClick={() => setActiveCategory(category)}
+            >
+              {Icon && <Icon size={12} aria-hidden="true" />}
+              {category === "All" ? "All" : category.replace(" Services", "")}
+            </button>
+          );
+        })}
       </div>
 
       <label className="queless-sort-select">

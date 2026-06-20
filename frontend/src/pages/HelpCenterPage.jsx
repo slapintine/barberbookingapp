@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { FiChevronDown, FiLifeBuoy, FiMail, FiMessageCircle, FiSearch, FiShield } from "react-icons/fi";
 import { SUPPORT_CHANNELS } from "../config/support.js";
+import { CUSTOMER_PREMIUM_PLAN } from "../utils/subscriptionPlans.js";
 
 const HOW_IT_WORKS = [
   "Search by service, category, nearby area, or current location.",
@@ -10,7 +11,7 @@ const HOW_IT_WORKS = [
 
 const PRICING = [
   { title: "Customer Free", price: "Free", text: "Browse, save providers, request quotes, and book services." },
-  { title: "Customer Premium", price: "UGX 10,000/month", text: "Unlock Smart Match recommendations for faster provider discovery." },
+  { title: "Customer Premium", price: `UGX ${CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month`, text: "Unlock Smart Match recommendations for faster provider discovery." },
   { title: "Provider Free", price: "UGX 0/month", text: "Start listing services and receiving booking requests." },
   { title: "Provider Premium", price: "UGX 12,000/month", text: "Grow visibility with stronger profile and booking tools." },
   { title: "Provider Platinum", price: "UGX 24,000/month", text: "Top visibility, advanced insights, and premium trust signals." },

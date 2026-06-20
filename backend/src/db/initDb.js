@@ -63,14 +63,18 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_reviews_blocked ON reviews(barber_id, blocked_from_public)`).catch(() => {});
   await run(`CREATE INDEX IF NOT EXISTS idx_quote_requests_customer_id ON quote_requests(customer_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_quote_requests_provider_id ON quote_requests(provider_id)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_quote_requests_customer_idempotency ON quote_requests(customer_id, idempotency_key) WHERE idempotency_key <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_support_requests_user_id ON support_requests(user_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_support_requests_status ON support_requests(status, created_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_messages_barber_id ON messages(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_messages_customer_user_id ON messages(customer_user_id)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_messages_sender_client_id ON messages(sender_user_id, client_message_id) WHERE client_message_id <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_notifications_thread_message ON notifications(user_id, type, barber_id, customer_user_id, read)`);
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_tokens_token ON notification_tokens(token)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_notification_tokens_user_id ON notification_tokens(user_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_sessions_refresh_hash ON auth_sessions(refresh_token_hash)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_schedule_barber_day ON barber_schedule(barber_id, day_of_week)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_team_members_barber_id ON barber_team_members(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_booking_events_booking_id ON booking_events(booking_id)`);
@@ -81,6 +85,7 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_otp_codes_user_channel ON otp_codes(user_id, channel, purpose)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_topups_reference ON wallet_topups(reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_topups_user_idempotency ON wallet_topups(user_id, idempotency_key)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_wallet_topups_user_idempotency_present ON wallet_topups(user_id, idempotency_key) WHERE idempotency_key <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barbers_subscription_tier ON barbers(subscription_tier, subscription_status)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barbers_public_status ON barbers(business_status, is_published, subscription_tier)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barbers_normalized_business_name ON barbers(normalized_business_name)`);
@@ -91,24 +96,42 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_reference ON payment_transactions(internal_reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_provider_reference ON payment_transactions(provider_reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_idempotency ON payment_transactions(idempotency_key)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_payment_transactions_user_idempotency_present ON payment_transactions(user_id, idempotency_key) WHERE idempotency_key <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payment_transactions_customer_subscription_id ON payment_transactions(customer_subscription_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payments_booking_id ON payments(booking_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payments_reference ON payments(internal_reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider_reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payments_idempotency ON payments(user_id, idempotency_key)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_payments_user_idempotency_present ON payments(user_id, idempotency_key) WHERE idempotency_key <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_ledger_owner ON wallet_ledger(owner_type, owner_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_ledger_payment ON wallet_ledger(payment_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_ledger_booking ON wallet_ledger(booking_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payouts_barber_id ON payouts(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payouts_wallet_id ON payouts(wallet_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payouts_idempotency ON payouts(barber_id, idempotency_key)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_payouts_barber_idempotency_present ON payouts(barber_id, idempotency_key) WHERE idempotency_key <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_webhook_events_reference ON webhook_events(reference, provider_reference)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_webhook_events_provider ON webhook_events(provider, event_type)`);
+  // Existing development databases may contain duplicate callback deliveries
+  // from before webhook idempotency was enforced. Keep the newest copy of each
+  // exact identity so the unique index can be added without blocking startup.
+  await run(`
+    DELETE FROM webhook_events
+    WHERE id NOT IN (
+      SELECT MAX(id)
+      FROM webhook_events
+      WHERE COALESCE(reference, '') <> '' OR COALESCE(provider_reference, '') <> ''
+      GROUP BY provider, event_type, reference, provider_reference
+    )
+    AND (COALESCE(reference, '') <> '' OR COALESCE(provider_reference, '') <> '')
+  `);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_webhook_events_identity_present ON webhook_events(provider, event_type, reference, provider_reference) WHERE reference <> '' OR provider_reference <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_transactions_payment_id ON wallet_transactions(payment_transaction_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_transactions_payout_id ON wallet_transactions(payout_request_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payout_requests_barber_id ON payout_requests(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payout_requests_wallet_id ON payout_requests(wallet_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_payout_requests_idempotency ON payout_requests(barber_id, idempotency_key)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_payout_requests_barber_idempotency_present ON payout_requests(barber_id, idempotency_key) WHERE idempotency_key <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_subscriptions_barber_id ON barber_subscriptions(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_sms_messages_provider_id ON sms_messages(provider_message_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_sms_messages_dedupe ON sms_messages(dedupe_key)`);
@@ -456,7 +479,7 @@ async function migrateExistingSchema() {
   await addColumnIfMissing(
     "barber_services",
     "duration_minutes",
-    `duration_minutes INTEGER NOT NULL DEFAULT 30`
+    `duration_minutes INTEGER NOT NULL DEFAULT 0`
   );
   await addColumnIfMissing(
     "barber_services",
@@ -619,6 +642,22 @@ async function migrateExistingSchema() {
     "notifications",
     "barber_owner_username",
     `barber_owner_username TEXT DEFAULT ''`
+  );
+
+  await addColumnIfMissing(
+    "messages",
+    "client_message_id",
+    `client_message_id TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "quote_requests",
+    "idempotency_key",
+    `idempotency_key TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "quote_requests",
+    "conversation_message_id",
+    `conversation_message_id INTEGER DEFAULT NULL`
   );
 
   await addColumnIfMissing(
@@ -879,6 +918,21 @@ export async function initDb() {
     await addColumnIfMissing("users", "blocked_at", `blocked_at TEXT DEFAULT NULL`);
 
     await run(`
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        refresh_token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT DEFAULT NULL,
+        user_agent TEXT DEFAULT '',
+        ip_address TEXT DEFAULT '',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
       CREATE TABLE IF NOT EXISTS profiles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL UNIQUE,
@@ -968,6 +1022,8 @@ export async function initDb() {
     await addColumnIfMissing("barbers", "selected_plan", `selected_plan TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "deleted_at", `deleted_at TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "map_icon_type", `map_icon_type TEXT DEFAULT ''`);
+    await addColumnIfMissing("barbers", "pricing_mode", `pricing_mode TEXT NOT NULL DEFAULT 'fixed'`);
+    await addColumnIfMissing("barbers", "requires_quote", `requires_quote INTEGER NOT NULL DEFAULT 0`);
     await addColumnIfMissing("barbers", "verification_document_name", `verification_document_name TEXT DEFAULT ''`);
     await addColumnIfMissing("barbers", "verification_document_url", `verification_document_url TEXT DEFAULT ''`);
     await addColumnIfMissing("barbers", "verification_notes", `verification_notes TEXT DEFAULT ''`);
@@ -996,7 +1052,7 @@ export async function initDb() {
         min_price REAL DEFAULT NULL,
         max_price REAL DEFAULT NULL,
         starting_price REAL DEFAULT NULL,
-        duration_minutes INTEGER NOT NULL DEFAULT 30,
+        duration_minutes INTEGER NOT NULL DEFAULT 0,
         location_type TEXT NOT NULL DEFAULT 'provider_location',
         description TEXT DEFAULT '',
         is_available INTEGER NOT NULL DEFAULT 1,
@@ -1016,6 +1072,33 @@ export async function initDb() {
         status TEXT DEFAULT NULL,
         metadata TEXT DEFAULT '{}',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Subscription reminder event tracking (migration 033)
+    await run(`
+      CREATE TABLE IF NOT EXISTS subscription_reminder_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        account_scope TEXT NOT NULL DEFAULT 'provider',
+        subscription_id INTEGER DEFAULT NULL,
+        event_type TEXT NOT NULL,
+        sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expiry_snapshot TEXT DEFAULT NULL,
+        metadata TEXT DEFAULT '{}'
+      )
+    `);
+    await run(`CREATE INDEX IF NOT EXISTS idx_sub_reminders_user_scope_event ON subscription_reminder_events(user_id, account_scope, event_type)`);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS subscription_job_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_name TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        finished_at TEXT DEFAULT NULL,
+        records_processed INTEGER DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'running',
+        error_message TEXT DEFAULT NULL
       )
     `);
 
@@ -1138,6 +1221,8 @@ export async function initDb() {
         preferred_date TEXT DEFAULT NULL,
         location TEXT DEFAULT '',
         status TEXT NOT NULL DEFAULT 'pending',
+        idempotency_key TEXT DEFAULT '',
+        conversation_message_id INTEGER DEFAULT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -1171,6 +1256,7 @@ export async function initDb() {
         sender_user_id INTEGER NOT NULL,
         text TEXT NOT NULL,
         seen INTEGER NOT NULL DEFAULT 0,
+        client_message_id TEXT DEFAULT '',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
         FOREIGN KEY (customer_user_id) REFERENCES users(id) ON DELETE CASCADE,

@@ -258,7 +258,12 @@ export function serviceMatchesCategory(service, category) {
   return terms.some((term) => haystack.includes(String(term).toLowerCase()));
 }
 
-export function normalizeServiceForBooking(item, idx = 0) {
+export function normalizeServiceForBooking(item, idx = 0, options = {}) {
+  // preserveEmptyTitle: when editing a service in the wizard, a user-cleared
+  // title ("") must stay empty instead of being coerced back to a default like
+  // "General service" on every re-normalization/render. Booking/display callers
+  // omit this so they still get a readable fallback label.
+  const { preserveEmptyTitle = false } = options;
   const fallback = DEFAULT_SERVICE_TYPES[idx % DEFAULT_SERVICE_TYPES.length] || DEFAULT_SERVICE_TYPES[0];
   if (typeof item === "string") {
     const inferredCategory = inferCategoryNameFromText(item, fallback.category || "Services");
@@ -286,10 +291,19 @@ export function normalizeServiceForBooking(item, idx = 0) {
   const normalizedPricingType = ["fixed", "range", "starting_from", "quote"].includes(pricingType) ? pricingType : "fixed";
   const legacyPrice = Number(item?.price_extra ?? item?.extra ?? item?.price ?? 0);
 
+  // When preserving empty titles, use ?? so a deliberate "" is kept (only
+  // missing/undefined falls through); otherwise use the readable-label fallback.
+  const serviceName = preserveEmptyTitle
+    ? String(item?.service_name ?? item?.name ?? item?.title ?? "")
+    : (item?.service_name || item?.name || item?.title || fallback.name || "Service");
+  const serviceTitle = preserveEmptyTitle
+    ? String(item?.title ?? item?.service_name ?? item?.name ?? "")
+    : (item?.title || item?.service_name || item?.name || fallback.name || "Service");
+
   return {
     id: item?.id ?? fallback.id ?? `fallback-${idx}`,
-    service_name: item?.service_name || item?.name || item?.title || fallback.name || "Service",
-    title: item?.title || item?.service_name || item?.name || fallback.name || "Service",
+    service_name: serviceName,
+    title: serviceTitle,
     category: getCategoryByName(category)?.name || category || "Services",
     price_extra: normalizedPricingType === "fixed" ? legacyPrice : 0,
     price: normalizedPricingType === "fixed" ? Number(item?.price ?? item?.price_extra ?? item?.extra ?? 0) : 0,

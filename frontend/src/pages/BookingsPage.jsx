@@ -19,6 +19,7 @@ export default function BookingsPage({
   completeBooking,
   approveBooking,
   rejectBooking,
+  rescheduleBooking,
   cancelBooking,
   confirmCashPayment,
   myBarberProfile,
@@ -34,6 +35,10 @@ export default function BookingsPage({
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [ratings, setRatings] = useState({});
   const [reviewErrors, setReviewErrors] = useState({});
+  const [rescheduleId, setRescheduleId] = useState("");
+  const [rescheduleDraft, setRescheduleDraft] = useState({ date: "", time: "" });
+  const [rescheduleError, setRescheduleError] = useState("");
+  const [rescheduling, setRescheduling] = useState(false);
 
   const isBarberView = role === "barber" && myBarberProfile;
   const visibleBookings = isBarberView
@@ -57,6 +62,29 @@ export default function BookingsPage({
       text
     );
     setReviewDrafts((prev) => ({ ...prev, [booking.id]: "" }));
+  };
+
+  const openReschedule = (booking) => {
+    setRescheduleId(String(booking.id));
+    setRescheduleDraft({ date: booking.date || "", time: String(booking.time || "").slice(0, 5) });
+    setRescheduleError("");
+  };
+
+  const submitReschedule = async (booking) => {
+    if (!rescheduleDraft.date || !rescheduleDraft.time) {
+      setRescheduleError("Choose a new date and time.");
+      return;
+    }
+    setRescheduling(true);
+    setRescheduleError("");
+    try {
+      await rescheduleBooking?.(booking.id, rescheduleDraft);
+      setRescheduleId("");
+    } catch (error) {
+      setRescheduleError(error?.message || "Could not reschedule this booking.");
+    } finally {
+      setRescheduling(false);
+    }
   };
 
   return (
@@ -104,6 +132,9 @@ export default function BookingsPage({
                 {isBarberView && booking.status === "confirmed" && (
                   <button type="button" className="mini-action-btn-v4 success" onClick={() => completeBooking(booking.id)}>Mark done</button>
                 )}
+                {["pending", "confirmed"].includes(booking.status) && (
+                  <button type="button" className="mini-action-btn-v4" onClick={() => openReschedule(booking)}>Reschedule</button>
+                )}
                 {isBarberView && booking.paymentMethod === "cash" && booking.paymentStatus !== "paid" && (
                   <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmCashPayment(booking.id)}>Confirm cash</button>
                 )}
@@ -114,6 +145,38 @@ export default function BookingsPage({
                   {isBarberView ? "Report customer" : "Report provider"}
                 </button>
               </div>
+
+              {rescheduleId === String(booking.id) ? (
+                <div className="booking-summary-v4">
+                  <div className="panel-title-v4 small-title-v4">Choose a new appointment</div>
+                  <label>
+                    Date
+                    <input
+                      className="input-v4"
+                      type="date"
+                      min={new Date().toISOString().split("T")[0]}
+                      value={rescheduleDraft.date}
+                      onChange={(event) => setRescheduleDraft((current) => ({ ...current, date: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Time
+                    <input
+                      className="input-v4"
+                      type="time"
+                      value={rescheduleDraft.time}
+                      onChange={(event) => setRescheduleDraft((current) => ({ ...current, time: event.target.value }))}
+                    />
+                  </label>
+                  <div className="inline-actions-v4">
+                    <button type="button" className="mini-action-btn-v4 success" disabled={rescheduling} onClick={() => submitReschedule(booking)}>
+                      {rescheduling ? "Saving..." : "Save new time"}
+                    </button>
+                    <button type="button" className="mini-action-btn-v4" disabled={rescheduling} onClick={() => setRescheduleId("")}>Cancel</button>
+                  </div>
+                  {rescheduleError ? <div className="auth-error">{rescheduleError}</div> : null}
+                </div>
+              ) : null}
 
               {!isBarberView && booking.status === "completed" && (
                 <div className="booking-summary-v4">

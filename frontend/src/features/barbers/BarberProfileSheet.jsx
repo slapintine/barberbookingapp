@@ -128,13 +128,14 @@ function getPopularityTags(service = {}, index = 0, totalRating = 0, reviewCount
   const tags = [];
   if (index === 0 && reviewCount >= 10 && totalRating >= 4.5) tags.push("High demand", "Popular");
   else if (index === 1 && totalRating >= 4.5) tags.push("Top rated");
-  else if (Number(service.duration_minutes || 30) <= 20) tags.push("Quick service");
+  else if (Number(service.duration_minutes || 0) > 0 && Number(service.duration_minutes) <= 20) tags.push("Quick service");
   else tags.push("Usually available");
   return tags;
 }
 
 function fmtDuration(mins) {
-  const m = Number(mins || 30);
+  const m = Number(mins || 0);
+  if (!Number.isFinite(m) || m <= 0) return "";
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60);
   const r = m % 60;
@@ -221,9 +222,9 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
       <div className="pps-svc-price-col">
         <span className="pps-svc-from">Starting from</span>
         <strong className="pps-svc-price">{priceLabel}</strong>
-        <span className="pps-svc-duration">
+        {duration && <span className="pps-svc-duration">
           <FiClock size={11} /> {duration}
-        </span>
+        </span>}
         {!isOwner && !currentUserIsBarber && (
           <button type="button" className="pps-svc-action-btn" onClick={handleAction}>
             {isQuote ? "Quote" : "Select"}
@@ -438,7 +439,6 @@ export default function BarberProfileSheet({
   const paymentLabel = [
     "Cash",
     safeBarber.accepts_mtn_mobile_money ? "Mobile Money" : null,
-    safeBarber.payment_methods?.includes("card") ? "Card" : null,
   ]
     .filter(Boolean)
     .join(", ") || "Cash";
@@ -455,7 +455,7 @@ export default function BarberProfileSheet({
       />
 
       {/* full-screen sheet */}
-      <div className="barber-profile-sheet-v4 pps-no-pad open">
+      <div className="barber-profile-sheet-v4 pps-no-pad open" data-testid="provider-profile-page">
         <div className="barber-profile-card-v4 pps-full-page">
 
           {/* ══════════════════════════════════════════
@@ -720,38 +720,36 @@ export default function BarberProfileSheet({
                     </div>
                   </div>
                 ) : (
-                  /* customer CTAs */
-                  !currentUserIsBarber && (
-                    <div className="pps-cta-section">
-                      <div className="pps-cta-row">
-                        {safeBarber.services.length > 0 && (
-                          <button
-                            type="button"
-                            className="pps-btn-primary"
-                            onClick={onBook}
-                          >
-                            <FiCalendar size={17} /> Book service
-                          </button>
-                        )}
+                  /* visitor CTAs — Book only for customers, Message for everyone */
+                  <div className="pps-cta-section">
+                    <div className="pps-cta-row">
+                      {!currentUserIsBarber && safeBarber.services.length > 0 && (
                         <button
                           type="button"
-                          className="pps-btn-secondary"
-                          onClick={onOpenChat}
+                          className="pps-btn-primary"
+                          onClick={onBook}
                         >
-                          <FiMessageCircle size={17} /> Message
-                        </button>
-                      </div>
-                      {quoteRelevant && (
-                        <button
-                          type="button"
-                          className="pps-btn-tertiary"
-                          onClick={onRequestQuote || onOpenChat}
-                        >
-                          <FiTag size={16} /> Request quote
+                          <FiCalendar size={17} /> Book service
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="pps-btn-secondary"
+                        onClick={onOpenChat}
+                      >
+                        <FiMessageCircle size={17} /> Message
+                      </button>
                     </div>
-                  )
+                    {!currentUserIsBarber && quoteRelevant && (
+                      <button
+                        type="button"
+                        className="pps-btn-tertiary"
+                        onClick={onRequestQuote || onOpenChat}
+                      >
+                        <FiTag size={16} /> Request quote
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* availability + location + trust + payment info card */}
@@ -1217,49 +1215,6 @@ export default function BarberProfileSheet({
 
           </div>
           {/* end .pps-tab-panel */}
-
-          {/* ══════════════════════════════════════════
-              STICKY BOTTOM BAR
-          ══════════════════════════════════════════ */}
-          <div className={`pps-sticky-bar${isOwnBarberProfile ? " pps-sticky-owner" : ""}`}>
-            {isOwnBarberProfile ? (
-              <>
-                <button
-                  type="button"
-                  className="pps-sticky-primary"
-                  onClick={onEditStand}
-                >
-                  <FiEdit2 size={17} /> Edit Stand
-                </button>
-                <button
-                  type="button"
-                  className="pps-sticky-secondary"
-                  onClick={onOpenDashboard}
-                >
-                  <FiLayout size={17} /> Dashboard
-                </button>
-              </>
-            ) : (
-              <>
-                {!currentUserIsBarber && safeBarber.services.length > 0 && (
-                  <button
-                    type="button"
-                    className="pps-sticky-primary"
-                    onClick={onBook}
-                  >
-                    <FiCalendar size={17} /> Book service
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="pps-sticky-secondary"
-                  onClick={onOpenChat}
-                >
-                  <FiMessageCircle size={17} /> Message
-                </button>
-              </>
-            )}
-          </div>
 
         </div>
       </div>

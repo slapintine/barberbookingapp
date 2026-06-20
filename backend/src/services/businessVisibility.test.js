@@ -38,7 +38,7 @@ test("hides draft or unpublished businesses even when a plan exists", () => {
   );
 });
 
-test("hides active businesses when subscription access is expired", () => {
+test("keeps active published businesses discoverable when paid features expire", () => {
   assert.equal(
     isBusinessPubliclyVisible(
       {
@@ -51,7 +51,7 @@ test("hides active businesses when subscription access is expired", () => {
       null,
       now
     ),
-    false
+    true
   );
 
   assert.equal(
@@ -67,7 +67,7 @@ test("hides active businesses when subscription access is expired", () => {
       null,
       now
     ),
-    false
+    true
   );
 });
 
@@ -88,7 +88,7 @@ test("allows published active Free businesses without payment expiry", () => {
   );
 });
 
-test("allows only published active businesses with free or unexpired paid access", () => {
+test("keeps discovery separate from provider paid entitlements", () => {
   assert.equal(
     isBusinessPubliclyVisible(
       {
@@ -117,7 +117,7 @@ test("allows only published active businesses with free or unexpired paid access
       null,
       now
     ),
-    false
+    true
   );
 });
 

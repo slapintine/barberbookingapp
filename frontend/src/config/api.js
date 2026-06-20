@@ -60,10 +60,56 @@ export function clearStoredAuth() {
     storage.removeItem("lineup_token");
     storage.removeItem("lineup_user");
     storage.removeItem("lineup_token_expires_at");
+    storage.removeItem("lineup_refresh_token");
     storage.removeItem("cutz_token");
     storage.removeItem("cutz_user");
     storage.removeItem("cutz_token_expires_at");
+    storage.removeItem("cutz_refresh_token");
   }
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem("lineup_refresh_token") || sessionStorage.getItem("lineup_refresh_token") || "";
+}
+
+function storeRefreshedTokens(accessToken, refreshToken) {
+  const storage = sessionStorage.getItem("lineup_refresh_token") ? sessionStorage : localStorage;
+  storage.setItem("lineup_token", accessToken || "");
+  storage.setItem("lineup_refresh_token", refreshToken || "");
+  try {
+    const encoded = String(accessToken).split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(encoded));
+    if (payload?.exp) storage.setItem("lineup_token_expires_at", new Date(payload.exp * 1000).toISOString());
+  } catch {
+    storage.removeItem("lineup_token_expires_at");
+  }
+  window.dispatchEvent(new CustomEvent("lineup:session-refreshed", { detail: { token: accessToken } }));
+}
+
+let refreshRequest = null;
+
+async function refreshSession() {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+  if (!refreshRequest) {
+    refreshRequest = fetch(buildApiUrl("/api/auth/refresh"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    })
+      .then(async (response) => {
+        if (!response.ok) return false;
+        const data = await response.json();
+        if (!data?.token || !data?.refreshToken) return false;
+        storeRefreshedTokens(data.token, data.refreshToken);
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshRequest = null;
+      });
+  }
+  return refreshRequest;
 }
 
 function broadcastUnauthorized(message) {
@@ -76,12 +122,13 @@ function broadcastUnauthorized(message) {
 }
 
 export async function apiFetch(url, options = {}) {
+  const { skipAuthRefresh = false, ...fetchOptions } = options;
   const tokenValue = getAuthToken();
   const headers = {
-    ...(options.headers || {}),
+    ...(fetchOptions.headers || {}),
   };
 
-  if (!headers["Content-Type"] && options.body) {
+  if (!headers["Content-Type"] && fetchOptions.body) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -94,7 +141,7 @@ export async function apiFetch(url, options = {}) {
 
   try {
     response = await fetch(requestUrl, {
-      ...options,
+      ...fetchOptions,
       headers,
     });
   } catch {
@@ -116,6 +163,11 @@ export async function apiFetch(url, options = {}) {
   const contentType = response.headers.get("content-type") || "";
   const isJsonResponse = contentType.includes("application/json");
   let data = null;
+
+  if (response.status === 401 && tokenValue && !skipAuthRefresh && getRefreshToken()) {
+    const refreshed = await refreshSession();
+    if (refreshed) return apiFetch(url, { ...fetchOptions, skipAuthRefresh: true });
+  }
 
   if (isJsonResponse) {
     try {

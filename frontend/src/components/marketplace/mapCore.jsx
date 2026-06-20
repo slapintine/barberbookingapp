@@ -24,7 +24,7 @@ const servicePinCache = new Map();
 const clusterPinCache = new Map();
 
 function statusCacheKey(status = {}) {
-  return `${status.tier || "FREE"}:${status.verified ? "v" : ""}:${status.closed ? "c" : ""}:${status.own ? "o" : ""}`;
+  return `${status.tier || "FREE"}:${status.closed ? "c" : ""}:${status.own ? "o" : ""}`;
 }
 
 export function getServicePinIcon(iconType, selected = false, status = {}) {
@@ -35,8 +35,8 @@ export function getServicePinIcon(iconType, selected = false, status = {}) {
       new L.DivIcon({
         className: "queless-map-pin-wrap",
         html: renderServiceMarkerHtml(iconType || "default", selected, status),
-        iconSize: selected ? [48, 60] : [44, 56],
-        iconAnchor: selected ? [24, 57] : [22, 53],
+        iconSize: [46, 58],
+        iconAnchor: [23, 58],
       })
     );
   }

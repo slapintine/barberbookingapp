@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer } from "react-leaflet";
+import { AttributionControl, MapContainer, TileLayer } from "react-leaflet";
 import {
   FiBell,
   FiCalendar,
@@ -30,6 +30,7 @@ import {
   isProviderVerified,
 } from "../../utils/marketplaceServices.js";
 import { resolveProviderImage, handleProviderImageError } from "../../utils/providerImage.js";
+import { formatProviderPrice } from "../../utils/providerData.js";
 import {
   ClusteredProviderMarkers,
   GAYAZA_CENTER,
@@ -45,7 +46,7 @@ import "./MapDashboard.css";
 
 const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>';
 
 const SIDEBAR_ITEMS = [
   { key: "discover", label: "Discover", tab: "home", Icon: FiCompass },
@@ -83,7 +84,7 @@ function priceRangeLabel(provider = {}) {
   const to = Number(provider.price_to || 0);
   if (from > 0 && to > 0) return `UGX ${from.toLocaleString()} – ${to.toLocaleString()}`;
   if (from > 0) return `From UGX ${from.toLocaleString()}`;
-  return "";
+  return formatProviderPrice(provider);
 }
 
 function responseTimeLabel(provider = {}) {
@@ -594,7 +595,8 @@ export default function MapDashboard({
               <span className="qmd-pill qmd-pill--muted">Updated just now</span>
             </div>
 
-            <MapContainer center={center} zoom={mapZoom} className="qmd-map" scrollWheelZoom>
+            <MapContainer center={center} zoom={mapZoom} className="qmd-map" scrollWheelZoom attributionControl={false}>
+              <AttributionControl position="bottomright" prefix={false} />
               <MapRecenter center={center} zoom={mapZoom} />
               <TileLayer key={theme} attribution={TILE_ATTRIBUTION} url={TILE_URL} />
               <ClusteredProviderMarkers

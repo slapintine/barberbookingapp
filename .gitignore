@@ -12,6 +12,7 @@ backend/.env
 backend/.env.*
 !backend/.env.example
 !backend/.env.*.example
+backend/uploads/
 frontend/.env
 frontend/.env.*
 !frontend/.env.example

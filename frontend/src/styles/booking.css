@@ -1741,7 +1741,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 900;
   letter-spacing: -0.01em;
   color: var(--bk-ink);
@@ -1756,7 +1756,22 @@
 .bk-month {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--bk-border);
+  border-radius: 12px;
+  background: var(--bk-card);
+  color: var(--bk-ink) !important;
+  box-shadow: 0 5px 14px rgba(43, 0, 56, 0.06);
+  white-space: nowrap;
+}
+
+.bk-month svg {
+  width: 14px;
+  height: 14px;
+  color: var(--bk-primary);
 }
 
 .bk-link {
@@ -1778,6 +1793,7 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+  margin-bottom: 2px;
 }
 
 .bk-work-thumb {
@@ -1797,63 +1813,83 @@
   display: block;
 }
 
-/* Quick chips */
-.bk-chips {
+/* Booking overview cards: intentionally 2x2 so the app stays readable even
+   when its narrow mobile column is rendered inside a wider desktop viewport. */
+.bk-info-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 2px 0 6px;
 }
 
-.bk-chip {
-  display: flex;
+.bk-info-card {
+  min-width: 0;
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  padding: 12px 10px;
+  gap: 11px;
+  padding: 14px;
   border-radius: 16px;
-  background: var(--bk-card);
+  background: linear-gradient(145deg, var(--bk-card), var(--bk-soft));
   border: 1px solid var(--bk-border);
+  box-shadow: 0 9px 22px rgba(43, 0, 56, 0.055);
 }
 
-.bk-chip-icon {
-  flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
+.bk-info-card-icon {
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  background: var(--bk-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bk-primary) 10%, var(--bk-card));
   color: var(--bk-primary);
-  font-size: 15px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bk-primary) 12%, transparent);
 }
 
-.dark .bk-chip-icon {
+.bk-info-card-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.15;
+}
+
+.dark .bk-info-card-icon {
   color: #d6b3f0;
 }
 
-.bk-chip div {
+.bk-info-card-copy {
   min-width: 0;
+  display: grid;
+  gap: 4px;
 }
 
-.bk-chip strong {
+.bk-info-card small {
   display: block;
-  font-size: 14px;
+  color: var(--bk-muted);
+  font-size: 11.5px;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+}
+
+.bk-info-card strong {
+  display: block;
+  min-width: 0;
+  color: var(--bk-ink);
+  font-size: 15px;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.bk-chip small {
-  display: block;
-  font-size: 11px;
+.bk-info-card em {
   color: var(--bk-muted);
-}
-
-@media (max-width: 480px) {
-  .bk-chips {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.3;
 }
 
 /* Team */
@@ -1898,8 +1934,11 @@
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 2px 0 5px;
+  scrollbar-width: none;
 }
+
+.bk-date-row::-webkit-scrollbar { display: none; }
 
 .bk-date-pill {
   flex: 0 0 auto;
@@ -2658,4 +2697,149 @@
 
 .dark .owner-sticky-footer .provider-sticky-primary-v6 {
   background: #6b21a8;
+}
+
+/* =========================================================
+   FULL-PAGE BOOKING EXPERIENCE
+   Turns the cramped bottom sheet into a real full-viewport page
+   (sticky header + single scroll body + sticky footer), mirroring
+   the provider-profile full-page pattern. All inner markup/logic
+   is reused unchanged.
+   ========================================================= */
+.booking-modal-v4.bk-fullpage {
+  top: 0;
+  bottom: -100%;
+  padding: 0;
+  align-items: stretch;
+  justify-content: center;
+}
+.booking-modal-v4.bk-fullpage.open {
+  bottom: 0;
+}
+
+/* The card becomes the page surface (keeps .bk-shell gradient bg) */
+.bk-fullpage .booking-modal-clean-v5 {
+  max-width: 600px;
+  width: 100%;
+  height: 100%;
+  max-height: 100% !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 auto;
+}
+.bk-fullpage .booking-sheet-handle-v5 {
+  display: none !important;
+}
+
+/* Sticky page header — full-bleed and flush to the top of the scroll.
+   Covers both the BookingModal (.bk-topbar) and QuoteRequestModal
+   (.booking-header-v5) headers. The negative side margin cancels the
+   scroll's horizontal padding so the header spans edge-to-edge. */
+.bk-fullpage .bk-topbar,
+.bk-fullpage .booking-header-v5 {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: 0 -16px 0;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  border-bottom: 1px solid var(--bk-border);
+}
+.light .bk-fullpage .bk-topbar,
+.light .bk-fullpage .booking-header-v5 {
+  background: linear-gradient(180deg, #fffaf6, #fdf6fb);
+}
+.dark .bk-fullpage .bk-topbar,
+.dark .bk-fullpage .booking-header-v5 {
+  background: linear-gradient(180deg, #190a22, #120717);
+}
+
+/* Single scroll body. No top padding so the sticky header sits flush;
+   the footer is a flex sibling (not an overlay) so a little bottom
+   breathing room is all that's needed. */
+.bk-fullpage .bk-scroll {
+  padding: 0 16px 20px;
+  gap: 16px;
+}
+
+/* Full-width footer pinned at the bottom of the page column */
+.bk-fullpage .bk-footer {
+  flex: 0 0 auto;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--bk-border);
+}
+
+/* Desktop: center the page column and round its corners a touch */
+@media (min-width: 720px) {
+  .bk-fullpage .booking-modal-clean-v5 {
+    height: min(96vh, 920px);
+    border-radius: 20px !important;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(20, 7, 27, 0.28);
+  }
+  .booking-modal-v4.bk-fullpage {
+    align-items: center;
+    padding: 16px;
+  }
+}
+
+/* Wizard progress stepper (fixed-price 4-step flow) */
+.bk-stepper {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+}
+.bk-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--bk-muted);
+}
+.bk-step:not(:last-child)::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 2px;
+  min-width: 10px;
+  border-radius: 2px;
+  background: var(--bk-border);
+  margin: 0 6px;
+}
+.bk-step.is-done:not(:last-child)::after {
+  background: var(--bk-primary);
+}
+.bk-step-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bk-soft);
+  color: var(--bk-muted);
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+  border: 1.5px solid var(--bk-border);
+}
+.bk-step-dot svg { width: 13px; height: 13px; }
+.bk-step-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bk-step.is-current .bk-step-dot,
+.bk-step.is-done .bk-step-dot {
+  background: var(--bk-primary);
+  color: #fff;
+  border-color: var(--bk-primary);
+}
+.bk-step.is-current { color: var(--bk-ink); }
+.bk-step.is-current .bk-step-label { font-weight: 900; }
+/* Save space on narrow screens: only the current step keeps its label */
+@media (max-width: 400px) {
+  .bk-step:not(.is-current) .bk-step-label { display: none; }
 }
