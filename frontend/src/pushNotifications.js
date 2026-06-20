@@ -7,6 +7,11 @@ import {
   getFirebaseClientConfigForWorker,
   getFirebaseMessagingIfSupported,
 } from "./firebase.js";
+import { getBrowserNotificationState } from "./utils/notificationState.js";
+
+function debugPush(message, details = {}) {
+  if (import.meta.env.DEV) console.warn(`[Queless notifications] ${message}`, details);
+}
 
 function browserLabel() {
   if (typeof navigator === "undefined") return "";
@@ -28,13 +33,16 @@ function workerUrl() {
 
 export function getNotificationSupportState() {
   if (typeof window === "undefined" || typeof navigator === "undefined") return "unsupported";
+  const browserState = getBrowserNotificationState({
+    hasNotification: "Notification" in window,
+    hasServiceWorker: "serviceWorker" in navigator,
+    permission: "Notification" in window ? Notification.permission : "default",
+  });
+  if (browserState !== "granted") return browserState;
   if (getFirebaseClientConfigIssues().length || !firebaseClientConfigured() || !firebaseVapidKey) {
-    return "missing_config";
+    return "delivery_unavailable";
   }
-  if (!("Notification" in window) || !("serviceWorker" in navigator)) return "unsupported";
-  if (Notification.permission === "granted") return "granted";
-  if (Notification.permission === "denied") return "denied";
-  return "default";
+  return "granted";
 }
 
 export async function registerFirebaseServiceWorker() {
@@ -46,8 +54,16 @@ export async function registerFirebaseServiceWorker() {
 
 export async function enableFirebaseNotifications() {
   const support = getNotificationSupportState();
-  if (support === "unsupported" || support === "missing_config") {
+  if (support === "unsupported" || support === "delivery_unavailable") {
     return { success: false, reason: support };
+  }
+
+  if (getFirebaseClientConfigIssues().length || !firebaseClientConfigured() || !firebaseVapidKey) {
+    debugPush("Push delivery configuration is incomplete; in-app notifications remain available.", {
+      issueCount: getFirebaseClientConfigIssues().length,
+      hasVapidKey: Boolean(firebaseVapidKey),
+    });
+    return { success: false, reason: "delivery_unavailable" };
   }
 
   const permission =
@@ -65,7 +81,8 @@ export async function enableFirebaseNotifications() {
   let registration;
   try {
     registration = await registerFirebaseServiceWorker();
-  } catch {
+  } catch (error) {
+    debugPush("Service worker registration failed.", { name: error?.name || "Error" });
     return { success: false, reason: "service_worker" };
   }
 
@@ -112,7 +129,7 @@ export async function sendFirebaseTestNotification() {
 }
 
 export async function listenForForegroundNotifications(callback) {
-  if (getNotificationSupportState() === "missing_config") return () => {};
+  if (getNotificationSupportState() === "delivery_unavailable") return () => {};
   const messaging = await getFirebaseMessagingIfSupported();
   if (!messaging || typeof callback !== "function") return () => {};
 

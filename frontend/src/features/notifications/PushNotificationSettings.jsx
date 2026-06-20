@@ -5,42 +5,48 @@ import {
   getNotificationSupportState,
 } from "../../pushNotifications.js";
 
+// User-facing copy only — no technical configuration details (push keys, VAPID,
+// service-worker internals). Those belong in logs/admin diagnostics, not here.
+// In-app alerts (the notification bell) keep working regardless of this state.
+const IN_APP_NOTE = "You'll still see alerts in the notification bell.";
+
 const STATE_COPY = {
   granted: {
-    label: "Notifications",
+    label: "Notifications enabled",
     text: "Booking, payment, wallet, and account alerts are active on this device.",
   },
   denied: {
     label: "Notifications blocked",
-    text: "Browser notifications are blocked. Enable them in your browser site settings to receive alerts.",
+    text: `Notifications are blocked in your browser settings. Re-enable them there to get device alerts. ${IN_APP_NOTE}`,
   },
   unsupported: {
     label: "Notifications not supported",
-    text: "This browser or device does not support web push notifications.",
+    text: `Push notifications aren't supported on this browser. ${IN_APP_NOTE}`,
   },
-  missing_config: {
-    label: "Notifications unavailable",
-    text: "Notifications need a valid push key before this browser can ask for permission.",
+  delivery_unavailable: {
+    label: "Device alerts aren't ready yet",
+    text: `Booking updates will still appear in the notification bell. Device alerts can be enabled when push setup is ready.`,
   },
   service_worker: {
-    label: "Notifications unavailable",
-    text: "Notifications could not start in this browser. Try again later or use another browser.",
+    label: "Notifications temporarily unavailable",
+    text: `Device notifications couldn't start in this browser right now. Please try again later. ${IN_APP_NOTE}`,
   },
   default: {
-    label: "Notifications",
-    text: "Enable booking, payment, wallet, and account alerts on this device.",
+    label: "Turn on notifications",
+    text: "Get booking updates, reminders, and provider messages.",
   },
 };
 
 function getFriendlyNotificationMessage(error) {
   const message = String(error?.message || error || "");
-  if (/applicationServerKey|PushManager|subscribe|vapid/i.test(message)) {
-    return "Notifications need a valid push key before this browser can ask for permission.";
+  // Config/key/service-worker problems → generic, friendly "temporarily unavailable".
+  if (/applicationServerKey|PushManager|subscribe|vapid|serviceworker|sw\b/i.test(message)) {
+    return `Device alerts aren't ready yet. ${IN_APP_NOTE}`;
   }
   if (/permission|blocked|denied/i.test(message)) {
-    return "Notifications are blocked in this browser. You can enable them in site settings.";
+    return "Notifications are blocked in your browser settings. You can re-enable them there.";
   }
-  return "Notifications could not be enabled right now. Please try again later.";
+  return `Device alerts couldn't be enabled. ${IN_APP_NOTE}`;
 }
 
 export default function PushNotificationSettings({ currentUser, onToast }) {
@@ -73,6 +79,12 @@ export default function PushNotificationSettings({ currentUser, onToast }) {
         setMessage(STATE_COPY[result.reason]?.text || "Notifications could not be enabled.");
       }
     } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn("[Queless notifications] Device registration failed; in-app alerts remain active.", {
+          status: Number(error?.status || 0),
+          serverUnavailable: Boolean(error?.serverUnavailable),
+        });
+      }
       setMessage(getFriendlyNotificationMessage(error));
     } finally {
       setLoading(false);
