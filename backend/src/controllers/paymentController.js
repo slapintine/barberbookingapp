@@ -17,6 +17,7 @@ import { finalizeBookingPayment, handleBookingPaymentWebhook, verifyBookingPayme
 import { mtnService } from "../services/mtn.service.js";
 import { sendNotificationToBusiness, sendPaymentNotification } from "../services/notificationService.js";
 import { sendBusinessPaymentSmsFallback, sendPaymentSmsFallback } from "../services/lifecycleSmsService.js";
+import { buildMtnPaymentStatus } from "../services/mtnPaymentStatus.js";
 
 function httpError(statusCode, message) {
   const error = new Error(message);
@@ -1071,12 +1072,23 @@ export async function checkMtnAuth(req, res, next) {
 export async function getMtnHealth(req, res, next) {
   try {
     const health = await mtnService.getHealth();
+    const status = buildMtnPaymentStatus({
+      health,
+      mode: env.mobileMoneyMode,
+      liveMode: env.mobileMoneyMode === "live" || env.mtnTargetEnvironment !== "sandbox",
+    });
+    if (!status.paymentsEnabled) {
+      console.warn("MTN payment readiness check did not pass.", {
+        reasonCode: status.reasonCode,
+        authStatus: health.authStatus || "not_tested",
+        statusCode: Number(health.statusCode || 0),
+        credentialsLoaded: Boolean(health.credentialsLoaded),
+        callbackConfigured: Boolean(health.callbackConfigured),
+      });
+    }
     return res.status(200).json({
-      credentialsLoaded: Boolean(health.credentialsLoaded),
-      callbackConfigured: Boolean(health.callbackConfigured),
-      authStatus: health.authStatus || "not_tested",
-      statusCode: health.statusCode,
-      sanitizedError: health.sanitizedError,
+      ...status,
+      bookingPaymentsEnabled: Boolean(env.bookingOnlinePaymentsEnabled),
     });
   } catch (error) {
     next(error);
