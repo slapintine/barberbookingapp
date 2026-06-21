@@ -4624,6 +4624,15 @@ const updateBarberStand = async (payload) => {
   // to real app tabs and closes the map. "favorites" has no dedicated tab yet,
   // so it routes to the profile screen where saved providers live.
   const navigateFromMap = (target) => {
+    // Smart Match is a dedicated flow, not a tab. Without this it fell through to
+    // the "home" default below — which is why tapping Smart Match in the map just
+    // closed the map. Open the flow and carry the map's selected category in.
+    if (target === "smart-match" || target === "smartMatch") {
+      openSmartMatch({
+        category: mapState.category && mapState.category !== "All" ? mapState.category : "",
+      });
+      return;
+    }
     const tabByKey = {
       home: "home",
       discover: "home",
