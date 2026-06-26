@@ -4,6 +4,21 @@ import { normalizeBillingCycle } from "./paymentService.js";
 export const CUSTOMER_PREMIUM_TIER = "PREMIUM";
 const PAID_PAYMENT_STATUSES = new Set(["paid", "successful"]);
 const TRIAL_PAYMENT_STATUSES = new Set(["", "trial", "trialing", "free_trial"]);
+const POSTGRES_TIMESTAMP_TEXT_PATTERN =
+  "^\\s*\\d{4}-\\d{2}-\\d{2}([ T]\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,6})?)?([+-]\\d{2}:?\\d{2}|Z)?)?\\s*$";
+
+export function getFutureDateSqlPredicate(columnName) {
+  if (env.dbClient === "postgres") {
+    const trimmedColumn = `TRIM(CAST(${columnName} AS TEXT))`;
+    return `(
+       NULLIF(${trimmedColumn}, '') IS NOT NULL
+       AND ${trimmedColumn} ~ '${POSTGRES_TIMESTAMP_TEXT_PATTERN}'
+       AND NULLIF(${trimmedColumn}, '')::timestamptz > CURRENT_TIMESTAMP
+     )`;
+  }
+
+  return `(${columnName} IS NOT NULL AND ${columnName} > CURRENT_TIMESTAMP)`;
+}
 
 function isFutureDate(value, now = new Date()) {
   if (!value) return false;
@@ -94,6 +109,7 @@ export async function getPendingCustomerPremiumPayment(userId, client = null) {
     const query = await import("../db/query.js");
     client = { get: query.get };
   }
+  const subscriptionStillPendingPredicate = getFutureDateSqlPredicate("cs.expires_at");
   return client.get(
     `SELECT
        pt.*,
@@ -107,8 +123,7 @@ export async function getPendingCustomerPremiumPayment(userId, client = null) {
        AND pt.transaction_type = 'customer_subscription_payment'
        AND LOWER(pt.status) IN ('pending', 'processing', 'initiated')
        AND LOWER(cs.status) = 'pending'
-       AND cs.expires_at IS NOT NULL
-       AND cs.expires_at > CURRENT_TIMESTAMP
+       AND ${subscriptionStillPendingPredicate}
      ORDER BY pt.id DESC
      LIMIT 1`,
     [userId]

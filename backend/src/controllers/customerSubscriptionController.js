@@ -13,21 +13,40 @@ import {
   getCustomerPremiumPrice,
   getActiveCustomerPremiumSubscription,
   getCustomerSubscriptionEndDate,
+  getFutureDateSqlPredicate,
   getLatestCustomerSubscription,
   getPendingCustomerPremiumPayment,
   isActiveCustomerPremium,
   mapCustomerSubscription,
 } from "../services/customerSubscriptionService.js";
 
-function httpError(statusCode, message) {
+function httpError(statusCode, message, code = "") {
   const error = new Error(message);
   error.statusCode = statusCode;
+  if (code) {
+    error.code = code;
+    error.publicMessage = message;
+  }
   return error;
 }
 
 function normalizeProvider(value) {
   const provider = String(value || "mtn_mobile_money").trim().toLowerCase();
   return ["mtn_mobile_money", "airtel_money"].includes(provider) ? provider : "";
+}
+
+const MTN_LOCAL_PREFIXES = ["76", "77", "78", "39"];
+const AIRTEL_LOCAL_PREFIXES = ["70", "74", "75", "20"];
+
+// Detect the network from a normalized +256 number, defending against a number
+// that doesn't match the selected provider.
+function detectMobileMoneyProvider(normalizedPhone) {
+  const match = String(normalizedPhone || "").match(/^\+256(\d{2})/);
+  if (!match) return "";
+  const prefix = match[1];
+  if (MTN_LOCAL_PREFIXES.includes(prefix)) return "mtn_mobile_money";
+  if (AIRTEL_LOCAL_PREFIXES.includes(prefix)) return "airtel_money";
+  return "";
 }
 
 function isFutureDate(value) {
@@ -130,7 +149,13 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
     const plan = getCustomerPremiumPlan();
     const rawPromoCode = req.body.promoCode || req.body.promo_code || "";
 
-    if (!price || price <= 0) throw httpError(400, "Customer Premium price is not configured.");
+    if (!price || price <= 0) {
+      throw httpError(
+        503,
+        "Mobile money payments are not fully configured yet.",
+        "MISSING_PAYMENT_CONFIG"
+      );
+    }
 
     const idempotencyKey = String(req.get("Idempotency-Key") || req.body.idempotencyKey || "").trim();
     const result = await transaction(async (client) => {
@@ -174,12 +199,22 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
         return { payment: null, subscription, promoActivated: true };
       }
 
-      if (!provider) throw httpError(400, "Choose MTN Mobile Money or Airtel Money.");
-      if (provider === "airtel_money" && !env.airtelEnabled) throw httpError(503, "Airtel Money for Customer Premium is coming soon.");
+      if (!provider) throw httpError(400, "Choose MTN Mobile Money or Airtel Money.", "INVALID_PHONE_NUMBER");
+      if (provider === "airtel_money" && !env.airtelEnabled) {
+        throw httpError(503, "Airtel Money is not available yet. Please use MTN Mobile Money.", "PAYMENT_PROVIDER_UNAVAILABLE");
+      }
 
       const phoneNumber = normalizeUgandaPhoneNumber(req.body.payment_phone || req.body.phoneNumber || "");
       if (!phoneNumber) {
-        throw httpError(400, "Enter a valid Uganda phone number before upgrading to Premium.");
+        throw httpError(400, "Enter a valid Uganda mobile money number.", "INVALID_PHONE_NUMBER");
+      }
+
+      // Defense in depth: reject a number that doesn't match the chosen network.
+      const detectedProvider = detectMobileMoneyProvider(phoneNumber);
+      if (detectedProvider && detectedProvider !== provider) {
+        const looksLike = detectedProvider === "mtn_mobile_money" ? "MTN" : "Airtel";
+        const selectedLabel = getMobileMoneyProviderLabel(provider);
+        throw httpError(400, `This number looks like ${looksLike}, but ${selectedLabel} is selected.`, "WRONG_PROVIDER_FOR_NUMBER");
       }
 
       if (idempotencyKey) {
@@ -205,13 +240,59 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
       }
 
       const reference = createReference("customer-premium", req.user.id);
-      const collection = await getMobileMoneyService(provider).initiateCollection({
-        provider,
-        amount: payableAmount,
-        phoneNumber,
-        reference,
-        description: `${plan.name} ${billingCycle} plan`,
-      });
+      let collection;
+      try {
+        collection = await getMobileMoneyService(provider).initiateCollection({
+          provider,
+          amount: payableAmount,
+          phoneNumber,
+          reference,
+          description: `${plan.name} ${billingCycle} plan`,
+        });
+      } catch (providerError) {
+        const providerStatusCode = Number(
+          providerError?.providerStatusCode || providerError?.statusCode || 0
+        );
+        const providerCode = String(
+          providerError?.safeProviderCode || providerError?.code || ""
+        )
+          .replace(/[^A-Za-z0-9_.-]/g, "")
+          .slice(0, 80);
+        const providerMessage = String(providerError?.safeProviderMessage || "")
+          .replace(/[\r\n\t]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 220);
+
+        // Log only the provider's controlled diagnostics. The original error
+        // can contain raw provider payloads and must never be serialized here.
+        req.log?.warn?.(
+          {
+            domain: "mobile_money",
+            operation: "collection",
+            provider: "mtn",
+            reference,
+            statusCode: providerStatusCode,
+            providerCode,
+            providerMessage,
+          },
+          "Customer Premium mobile money initiation failed"
+        );
+
+        if (providerError?.code === "MISSING_PAYMENT_CONFIG") {
+          throw httpError(
+            503,
+            "Mobile money payments are not fully configured yet.",
+            "MISSING_PAYMENT_CONFIG"
+          );
+        }
+
+        throw httpError(
+          503,
+          "Payment service is temporarily unavailable. Please try again shortly.",
+          "PAYMENT_PROVIDER_UNAVAILABLE"
+        );
+      }
 
       const startedAt = new Date();
       const expiresAt = getCustomerSubscriptionEndDate(startedAt, billingCycle);
@@ -334,8 +415,7 @@ export async function verifyCustomerSubscriptionUpgrade(req, res, next) {
            AND id <> ?
            AND UPPER(tier) = 'PREMIUM'
            AND LOWER(status) IN ('active', 'trialing')
-           AND expires_at IS NOT NULL
-           AND expires_at > CURRENT_TIMESTAMP`,
+           AND ${getFutureDateSqlPredicate("expires_at")}`,
         [req.user.id, payment.customer_subscription_id]
       );
       await client.run(

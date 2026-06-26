@@ -1,5 +1,5 @@
 import { all, get, run, transaction } from "../db/query.js";
-import { getCustomerPremiumPlan, getCustomerPremiumPrice, getCustomerSubscriptionEndDate, isActiveCustomerPremium, mapCustomerSubscription } from "../services/customerSubscriptionService.js";
+import { getCustomerPremiumPlan, getCustomerPremiumPrice, getCustomerSubscriptionEndDate, getFutureDateSqlPredicate, isActiveCustomerPremium, mapCustomerSubscription } from "../services/customerSubscriptionService.js";
 import { getDeploymentReadiness, getPaidFeatureSafety, remediatePaidFeatureEntitlements, softDisableDemoBusinesses } from "../services/deploymentReadiness.js";
 import { FREE_TRIAL_DAYS, getPlanPrice, getSubscriptionEndDate, getSubscriptionTierConfig, normalizeBillingCycle } from "../services/paymentService.js";
 import { getProviderPublicationReadiness } from "../services/providerPublicationReadiness.js";
@@ -344,7 +344,7 @@ export async function getAdminSubscriptionSummary(req, res, next) {
                  WHEN UPPER(tier) = 'PREMIUM'
                   AND LOWER(status) = 'active'
                   AND LOWER(payment_status) IN ('paid', 'successful')
-                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                  AND (expires_at IS NULL OR ${getFutureDateSqlPredicate("expires_at")})
                  THEN 0 ELSE 1
                END,
                COALESCE(activated_at, started_at, created_at) DESC,
@@ -433,7 +433,7 @@ export async function getAdminCustomerSubscriptions(req, res, next) {
              WHEN UPPER(tier) = 'PREMIUM'
               AND LOWER(status) = 'active'
               AND LOWER(payment_status) IN ('paid', 'successful')
-              AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+              AND (expires_at IS NULL OR ${getFutureDateSqlPredicate("expires_at")})
              THEN 0 ELSE 1
            END,
            COALESCE(activated_at, started_at, created_at) DESC,
@@ -684,7 +684,7 @@ export async function runAdminAccessTest(req, res, next) {
              WHEN UPPER(tier) = 'PREMIUM'
               AND LOWER(status) = 'active'
               AND LOWER(payment_status) IN ('paid', 'successful')
-              AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+              AND (expires_at IS NULL OR ${getFutureDateSqlPredicate("expires_at")})
              THEN 0 ELSE 1
            END,
            COALESCE(activated_at, started_at, created_at) DESC,
