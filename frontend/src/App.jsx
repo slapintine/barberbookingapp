@@ -17,7 +17,7 @@ import {
   verifyBookingPaymentRequest,
 } from "./api/bookingsApi.js";
 import { createMessage, getMessages } from "./api/chatApi.js";
-import { createQuoteRequest } from "./api/marketplaceApi.js";
+import { createQuoteRequest, getMyQuoteRequests } from "./api/marketplaceApi.js";
 import { addFavorite, getFavorites as getFavoriteRows, removeFavorite } from "./api/favoritesApi.js";
 import { getNotifications, markNotificationReadRequest } from "./api/notificationsApi.js";
 import { getProfile, saveProfileRequest } from "./api/profilesApi.js";
@@ -70,10 +70,16 @@ import {
   normalizeServiceForBooking,
   serviceMatchesCategory,
 } from "./utils/serviceCatalog.js";
-import { isBookingPaymentMethodEnabled, isOnlinePaymentMethod } from "./utils/paymentLabels.js";
 import { DEFAULT_CUSTOMER_SUBSCRIPTION_STATE, isCustomerPremiumActive } from "./utils/customerPremium.js";
 import { isPublicMarketplaceProvider } from "./utils/marketplaceServices.js";
 import { CUSTOMER_PREMIUM_PLAN } from "./utils/subscriptionPlans.js";
+import {
+  MOBILE_MONEY_COMING_SOON_MESSAGE,
+  PARTIAL_PROMO_COMING_SOON_MESSAGE,
+  PAYMENTS_COMING_SOON_MESSAGE,
+  PAYMENTS_ENABLED,
+  WALLET_PAYMENTS_COMING_SOON_MESSAGE,
+} from "./utils/launchFlags.js";
 
 // Provider profile is created as a retryable lazy inside the component (keyed by
 // a retry counter) so a failed chunk import can be re-attempted in place.
@@ -340,7 +346,7 @@ const BOOKING_REFRESH_FALLBACK_INTERVAL_MS = 2 * 60 * 1000;
 const BOOKING_REFRESH_RATE_LIMIT_FALLBACK_MS = 5 * 60 * 1000;
 const BOOKING_REFRESH_MAX_BACKOFF_MS = 15 * 60 * 1000;
 const BOOKING_ONLINE_PAYMENTS_ENABLED =
-  String(import.meta.env.VITE_BOOKING_ONLINE_PAYMENTS_ENABLED || "").toLowerCase() === "true";
+  PAYMENTS_ENABLED && String(import.meta.env.VITE_BOOKING_ONLINE_PAYMENTS_ENABLED || "").toLowerCase() === "true";
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin", "super-admin"]);
 const PROVIDER_ROLES = new Set(["barber", "provider", "business", "salon", "spa"]);
 
@@ -1031,6 +1037,7 @@ function App() {
   const [barbersError, setBarbersError] = useState("");
   const [favorites, setFavorites] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [quoteRequests, setQuoteRequests] = useState([]);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
   const [focusedBookingId, setFocusedBookingId] = useState(() => getBookingIdFromPath(window.location.pathname));
   const [reviewsByBarber, setReviewsByBarber] = useState({});
@@ -1136,6 +1143,13 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     async function loadPaymentReadiness() {
+      if (!PAYMENTS_ENABLED) {
+        setWalletTopupReady(false);
+        setWalletTopupReadinessMessage(WALLET_PAYMENTS_COMING_SOON_MESSAGE);
+        setBookingOnlinePaymentsReady(false);
+        setBookingPaymentReadinessMessage(MOBILE_MONEY_COMING_SOON_MESSAGE);
+        return;
+      }
       try {
         const health = await apiFetch("/api/payments/mtn/health");
         const readiness = getMtnReadiness(health);
@@ -1197,12 +1211,12 @@ function App() {
   const [chatStatus, setChatStatus] = useState("");
   const [selectedService, setSelectedService] = useState(SERVICE_TYPES[0].id);
   const [selectedTeamMemberId, setSelectedTeamMemberId] = useState("");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("mtn_mobile_money");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash");
   const [mtnPaymentPhone, setMtnPaymentPhone] = useState("");
 
   useEffect(() => {
-    if (!["mtn_mobile_money", "airtel_money", "wallet_balance", "wallet"].includes(String(selectedPaymentMethod || "").toLowerCase())) {
-      setSelectedPaymentMethod("mtn_mobile_money");
+    if (!["cash", "provider_direct", "mtn_mobile_money", "airtel_money", "wallet_balance", "wallet"].includes(String(selectedPaymentMethod || "").toLowerCase())) {
+      setSelectedPaymentMethod("cash");
     }
   }, [bookingOnlinePaymentsReady, selectedPaymentMethod]);
   const [bookingLocationType, setBookingLocationType] = useState("provider_location");
@@ -1256,6 +1270,36 @@ function App() {
   const effectiveIsBarber = Boolean(
     !isAdmin && (userIsProvider(currentUser) || ownedBarberFromState)
   );
+
+  // Shape raw quote-request rows into the props RequestCard expects, joining
+  // provider name/image/service from the loaded barbers so the Requests tab is
+  // readable even though the API returns only ids.
+  const enrichedQuoteRequests = useMemo(() => {
+    return (quoteRequests || []).map((row) => {
+      const providerId = row.provider_id ?? row.providerId ?? null;
+      const provider = barbers.find((item) => String(item?.id) === String(providerId)) || null;
+      const serviceId = row.service_id ?? row.serviceId ?? null;
+      const service = provider
+        ? getBarberServices(provider).find((item) => String(item?.id) === String(serviceId))
+        : null;
+      return {
+        id: row.id,
+        kind: row.kind || "quote",
+        status: row.status || "pending",
+        createdAt: row.created_at || row.createdAt || null,
+        preferredDate: row.preferred_date || row.preferredDate || "",
+        location: row.location || "",
+        description: row.description || "",
+        budget: row.budget != null ? row.budget : null,
+        providerId,
+        providerName: provider?.business_name || row.provider_name || row.business_name || "Provider",
+        providerImage: provider?.image || "",
+        serviceId,
+        serviceName: service?.service_name || row.service_name || "Service",
+        customerName: row.customer_full_name || row.customer_name || row.customer_username || "",
+      };
+    });
+  }, [quoteRequests, barbers]);
   const {
     availability: barberDayAvailability,
     loading: barberDayAvailabilityLoading,
@@ -1619,6 +1663,7 @@ function App() {
     fetchProfile(currentUser.username);
     fetchFavorites(currentUser.username);
     fetchBookings(currentUser.username, effectiveIsBarber ? "barber" : "customer");
+    fetchQuoteRequests();
     fetchMyReviews(currentUser.username);
     fetchNotifications();
     fetchWallet();
@@ -1808,7 +1853,7 @@ function App() {
 
   useEffect(() => {
     if (!selectedBarber) return;
-    setSelectedPaymentMethod("mtn_mobile_money");
+    setSelectedPaymentMethod(PAYMENTS_ENABLED ? "mtn_mobile_money" : "cash");
     setMtnPaymentPhone(profile.phone || "");
     setPendingBookingPayment(null);
   }, [selectedBarber, profile.phone]);
@@ -2146,6 +2191,23 @@ const fetchBarbers = async () => {
     return request;
   };
 
+  const fetchQuoteRequests = async () => {
+    if (!getAuthToken()) return;
+    try {
+      const data = await getMyQuoteRequests();
+      const rows = Array.isArray(data?.quote_requests)
+        ? data.quote_requests
+        : Array.isArray(data)
+        ? data
+        : [];
+      setQuoteRequests(rows);
+    } catch (error) {
+      // Requests are a non-critical secondary view: keep whatever we have and
+      // surface nothing intrusive if the endpoint is briefly unavailable.
+      if (import.meta.env.DEV) console.warn("Could not load quote requests", error);
+    }
+  };
+
   const fetchReviewsForBarber = async (barberId) => {
     try {
       const data = await getBarberReviews(barberId);
@@ -2303,6 +2365,7 @@ const fetchBarbers = async () => {
     if (!currentUser?.username || effectiveIsBarber || isAdmin) {
       setCustomerSubscriptionState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
       setCustomerSubscriptionPlan(null);
+      setCustomerSubscriptionMessage("");
       return;
     }
 
@@ -2319,9 +2382,11 @@ const fetchBarbers = async () => {
         },
       });
       setPendingCustomerSubscriptionPayment(data?.pendingPayment?.reference ? data.pendingPayment : null);
+      setCustomerSubscriptionMessage("");
     } catch {
       setCustomerSubscriptionState(DEFAULT_CUSTOMER_SUBSCRIPTION_STATE);
       setPendingCustomerSubscriptionPayment(null);
+      setCustomerSubscriptionMessage("Premium status is temporarily unavailable. You can still use the app while we reconnect.");
     } finally {
       setCustomerSubscriptionLoading(false);
     }
@@ -2940,7 +3005,7 @@ const registerBarber = async (payload) => {
       setGlobalError(
         error?.payload?.code === "DUPLICATE_BUSINESS_NAME"
           ? "A business with this name already exists. If this is your business, you can report or claim it."
-          : error.message || "Payment was not completed. Your business has been saved, but it will only go live after payment."
+          : error.message || "Payments are coming soon. Your business can be saved as a draft for now."
       );
       return false;
     }
@@ -2976,7 +3041,7 @@ const registerBarber = async (payload) => {
       message: startsTrial || data?.next_step === "active"
         ? "Your business page was uploaded successfully."
         : payload.submitIntent === "payment"
-        ? data?.message || "Payment pending. Your paid plan will activate after payment confirmation."
+        ? data?.message || "Payments are coming soon. Your stand progress was saved."
         : data?.message || "Business stand draft saved successfully.",
       createdAt: new Date().toISOString(),
       read: false,
@@ -3180,19 +3245,8 @@ const updateBarberStand = async (payload) => {
       return;
     }
 
-    const paymentAllowed = isBookingPaymentMethodEnabled(selectedPaymentMethod, {
-      onlinePaymentsEnabled: bookingOnlinePaymentsReady,
-      walletPaymentsEnabled: true,
-    });
-    if (!paymentAllowed) {
-      setGlobalError(bookingPaymentReadinessMessage || "Choose MTN Mobile Money, Airtel Money, or Wallet Balance.");
-      return;
-    }
-    const mobileMoneyPhone = String(mtnPaymentPhone || "").trim();
-    if (isOnlinePaymentMethod(selectedPaymentMethod) && !/^(\+?256|0)?[37]\d{8}$/.test(mobileMoneyPhone.replace(/\s+/g, ""))) {
-      setGlobalError("Enter a valid Uganda phone number for mobile money.");
-      return;
-    }
+    const effectivePaymentMethod = PAYMENTS_ENABLED ? selectedPaymentMethod : "cash";
+    const mobileMoneyPhone = PAYMENTS_ENABLED ? String(mtnPaymentPhone || "").trim() : "";
     const teamMembers = normalizeTeamMembers(selectedBarber.team_members || selectedBarber.teamMembers || []);
     const activeTeamMembers = teamMembers.filter((item) => Number(item.is_active ?? 1) === 1);
     const requiresTeamMember =
@@ -3247,10 +3301,10 @@ const updateBarberStand = async (payload) => {
         booking_time: selectedTime,
         booking_location_type: normalizedLocationType,
         booking_address: cleanBookingAddress,
-        payment_method: selectedPaymentMethod,
-        payment_phone: isOnlinePaymentMethod(selectedPaymentMethod) ? mobileMoneyPhone : profile.phone,
+        payment_method: effectivePaymentMethod,
+        payment_phone: PAYMENTS_ENABLED ? (mobileMoneyPhone || profile.phone) : profile.phone,
         booking_details: options.bookingDetails || null,
-        idempotencyKey: makeId("booking-payment"),
+        idempotencyKey: makeId(PAYMENTS_ENABLED ? "booking-payment" : "booking"),
         team_member_id: selectedTeamMember?.id || null,
       });
 
@@ -3263,7 +3317,7 @@ const updateBarberStand = async (payload) => {
         location: cleanBookingAddress || selectedBarber.location,
         booking_location_type: normalizedLocationType,
         booking_address: cleanBookingAddress,
-        payment_method: selectedPaymentMethod,
+        payment_method: effectivePaymentMethod,
         team_member_id: selectedTeamMember?.id || created.team_member_id || null,
         team_member_name: selectedTeamMember?.name || created.team_member_name || "",
         team_member_title: selectedTeamMember?.title || created.team_member_title || "",
@@ -3276,7 +3330,7 @@ const updateBarberStand = async (payload) => {
         uniqueById([nextBooking, ...readStored("bookings", "global", [])])
       );
 
-      if (data?.payment?.reference) {
+      if (PAYMENTS_ENABLED && data?.payment?.reference) {
         setPendingBookingPayment({
           bookingId: nextBooking.id,
           reference: data.payment.reference,
@@ -3294,19 +3348,19 @@ const updateBarberStand = async (payload) => {
 
       vibrate([12, 30, 12]);
       showSystemToast(
-        data?.payment?.reference ? "Payment started" : "Booking confirmed",
-        data?.payment?.reference
+        PAYMENTS_ENABLED && data?.payment?.reference ? "Payment started" : "Booking confirmed",
+        PAYMENTS_ENABLED && data?.payment?.reference
           ? "Approve the mobile money prompt to secure your booking."
-          : "Your booking was created successfully.",
+          : "Your booking was created successfully. Payment can be handled directly with the provider for now.",
         "booking"
       );
-      if (!data?.payment?.reference) {
+      if (!PAYMENTS_ENABLED || !data?.payment?.reference) {
         setShowBookingModal(false);
         setConfirmedBooking(nextBooking);
         setFocusedBookingId(String(nextBooking.id || ""));
       }
       setShowBarberProfile(false);
-      setActiveTab(data?.payment?.reference ? "bookings" : "bookingConfirmation");
+      setActiveTab(PAYMENTS_ENABLED && data?.payment?.reference ? "bookings" : "bookingConfirmation");
       notifyBookingUpdate(nextBooking);
       fetchNotifications();
       fetchWallet();
@@ -3357,6 +3411,11 @@ const updateBarberStand = async (payload) => {
 
   const verifyCurrentBookingPayment = async (bookingId = pendingBookingPayment?.bookingId, silent = false) => {
     if (!bookingId || !currentUser?.username) return false;
+    if (!PAYMENTS_ENABLED) {
+      if (!silent) setGlobalError(MOBILE_MONEY_COMING_SOON_MESSAGE);
+      setPendingBookingPayment(null);
+      return false;
+    }
 
     try {
       setCreatingBooking(true);
@@ -3394,9 +3453,31 @@ const updateBarberStand = async (payload) => {
   };
 
   const getFriendlyPaymentError = (error) => {
-    if (error?.status === 401) return "Your session has expired. Please log in again.";
-    if (error?.status === 403) return error?.message || "This action is not available for your account type.";
-    return error?.message || "Payment failed. Please try again.";
+    const code = String(error?.code || "").toUpperCase();
+    const status = Number(error?.status || 0);
+
+    // Map known backend error codes to clear, safe, user-facing guidance.
+    const byCode = {
+      INVALID_PHONE_NUMBER: error?.message || "This phone number is not valid for mobile money. Please check the number and try again.",
+      WRONG_PROVIDER_FOR_NUMBER: error?.message || "This number does not match the selected mobile money network.",
+      PAYMENT_PROVIDER_UNAVAILABLE: "Payment service is temporarily unavailable. Please try again shortly.",
+      MISSING_PAYMENT_CONFIG: import.meta.env.PROD
+        ? "Mobile money payments are temporarily unavailable. Please try again later."
+        : "Mobile money payments are not fully configured yet.",
+      PAYMENT_REQUEST_FAILED: "We could not start the mobile money request. Please check your number or try again in a moment.",
+      PAYMENT_TIMEOUT: "The payment request timed out. Please try again.",
+      UNAUTHORIZED: "Your session has expired. Please sign in again before paying.",
+      SERVER_ERROR: "We could not complete the payment. Please try again in a moment.",
+    };
+    if (code && byCode[code]) return byCode[code];
+
+    if (status === 401) return "Your session has expired. Please sign in again before paying.";
+    if (status === 403) return error?.message || "This action is not available for your account type.";
+    if (status === 0 || status >= 500) return "Payment service is temporarily unavailable. Please try again shortly.";
+    if ([400, 402, 409].includes(status)) {
+      return error?.message || "We could not start the payment. Please check your details and try again.";
+    }
+    return error?.message || "We could not start the mobile money request. Please check your number or try again in a moment.";
   };
 
   const startCurrentSubscriptionUpgrade = async (request, fallbackProvider = "mtn_mobile_money") => {
@@ -3406,6 +3487,21 @@ const updateBarberStand = async (payload) => {
         : { tier: request, provider: fallbackProvider, method: fallbackProvider };
     const tier = String(payload.tier || "PREMIUM").toUpperCase();
     const provider = String(payload.provider || payload.method || fallbackProvider || "mtn_mobile_money").toLowerCase();
+    const isFreeActivation = tier === "FREE" || provider === "free" || provider === "trial";
+    const hasPromo = Boolean(String(payload.promoCode || payload.promo_code || "").trim());
+    const paymentsOff = !PAYMENTS_ENABLED;
+
+    // While live payments are off, allow free activations and promo-bearing requests.
+    if (paymentsOff && !isFreeActivation && !hasPromo) {
+      setSubscriptionMessage(PAYMENTS_COMING_SOON_MESSAGE);
+      return false;
+    }
+    // With payments off, never send a payment method/phone for a paid tier: a full
+    // promo activates server-side, and a partial promo is rejected before any live
+    // collection can start. Free/trial activations keep their provider value.
+    const promoOnly = paymentsOff && !isFreeActivation;
+    const effectiveProvider = promoOnly ? "promo" : provider;
+    const effectivePhone = promoOnly ? "" : (payload.phoneNumber || payload.payment_phone || profile.phone);
 
     try {
       setSubscriptionLoading(true);
@@ -3416,10 +3512,10 @@ const updateBarberStand = async (payload) => {
           tier,
           planId: tier,
           billingCycle: payload.billingCycle || payload.billing_cycle || "monthly",
-          provider,
-          method: provider,
-          payment_phone: payload.phoneNumber || payload.payment_phone || profile.phone,
-          phoneNumber: payload.phoneNumber || payload.payment_phone || profile.phone,
+          provider: effectiveProvider,
+          method: effectiveProvider,
+          payment_phone: effectivePhone,
+          phoneNumber: effectivePhone,
           promoCode: payload.promoCode || payload.promo_code || "",
         },
         idempotencyKey
@@ -3461,10 +3557,15 @@ const updateBarberStand = async (payload) => {
         fetchBarbers();
         setActiveTab(effectiveIsBarber ? "dashboard" : "profile");
       }
-      setSubscriptionMessage(activatedImmediately ? providerActiveMessage : data?.message || "Plan selected. Complete payment to activate your business.");
+      setSubscriptionMessage(activatedImmediately ? providerActiveMessage : data?.message || "Plan selected. Mobile money confirmation is required to activate your business.");
       return true;
     } catch (error) {
-      setSubscriptionMessage(getFriendlyPaymentError(error));
+      // A partial promo while payments are off fails with a payment-required error
+      // (not a promo-validity error). Show the Coming Soon discount message instead.
+      const isPromoError = /promo/i.test(error?.message || "");
+      setSubscriptionMessage(
+        promoOnly && !isPromoError ? PARTIAL_PROMO_COMING_SOON_MESSAGE : getFriendlyPaymentError(error)
+      );
       return false;
     } finally {
       setSubscriptionLoading(false);
@@ -3473,6 +3574,10 @@ const updateBarberStand = async (payload) => {
 
   const verifyCurrentSubscription = async (reference = pendingSubscriptionPayment?.reference, silent = false) => {
     if (!reference) return false;
+    if (!PAYMENTS_ENABLED) {
+      if (!silent) setSubscriptionMessage(PAYMENTS_COMING_SOON_MESSAGE);
+      return false;
+    }
 
     try {
       setSubscriptionLoading(true);
@@ -3512,15 +3617,29 @@ const updateBarberStand = async (payload) => {
 
   const openCustomerPremiumPayment = () => {
     if (customerPremiumActive) {
-      setCustomerSubscriptionMessage("Customer Premium is active. Smart Match is unlocked.");
+      setCustomerSubscriptionMessage("Your premium booking experience is active. Smart Match is ready.");
       setCustomerPremiumPaymentOpen(false);
       return;
     }
+    // Open the upgrade modal even when live payments are off. The modal keeps the
+    // promo code path usable (a full promo unlocks Customer Premium now); the
+    // payment methods inside it are the only things shown as Coming Soon.
     setCustomerSubscriptionMessage("");
     setCustomerPremiumPaymentOpen(true);
   };
 
   const startCurrentCustomerPremiumUpgrade = async (request = {}) => {
+    const hasPromo = Boolean(String(request.promoCode || request.promo_code || "").trim());
+    const paymentsOff = !PAYMENTS_ENABLED;
+    // While live payments are off, only promo-bearing requests may proceed.
+    if (paymentsOff && !hasPromo) {
+      setCustomerSubscriptionMessage(PAYMENTS_COMING_SOON_MESSAGE);
+      return false;
+    }
+    // With payments off, send no payment method/phone: a full promo activates
+    // server-side and a partial promo is rejected before any live collection.
+    const effectiveProvider = paymentsOff ? "promo" : (request.provider || "mtn_mobile_money");
+    const effectivePhone = paymentsOff ? "" : (request.phoneNumber || profile.phone);
     try {
       setCustomerSubscriptionLoading(true);
       setCustomerSubscriptionMessage("");
@@ -3528,10 +3647,10 @@ const updateBarberStand = async (payload) => {
       const data = await startCustomerSubscriptionUpgrade(
         {
           billingCycle: request.billingCycle || "monthly",
-          provider: request.provider || "mtn_mobile_money",
-          method: request.provider || "mtn_mobile_money",
-          phoneNumber: request.phoneNumber || profile.phone,
-          payment_phone: request.phoneNumber || profile.phone,
+          provider: effectiveProvider,
+          method: effectiveProvider,
+          phoneNumber: effectivePhone,
+          payment_phone: effectivePhone,
           promoCode: request.promoCode || request.promo_code || "",
         },
         idempotencyKey
@@ -3556,7 +3675,7 @@ const updateBarberStand = async (payload) => {
       } : null);
       if (premiumActivated) {
         setCustomerPremiumPaymentOpen(false);
-        setCustomerSubscriptionMessage("Customer Premium is active. Smart Match is unlocked.");
+        setCustomerSubscriptionMessage("Your premium booking experience is active. Smart Match is ready.");
         showSystemToast("Customer Premium active", data?.message || "Smart Match is unlocked.", "system");
         await fetchCustomerSubscription();
       } else {
@@ -3564,7 +3683,10 @@ const updateBarberStand = async (payload) => {
       }
       return true;
     } catch (error) {
-      setCustomerSubscriptionMessage(getFriendlyPaymentError(error));
+      const isPromoError = /promo/i.test(error?.message || "");
+      setCustomerSubscriptionMessage(
+        paymentsOff && !isPromoError ? PARTIAL_PROMO_COMING_SOON_MESSAGE : getFriendlyPaymentError(error)
+      );
       return false;
     } finally {
       setCustomerSubscriptionLoading(false);
@@ -3573,6 +3695,10 @@ const updateBarberStand = async (payload) => {
 
   const verifyCurrentCustomerPremium = async (reference = pendingCustomerSubscriptionPayment?.reference, silent = false) => {
     if (!reference) return false;
+    if (!PAYMENTS_ENABLED) {
+      if (!silent) setCustomerSubscriptionMessage(PAYMENTS_COMING_SOON_MESSAGE);
+      return false;
+    }
     try {
       setCustomerSubscriptionLoading(true);
       const data = await verifyCustomerSubscriptionUpgrade(reference);
@@ -3587,7 +3713,7 @@ const updateBarberStand = async (payload) => {
       setCustomerSubscriptionState(nextSubscription);
       setPendingCustomerSubscriptionPayment(null);
       setCustomerPremiumPaymentOpen(false);
-      setCustomerSubscriptionMessage(data?.message || "Customer Premium is active. Smart Match is unlocked.");
+      setCustomerSubscriptionMessage(data?.message || "Your premium booking experience is active. Smart Match is ready.");
       showSystemToast("Customer Premium active", data?.message || "Smart Match is unlocked.", "system");
       await fetchCustomerSubscription();
       return true;
@@ -3602,6 +3728,10 @@ const updateBarberStand = async (payload) => {
   };
 
   const requestCurrentWithdrawal = async (amount) => {
+    if (!PAYMENTS_ENABLED) {
+      setWalletMessage(WALLET_PAYMENTS_COMING_SOON_MESSAGE);
+      return;
+    }
     try {
       setWalletLoading(true);
       setWalletMessage("");
@@ -3623,6 +3753,10 @@ const updateBarberStand = async (payload) => {
   const confirmCashPayment = async (bookingId) => {
     const existingBooking = bookings.find((item) => String(item.id) === String(bookingId));
     if (!existingBooking) return;
+    if (!PAYMENTS_ENABLED) {
+      setGlobalError(PAYMENTS_COMING_SOON_MESSAGE);
+      return;
+    }
 
     try {
       const data = await confirmCashPaymentRequest(bookingId);
@@ -4492,6 +4626,7 @@ const updateBarberStand = async (payload) => {
         idempotencyKey: quoteIdempotencyRef.current,
       });
       showSystemToast("Quote request sent", `${selectedBarber.business_name} can respond in this conversation.`, "booking");
+      fetchQuoteRequests();
       setShowQuoteModal(false);
       setShowBarberProfile(false);
       openConversation({
@@ -4828,6 +4963,28 @@ const updateBarberStand = async (payload) => {
           <BookingsScreen
           role={effectiveIsBarber ? "barber" : "customer"}
           bookings={bookings}
+          quoteRequests={enrichedQuoteRequests}
+          onExploreServices={() => setActiveTab("categories")}
+          onOpenRequestConversation={(request) => {
+            const barber = barbers.find((item) => String(item.id) === String(request?.providerId));
+            if (!barber) {
+              setGlobalError("This provider is no longer available.");
+              return;
+            }
+            openConversation({
+              barber,
+              customerUsername: effectiveIsBarber ? (request?.customerUsername || barber.ownerUsername || "") : currentUser?.username || "",
+              targetName: effectiveIsBarber ? (request?.customerName || "Customer") : barber.business_name,
+            });
+          }}
+          onViewProviderStand={(request) => {
+            const barber = barbers.find((item) => String(item.id) === String(request?.providerId));
+            if (!barber) {
+              setGlobalError("This provider is no longer available.");
+              return;
+            }
+            openProviderProfile(barber);
+          }}
           completeBooking={(id) => updateBookingStatus(id, "completed")}
           approveBooking={(id) => updateBookingStatus(id, "confirmed")}
           rejectBooking={(id) => updateBookingStatus(id, "rejected")}
@@ -4895,6 +5052,7 @@ const updateBarberStand = async (payload) => {
           pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
           onUpgradeCustomerPremium={openCustomerPremiumPayment}
           onVerifyCustomerPremium={verifyCurrentCustomerPremium}
+          onOpenSmartMatch={() => setActiveTab("smartMatch")}
           onOpenUpgradePlan={openUpgradePlan}
           onRequestWithdrawal={requestCurrentWithdrawal}
           onWalletUpdated={fetchWallet}
@@ -5025,22 +5183,24 @@ const updateBarberStand = async (payload) => {
       )}
 
       {activeTab === "smartMatch" && (
-        <SmartMatchPage
-          initial={smartMatchInitial}
-          providers={enrichedBarbers.filter(isPublicProvider)}
-          locationLabel={locationLabel}
-          customerSubscription={customerSubscriptionState}
-          customerSubscriptionLoading={customerSubscriptionLoading}
-          customerSubscriptionMessage={customerSubscriptionMessage}
-          pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
-          onBack={() => setActiveTab(previousMobileView === "smartMatch" ? "home" : previousMobileView || "home")}
-          onUpgradePremium={openCustomerPremiumPayment}
-          onVerifyPremium={(reference) => verifyCurrentCustomerPremium(reference)}
-          onContinueManualSearch={() => setActiveTab("searchResults")}
-          onOpenProvider={(provider) => {
-            openProviderProfile(provider);
-          }}
-        />
+        <div className="tab-scene-v5">
+          <SmartMatchPage
+            initial={smartMatchInitial}
+            providers={enrichedBarbers.filter(isPublicProvider)}
+            locationLabel={locationLabel}
+            customerSubscription={customerSubscriptionState}
+            customerSubscriptionLoading={customerSubscriptionLoading}
+            customerSubscriptionMessage={customerSubscriptionMessage}
+            pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
+            onBack={() => setActiveTab(previousMobileView === "smartMatch" ? "home" : previousMobileView || "home")}
+            onUpgradePremium={openCustomerPremiumPayment}
+            onVerifyPremium={(reference) => verifyCurrentCustomerPremium(reference)}
+            onContinueManualSearch={() => setActiveTab("searchResults")}
+            onOpenProvider={(provider) => {
+              openProviderProfile(provider);
+            }}
+          />
+        </div>
       )}
 
       {isAdmin && (activeTab === "admin" || activeTab === "adminReports" || activeTab === "adminSms") && (
@@ -5364,6 +5524,7 @@ const updateBarberStand = async (payload) => {
         mtnReadinessMessage={walletTopupReadinessMessage}
         airtelReady={false}
         submitLabel="Confirm Premium Payment"
+        comingSoon={!PAYMENTS_ENABLED}
         promoEnabled
         allowPromoOnly
         promoLabel="Customer Premium promo code"

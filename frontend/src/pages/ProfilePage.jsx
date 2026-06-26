@@ -8,11 +8,18 @@ import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
 import { formatPlanName, formatSubscriptionPrice, PROVIDER_PLANS } from "../utils/subscriptionPlans.js";
 import { formatCustomerPremiumPrice, isCustomerPremiumActive } from "../utils/customerPremium.js";
 import MembershipBadge from "../components/ui/MembershipBadge.jsx";
+import CustomerPremiumExperience from "../components/subscriptions/CustomerPremiumExperience.jsx";
 import {
   getBadgesFromSubscriptionStates,
   getAccountStatusStripText,
   getPrimaryMembershipLabel,
 } from "../utils/membershipDisplay.js";
+import {
+  PAYMENTS_ENABLED,
+  SMS_COMING_SOON_MESSAGE,
+  SMS_ENABLED,
+  WALLET_PAYMENTS_COMING_SOON_MESSAGE,
+} from "../utils/launchFlags.js";
 
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
@@ -53,8 +60,6 @@ export default function ProfilePage({
   subscriptionLoading,
   subscriptionMessage,
   pendingSubscriptionPayment,
-  onUpgradeSubscription,
-  onVerifySubscription,
   subscriptionSummary,
   customerSubscriptionState,
   customerSubscriptionPlan,
@@ -62,7 +67,7 @@ export default function ProfilePage({
   customerSubscriptionMessage,
   pendingCustomerSubscriptionPayment,
   onUpgradeCustomerPremium,
-  onVerifyCustomerPremium,
+  onOpenSmartMatch,
   onOpenUpgradePlan,
   onRequestWithdrawal,
   onWalletUpdated,
@@ -232,6 +237,13 @@ export default function ProfilePage({
       return;
     }
 
+    if (!SMS_ENABLED) {
+      setPhoneCode("");
+      setPhoneCodeSent(false);
+      setVerifyStatus(SMS_COMING_SOON_MESSAGE);
+      return;
+    }
+
     if (!profile.phone?.trim()) {
       setVerifyError("Please save your phone number in Profile first.");
       return;
@@ -260,6 +272,11 @@ export default function ProfilePage({
   const confirmVerification = async (type) => {
     setVerifyError("");
     setVerifyStatus("");
+
+    if (type === "phone" && !SMS_ENABLED) {
+      setVerifyStatus(SMS_COMING_SOON_MESSAGE);
+      return;
+    }
 
     const destination = type === "email" ? profile.email?.trim() : profile.phone?.trim();
     const code = type === "email" ? emailCode : phoneCode;
@@ -352,7 +369,7 @@ export default function ProfilePage({
     businessSubscriptionStatus === "active" &&
     businessVerificationApproved;
   const businessStatusText = pendingSubscriptionPayment?.reference
-    ? "Payment pending. Your paid plan will activate after payment confirmation."
+    ? "Payments are coming soon. Your paid plan can be completed once Queless payments launch."
     : businessIsActive
     ? `Business active. Your business is visible to customers on the ${currentPlanLabel} plan.`
     : !businessVerificationApproved && businessSubscriptionStatus === "active"
@@ -374,7 +391,7 @@ export default function ProfilePage({
   const accountDetailRows = [
     { label: "Username", value: currentUser?.username || profile.username || "Not set", icon: FiUser, cta: !currentUser?.username && !profile.username ? "Edit profile" : "" },
     { label: "Email", value: profile.email || currentUser?.email || "Email not added", icon: FiMail, cta: profile.email ? (verifiedChannels.email ? "Verified" : "Update email") : "Update email" },
-    { label: "Phone", value: profile.phone || "Phone not added", icon: FiSmartphone, cta: profile.phone ? (verifiedChannels.phone ? "Verified" : "Verify phone") : "Add phone number" },
+    { label: "Phone", value: profile.phone || "Phone not added", icon: FiSmartphone, cta: profile.phone ? (verifiedChannels.phone ? "Verified" : "SMS Coming Soon") : "Add phone number" },
     { label: "Address", value: profile.address || profile.location || currentUser?.location || "Address not added", icon: FiMapPin, cta: profile.address || profile.location || currentUser?.location ? "" : "Add address" },
     {
       label: "Account type",
@@ -390,9 +407,6 @@ export default function ProfilePage({
     { label: "Joined", value: joinedDate ? new Date(joinedDate).toLocaleDateString() : "Date unavailable", icon: FiCheckCircle, cta: "" },
     ...(isProviderAccount ? [{ label: "Business", value: myBarberProfile?.business_name || myBarberProfile?.businessName || "Business profile not completed", icon: FiBriefcase, cta: myBarberProfile ? "Provider profile" : "Create business profile" }] : []),
   ];
-  const customerPremiumExpiry = customerSubscriptionState?.expires_at
-    ? new Date(customerSubscriptionState.expires_at).toLocaleDateString()
-    : "";
   const openPaymentHistory = () => {
     paymentHistoryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -654,7 +668,7 @@ export default function ProfilePage({
           <div className="profile-sub-v4">{profileCompletionCount} of {profileCompletionItems.length} steps complete.</div>
           <div className="inline-actions-v4 space-top">
             <button type="button" className="mini-action-btn-v4 success" onClick={() => setEditing(true)}>Complete profile</button>
-            <button type="button" className="mini-action-btn-v4" onClick={() => setTopupOpen(true)}>Top up wallet</button>
+            <button type="button" className="mini-action-btn-v4" disabled title={WALLET_PAYMENTS_COMING_SOON_MESSAGE}>Wallet Coming Soon</button>
           </div>
         </div>
       ) : null}
@@ -756,9 +770,9 @@ export default function ProfilePage({
                   }
                   onRequestWithdrawal(withdrawAmount);
                 }}
-                disabled={walletLoading}
+                disabled={walletLoading || !PAYMENTS_ENABLED}
               >
-                <FiArrowUpRight /> Request payout
+                <FiArrowUpRight /> {PAYMENTS_ENABLED ? "Request payout" : "Payouts Coming Soon"}
               </button>
             </div>
           </div>
@@ -838,7 +852,7 @@ export default function ProfilePage({
                 <div className="customer-pay-brand-v15">Customer Wallet</div>
                 <div className="customer-pay-status-v15">
                   <FiCheckCircle />
-                  Pay for bookings
+                  Payments Coming Soon
                 </div>
               </div>
               <div className="customer-pay-chip-v15" aria-hidden="true">
@@ -848,20 +862,20 @@ export default function ProfilePage({
             <div className="customer-pay-main-v15">
               <span>Wallet Balance</span>
               <strong>UGX {customerWalletBalance.toLocaleString()}</strong>
-              <small>Use your wallet balance to pay for bookings faster.</small>
+              <small>Wallet payments are being prepared and will be available soon.</small>
             </div>
             <div className="customer-pay-card-bottom-v15">
               <span>
                 Use Wallet for Booking
-                <strong>{customerWalletBalance > 0 ? "Available when balance is enough" : "Top up to activate"}</strong>
+                <strong>Coming Soon</strong>
               </span>
               <em>UGX</em>
             </div>
           </div>
 
           <div className="customer-wallet-actions-v15" aria-label="Customer wallet actions">
-            <button type="button" onClick={() => setTopupOpen(true)}>
-              <FiCreditCard /> Top Up Wallet
+            <button type="button" disabled>
+              <FiCreditCard /> Wallet Top-Up Coming Soon
             </button>
             <button type="button" onClick={openPaymentHistory}>
               <FiCheckCircle /> Recent Activity
@@ -872,26 +886,26 @@ export default function ProfilePage({
             <div className="wallet-section-head-v5">
               <div>
                 <div className="wallet-panel-title-v5">Payment Methods</div>
-                <div className="wallet-section-sub-v5">Pay at checkout when you book a service.</div>
+                <div className="wallet-section-sub-v5">Online payments will be available soon.</div>
               </div>
               <FiCreditCard />
             </div>
             <div className="customer-payment-copy-v15">
-              Cash is always available. MTN Mobile Money appears only when Queless verifies that production payments are ready.
+              Online payments are coming soon. For now, payment can be handled directly with the provider.
             </div>
             <div className="customer-method-grid-v15">
               <div className="customer-method-card-v15">
                 <span className="customer-method-icon-v15"><FiCreditCard /></span>
                 <div>
                   <strong>Cash</strong>
-                  <span>Available for all bookings</span>
+                  <span>Arrange directly with the provider</span>
                 </div>
               </div>
               <div className="customer-method-card-v15">
                 <span className="customer-method-icon-v15"><FiSmartphone /></span>
                 <div>
                   <strong>Mobile Money</strong>
-                  <span>Available where supported</span>
+                  <span>Coming Soon</span>
                 </div>
               </div>
               <div className="customer-method-card-v15">
@@ -979,7 +993,7 @@ export default function ProfilePage({
           <div className="panel-title-v4">Subscription</div>
           <div className="profile-sub-v4">
             {pendingSubscriptionPayment?.reference
-              ? `Plan selected: ${pendingProviderTier}. Complete payment to activate your business.`
+              ? `Plan selected: ${pendingProviderTier}. Payments are coming soon, so no new online payment can be completed right now.`
               : hasActivePlan
               ? `Active plan: ${currentPlanLabel}`
               : "Choose a provider plan to activate your business."}
@@ -990,13 +1004,13 @@ export default function ProfilePage({
           {pendingSubscriptionPayment?.reference ? (
             <div className="profile-plan-status-v16 pending">
               <FiCreditCard />
-              <span>Plan selected. Complete payment to activate your business.</span>
+              <span>Payments Coming Soon. You can keep setup progress and return when payments launch.</span>
             </div>
           ) : !hasActivePlan ? <div className="profile-sub-v4">Choose a plan to activate your business.</div> : null}
           {!hasActivePlan ? (
             <div className="profile-plan-status-v16">
               <FiCreditCard />
-              <span>Your business goes live only after backend payment confirmation.</span>
+              <span>Paid plan payments are coming soon. You can continue setup and use Free where available.</span>
             </div>
           ) : null}
           <div className="profile-review-list-v4">
@@ -1013,8 +1027,9 @@ export default function ProfilePage({
                 </div>
                 <div className="profile-plan-badges-v16">
                   {isActive ? <span className="active">Active</span> : null}
-                  {isPending ? <span className="pending">Pending payment</span> : null}
+                  {isPending ? <span className="pending">Payments Coming Soon</span> : null}
                   {selected && !isActive && !isPending ? <span>Selected</span> : null}
+                  {tier !== "FREE" && !PAYMENTS_ENABLED ? <span>Coming Soon</span> : null}
                   {plan.recommended ? <span>Recommended</span> : null}
                 </div>
                 <div className="profile-review-text-v4">{plan.bestFor || plan.summary}</div>
@@ -1037,12 +1052,18 @@ export default function ProfilePage({
                     onClick={() => onOpenUpgradePlan?.(tier)}
                     disabled={subscriptionLoading || isActive}
                   >
-                    {isActive ? "Current plan" : tier === "FREE" ? "Start free" : `Select ${plan.name}`}
+                    {isActive
+                      ? "Current plan"
+                      : tier === "FREE"
+                      ? "Start free"
+                      : PAYMENTS_ENABLED
+                      ? "Upgrade"
+                      : "Apply a promo code"}
                   </button>
                 </div>
                 {planDetailsTier === tier ? (
                   <div className="profile-review-text-v4">
-                    Plan name: {plan.name}. Monthly price: {formatSubscriptionPrice(plan, "monthly")}. {tier === "FREE" ? "Free starts without payment." : `Annual price: ${formatSubscriptionPrice(plan, "annual")}. Provider plans activate only after backend payment confirmation.`}
+                    Plan name: {plan.name}. Monthly price: {formatSubscriptionPrice(plan, "monthly")}. {tier === "FREE" ? "Free starts without payment." : `Annual price: ${formatSubscriptionPrice(plan, "annual")}. Payments for paid provider plans are coming soon.`}
                   </div>
                 ) : null}
               </div>
@@ -1053,8 +1074,8 @@ export default function ProfilePage({
           </div>
           {pendingSubscriptionPayment?.reference ? (
             <div className="inline-actions-v4 space-top">
-              <button type="button" className="mini-action-btn-v4 success" onClick={() => onVerifySubscription?.(pendingSubscriptionPayment.reference)} disabled={subscriptionLoading}>
-                Verify {pendingSubscriptionPayment.tier} payment
+              <button type="button" className="mini-action-btn-v4 success" disabled>
+                Payments Coming Soon
               </button>
             </div>
           ) : null}
@@ -1067,66 +1088,62 @@ export default function ProfilePage({
       ) : null}
 
       {activeProfileTab === "subscription" && !isProviderAccount ? (
-        <div className="simple-card-v4">
-          <div className="panel-title-v4">Customer plan</div>
-          <div className="profile-sub-v4">
-            Customer Premium unlocks Smart Match while normal browsing, manual search, and booking stay free.
-          </div>
-          <div className="profile-review-list-v4">
-            <div className="profile-review-card-v4">
-              <div className="profile-review-head-v4">
-                <strong>Free</strong>
-                <span className="profile-review-rating-v4">Free</span>
-              </div>
-              <div className="profile-review-text-v4">Manual search, categories, provider profiles, and normal booking.</div>
+        customerPremiumActive ? (
+          <CustomerPremiumExperience
+            plan={customerSubscriptionPlan}
+            subscription={customerSubscriptionState}
+            message={customerSubscriptionMessage}
+            onUseSmartMatch={onOpenSmartMatch}
+          />
+        ) : (
+          <div className="simple-card-v4 customer-plan-upgrade-card">
+            <div className="panel-title-v4">Choose your customer plan</div>
+            <div className="profile-sub-v4">
+              Normal browsing and booking stay free. Customer Premium adds Smart Match and smarter provider recommendations.
             </div>
-            <div className="profile-review-card-v4">
-              <div className="profile-review-head-v4">
-                <strong>Customer Premium</strong>
-                <span className="profile-review-rating-v4">
-                  {customerPremiumActive ? "Active" : formatCustomerPremiumPrice(customerSubscriptionPlan, "monthly")}
-                </span>
+            <div className="profile-review-list-v4">
+              <div className="profile-review-card-v4">
+                <div className="profile-review-head-v4">
+                  <strong>Free</strong>
+                  <span className="profile-review-rating-v4">Current plan</span>
+                </div>
+                <div className="profile-review-text-v4">Manual search, categories, provider profiles, and normal booking.</div>
               </div>
-              <div className="profile-review-text-v4">
-                Smart Match, ranked recommendations, budget matching, location matching, availability matching, and payment-option matching.
-                {customerPremiumActive && customerPremiumExpiry ? ` Active until ${customerPremiumExpiry}.` : ""}
-                {!customerPremiumActive && pendingCustomerSubscriptionPayment?.reference ? ` Payment pending: ${pendingCustomerSubscriptionPayment.reference}.` : ""}
-              </div>
-              <div className="inline-actions-v4">
-                {customerPremiumActive ? (
-                  <button className="mini-action-btn-v4 success" type="button" disabled>
-                    Smart Match unlocked
-                  </button>
-                ) : (
+              <div className="profile-review-card-v4 customer-plan-premium-option">
+                <div className="profile-review-head-v4">
+                  <strong>Customer Premium</strong>
+                  <span className="profile-review-rating-v4">{formatCustomerPremiumPrice(customerSubscriptionPlan, "monthly")}</span>
+                </div>
+                <div className="profile-review-text-v4">
+                  Smart Match, personalized recommendations, easier comparison, and premium booking tools. Payments are coming soon.
+                </div>
+                <div className="inline-actions-v4">
                   <button
                     className="mini-action-btn-v4 success"
                     type="button"
                     onClick={() => onUpgradeCustomerPremium?.()}
-                    disabled={customerSubscriptionLoading}
                   >
-                    Upgrade to Premium
+                    Have a promo code? Unlock Premium
                   </button>
-                )}
-                {pendingCustomerSubscriptionPayment?.reference ? (
-                  <button
-                    type="button"
-                    className="mini-action-btn-v4"
-                    type="button"
-                    onClick={() => onVerifyCustomerPremium?.(pendingCustomerSubscriptionPayment.reference)}
-                    disabled={customerSubscriptionLoading}
-                  >
-                    Verify Premium payment
-                  </button>
-                ) : null}
+                  {pendingCustomerSubscriptionPayment?.reference ? (
+                    <button
+                      type="button"
+                      className="mini-action-btn-v4"
+                      disabled
+                    >
+                      Payments Coming Soon
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
+            {customerSubscriptionMessage ? (
+              <div className={customerSubscriptionMessage.toLowerCase().includes("could not") || customerSubscriptionMessage.toLowerCase().includes("failed") ? "auth-error" : "auth-info"}>
+                {customerSubscriptionMessage}
+              </div>
+            ) : null}
           </div>
-          {customerSubscriptionMessage ? (
-            <div className={customerSubscriptionMessage.toLowerCase().includes("could not") || customerSubscriptionMessage.toLowerCase().includes("failed") ? "auth-error" : "auth-success"}>
-              {customerSubscriptionMessage}
-            </div>
-          ) : null}
-        </div>
+        )
       ) : null}
 
       {activeProfileTab === "account" ? (
@@ -1154,7 +1171,7 @@ export default function ProfilePage({
         </div>
         <div className="profile-status-strip-v17">
           <span>{verifiedChannels.email ? "Email verified" : "Email needs verification"}</span>
-          <span>{verifiedChannels.phone ? "Phone verified" : profile.phone ? "Verify phone" : "Add phone number"}</span>
+          <span>{verifiedChannels.phone ? "Phone verified" : profile.phone ? "SMS verification coming soon" : "Add phone number"}</span>
           <span>{getAccountStatusStripText(customerSubscriptionState, subscriptionState, Boolean(myBarberProfile), isProviderAccount)}</span>
         </div>
         {verifyStatus ? <div className="auth-success">{verifyStatus}</div> : null}
@@ -1163,7 +1180,7 @@ export default function ProfilePage({
           {!profile.phone ? <button type="button" className="mini-action-btn-v4" onClick={() => setEditing(true)}>Add phone number</button> : null}
           {!profile.address ? <button type="button" className="mini-action-btn-v4" onClick={() => setEditing(true)}>Add address</button> : null}
           {!verifiedChannels.phone && profile.phone ? (
-            <button type="button" className="mini-action-btn-v4" onClick={() => setActiveProfileTab("security")}>Verify phone</button>
+            <button type="button" className="mini-action-btn-v4" onClick={() => setActiveProfileTab("security")} disabled title={SMS_COMING_SOON_MESSAGE}>SMS Coming Soon</button>
           ) : null}
           </div>
       </div>
@@ -1185,7 +1202,7 @@ export default function ProfilePage({
           <div className={verifiedChannels.phone ? "security-status-card-v7 verified" : "security-status-card-v7"}>
             <FiSmartphone />
             <strong>Phone</strong>
-            <span>{verifiedChannels.phone ? "Verified" : profile.phone?.trim() ? "Ready to verify" : "Missing"}</span>
+            <span>{verifiedChannels.phone ? "Verified" : profile.phone?.trim() ? "SMS Coming Soon" : "Missing"}</span>
           </div>
         </div>
 
@@ -1212,7 +1229,7 @@ export default function ProfilePage({
                         : "Email not verified."
                       : "Add and save your email first.")
                   : (profile.phone?.trim()
-                      ? "Your phone number is ready for verification."
+                      ? "Phone verification by SMS will be available soon."
                       : "Add and save your phone number first.")}
               </div>
             </div>
@@ -1366,11 +1383,11 @@ export default function ProfilePage({
                 <div>
                   <div className="verify-page-label-v4">Phone verification</div>
                   <div className="verify-page-helper-v4">
-                    Use SMS verification for sign-in recovery and important account alerts.
+                    SMS verification for sign-in recovery and account alerts is coming soon.
                   </div>
                 </div>
                 <span className={verifiedChannels.phone ? "verify-status-chip-v4 ready verified" : profile.phone?.trim() ? "verify-status-chip-v4 ready" : "verify-status-chip-v4 missing"}>
-                  {verifiedChannels.phone ? "Verified" : profile.phone?.trim() ? "Ready" : "Missing"}
+                  {verifiedChannels.phone ? "Verified" : profile.phone?.trim() ? "Coming Soon" : "Missing"}
                 </span>
               </div>
 
@@ -1380,11 +1397,11 @@ export default function ProfilePage({
               </div>
 
               {!phoneCodeSent ? (
-                <button type="button" className="secondary-btn-v4 verify-send-btn-v4" onClick={() => sendVerification("phone")} disabled={sendingPhoneCode || resendCooldowns.phone > 0}>
-                  {sendingPhoneCode ? "Sending..." : resendCooldowns.phone > 0 ? `Resend in ${resendCooldowns.phone}s` : "Send code"}
+                <button type="button" className="secondary-btn-v4 verify-send-btn-v4" onClick={() => sendVerification("phone")} disabled={!SMS_ENABLED || sendingPhoneCode || resendCooldowns.phone > 0}>
+                  {SMS_ENABLED ? (sendingPhoneCode ? "Sending..." : resendCooldowns.phone > 0 ? `Resend in ${resendCooldowns.phone}s` : "Send code") : "SMS Coming Soon"}
                 </button>
               ) : null}
-              <div className="cooldown-note-v7">SMS codes can be requested every 45 seconds.</div>
+              <div className="cooldown-note-v7">{SMS_COMING_SOON_MESSAGE}</div>
 
               {phoneCodeSent ? (
                 <>
@@ -1399,11 +1416,11 @@ export default function ProfilePage({
                   </label>
 
                   <div className="verify-page-actions-v4">
-                    <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmVerification("phone")}>
-                      <FiCheckCircle /> Verify phone
+                    <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmVerification("phone")} disabled={!SMS_ENABLED}>
+                      <FiCheckCircle /> {SMS_ENABLED ? "Verify phone" : "SMS Coming Soon"}
                     </button>
-                    <button type="button" className="mini-action-btn-v4" onClick={() => sendVerification("phone")} disabled={sendingPhoneCode || resendCooldowns.phone > 0}>
-                      {sendingPhoneCode ? "Sending..." : "Resend code"}
+                    <button type="button" className="mini-action-btn-v4" onClick={() => sendVerification("phone")} disabled={!SMS_ENABLED || sendingPhoneCode || resendCooldowns.phone > 0}>
+                      {SMS_ENABLED ? (sendingPhoneCode ? "Sending..." : "Resend code") : "SMS Coming Soon"}
                     </button>
                   </div>
                 </>

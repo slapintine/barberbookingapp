@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiArrowLeft, FiCheck, FiCreditCard, FiHelpCircle, FiLock, FiMapPin, FiSearch, FiStar, FiZap } from "react-icons/fi";
+import { FiArrowLeft, FiCheck, FiCreditCard, FiHelpCircle, FiLock, FiMapPin, FiSearch, FiStar, FiX, FiZap } from "react-icons/fi";
 import { findSmartMatches } from "../../api/smartMatchApi.js";
 import logo from "../../assets/queless-logo-full.png";
 import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
 import { reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
 import { CUSTOMER_PREMIUM_PLAN } from "../../utils/subscriptionPlans.js";
+import { PAYMENTS_COMING_SOON_MESSAGE } from "../../utils/launchFlags.js";
 import {
   AI_REASON_SETS,
   LOCATION_OPTIONS,
@@ -28,6 +29,13 @@ function friendlySmartMatchError(error) {
   if (status === 403) return "Smart Match needs active Customer Premium. Please verify your access and try again.";
   if (status === 0 || status >= 500) return "Smart Match is temporarily unavailable. Please try again in a moment.";
   return "We couldn't load matches right now. Please try again.";
+}
+
+function customerSubscriptionMessageClass(message) {
+  const value = String(message || "").toLowerCase();
+  if (/active|unlocked|ready|successful|success/.test(value)) return "smart-match-subscription-message is-success";
+  if (/could not|failed|invalid|expired|declined/.test(value)) return "smart-match-subscription-message is-error";
+  return "smart-match-subscription-message";
 }
 
 function readStoredDraft(initial, fallbackLocation) {
@@ -243,6 +251,7 @@ export default function SmartMatchPage({
   const draftKey = `${locationLabel}|${JSON.stringify(initial || {})}`;
   const [stateEntry, setStateEntry] = useState(() => ({ key: draftKey, value: readStoredDraft(initial, locationLabel) }));
   const [locationMessageEntry, setLocationMessageEntry] = useState({ key: "", value: "" });
+  const [showHelp, setShowHelp] = useState(false);
   const cacheRef = useRef(new Map());
   const premiumActive = isCustomerPremiumActive(customerSubscription);
   const state = stateEntry.key === draftKey ? stateEntry.value : readStoredDraft(initial, locationLabel);
@@ -414,12 +423,28 @@ export default function SmartMatchPage({
       <header className="smart-match-header">
         <button type="button" onClick={goBack} aria-label="Back"><FiArrowLeft /></button>
         <img src={logo} alt="Queless" />
-        <button type="button" aria-label="Smart Match help"><FiHelpCircle /></button>
+        <button
+          type="button"
+          aria-label={showHelp ? "Close Smart Match help" : "Smart Match help"}
+          aria-expanded={showHelp}
+          aria-controls="smart-match-help"
+          onClick={() => setShowHelp((visible) => !visible)}
+        >
+          {showHelp ? <FiX /> : <FiHelpCircle />}
+        </button>
       </header>
 
       {premiumActive ? <SmartMatchStepper currentStep={state.step} /> : null}
 
       <main className="smart-match-content">
+        {showHelp ? (
+          <aside id="smart-match-help" className="smart-match-help" aria-label="How Smart Match works">
+            <strong>How Smart Match works</strong>
+            <p>Choose a service, timing, and location. Queless ranks suitable providers using fit, distance, availability, rating, and reliability signals.</p>
+            <span>You stay in control—review a provider before you book.</span>
+          </aside>
+        ) : null}
+
         {!premiumActive ? (
           <section className="smart-match-lock-panel">
             <div className="smart-match-lock-icon"><FiLock /></div>
@@ -427,8 +452,8 @@ export default function SmartMatchPage({
             <p>Smart Match is included with Customer Premium. Manual search and normal booking stay free.</p>
             {pendingCustomerSubscriptionPayment?.reference ? (
               <div className="smart-match-pending">
-                <strong>Payment pending</strong>
-                <span>Reference {pendingCustomerSubscriptionPayment.reference}</span>
+                <strong>Payments Coming Soon</strong>
+                <span>Customer Premium payments are not active yet.</span>
               </div>
             ) : null}
             <div className="smart-match-lock-list">
@@ -436,12 +461,24 @@ export default function SmartMatchPage({
                 <span key={item}><FiCheck /> {item}</span>
               ))}
             </div>
-            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX {CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month</div>
-            {customerSubscriptionMessage ? <div className="smart-match-error">{customerSubscriptionMessage}</div> : null}
+            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX {CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month · Coming Soon</div>
+            <div className="smart-match-subscription-message" role="status">{PAYMENTS_COMING_SOON_MESSAGE}</div>
+            {customerSubscriptionMessage ? <div className={customerSubscriptionMessageClass(customerSubscriptionMessage)} role="status">{customerSubscriptionMessage}</div> : null}
           </section>
         ) : null}
 
-        {premiumActive && state.error ? <div className="smart-match-error">{state.error}</div> : null}
+        {premiumActive && state.error ? (
+          <section className="smart-match-error smart-match-error-card" role="alert">
+            <strong>We couldn't finish the match</strong>
+            <span>{state.error}</span>
+            <div className="smart-match-error-actions">
+              <button type="button" onClick={loadMatches} disabled={state.loading}>
+                {state.loading ? "Trying again…" : "Try again"}
+              </button>
+              <button type="button" onClick={() => updateState({ step: "where" })}>Review location</button>
+            </div>
+          </section>
+        ) : null}
 
         {premiumActive && state.step === "need" ? (
           <section className="smart-match-step">
@@ -562,15 +599,9 @@ export default function SmartMatchPage({
       <footer className="smart-match-footer">
         {!premiumActive ? (
           <>
-            {pendingCustomerSubscriptionPayment?.reference ? (
-              <button type="button" className="smart-match-primary-button" onClick={() => onVerifyPremium?.(pendingCustomerSubscriptionPayment.reference)} disabled={customerSubscriptionLoading}>
-                {customerSubscriptionLoading ? "Checking payment..." : "Verify Premium payment"}
-              </button>
-            ) : (
-              <button type="button" className="smart-match-primary-button" onClick={onUpgradePremium} disabled={customerSubscriptionLoading}>
-                {customerSubscriptionLoading ? "Loading..." : "Choose Payment Method"}
-              </button>
-            )}
+            <button type="button" className="smart-match-primary-button" onClick={onUpgradePremium}>
+              Have a promo code? Unlock Premium
+            </button>
             <button type="button" className="smart-match-secondary-button" onClick={onContinueManualSearch || onBack}>Continue with Manual Search</button>
           </>
         ) : state.step === "matches" ? (

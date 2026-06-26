@@ -191,6 +191,122 @@
   line-height: 1.35;
 }
 
+/* Fixed +256 country code + 9-digit local input */
+.payment-flow-phone-v1 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  height: 50px;
+  border: 1px solid rgba(251, 228, 216, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.payment-flow-phone-v1.has-error {
+  border-color: rgba(255, 150, 150, 0.55);
+}
+.payment-flow-phone-cc-v1 {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 12px;
+  color: rgba(255, 248, 244, 0.82);
+  font-size: 15px;
+  font-weight: 950;
+  text-transform: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-right: 1px solid rgba(251, 228, 216, 0.16);
+}
+.payment-flow-field-v1 .payment-flow-phone-v1 input {
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  letter-spacing: 1.5px;
+}
+.payment-flow-field-v1 small.is-hint {
+  color: rgba(255, 248, 244, 0.6);
+}
+
+/* "You'll get a prompt on your phone" note */
+.payment-flow-note-v1 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 248, 244, 0.78);
+  font-size: 12.5px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+.payment-flow-note-v1 svg {
+  margin-top: 1px;
+}
+
+.payment-flow-coming-soon-v1 {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(251, 228, 216, 0.14);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(226, 74, 165, 0.18), transparent 34%),
+    rgba(255, 255, 255, 0.075);
+}
+
+.payment-flow-coming-soon-v1 strong {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.payment-flow-coming-soon-v1 p {
+  margin: 0;
+  color: rgba(255, 248, 244, 0.74);
+  line-height: 1.5;
+}
+
+.payment-flow-soon-badge-v1 {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 228, 216, 0.22);
+  background: rgba(251, 228, 216, 0.1);
+  color: #fbe4d8;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Airtel "coming soon" badge */
+.payment-flow-soon-v1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 950;
+  font-style: normal;
+  white-space: nowrap;
+  color: rgba(255, 248, 244, 0.78);
+  background: rgba(255, 255, 255, 0.1);
+}
+.payment-flow-soon-v1 svg {
+  width: 12px;
+  height: 12px;
+}
+.payment-flow-methods-v1 button.is-disabled {
+  opacity: 0.6;
+}
+
 .payment-flow-methods-v1 {
   display: grid;
   gap: 9px;
@@ -287,6 +403,11 @@
   box-shadow: none;
 }
 
+.payment-flow-primary-v1.is-disabled {
+  opacity: 0.82;
+  filter: saturate(0.85);
+}
+
 .payment-flow-secondary-v1 {
   border: 1px solid rgba(251, 228, 216, 0.16);
   color: inherit;
@@ -331,6 +452,41 @@
 .light .payment-flow-summary-v1 input,
 .light .payment-flow-field-v1 input {
   color: #2c163a;
+}
+
+.light .payment-flow-phone-v1 {
+  border-color: rgba(82, 43, 91, 0.12);
+  background: rgba(82, 43, 91, 0.055);
+}
+.light .payment-flow-phone-cc-v1 {
+  color: rgba(44, 22, 58, 0.78);
+  background: rgba(82, 43, 91, 0.06);
+  border-right-color: rgba(82, 43, 91, 0.12);
+}
+.light .payment-flow-note-v1 {
+  background: rgba(82, 43, 91, 0.055);
+  color: rgba(44, 22, 58, 0.7);
+}
+.light .payment-flow-coming-soon-v1 {
+  border-color: rgba(82, 43, 91, 0.12);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(226, 74, 165, 0.1), transparent 34%),
+    rgba(82, 43, 91, 0.045);
+}
+.light .payment-flow-coming-soon-v1 p {
+  color: rgba(44, 22, 58, 0.7);
+}
+.light .payment-flow-soon-badge-v1 {
+  border-color: rgba(82, 43, 91, 0.14);
+  background: rgba(82, 43, 91, 0.075);
+  color: #522b5b;
+}
+.light .payment-flow-soon-v1 {
+  color: rgba(44, 22, 58, 0.7);
+  background: rgba(82, 43, 91, 0.08);
+}
+.light .payment-flow-field-v1 small.is-hint {
+  color: rgba(44, 22, 58, 0.6);
 }
 
 .light .payment-flow-alert-v1 {

@@ -15,6 +15,7 @@ import {
   FiZap,
 } from "react-icons/fi";
 import { formatMoney, formatPlanName, formatSubscriptionPrice, getPlanAmount, normalizePlanTier, PROVIDER_PLANS } from "../../utils/subscriptionPlans.js";
+import { PAYMENTS_COMING_SOON_MESSAGE, PAYMENTS_ENABLED } from "../../utils/launchFlags.js";
 
 const PLANS = PROVIDER_PLANS.map((plan) => ({
   ...plan,
@@ -22,8 +23,8 @@ const PLANS = PROVIDER_PLANS.map((plan) => ({
 }));
 
 const PAYMENT_METHODS = [
-  { id: "mtn_mobile_money", label: "MTN Mobile Money", icon: FiPhone, action: "Pay with MTN Mobile Money" },
-  { id: "airtel_money", label: "Airtel Money", icon: FiPhone, action: "Pay with Airtel Money" },
+  { id: "mtn_mobile_money", label: "MTN Mobile Money", icon: FiPhone, action: "Continue with MTN Mobile Money" },
+  { id: "airtel_money", label: "Airtel Money", icon: FiPhone, action: "Continue with Airtel Money" },
 ];
 
 const COMPARISON_ROWS = [
@@ -94,6 +95,7 @@ export default function TrialUpgradeScreen({
     [selectedTier]
   );
   const selectedIsFree = selectedPlan?.tier === "FREE";
+  const selectedPaidComingSoon = !selectedIsFree && !PAYMENTS_ENABLED;
   const selectedPaymentMethod = PAYMENT_METHODS.find((method) => method.id === selectedMethod);
   const currentTier = String(subscription?.tier || "LOCKED").toUpperCase();
   const currentTierLabel = formatPlanName(currentTier, "Plan required");
@@ -150,13 +152,21 @@ export default function TrialUpgradeScreen({
       }
       return;
     }
+    // Payments may be off, but the promo path stays open. Advance to the payment
+    // step so the user can still enter and apply a promo code.
     setStep("payment");
     setStatus("");
-    setLocalMessage("");
+    setLocalMessage(PAYMENTS_ENABLED ? "" : "Online payments are Coming Soon. Enter a promo code to unlock your plan.");
   };
 
   const validatePayment = () => {
     if (!currentUser?.username) return "Your session has expired. Please log in again.";
+    // While payments are off, only the promo path is available.
+    if (!PAYMENTS_ENABLED) {
+      return promoApplied || promoCode.trim()
+        ? ""
+        : "Enter a promo code to continue while online payments are Coming Soon.";
+    }
     if ((promoApplied || promoCode.trim()) && !selectedMethod) return "";
     if (!selectedMethod) return "Choose MTN Mobile Money or Airtel Money before paying.";
     if (!phoneNumber.trim()) return "Enter a phone number for Mobile Money payment.";
@@ -189,8 +199,14 @@ export default function TrialUpgradeScreen({
         promoCode: promoApplied || promoCode.trim(),
       });
       if (ok) {
-        setStatus("pending");
-        setLocalMessage("Plan selected. Complete payment to activate your business.");
+        if (PAYMENTS_ENABLED) {
+          setStatus("pending");
+          setLocalMessage("Plan selected. Mobile money confirmation is required to activate your business.");
+        } else {
+          // Promo path: let the parent's activation / partial-promo message show.
+          setStatus("");
+          setLocalMessage("");
+        }
       } else {
         setStatus("failed");
         setLocalMessage("");
@@ -202,11 +218,21 @@ export default function TrialUpgradeScreen({
   };
 
   const simulateSuccess = () => {
+    if (!PAYMENTS_ENABLED) {
+      setStatus("");
+      setLocalMessage(PAYMENTS_COMING_SOON_MESSAGE);
+      return;
+    }
     setStatus("success");
     setLocalMessage("Payment successful. Admin preview mode did not change a real subscription.");
   };
 
   const verifyPayment = async () => {
+    if (!PAYMENTS_ENABLED) {
+      setStatus("");
+      setLocalMessage(PAYMENTS_COMING_SOON_MESSAGE);
+      return;
+    }
     const ok = await onVerify?.(pendingPayment?.reference);
     if (ok) {
       setStatus("success");
@@ -272,7 +298,7 @@ export default function TrialUpgradeScreen({
               <button type="button" className="trial-plan-select-v13" onClick={() => selectPlan(plan.tier)}>
                 <span className="trial-plan-top-v12">
                   <span>{plan.name}</span>
-                  {plan.badge ? <em>{plan.badge}</em> : null}
+                  {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? <em>Coming Soon</em> : plan.badge ? <em>{plan.badge}</em> : null}
                 </span>
                 <strong>{formatSubscriptionPrice(plan, billingCycle)}</strong>
                 <small>{plan.summary}</small>
@@ -284,7 +310,7 @@ export default function TrialUpgradeScreen({
                 ))}
               </span>
               <button type="button" className="trial-select-btn-v13" onClick={() => selectPlan(plan.tier)}>
-                {selectedTier === plan.tier ? "Selected" : plan.tier === "FREE" ? "Start free" : `Upgrade to ${plan.name}`}
+                {selectedTier === plan.tier ? "Selected" : plan.tier === "FREE" ? "Start free" : `${plan.name} Coming Soon`}
               </button>
               <button
                 type="button"
@@ -319,8 +345,11 @@ export default function TrialUpgradeScreen({
               </div>
               {visibleMessage ? <p className="trial-message-v12">{visibleMessage}</p> : null}
               <button type="button" className="trial-primary-btn-v12" onClick={openPayment} disabled={loading}>
-                {selectedIsFree ? "Start free" : "Continue to payment"} <FiArrowRight />
+                {selectedIsFree ? "Start free" : PAYMENTS_ENABLED ? "Continue" : "Continue — apply promo code"} <FiArrowRight />
               </button>
+              {selectedPaidComingSoon ? (
+                <p className="trial-message-v12">Online payments are Coming Soon. You can still apply a promo code to unlock {selectedPlan.name} now.</p>
+              ) : null}
               <button type="button" className="trial-secondary-btn-v12" onClick={onChooseLater}>
                 Choose later
               </button>
@@ -372,24 +401,29 @@ export default function TrialUpgradeScreen({
                 <button
                   type="button"
                   key={id}
-                  className={selectedMethod === id ? "selected" : ""}
+                  className={`${selectedMethod === id ? "selected" : ""} ${PAYMENTS_ENABLED ? "" : "is-disabled"}`.trim()}
                   onClick={() => {
+                    if (!PAYMENTS_ENABLED) return;
                     setSelectedMethod(id);
                     setLocalMessage("");
                     setStatus("");
                   }}
+                  disabled={!PAYMENTS_ENABLED}
+                  aria-disabled={!PAYMENTS_ENABLED}
                 >
                   <Icon />
-                  <span>{label}</span>
+                  <span>{PAYMENTS_ENABLED ? label : `${label} — Coming Soon`}</span>
                 </button>
               ))}
             </div>
 
             <div className="trial-payment-form-v13">
-              <label>
-                Phone number
-                <input inputMode="tel" placeholder="256700000000" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} />
-              </label>
+              {PAYMENTS_ENABLED ? (
+                <label>
+                  Phone number
+                  <input inputMode="tel" placeholder="256700000000" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} />
+                </label>
+              ) : null}
               <label>
                 Promo code
                 <span className="trial-promo-row-v16">
@@ -414,10 +448,15 @@ export default function TrialUpgradeScreen({
                   </button>
                 </span>
               </label>
-              <div className="trial-readonly-row-v13">
-                <span>Network</span>
-                <strong>{selectedPaymentMethod?.label || "Choose a network"}</strong>
-              </div>
+              {!PAYMENTS_ENABLED ? (
+                <p className="trial-message-v12">Have a promo code? Apply it here — promo codes are active while online payments are being prepared. A full promo unlocks {selectedPlan.name} now.</p>
+              ) : null}
+              {PAYMENTS_ENABLED ? (
+                <div className="trial-readonly-row-v13">
+                  <span>Network</span>
+                  <strong>{selectedPaymentMethod?.label || "Choose a network"}</strong>
+                </div>
+              ) : null}
             </div>
 
             <div className="trial-readonly-row-v13">
@@ -447,7 +486,11 @@ export default function TrialUpgradeScreen({
               </button>
             ) : (
               <button type="button" className="trial-primary-btn-v12" onClick={submitPayment} disabled={loading || status === "processing"}>
-                {status === "processing" || loading ? "Processing payment..." : selectedPaymentMethod?.action || "Choose Payment Method"}
+                {status === "processing" || loading
+                  ? "Processing request..."
+                  : !PAYMENTS_ENABLED
+                  ? "Apply promo code"
+                  : selectedPaymentMethod?.action || "Choose Payment Method"}
                 <FiArrowRight />
               </button>
             )}
@@ -472,7 +515,9 @@ export default function TrialUpgradeScreen({
           <span>
             {isAdmin
               ? "Admin users can preview all subscription and payment screens without being blocked."
-              : "Free starts without payment. Paid features activate after payment is confirmed."}
+              : PAYMENTS_ENABLED
+              ? "Free starts without payment. Paid features activate after payment is confirmed."
+              : "Free starts without payment. Premium and Platinum payments are coming soon."}
           </span>
         </div>
       </div>

@@ -16,10 +16,14 @@
   --queless-muted: rgba(43, 18, 76, 0.68);
   width: 100%;
   max-width: 480px;
-  height: 100dvh;
-  min-height: 100dvh;
+  /* Fill the bounded .tab-scene-v5 parent instead of the full viewport, so the
+     only scroll is the inner .smart-match-content (single scrollbar, matching the
+     rest of the app). Falls back to 100dvh if rendered without that wrapper. */
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
   margin: 0 auto;
-  overflow-x: hidden;
+  overflow: hidden;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   background:
@@ -148,6 +152,30 @@
   padding: 16px;
   padding-bottom: 124px;
   overscroll-behavior: contain;
+}
+
+.smart-match-help {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+  padding: 14px 15px;
+  border: 1px solid var(--queless-border);
+  border-radius: 18px;
+  color: var(--queless-primary-dark);
+  background: rgba(255, 248, 245, 0.9);
+  box-shadow: 0 12px 28px rgba(43, 18, 76, 0.1);
+}
+
+.smart-match-help strong {
+  font-size: 0.98rem;
+}
+
+.smart-match-help p,
+.smart-match-help span {
+  margin: 0;
+  color: var(--queless-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .smart-match-step {
@@ -577,6 +605,65 @@
 .smart-match-error {
   color: #7f1239;
   background: rgba(223, 182, 178, 0.5);
+}
+
+.smart-match-subscription-message {
+  border: 1px solid rgba(91, 22, 125, 0.14);
+  border-radius: 15px;
+  padding: 12px 14px;
+  color: #5a3658;
+  background: linear-gradient(135deg, #fffaf6, #f6e9ef);
+  font-size: 0.88rem;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.smart-match-subscription-message.is-success {
+  color: #4a184f;
+  border-color: rgba(91, 22, 125, 0.18);
+  background: linear-gradient(135deg, #fff8f4, #f2e4ee);
+}
+
+.smart-match-subscription-message.is-error {
+  color: #7f1239;
+  border-color: rgba(127, 18, 57, 0.2);
+  background: rgba(223, 182, 178, 0.42);
+}
+
+.dark .smart-match-subscription-message {
+  color: #f4ded6;
+  border-color: rgba(251, 228, 216, 0.12);
+  background: rgba(105, 54, 87, 0.24);
+}
+
+.smart-match-error-card > strong,
+.smart-match-error-card > span {
+  overflow-wrap: anywhere;
+}
+
+.smart-match-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.smart-match-error-actions button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid rgba(82, 43, 91, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 248, 245, 0.84);
+  color: var(--queless-primary-dark);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.smart-match-error-actions button:first-child {
+  border-color: var(--queless-primary);
+  background: var(--queless-primary);
+  color: #fff;
 }
 
 .smart-match-skeletons {

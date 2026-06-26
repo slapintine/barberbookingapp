@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { FiAlertCircle, FiCheck, FiCheckCircle, FiLoader, FiRefreshCw, FiSmartphone, FiX } from "react-icons/fi";
+import { FiAlertCircle, FiCheck, FiCheckCircle, FiClock, FiLoader, FiRefreshCw, FiSmartphone, FiX } from "react-icons/fi";
+import { PAYMENTS_ENABLED, PAYMENTS_COMING_SOON_MESSAGE } from "../../utils/launchFlags.js";
+import {
+  getUgMobileProvider,
+  maskUgandaPhone,
+  toE164Uganda,
+  toUgLocalDigits,
+  validateUgMobileForProvider,
+} from "../../utils/ugandaPhone.js";
 import "./PaymentFlowModal.css";
 
 const MIN_DEFAULT_AMOUNT = 1000;
@@ -9,7 +17,7 @@ const PAYMENT_METHODS = [
   {
     id: "mtn_mobile_money",
     label: "MTN Mobile Money",
-    detail: "Pay securely from your MTN MoMo phone.",
+    detail: "Pay securely with MTN Mobile Money.",
     icon: FiSmartphone,
   },
   {
@@ -20,21 +28,10 @@ const PAYMENT_METHODS = [
   },
 ];
 
-function cleanPhone(value) {
-  return String(value || "").replace(/[\s-]/g, "").trim();
-}
-
+// Re-exported for callers/tests that historically imported these from here.
+export { toE164Uganda as normalizeUgandaPhoneNumber };
 export function isValidUgandaPhoneNumber(value) {
-  return /^(\+?256|0)?[37]\d{8}$/.test(cleanPhone(value));
-}
-
-export function normalizeUgandaPhoneNumber(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("256") && digits.length === 12) return `+${digits}`;
-  if (digits.startsWith("0") && digits.length === 10) return `+256${digits.slice(1)}`;
-  if (digits.length === 9) return `+256${digits}`;
-  return "";
+  return Boolean(toE164Uganda(value));
 }
 
 function money(value) {
@@ -71,6 +68,7 @@ export default function PaymentFlowModal({
   promoEnabled = false,
   promoLabel = "Promo code",
   allowPromoOnly = false,
+  comingSoon = !PAYMENTS_ENABLED,
   onClose,
   onSubmit,
   onVerify,
@@ -78,36 +76,63 @@ export default function PaymentFlowModal({
   const formKey = `${show ? "open" : "closed"}|${amount || 10000}|${defaultPhone || ""}`;
   const [selectedMethodEntry, setSelectedMethodEntry] = useState({ key: "", value: "" });
   const [amountValueEntry, setAmountValueEntry] = useState({ key: "", value: "" });
-  const [phoneNumberEntry, setPhoneNumberEntry] = useState({ key: "", value: "" });
+  // Phone is stored as the 9 local digits only — the +256 prefix is fixed in the UI.
+  const [localDigitsEntry, setLocalDigitsEntry] = useState({ key: "", value: "" });
   const [promoCodeEntry, setPromoCodeEntry] = useState({ key: "", value: "" });
   const [errorsEntry, setErrorsEntry] = useState({ key: "", value: {} });
+
   const selectedMethod = selectedMethodEntry.key === formKey ? selectedMethodEntry.value : "";
   const amountValue = amountValueEntry.key === formKey ? amountValueEntry.value : String(amount || 10000);
-  const phoneNumber = phoneNumberEntry.key === formKey ? phoneNumberEntry.value : defaultPhone || "";
+  const localDigits = localDigitsEntry.key === formKey ? localDigitsEntry.value : toUgLocalDigits(defaultPhone || "");
   const promoCode = promoCodeEntry.key === formKey ? promoCodeEntry.value : "";
   const errors = errorsEntry.key === formKey ? errorsEntry.value : {};
+
   const setSelectedMethod = (value) => setSelectedMethodEntry({ key: formKey, value });
   const setAmountValue = (value) => setAmountValueEntry({ key: formKey, value });
-  const setPhoneNumber = (value) => setPhoneNumberEntry({ key: formKey, value });
+  const setLocalDigits = (value) => setLocalDigitsEntry({ key: formKey, value });
   const setPromoCode = (value) => setPromoCodeEntry({ key: formKey, value });
   const setErrors = (updater) => {
     setErrorsEntry((prev) => {
       const current = prev.key === formKey ? prev.value : {};
-      return {
-        key: formKey,
-        value: typeof updater === "function" ? updater(current) : updater,
-      };
+      return { key: formKey, value: typeof updater === "function" ? updater(current) : updater };
     });
   };
 
   const numericAmount = useMemo(() => Number(amountValue), [amountValue]);
-  const methodReady = selectedMethod ? selectedMethod === "mtn_mobile_money" ? mtnReady : airtelReady : false;
   const selectedMethodLabel = PAYMENT_METHODS.find((item) => item.id === selectedMethod)?.label || "Mobile money";
   const statusKind = getStatusKind(pendingPayment?.status);
   const canVerify = Boolean(pendingPayment?.reference) && typeof onVerify === "function";
+  const detectedProvider = getUgMobileProvider(localDigits);
+
+  // Promo-only path: a full-discount promo can unlock without entering a number.
+  const promoOnlyAttempt = allowPromoOnly && promoEnabled && promoCode.trim() && !selectedMethod;
+
+  const isMethodReady = (id) => (id === "mtn_mobile_money" ? mtnReady : airtelReady);
+
+  const handlePhoneChange = (raw) => {
+    setLocalDigits(toUgLocalDigits(raw));
+    setErrors((prev) => ({ ...prev, phoneNumber: "" }));
+  };
+
+  const handleSelectMethod = (id) => {
+    if (!isMethodReady(id)) {
+      // Don't select an unavailable method; explain why instead.
+      setErrors((prev) => ({
+        ...prev,
+        method:
+          id === "airtel_money"
+            ? "Airtel Money is not available yet. Please use MTN Mobile Money."
+            : mtnReadinessMessage || "This payment method is not available right now.",
+      }));
+      return;
+    }
+    setSelectedMethod(id);
+    setErrors((prev) => ({ ...prev, method: "", phoneNumber: "" }));
+  };
 
   const validate = () => {
     const nextErrors = {};
+
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       nextErrors.amount = "Enter a valid amount.";
     } else if (numericAmount < minAmount) {
@@ -116,20 +141,20 @@ export default function PaymentFlowModal({
       nextErrors.amount = `Maximum amount is ${money(maxAmount)}.`;
     }
 
-    const promoOnlyAttempt = allowPromoOnly && promoEnabled && promoCode.trim() && !selectedMethod;
-
-    if (!selectedMethod && !promoOnlyAttempt) {
-      nextErrors.method = "Choose MTN Mobile Money or Airtel Money before paying.";
-    } else if (selectedMethod && !methodReady) {
-      nextErrors.method =
-        selectedMethod === "mtn_mobile_money"
-          ? mtnReadinessMessage || "MTN Mobile Money is not available right now."
-          : airtelReadinessMessage || "Airtel Money is not available right now.";
-    }
-
     if (!promoOnlyAttempt) {
-      if (!phoneNumber.trim()) nextErrors.phoneNumber = "Enter your mobile money number.";
-      else if (!isValidUgandaPhoneNumber(phoneNumber)) nextErrors.phoneNumber = "Use a valid Uganda number, for example 0772123456.";
+      if (!selectedMethod) {
+        nextErrors.method = "Choose MTN Mobile Money to continue.";
+      } else if (!isMethodReady(selectedMethod)) {
+        nextErrors.method =
+          selectedMethod === "mtn_mobile_money"
+            ? mtnReadinessMessage || "MTN Mobile Money is not available right now."
+            : "Airtel Money is not available yet. Please use MTN Mobile Money.";
+      }
+
+      const phoneCheck = validateUgMobileForProvider(localDigits, selectedMethod);
+      if (!phoneCheck.valid) {
+        nextErrors.phoneNumber = phoneCheck.error;
+      }
     }
 
     setErrors(nextErrors);
@@ -137,17 +162,143 @@ export default function PaymentFlowModal({
   };
 
   const submit = async () => {
+    if (loading) return;
     if (!validate()) return;
     await onSubmit?.({
       amount: numericAmount,
       method: selectedMethod,
       provider: selectedMethod,
-      phoneNumber: normalizeUgandaPhoneNumber(phoneNumber),
+      phoneNumber: toE164Uganda(localDigits),
       promoCode: promoCode.trim(),
     });
   };
 
+  // Primary CTA label reflects the real state of the flow.
+  const primaryLabel = (() => {
+    if (loading) {
+      if (pendingPayment?.reference) return "Waiting for payment confirmation...";
+      return "Starting payment...";
+    }
+    if (pendingPayment?.reference) {
+      return statusKind === "failed" ? "Try Again" : "Check payment status";
+    }
+    if (promoOnlyAttempt) return "Unlock Premium";
+    return submitLabel;
+  })();
+
   if (!show) return null;
+
+  if (comingSoon) {
+    // Live payments are off, but the promo path stays fully usable. We disable the
+    // payment methods + Pay Now (Coming Soon) yet keep the promo input live so a
+    // full/free promo can still unlock the plan. A promo entered with no method is
+    // a promo-only attempt; the backend activates a full promo and never starts a
+    // live collection (it requires an explicit method + phone for any balance).
+    const canSubmitPromo = promoEnabled && promoCode.trim().length > 0;
+    // Promo-only submit: no payment method while payments are off. The backend
+    // activates a full promo or rejects a partial one without a live collection.
+    const submitPromoOnly = async () => {
+      if (loading || !canSubmitPromo) return;
+      await onSubmit?.({
+        amount: numericAmount,
+        method: "",
+        provider: "promo",
+        phoneNumber: "",
+        promoCode: promoCode.trim(),
+      });
+    };
+    return (
+      <div className="payment-flow-shell-v1" role="presentation" onClick={onClose}>
+        <section
+          className="payment-flow-panel-v1"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payment-flow-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button type="button" className="payment-flow-close-v1" aria-label="Close payment" onClick={onClose}>
+            <FiX />
+          </button>
+
+          <header className="payment-flow-header-v1">
+            <span className="payment-flow-mark-v1" aria-hidden="true">
+              <FiSmartphone />
+            </span>
+            <div>
+              <strong id="payment-flow-title">{title}</strong>
+              <p>{subtitle}</p>
+            </div>
+          </header>
+
+          {message ? (
+            <div className="payment-flow-alert-v1 warning">
+              <FiAlertCircle />
+              <span>{message}</span>
+            </div>
+          ) : null}
+
+          <div className="payment-flow-summary-v1">
+            <span>{amountLabel}</span>
+            <strong>{money(numericAmount)}</strong>
+          </div>
+
+          <div className="payment-flow-methods-v1" aria-label="Payment methods">
+            {PAYMENT_METHODS.map(({ id, label, icon: Icon }) => (
+              <button type="button" key={id} className="is-disabled" disabled aria-disabled="true">
+                <Icon />
+                <span>
+                  <strong>{label}</strong>
+                  <small>Coming Soon</small>
+                </span>
+                <em className="payment-flow-soon-v1"><FiClock /> Soon</em>
+              </button>
+            ))}
+          </div>
+          <p className="payment-flow-note-v1">
+            <FiClock aria-hidden="true" />
+            {PAYMENTS_COMING_SOON_MESSAGE}
+          </p>
+
+          {promoEnabled ? (
+            <label className="payment-flow-field-v1">
+              <span>{promoLabel}</span>
+              <input
+                type="text"
+                value={promoCode}
+                placeholder="Enter promo code"
+                autoComplete="off"
+                onChange={(event) => setPromoCode(event.target.value)}
+                disabled={loading}
+              />
+              <small>Have a promo code? Apply it here. Promo codes are active while online payments are being prepared — your code can unlock access if it covers this plan.</small>
+            </label>
+          ) : null}
+
+          <footer className="payment-flow-actions-v1">
+            {promoEnabled ? (
+              <button
+                type="button"
+                className={`payment-flow-primary-v1${canSubmitPromo ? "" : " is-disabled"}`}
+                onClick={submitPromoOnly}
+                disabled={loading || !canSubmitPromo}
+              >
+                {loading ? <FiLoader className="payment-flow-spin-v1" /> : <FiCheckCircle />}
+                {loading ? "Applying promo..." : "Apply promo code"}
+              </button>
+            ) : (
+              <button type="button" className="payment-flow-primary-v1 is-disabled" disabled>
+                <FiClock />
+                Payments Coming Soon
+              </button>
+            )}
+            <button type="button" className="payment-flow-secondary-v1" onClick={onClose}>
+              Continue for now
+            </button>
+          </footer>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="payment-flow-shell-v1" role="presentation" onClick={onClose}>
@@ -176,7 +327,7 @@ export default function PaymentFlowModal({
           <div className={`payment-flow-alert-v1 ${statusKind || "pending"}`}>
             {statusKind === "success" ? <FiCheckCircle /> : statusKind === "pending" ? <FiLoader /> : <FiAlertCircle />}
             <span>
-              {message || "Payment request started. Confirm the prompt on your phone, then check status."}
+              {message || "Check your phone to approve the payment, then confirm the status here."}
               <small>Reference: {pendingPayment.reference}</small>
             </span>
           </div>
@@ -212,49 +363,74 @@ export default function PaymentFlowModal({
 
         <div className="payment-flow-methods-v1" aria-label="Payment methods">
           {PAYMENT_METHODS.map(({ id, label, detail, icon: Icon }) => {
-            const ready = id === "mtn_mobile_money" ? mtnReady : airtelReady;
-            const disabled = !ready || loading || Boolean(pendingPayment?.reference);
+            const ready = isMethodReady(id);
+            const active = selectedMethod === id;
+            const comingSoon = id === "airtel_money" && !ready;
             return (
               <button
                 type="button"
                 key={id}
-                className={selectedMethod === id ? "active" : ""}
-                onClick={() => {
-                  setSelectedMethod(id);
-                  setErrors((prev) => ({ ...prev, method: "" }));
-                }}
-                disabled={disabled}
+                className={`${active ? "active" : ""} ${ready ? "" : "is-disabled"}`.trim()}
+                onClick={() => handleSelectMethod(id)}
+                disabled={loading || Boolean(pendingPayment?.reference)}
+                aria-pressed={active}
               >
                 <Icon />
                 <span>
                   <strong>{label}</strong>
-                  <small>{ready ? detail : id === "mtn_mobile_money" ? mtnReadinessMessage || "Unavailable" : airtelReadinessMessage || "Unavailable"}</small>
+                  <small>
+                    {comingSoon
+                      ? "Airtel Money coming soon"
+                      : ready
+                      ? detail
+                      : id === "mtn_mobile_money"
+                      ? mtnReadinessMessage || "Unavailable"
+                      : airtelReadinessMessage || "Unavailable"}
+                  </small>
                 </span>
-                {selectedMethod === id ? <FiCheck /> : null}
+                {comingSoon ? (
+                  <em className="payment-flow-soon-v1"><FiClock /> Soon</em>
+                ) : active ? (
+                  <FiCheck />
+                ) : null}
               </button>
             );
           })}
         </div>
         {errors.method ? <div className="payment-flow-field-error-v1">{errors.method}</div> : null}
 
-        <label className="payment-flow-field-v1">
-          <span>{selectedMethodLabel} number</span>
-          <input
-            type="tel"
-            value={phoneNumber}
-            placeholder="0772123456"
-            inputMode="tel"
-            autoComplete="tel"
-            onChange={(event) => {
-              setPhoneNumber(event.target.value);
-              setErrors((prev) => ({ ...prev, phoneNumber: "" }));
-            }}
-            disabled={loading || Boolean(pendingPayment?.reference)}
-          />
-          <small>{errors.phoneNumber || "Enter the phone number registered for mobile money."}</small>
-        </label>
+        {!pendingPayment?.reference ? (
+          <label className="payment-flow-field-v1">
+            <span>{selectedMethodLabel} number</span>
+            <div className={`payment-flow-phone-v1${errors.phoneNumber ? " has-error" : ""}`}>
+              <span className="payment-flow-phone-cc-v1" aria-hidden="true">+256</span>
+              <input
+                type="tel"
+                value={localDigits}
+                placeholder="712345678"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                aria-label="Mobile money number, 9 digits after +256"
+                maxLength={9}
+                onChange={(event) => handlePhoneChange(event.target.value)}
+                onPaste={(event) => {
+                  event.preventDefault();
+                  handlePhoneChange(event.clipboardData.getData("text"));
+                }}
+                disabled={loading}
+              />
+            </div>
+            <small className={errors.phoneNumber ? "is-error" : "is-hint"}>
+              {errors.phoneNumber
+                ? errors.phoneNumber
+                : detectedProvider && localDigits.length === 9
+                ? `Detected: ${detectedProvider === "mtn_mobile_money" ? "MTN" : "Airtel"} · ${maskUgandaPhone(localDigits)}`
+                : "Enter the 9 digits after +256, e.g. 712345678."}
+            </small>
+          </label>
+        ) : null}
 
-        {promoEnabled ? (
+        {promoEnabled && !pendingPayment?.reference ? (
           <label className="payment-flow-field-v1">
             <span>{promoLabel}</span>
             <input
@@ -263,22 +439,29 @@ export default function PaymentFlowModal({
               placeholder="Enter promo code"
               autoComplete="off"
               onChange={(event) => setPromoCode(event.target.value)}
-              disabled={loading || Boolean(pendingPayment?.reference)}
+              disabled={loading}
             />
-            <small>{allowPromoOnly ? "Optional. A full promo can unlock without mobile money." : "Optional. Discounts are validated before payment is created."}</small>
+            <small>{allowPromoOnly ? "Optional. A full promo can unlock Premium without mobile money." : "Optional. Discounts are validated before payment is created."}</small>
           </label>
+        ) : null}
+
+        {!pendingPayment?.reference && !promoOnlyAttempt ? (
+          <p className="payment-flow-note-v1">
+            <FiSmartphone aria-hidden="true" />
+            You will receive a mobile money prompt on your phone. Enter your PIN to approve the payment.
+          </p>
         ) : null}
 
         <footer className="payment-flow-actions-v1">
           {pendingPayment?.reference ? (
             <button type="button" className="payment-flow-primary-v1" onClick={() => onVerify?.(pendingPayment.reference)} disabled={!canVerify || loading}>
               {loading ? <FiLoader className="payment-flow-spin-v1" /> : <FiRefreshCw />}
-              {loading ? "Checking..." : "Check payment status"}
+              {primaryLabel}
             </button>
           ) : (
             <button type="button" className="payment-flow-primary-v1" onClick={submit} disabled={loading}>
               {loading ? <FiLoader className="payment-flow-spin-v1" /> : <FiCheckCircle />}
-              {loading ? "Processing..." : submitLabel}
+              {primaryLabel}
             </button>
           )}
           <button type="button" className="payment-flow-secondary-v1" onClick={onClose} disabled={loading}>
