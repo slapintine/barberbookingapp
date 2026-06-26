@@ -23,6 +23,9 @@ logs/
 *.err
 *.err.log
 *.tar.gz
+# Local deploy bundle artifacts (not committed)
+frontend/*.tgz
+*.tgz
 *.sqlite
 *.sqlite3
 *.db
