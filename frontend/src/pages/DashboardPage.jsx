@@ -1,7 +1,10 @@
 import { FiAward, FiBell, FiCalendar, FiClock, FiEdit2, FiEye, FiMap, FiMapPin, FiScissors, FiShield, FiStar, FiTrendingUp, FiUpload, FiZap } from "react-icons/fi";
 import { lazy } from "react";
+import { PAYMENTS_ENABLED } from "../utils/launchFlags.js";
 import { getPaymentMethodLabel, isOnlinePaymentMethod } from "../utils/paymentLabels.js";
 import { formatPlanName } from "../utils/subscriptionPlans.js";
+
+import ShareStandCard from "../components/share/ShareStandCard.jsx";
 
 const ScheduleWorkspace = lazy(() => import("../features/barbers/ScheduleWorkspace.jsx"));
 
@@ -144,14 +147,14 @@ export default function DashboardPage({
             )}
             {isPendingPayment && (
               <div className="dashboard-publish-missing-v9">
-                <span>Complete your plan payment to activate your stand.</span>
+                <span>{PAYMENTS_ENABLED ? "Mobile money confirmation is required to activate your stand." : "Payments are coming soon. You can keep editing your stand and save progress for now."}</span>
               </div>
             )}
           </div>
           <div className="dashboard-publish-actions-v9">
             {isPendingPayment ? (
-              <button type="button" className="primary-btn-v4" onClick={() => onOpenUpgradePlan?.(currentPlan || "FREE")}>
-                Complete Payment
+              <button type="button" className="primary-btn-v4" onClick={() => PAYMENTS_ENABLED && onOpenUpgradePlan?.(currentPlan || "FREE")} disabled={!PAYMENTS_ENABLED}>
+                {PAYMENTS_ENABLED ? "Continue Plan Setup" : "Payments Coming Soon"}
               </button>
             ) : canPublish ? (
               <button type="button" className="primary-btn-v4" onClick={() => onPublishStand?.()}>
@@ -232,6 +235,8 @@ export default function DashboardPage({
           </button>
         </div>
       </div>
+
+      <ShareStandCard barber={barber} />
 
       <div className="dashboard-stats-v4 dashboard-stats-v4-large">
         <div className="simple-card-v4 stat-card-v4">
