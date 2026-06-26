@@ -1,0 +1,307 @@
+/* Bookings tabs + Requests tab (RequestCard). Themed via queless-theme vars so
+   it follows light/dark automatically. Loaded last so it wins the cascade. */
+
+.bookings-tabs-v6 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 4px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--queless-card-soft-bg, rgb(var(--highlight-rgb) / 0.08));
+  border: 1px solid var(--queless-border, rgba(120, 80, 130, 0.14));
+}
+
+.bookings-tab-v6 {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 84px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--queless-muted, rgba(90, 60, 100, 0.8));
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.bookings-tab-v6:hover {
+  background: var(--queless-control-hover-bg, rgb(var(--highlight-rgb) / 0.12));
+  color: inherit;
+}
+
+.bookings-tab-v6.active {
+  /* Queless brand: dark purple/maroon, not the blush CTA gradient. */
+  background: linear-gradient(135deg, #2b003d, #5b0b3b);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(43, 0, 61, 0.28);
+}
+
+.bookings-tab-count-v6 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  background: rgb(var(--accent-rgb, 139 79 140) / 0.16);
+  color: var(--accent, #8B4F8C);
+}
+
+.bookings-tab-v6.active .bookings-tab-count-v6 {
+  background: rgb(255 255 255 / 0.26);
+  color: var(--queless-button-text, #fff);
+}
+
+.bookings-tab-panel-v6 {
+  margin-top: 12px;
+}
+
+/* ---- Requests list ---- */
+.request-list-v6 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.request-card-v6 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--queless-card-bg, #fff);
+  border: 1px solid var(--queless-border, rgba(120, 80, 130, 0.14));
+  box-shadow: var(--queless-card-shadow, 0 14px 28px rgba(40, 16, 60, 0.1));
+  overflow: hidden;
+}
+
+.request-card-head-v6 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.request-card-kind-v6 {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent, #8B4F8C);
+}
+
+.status-pill-v6 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-pill-v6.tone-wait { background: rgba(214, 158, 46, 0.16); color: #9a6b10; }
+.status-pill-v6.tone-info { background: rgb(var(--accent-rgb, 139 79 140) / 0.14); color: var(--accent, #8B4F8C); }
+.status-pill-v6.tone-success { background: rgba(40, 150, 95, 0.16); color: #1f7a4d; }
+.status-pill-v6.tone-muted { background: rgba(120, 110, 125, 0.16); color: #6a6270; }
+
+.request-card-title-v6 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.request-card-avatar-v6 {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgb(var(--accent-rgb, 139 79 140) / 0.12);
+  color: var(--accent, #8B4F8C);
+  font-size: 1.2rem;
+}
+
+.request-card-avatar-v6 img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.request-card-title-copy-v6 {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.request-card-title-copy-v6 strong {
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.request-card-title-copy-v6 span {
+  font-size: 0.86rem;
+  color: var(--queless-muted, rgba(90, 60, 100, 0.8));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.request-card-meta-v6 {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.request-card-meta-v6 li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  color: var(--queless-muted, rgba(90, 60, 100, 0.85));
+  min-width: 0;
+}
+
+.request-card-meta-v6 li svg {
+  flex: 0 0 auto;
+  color: var(--accent, #8B4F8C);
+}
+
+.request-card-meta-v6 li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-card-notes-v6 {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--queless-card-soft-bg, rgb(var(--highlight-rgb) / 0.06));
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: inherit;
+}
+
+.request-card-notes-v6 svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--accent, #8B4F8C);
+}
+
+.request-card-actions-v6 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.request-card-btn-v6 {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--queless-border-strong, rgba(120, 80, 130, 0.2));
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.12s ease;
+}
+
+.request-card-btn-v6:hover { background: var(--queless-control-hover-bg, rgb(var(--highlight-rgb) / 0.12)); }
+.request-card-btn-v6:active { transform: translateY(1px); }
+
+.request-card-btn-v6.primary {
+  border: 0;
+  background: linear-gradient(135deg, #2b003d, #5b0b3b);
+  color: #fff;
+}
+
+/* ---- Empty states ---- */
+.bookings-empty-v6 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 40px 24px;
+  margin-top: 8px;
+  border-radius: 20px;
+  background: var(--queless-card-soft-bg, rgb(var(--highlight-rgb) / 0.05));
+  border: 1px dashed var(--queless-border-strong, rgba(120, 80, 130, 0.2));
+}
+
+.bookings-empty-icon-v6 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  background: rgb(var(--accent-rgb, 139 79 140) / 0.12);
+  color: var(--accent, #8B4F8C);
+  font-size: 1.5rem;
+}
+
+.bookings-empty-v6 strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.bookings-empty-v6 p {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--queless-muted, rgba(90, 60, 100, 0.85));
+}
+
+.bookings-empty-btn-v6 {
+  margin-top: 6px;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2b003d, #5b0b3b);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (min-width: 720px) {
+  .request-list-v6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
