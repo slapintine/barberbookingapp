@@ -561,10 +561,9 @@ export default function BarberProfileSheet({
               </span>
             </div>
 
-            <div className="pps-stat-sep" />
-
             {safeBarber.completedJobs > 0 ? (
               <>
+                <div className="pps-stat-sep" />
                 <div className="pps-stat">
                   <FiPackage className="pps-stat-icon" size={15} />
                   <strong className="pps-stat-value">
@@ -572,17 +571,23 @@ export default function BarberProfileSheet({
                   </strong>
                   <span className="pps-stat-label">Jobs done</span>
                 </div>
-                <div className="pps-stat-sep" />
               </>
             ) : null}
 
-            <div className="pps-stat">
-              <FiClock className="pps-stat-icon" size={15} />
-              <strong className="pps-stat-value">
-                {safeBarber.responseTime || "~1h"}
-              </strong>
-              <span className="pps-stat-label">Response</span>
-            </div>
+            {/* Only show Response when a real avg response time exists — never a
+                fabricated "~1h" fallback (honest trust signals only). */}
+            {safeBarber.responseTime ? (
+              <>
+                <div className="pps-stat-sep" />
+                <div className="pps-stat">
+                  <FiClock className="pps-stat-icon" size={15} />
+                  <strong className="pps-stat-value">
+                    {safeBarber.responseTime}
+                  </strong>
+                  <span className="pps-stat-label">Response</span>
+                </div>
+              </>
+            ) : null}
 
             {safeBarber.ontimeRate > 0 ? (
               <>
