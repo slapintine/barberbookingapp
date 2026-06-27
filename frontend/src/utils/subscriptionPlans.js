@@ -113,6 +113,27 @@ export function normalizePlanTier(value, fallback = "") {
   return plan?.tier || fallback;
 }
 
+export function isProviderPlanActive(subscription = {}, expectedTier = "") {
+  const tier = normalizePlanTier(subscription?.tier);
+  const requiredTier = normalizePlanTier(expectedTier);
+  const status = String(subscription?.status || "").trim().toLowerCase();
+  const activeStatuses = new Set(["active", "trialing", "manual_approved", "admin_approved", "approved"]);
+
+  return Boolean(tier && requiredTier && tier === requiredTier && activeStatuses.has(status));
+}
+
+export function getStandFinalAction({ selectedTier = "FREE", subscription = {}, paymentsEnabled = false } = {}) {
+  const tier = normalizePlanTier(selectedTier, "FREE");
+  const paidPlanNeedsActivation =
+    tier !== "FREE" &&
+    !paymentsEnabled &&
+    !isProviderPlanActive(subscription, tier);
+
+  return paidPlanNeedsActivation
+    ? { intent: "draft", label: "Save Draft", paymentComingSoon: true }
+    : { intent: "publish", label: "Publish Stand", paymentComingSoon: false };
+}
+
 export function getPlanFeatures(value) {
   return PLAN_FEATURES[normalizePlanId(value, "free")];
 }

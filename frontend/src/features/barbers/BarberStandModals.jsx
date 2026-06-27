@@ -27,7 +27,9 @@ import {
   getPlanImageLimitLabel,
   getPlanImageLimits,
   getPlanImageSizeMessage,
+  getStandFinalAction,
   PROVIDER_PLANS,
+  isProviderPlanActive,
 } from "../../utils/subscriptionPlans.js";
 import { PAYMENTS_ENABLED } from "../../utils/launchFlags.js";
 
@@ -572,9 +574,13 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const profilePlanStatus = String(profile?.subscription?.status || profile?.subscription_status || "").toLowerCase();
   const selectedPlanAlreadyActive =
     selectedPlan.tier !== "FREE" &&
-    profilePlan === selectedPlan.tier &&
-    !["pending", "expired", "cancelled", "canceled", "inactive", "locked"].includes(profilePlanStatus);
-  const selectedPaidPlanComingSoon = selectedPlan.tier !== "FREE" && !PAYMENTS_ENABLED && !selectedPlanAlreadyActive;
+    isProviderPlanActive({ tier: profilePlan, status: profilePlanStatus }, selectedPlan.tier);
+  const finalAction = getStandFinalAction({
+    selectedTier: selectedPlan.tier,
+    subscription: { tier: profilePlan, status: profilePlanStatus },
+    paymentsEnabled: PAYMENTS_ENABLED,
+  });
+  const selectedPaidPlanComingSoon = finalAction.paymentComingSoon;
   const planFeatures = getPlanFeatures(selectedPlan.id);
   const maxServices = planFeatures.maxServices;
   const maxPhotos = planFeatures.maxPhotos;
@@ -777,7 +783,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
 
   const submitWizard = async (intent = "draft") => {
     if (savingIntent) return;
-    if (intent === "publish" && form.selectedPlan !== "FREE" && !PAYMENTS_ENABLED && !selectedPlanAlreadyActive) {
+    if (intent === "publish" && selectedPlan.tier !== "FREE" && !PAYMENTS_ENABLED && !selectedPlanAlreadyActive) {
       intent = "draft";
     }
     if (intent === "publish") {
@@ -1506,7 +1512,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     ? "Saving..."
                     : selectedPaidPlanComingSoon
                     ? "Save Draft"
-                    : "Publish Stand"}
+                    : finalAction.label}
                 </button>
                 {selectedPaidPlanComingSoon ? (
                   <div className="wizard-note-v10">

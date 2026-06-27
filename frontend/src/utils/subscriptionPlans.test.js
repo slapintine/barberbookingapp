@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getPlanFeatures,
+  getStandFinalAction,
+  isProviderPlanActive,
   normalizePlanId,
   normalizePlanTier,
   PROVIDER_PLANS,
@@ -47,6 +49,46 @@ test("plan selection keeps normalized plan IDs and tiers stable", () => {
   assert.equal(normalizePlanTier("Premium"), "PREMIUM");
   assert.equal(normalizePlanTier("PLATINUM"), "PLATINUM");
   assert.equal(normalizePlanTier("", "FREE"), "FREE");
+});
+
+test("stand publishing recognizes active provider plans without treating payment states as active", () => {
+  assert.equal(isProviderPlanActive({ tier: "PLATINUM", status: "active" }, "PLATINUM"), true);
+  assert.equal(isProviderPlanActive({ tier: "platinum", status: "trialing" }, "PLATINUM"), true);
+  assert.equal(isProviderPlanActive({ tier: "PLATINUM", status: "manual_approved" }, "PLATINUM"), true);
+  assert.equal(isProviderPlanActive({ tier: "PLATINUM", status: "pending_payment" }, "PLATINUM"), false);
+  assert.equal(isProviderPlanActive({ tier: "PLATINUM", status: "expired" }, "PLATINUM"), false);
+  assert.equal(isProviderPlanActive({ tier: "PREMIUM", status: "active" }, "PLATINUM"), false);
+});
+
+test("stand final CTA publishes active Platinum directly and keeps inactive paid plans in draft", () => {
+  assert.deepEqual(
+    getStandFinalAction({
+      selectedTier: "PLATINUM",
+      subscription: { tier: "PLATINUM", status: "active" },
+      paymentsEnabled: false,
+    }),
+    { intent: "publish", label: "Publish Stand", paymentComingSoon: false }
+  );
+  assert.deepEqual(
+    getStandFinalAction({
+      selectedTier: "PREMIUM",
+      subscription: { tier: "PREMIUM", status: "active" },
+      paymentsEnabled: false,
+    }),
+    { intent: "publish", label: "Publish Stand", paymentComingSoon: false }
+  );
+  assert.deepEqual(
+    getStandFinalAction({
+      selectedTier: "PLATINUM",
+      subscription: { tier: "PLATINUM", status: "pending_payment" },
+      paymentsEnabled: false,
+    }),
+    { intent: "draft", label: "Save Draft", paymentComingSoon: true }
+  );
+  assert.deepEqual(
+    getStandFinalAction({ selectedTier: "FREE", paymentsEnabled: false }),
+    { intent: "publish", label: "Publish Stand", paymentComingSoon: false }
+  );
 });
 
 test("plan comparison prices and feature order remain launch-ready", () => {
