@@ -5000,6 +5000,14 @@ const updateBarberStand = async (payload) => {
           formatTimeLabel={formatTimeLabel}
           focusBookingId={focusedBookingId}
           onReportBooking={(_booking, topic) => openSupportFlow(topic)}
+          onBookAgain={(booking) => {
+            const barber = barbers.find((item) => String(item.id) === String(booking?.barberId));
+            if (!barber) {
+              setGlobalError("This provider is no longer available.");
+              return;
+            }
+            openProviderProfile(barber);
+          }}
         />
         </div>
       )}
