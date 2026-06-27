@@ -21,10 +21,20 @@ function devLiveSendAllowed() {
 }
 
 // Partially mask a recipient for safe logging (never log the full number or body).
-function maskPhone(phone) {
+export function maskPhone(phone) {
   const value = String(phone || "");
   if (value.length <= 5) return "***";
   return `${value.slice(0, 5)}***${value.slice(-2)}`;
+}
+
+export function sanitizeSmsLogText(value) {
+  return String(value || "SMS operation failed.")
+    .replace(/(?:\+?256|0)[37]\d{8}/g, (phone) => maskPhone(phone))
+    .replace(/(bearer\s+)[^\s,;]+/gi, "$1[REDACTED]")
+    .replace(/((?:api[_ -]?key|authorization|token|password)\s*[:=]\s*)[^\s,;]+/gi, "$1[REDACTED]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
 }
 
 // Minimal Africa's Talking-shaped success response so callers/loggers behave the
@@ -101,6 +111,20 @@ export async function sendSms({ to, message, metadata = {} }) {
   if (!phoneNumber) throw Object.assign(new Error("Valid recipient phone number is required."), { statusCode: 400 });
   if (!text) throw Object.assign(new Error("SMS message is required."), { statusCode: 400 });
   if (text.length > 918) throw Object.assign(new Error("SMS message is too long."), { statusCode: 400 });
+
+  // Master gate: SMS is Coming Soon until enabled. Reject every send here so no
+  // path (OTP, admin manual, lifecycle, auto-reply) can contact the provider while
+  // disabled. Callers catch this and surface a clean 503. Log only masked metadata.
+  if (!env.smsEnabled) {
+    logger.info(
+      { to: maskPhone(phoneNumber), length: text.length, source: metadata?.source || "" },
+      "SMS disabled (Coming Soon): message not sent."
+    );
+    throw Object.assign(new Error("SMS messaging is coming soon and is not available yet."), {
+      statusCode: 503,
+      code: "SMS_DISABLED",
+    });
+  }
 
   const config = getSmsConfig();
 

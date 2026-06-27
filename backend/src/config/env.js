@@ -72,6 +72,11 @@ export const env = {
   africasTalkingApiKey: (process.env.AFRICASTALKING_API_KEY || process.env.AFRICAS_TALKING_API_KEY || "").trim(),
   africasTalkingShortcode: (process.env.AFRICASTALKING_SHORTCODE || process.env.AFRICAS_TALKING_SHORTCODE || "").trim(),
   africasTalkingEnv: (process.env.AFRICASTALKING_ENV || process.env.AFRICAS_TALKING_ENV || "sandbox").trim().toLowerCase(),
+  // Master SMS kill switch. SMS is "Coming Soon" until the sender ID is approved,
+  // so this defaults OFF: every SMS send (OTP, admin, lifecycle, auto-reply) is
+  // rejected at the central sender unless SMS_ENABLED=true. Backend-enforced — the
+  // frontend "Coming Soon" label is not the gate.
+  smsEnabled: String(process.env.SMS_ENABLED || "false").trim().toLowerCase() === "true",
   africasTalkingLifecycleSmsEnabled: String(process.env.AFRICASTALKING_LIFECYCLE_SMS_ENABLED || process.env.AFRICAS_TALKING_LIFECYCLE_SMS_ENABLED || "false").trim().toLowerCase() === "true",
   africasTalkingSmsAutoReplyEnabled: String(process.env.AFRICASTALKING_SMS_AUTO_REPLY_ENABLED || process.env.AFRICAS_TALKING_SMS_AUTO_REPLY_ENABLED || "false").trim().toLowerCase() === "true",
   africasTalkingDefaultAutoReply: (process.env.AFRICASTALKING_DEFAULT_AUTO_REPLY || process.env.AFRICAS_TALKING_DEFAULT_AUTO_REPLY || "Thank you for contacting Queless. We have received your message.").trim(),

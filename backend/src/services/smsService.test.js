@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
-import { getSmsConfig, normalizePhoneNumber, sendSms } from "./smsService.js";
+import { getSmsConfig, maskPhone, normalizePhoneNumber, sanitizeSmsLogText, sendSms } from "./smsService.js";
 
 // These tests mutate the shared `env` object and AFRICASTALKING_ALLOW_LIVE_SEND.
 // `node --test` runs each test file in its own process, so this stays isolated.
-const ENV_KEYS = ["nodeEnv", "africasTalkingUsername", "africasTalkingApiKey", "africasTalkingEnv"];
+const ENV_KEYS = ["nodeEnv", "africasTalkingUsername", "africasTalkingApiKey", "africasTalkingEnv", "smsEnabled"];
 
 function snapshotEnv() {
   const snap = { _allow: process.env.AFRICASTALKING_ALLOW_LIVE_SEND };
@@ -41,9 +41,25 @@ test("normalizePhoneNumber rejects invalid numbers with an empty string", () => 
   assert.equal(normalizePhoneNumber(null), "");
 });
 
+test("maskPhone never exposes a full Uganda recipient", () => {
+  const phone = "+256772123456";
+  const masked = maskPhone(phone);
+  assert.equal(masked, "+2567***56");
+  assert.ok(!masked.includes("772123456"));
+});
+
+test("sanitizeSmsLogText redacts recipients and common secret fields", () => {
+  const safe = sanitizeSmsLogText("to=+256772123456 apiKey=secret-value Authorization=Bearer-token token=abc123");
+  assert.ok(!safe.includes("772123456"));
+  assert.ok(!safe.includes("secret-value"));
+  assert.ok(!safe.includes("Bearer-token"));
+  assert.ok(!safe.includes("abc123"));
+});
+
 test("sendSms mock mode returns a success-shaped response without calling Africa's Talking", async () => {
   const snap = snapshotEnv();
   applyLocalLiveCreds();
+  env.smsEnabled = true; // these tests exercise the send mechanics (SMS enabled)
   delete process.env.AFRICASTALKING_ALLOW_LIVE_SEND; // default => mock in dev
 
   const originalInfo = logger.info;
@@ -97,6 +113,35 @@ test("real-send gate: dev only leaves mock mode when AFRICASTALKING_ALLOW_LIVE_S
     process.env.AFRICASTALKING_ALLOW_LIVE_SEND = "true";
     assert.equal(getSmsConfig().mock, false, "explicit opt-in allows real local sends");
   } finally {
+    restoreEnv(snap);
+  }
+});
+
+test("SMS disabled (Coming Soon) gate: sendSms refuses to send and never contacts the provider", async () => {
+  const snap = snapshotEnv();
+  applyLocalLiveCreds();
+  env.smsEnabled = false; // master kill switch off => Coming Soon
+  process.env.AFRICASTALKING_ALLOW_LIVE_SEND = "true"; // even with live opt-in, must not send
+
+  const originalInfo = logger.info;
+  const calls = [];
+  logger.info = (obj, msg) => calls.push({ obj, msg });
+
+  try {
+    await assert.rejects(
+      () => sendSms({ to: "0772123456", message: "Your code is 999111.", metadata: { source: "otp" } }),
+      (error) => {
+        assert.equal(error.statusCode, 503);
+        assert.equal(error.code, "SMS_DISABLED");
+        return true;
+      }
+    );
+    // Disabled log carries only masked metadata; the OTP/body is never logged.
+    const serialized = JSON.stringify(calls);
+    assert.ok(!serialized.includes("999111"), "OTP code must not be logged");
+    assert.ok(!serialized.includes("772123456"), "recipient must be masked");
+  } finally {
+    logger.info = originalInfo;
     restoreEnv(snap);
   }
 });
