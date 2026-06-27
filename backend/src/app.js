@@ -53,8 +53,22 @@ app.use(securityHeaders);
 app.use(cors(buildCorsOptions()));
 app.use("/api", apiRateLimiter);
 
-app.use(express.json({ limit: "150mb" }));
-app.use(express.urlencoded({ extended: true, limit: "150mb" }));
+// Body size limits. Normal API calls are small JSON, so the global limit is kept
+// tight to shrink the memory-DoS surface. Only provider stand + profile routes
+// carry base64 images (up to the Platinum plan's image allowance), so the large
+// limit is applied exclusively to those path prefixes.
+const STANDARD_JSON_LIMIT = "1mb";
+const IMAGE_JSON_LIMIT = "150mb";
+const IMAGE_BODY_PREFIXES = ["/api/barbers", "/api/profiles"];
+const standardJsonParser = express.json({ limit: STANDARD_JSON_LIMIT });
+const imageJsonParser = express.json({ limit: IMAGE_JSON_LIMIT });
+app.use((req, res, next) => {
+  const acceptsImages = IMAGE_BODY_PREFIXES.some(
+    (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`)
+  );
+  return (acceptsImages ? imageJsonParser : standardJsonParser)(req, res, next);
+});
+app.use(express.urlencoded({ extended: true, limit: STANDARD_JSON_LIMIT }));
 app.use("/api/uploads", express.static(providerImageStorageRoot, {
   immutable: true,
   maxAge: "1y",
