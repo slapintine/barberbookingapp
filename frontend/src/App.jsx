@@ -5199,6 +5199,14 @@ const updateBarberStand = async (payload) => {
             onOpenProvider={(provider) => {
               openProviderProfile(provider);
             }}
+            onAsk={(provider) =>
+              openConversation({
+                barber: provider,
+                customerUsername: currentUser?.username,
+                targetName: provider?.business_name || provider?.name,
+              })
+            }
+            onViewOnMap={(provider) => openMarketplaceMap(provider?.business_type || "All")}
           />
         </div>
       )}

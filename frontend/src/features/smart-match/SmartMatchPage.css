@@ -881,3 +881,105 @@
     border-radius: 18px;
   }
 }
+
+/* ── Phase 3: match reason chips, priority filters, compact actions ── */
+.smart-match-filter-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin: 2px 0 2px;
+  scrollbar-width: none;
+}
+.smart-match-filter-row::-webkit-scrollbar { display: none; }
+
+.smart-match-filter-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--queless-border);
+  border-radius: 999px;
+  padding: 7px 13px;
+  background: rgba(82, 43, 91, 0.06);
+  color: var(--queless-primary);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.smart-match-filter-chip:hover { background: rgba(82, 43, 91, 0.12); }
+.smart-match-filter-chip.is-active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #2b003d, #5b0b3b);
+}
+
+.smart-match-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.smart-match-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(82, 43, 91, 0.08);
+  color: var(--queless-primary);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.smart-match-chip svg { width: 12px; height: 12px; }
+
+.smart-match-why-line {
+  margin: 0;
+  color: var(--queless-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+
+.smart-match-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.smart-match-result-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 11px;
+  border: 1px solid var(--queless-border);
+  background: rgba(82, 43, 91, 0.06);
+  color: var(--queless-primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease, filter 0.15s ease;
+}
+.smart-match-result-btn svg { width: 14px; height: 14px; }
+.smart-match-result-btn:hover { background: rgba(82, 43, 91, 0.12); }
+.smart-match-result-btn:active { transform: translateY(1px); }
+
+.smart-match-result-btn.primary {
+  flex: 1 1 auto;
+  justify-content: center;
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #2b003d, #5b0b3b);
+}
+.smart-match-result-btn.primary:hover { filter: brightness(1.08); }
+
+.smart-match-result-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}

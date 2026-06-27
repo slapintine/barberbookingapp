@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiArrowLeft, FiCheck, FiCreditCard, FiHelpCircle, FiLock, FiMapPin, FiSearch, FiStar, FiX, FiZap } from "react-icons/fi";
+import { FiArrowLeft, FiCheck, FiCheckCircle, FiCreditCard, FiHelpCircle, FiHome, FiLock, FiMap, FiMapPin, FiMessageSquare, FiSearch, FiShield, FiStar, FiX, FiZap } from "react-icons/fi";
 import { findSmartMatches } from "../../api/smartMatchApi.js";
+import { getProviderTier, isProviderOpenNow, isProviderVerified } from "../../utils/marketplaceServices.js";
 import logo from "../../assets/queless-logo-full.png";
 import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
 import { reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
@@ -197,11 +198,97 @@ function NoMatchResults({ state, onChangeLocation, onTryAnotherService, onOpenPr
   );
 }
 
-function MatchProviderCard({ match, provider, onOpenProvider }) {
+/** Priority sort modes — all sort by REAL fields; ties keep best-match order. */
+const SMART_MATCH_SORTS = [
+  { key: "best", label: "Best match" },
+  { key: "nearest", label: "Nearest" },
+  { key: "rated", label: "Top rated" },
+  { key: "available", label: "Available now" },
+  { key: "budget", label: "Budget" },
+  { key: "premium", label: "Premium" },
+];
+
+function providerHasHours(provider) {
+  return Boolean(provider?.availability?.start || provider?.availability_start);
+}
+
+function providerPriceFrom(provider) {
+  const value = Number(provider?.price_from || 0);
+  return value > 0 ? value : Number.POSITIVE_INFINITY;
+}
+
+function providerTierRank(provider) {
+  const tier = String(getProviderTier(provider || {}) || "").toUpperCase();
+  return tier === "PLATINUM" ? 0 : tier === "PREMIUM" ? 1 : 2;
+}
+
+/** Sort the existing matches client-side. Default keeps the backend relevance order. */
+function sortMatches(matches, mode, providerById) {
+  const resolve = (match) =>
+    providerById?.get?.(String(match.providerId || match.businessId || "")) || match.provider || null;
+  const list = [...matches];
+  switch (mode) {
+    case "nearest":
+      return list.sort(
+        (a, b) => Number(a.distanceKm ?? Number.POSITIVE_INFINITY) - Number(b.distanceKm ?? Number.POSITIVE_INFINITY)
+      );
+    case "rated":
+      return list.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    case "budget":
+      return list.sort((a, b) => providerPriceFrom(resolve(a)) - providerPriceFrom(resolve(b)));
+    case "premium":
+      return list.sort((a, b) => providerTierRank(resolve(a)) - providerTierRank(resolve(b)));
+    case "available":
+      return list.sort((a, b) => {
+        const openRank = (match) => {
+          const provider = resolve(match);
+          return providerHasHours(provider) && isProviderOpenNow(provider) ? 0 : 1;
+        };
+        return openRank(a) - openRank(b);
+      });
+    default:
+      return list;
+  }
+}
+
+/**
+ * Build honest "why this match" chips from REAL fields only. Never fabricate
+ * availability, distance, rating, verification, home service, or plan tier.
+ */
+function getMatchChips(match, provider) {
+  const chips = [];
+  const distance = Number(match?.distanceKm);
+  const rating = Number(match?.rating);
+  if (Number.isFinite(distance) && distance <= 3) chips.push({ icon: "pin", label: "Nearby" });
+  if (Number.isFinite(rating) && rating >= 4.5) chips.push({ icon: "star", label: "Highly rated" });
+  if (isProviderVerified(provider || {})) chips.push({ icon: "shield", label: "Verified" });
+  const tier = String(getProviderTier(provider || {}) || "").toUpperCase();
+  if (tier === "PLATINUM") chips.push({ icon: "zap", label: "Platinum" });
+  else if (tier === "PREMIUM") chips.push({ icon: "zap", label: "Premium" });
+  if (provider?.home_service_enabled === 1 || provider?.home_service_enabled === true) {
+    chips.push({ icon: "home", label: "Home service" });
+  }
+  // Only when real availability hours exist and the provider is open right now.
+  if (providerHasHours(provider) && isProviderOpenNow(provider)) chips.push({ icon: "check", label: "Available now" });
+  return chips.slice(0, 4);
+}
+
+function ChipIcon({ name }) {
+  if (name === "pin") return <FiMapPin />;
+  if (name === "star") return <FiStar />;
+  if (name === "shield") return <FiShield />;
+  if (name === "zap") return <FiZap />;
+  if (name === "home") return <FiHome />;
+  if (name === "check") return <FiCheckCircle />;
+  return null;
+}
+
+function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap }) {
   const score = Number(match.score || 0);
-  const badges = Array.isArray(match.badges) ? match.badges.slice(0, 5) : [];
-  const reasons = Array.isArray(match.reasons) ? match.reasons.slice(0, 3) : [];
+  const chips = getMatchChips(match, provider);
+  const primaryReason = Array.isArray(match.reasons) && match.reasons.length ? match.reasons[0] : "";
   const providerImage = match.imageUrl || provider?.image || "";
+  const hasRating = Number(match.rating) > 0;
   return (
     <article className="smart-match-result-card">
       <div className="smart-match-result-media">
@@ -214,21 +301,42 @@ function MatchProviderCard({ match, provider, onOpenProvider }) {
           <span>{match.serviceLabel || match.serviceName || match.category || "Service"}</span>
         </div>
         <div className="smart-match-result-meta">
-          <span><FiStar /> {match.rating ? Number(match.rating).toFixed(1) : "New"} ({Number(match.reviewsCount || match.reviews || 0)})</span>
+          <span><FiStar /> {hasRating ? Number(match.rating).toFixed(1) : "New"} ({Number(match.reviewsCount || match.reviews || 0)})</span>
           <span><FiMapPin /> {Number.isFinite(Number(match.distanceKm)) ? `${Number(match.distanceKm).toFixed(1)} km` : "Nearby"}</span>
         </div>
-        {match.availabilityLabel ? <div className="smart-match-availability">{match.availabilityLabel}</div> : null}
-        <div className="smart-match-badges">
-          {badges.map((badge) => <span key={badge}>{badge}</span>)}
-        </div>
-        {reasons.length ? (
-          <ul>
-            {reasons.map((reason) => <li key={reason}>{reason}</li>)}
-          </ul>
+        {chips.length ? (
+          <div className="smart-match-chips">
+            {chips.map((chip) => (
+              <span className="smart-match-chip" key={chip.label}>
+                <ChipIcon name={chip.icon} /> {chip.label}
+              </span>
+            ))}
+          </div>
         ) : null}
-        <button type="button" onClick={() => provider ? onOpenProvider?.(provider) : null} disabled={!provider}>
-          View / Book
-        </button>
+        {primaryReason ? <p className="smart-match-why-line">{primaryReason}</p> : null}
+        <div className="smart-match-result-actions">
+          <button
+            type="button"
+            className="smart-match-result-btn primary"
+            onClick={() => (provider ? onOpenProvider?.(provider) : null)}
+            disabled={!provider}
+          >
+            View &amp; Book
+          </button>
+          <button
+            type="button"
+            className="smart-match-result-btn"
+            onClick={() => (provider ? onAsk?.(provider) : null)}
+            disabled={!provider}
+          >
+            <FiMessageSquare /> Ask
+          </button>
+          {onViewOnMap ? (
+            <button type="button" className="smart-match-result-btn" onClick={() => onViewOnMap(provider || match)}>
+              <FiMap /> Map
+            </button>
+          ) : null}
+        </div>
       </div>
     </article>
   );
@@ -247,11 +355,14 @@ export default function SmartMatchPage({
   onUpgradePremium,
   onVerifyPremium,
   onContinueManualSearch,
+  onAsk,
+  onViewOnMap,
 }) {
   const draftKey = `${locationLabel}|${JSON.stringify(initial || {})}`;
   const [stateEntry, setStateEntry] = useState(() => ({ key: draftKey, value: readStoredDraft(initial, locationLabel) }));
   const [locationMessageEntry, setLocationMessageEntry] = useState({ key: "", value: "" });
   const [showHelp, setShowHelp] = useState(false);
+  const [sortMode, setSortMode] = useState("best");
   const cacheRef = useRef(new Map());
   const premiumActive = isCustomerPremiumActive(customerSubscription);
   const state = stateEntry.key === draftKey ? stateEntry.value : readStoredDraft(initial, locationLabel);
@@ -417,6 +528,10 @@ export default function SmartMatchPage({
   };
 
   const matches = Array.isArray(state.matchResults) ? state.matchResults : [];
+  const displayedMatches = useMemo(
+    () => sortMatches(matches, sortMode, localProviderById),
+    [matches, sortMode, localProviderById]
+  );
 
   return (
     <div className="smart-match-page">
@@ -577,11 +692,35 @@ export default function SmartMatchPage({
                 <span>We ranked providers based on service fit, distance, availability, rating, and reliability.</span>
               </div>
             ) : null}
-            {state.loading ? <LoadingResults /> : matches.length ? (
+            {matches.length > 1 ? (
+              <div className="smart-match-filter-row" role="group" aria-label="Sort matches">
+                {SMART_MATCH_SORTS.map((option) => (
+                  <button
+                    type="button"
+                    key={option.key}
+                    className={sortMode === option.key ? "smart-match-filter-chip is-active" : "smart-match-filter-chip"}
+                    aria-pressed={sortMode === option.key}
+                    onClick={() => setSortMode(option.key)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {state.loading ? <LoadingResults /> : displayedMatches.length ? (
               <div className="smart-match-results">
-                {matches.map((match) => {
+                {displayedMatches.map((match) => {
                   const provider = localProviderById?.get?.(String(match.providerId || match.businessId || "")) || match.provider || null;
-                  return <MatchProviderCard key={`${match.providerId || match.businessId}-${match.serviceId || match.serviceName}`} match={match} provider={provider} onOpenProvider={onOpenProvider} />;
+                  return (
+                    <MatchProviderCard
+                      key={`${match.providerId || match.businessId}-${match.serviceId || match.serviceName}`}
+                      match={match}
+                      provider={provider}
+                      onOpenProvider={onOpenProvider}
+                      onAsk={onAsk}
+                      onViewOnMap={onViewOnMap}
+                    />
+                  );
                 })}
               </div>
             ) : state.error ? null : (
