@@ -31,6 +31,7 @@ import {
 } from "./api/customerSubscriptionsApi.js";
 import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
 import { normalizeProviderData } from "./utils/providerData.js";
+import { buildStandDraftUpdatePayload } from "./utils/standDraftPayload.js";
 import { getCustomerWallet, getMyWallet, requestWalletWithdrawal } from "./api/walletApi.js";
 import AppHeader from "./components/ui/AppHeader.jsx";
 import AccountMenu from "./components/ui/AccountMenu.jsx";
@@ -834,7 +835,7 @@ function normalizeBarber(barber, index) {
                   id: `fallback-${idx}`,
                   ...normalizeServiceForBooking(service, idx),
                 }
-              : normalizeServiceForBooking(service, idx)
+              : normalizeServiceForBooking(service, idx, { preserveEmptyTitle: true })
           )
         : [],
     availability:
@@ -2919,9 +2920,10 @@ const fetchBarbers = async () => {
   };
 
 const registerBarber = async (payload) => {
-    if (!currentUser?.username) return false;
+    if (!currentUser?.username) return { success: false, message: "Please log in to save your stand draft." };
+    const wantsPublish = payload.submitIntent === "publish";
     const selectedServices = Array.isArray(payload.services)
-      ? payload.services.map(normalizeServiceForBooking)
+      ? payload.services.map((service, index) => normalizeServiceForBooking(service, index, { preserveEmptyTitle: true }))
       : String(payload.services || "")
           .split(",")
           .flatMap((item) => {
@@ -2935,12 +2937,11 @@ const registerBarber = async (payload) => {
       barbers.some((item) => String(item.ownerUsername || "") === String(currentUser.username || ""));
 
     if (alreadyHasBarberStand) {
-      setShowRegisterBarber(false);
-      setGlobalError("This account already has a business profile.");
-      return false;
+      const message = "This account already has a business profile. Open Edit Stand to continue.";
+      setGlobalError(message);
+      return { success: false, message };
     }
 
-    const selectedPlan = normalizeProviderPlan(payload.selectedPlan || payload.plan);
     const startsTrial = false;
 
     const normalizedName = String(payload.businessName || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -2948,14 +2949,16 @@ const registerBarber = async (payload) => {
       (item) => String(item.business_name || "").trim().toLowerCase().replace(/\s+/g, " ") === normalizedName
     );
     if (duplicateBusiness) {
-      setGlobalError("A business with this name already exists. If this is your business, report it for review.");
-      return false;
+      const message = "A business with this name already exists. If this is your business, report it for review.";
+      setGlobalError(message);
+      return { success: false, message };
     }
 
     let data;
     try {
       data = await registerBarberStand({
         business_name: payload.businessName,
+        phone: payload.phone,
         location: payload.location,
         latitude: Number(payload.latitude || DEFAULT_CENTER[0]),
         longitude: Number(payload.longitude || DEFAULT_CENTER[1]),
@@ -2973,14 +2976,20 @@ const registerBarber = async (payload) => {
         document_name: payload.documentName || "",
         portfolio: Array.isArray(payload.portfolio) ? payload.portfolio : [],
         team_members: payload.standType === "shop" ? parseTeamMembers(payload.teamMembers) : [],
+        schedule_start: payload.scheduleStart || "08:00",
+        schedule_end: payload.scheduleEnd || "20:00",
         accepts_wallet: Boolean(payload.acceptsWallet),
         accepts_cash: true,
-        selected_plan: payload.submitIntent === "payment" ? selectedPlan || "" : "",
-        submit_intent: payload.submitIntent || "draft",
+        selected_plan: "",
+        submit_intent: "draft",
         access_type: "subscription",
         start_free_trial: false,
       });
 
+      if (wantsPublish) {
+        const publishData = await publishMyBarberStand();
+        data = { ...data, ...publishData, next_step: "active" };
+      }
       const createdBarber = data?.barber ? normalizeBarber(data.barber, 0) : null;
       if (createdBarber) {
         setBarbers((prev) => mergeBarberListsPreservingLocal([createdBarber], prev));
@@ -3002,12 +3011,12 @@ const registerBarber = async (payload) => {
         setSubscriptionMessage(data?.message || "Business stand draft saved successfully.");
       }
     } catch (error) {
-      setGlobalError(
+      const message =
         error?.payload?.code === "DUPLICATE_BUSINESS_NAME"
           ? "A business with this name already exists. If this is your business, you can report or claim it."
-          : error.message || "Payments are coming soon. Your business can be saved as a draft for now."
-      );
-      return false;
+          : error?.message || "We couldn’t save your stand draft. Please try again.";
+      setGlobalError(message);
+      return { success: false, message };
     }
 
     const upgradedUser = {
@@ -3025,13 +3034,7 @@ const registerBarber = async (payload) => {
     );
 
     setShowRegisterBarber(false);
-    if (startsTrial || data?.next_step === "active") {
-      setActiveTab("dashboard");
-    } else if (payload.submitIntent === "payment") {
-      openUpgradePlan(selectedPlan || "FREE");
-    } else {
-      setActiveTab("dashboard");
-    }
+    setActiveTab("dashboard");
 
     const uploadNotification = {
       id: makeId("ntf"),
@@ -3040,16 +3043,19 @@ const registerBarber = async (payload) => {
       title: startsTrial || data?.next_step === "active" ? "Business profile activated" : "Business draft saved",
       message: startsTrial || data?.next_step === "active"
         ? "Your business page was uploaded successfully."
-        : payload.submitIntent === "payment"
-        ? data?.message || "Payments are coming soon. Your stand progress was saved."
-        : data?.message || "Business stand draft saved successfully.",
+        : data?.message || "Draft saved. You can come back and continue anytime.",
       createdAt: new Date().toISOString(),
       read: false,
     };
     appendStored("notifications", upgradedUser.username, uploadNotification);
     fetchNotifications();
     setGlobalError("");
-    return true;
+    showSystemToast(
+      wantsPublish ? "Stand published" : "Draft saved",
+      wantsPublish ? "Your stand is now live and visible to customers." : "Draft saved. You can come back and continue anytime.",
+      "success"
+    );
+    return { success: true, published: wantsPublish, message: data?.message };
   };
 
   const publishBarberStand = async () => {
@@ -3074,9 +3080,12 @@ const registerBarber = async (payload) => {
   };
 
 const updateBarberStand = async (payload) => {
-    if (!currentUser?.username || !myBarberProfile) return false;
+    if (!currentUser?.username || !myBarberProfile) {
+      return { success: false, message: "We couldn’t load your saved stand. Refresh and try again." };
+    }
+    const wantsPublish = payload.submitIntent === "publish";
     const selectedServices = Array.isArray(payload.services)
-      ? payload.services.map(normalizeServiceForBooking)
+      ? payload.services.map((service, index) => normalizeServiceForBooking(service, index, { preserveEmptyTitle: true }))
       : String(payload.services || "")
           .split(",")
           .flatMap((item) => {
@@ -3084,97 +3093,72 @@ const updateBarberStand = async (payload) => {
             return service ? [service] : [];
           })
           .map(normalizeServiceForBooking);
-    const nextDocumentName = String(payload.documentName || "").trim();
-    const existingDocumentName = String(myBarberProfile.verification_document_name || myBarberProfile.document_name || "").trim();
-    const verificationChanged = nextDocumentName !== existingDocumentName;
-    const nextVerificationStatus = verificationChanged
-      ? nextDocumentName
-        ? "Pending verification"
-        : "New"
-      : myBarberProfile.verified_status || myBarberProfile.verified || "New";
-
-    const nextBarber = normalizeBarber(
+    const existingTeamMembers = Array.isArray(myBarberProfile.team_members || myBarberProfile.teamMembers)
+      ? myBarberProfile.team_members || myBarberProfile.teamMembers
+      : [];
+    const existingTeamNames = existingTeamMembers
+      .map((member) => typeof member === "string" ? member : member.name)
+      .filter(Boolean)
+      .join(", ");
+    const submittedTeamNames = String(payload.teamMembers || "").trim();
+    const nextTeamMembers = payload.standType !== "shop"
+      ? []
+      : submittedTeamNames === existingTeamNames
+      ? existingTeamMembers
+      : parseTeamMembers(payload.teamMembers);
+    const draftPayload = buildStandDraftUpdatePayload(
       {
-        ...myBarberProfile,
-        business_name: payload.businessName,
-        location: payload.location,
-        price_from: Number(payload.pricing || 0),
+        ...payload,
         services: selectedServices,
-        categories: Array.isArray(payload.categories) ? payload.categories : [],
-        primary_category: payload.primaryCategory || null,
-        availability: { start: payload.scheduleStart, end: payload.scheduleEnd },
-        latitude: Number(payload.latitude || DEFAULT_CENTER[0]),
-        longitude: Number(payload.longitude || DEFAULT_CENTER[1]),
-        image: payload.image || myBarberProfile.image || "",
-        accepts_wallet: payload.acceptsWallet ? 1 : 0,
-        accepts_cash: 1,
-        stand_type: payload.standType || "individual",
-        business_type: payload.businessType || myBarberProfile.business_type || "Services",
-        map_icon_type: payload.mapIconType || myBarberProfile.map_icon_type || myBarberProfile.mapIconType || "",
-        home_service_enabled: payload.homeServiceEnabled ? 1 : 0,
-        intro_text: payload.introText || "",
-        document_name: nextDocumentName,
-        verification_document_name: nextDocumentName,
-        portfolio: Array.isArray(payload.portfolio) ? payload.portfolio : myBarberProfile.portfolio || [],
-        team_members: payload.standType === "shop" ? parseTeamMembers(payload.teamMembers) : [],
-        verified: getBadgeLabel(nextVerificationStatus),
-        verified_status: nextVerificationStatus,
-        ownerUsername: currentUser.username,
+        teamMembers: nextTeamMembers,
+        acceptsWallet: PAYMENTS_ENABLED ? Boolean(payload.acceptsWallet) : false,
+        acceptsCash: true,
       },
-      0
+      myBarberProfile
     );
 
     try {
-      await updateMyBarberStand({
-        business_name: nextBarber.business_name,
-        location: nextBarber.location,
-        latitude: nextBarber.latitude,
-        longitude: nextBarber.longitude,
-        price_from: nextBarber.price_from,
-        image: nextBarber.image || "",
-        services: nextBarber.services,
-        categories: Array.isArray(payload.categories) ? payload.categories : [],
-        primary_category: payload.primaryCategory || null,
-        stand_type: nextBarber.stand_type || "individual",
-        business_type: nextBarber.business_type || "Services",
-        map_icon_type: nextBarber.map_icon_type || payload.mapIconType || "",
-        home_service_enabled: Boolean(nextBarber.home_service_enabled),
-        intro_text: nextBarber.intro_text || "",
-        verification_document_name: nextDocumentName,
-        document_name: nextDocumentName,
-        portfolio: nextBarber.portfolio || [],
-        team_members: nextBarber.team_members || [],
-        accepts_wallet: Boolean(nextBarber.accepts_wallet),
-        accepts_cash: true,
-      });
-
-      const localUpdated = getStoredBarbers().map((item) =>
-        String(item.id) === String(myBarberProfile.id) ? nextBarber : item
-      );
-      saveStoredBarbers(localUpdated);
-      setBarbers(localUpdated);
-      setSelectedBarber(nextBarber);
+      let data = await updateMyBarberStand(draftPayload);
+      if (wantsPublish) {
+        data = await publishMyBarberStand();
+      }
+      const savedBarber = data?.barber ? normalizeBarber(data.barber, 0) : null;
+      if (savedBarber) {
+        setBarbers((prev) => mergeBarberListsPreservingLocal([savedBarber], prev));
+        setSelectedBarber(savedBarber);
+      }
       await fetchBarbers();
     } catch (error) {
-      setGlobalError(error.message || "Could not update your business profile. Please check your connection and try again.");
-      return false;
+      const draftWasSaved = wantsPublish && error?.payload?.code === "STAND_NOT_READY";
+      const message = draftWasSaved
+        ? error?.message || "Your draft is saved, but complete the missing details before publishing."
+        : error?.message || "We couldn’t save your stand draft. Please try again.";
+      setGlobalError(message);
+      if (draftWasSaved) {
+        showSystemToast("Draft saved, not published", message, "system");
+      }
+      return { success: false, draftSaved: draftWasSaved, message };
     }
 
-    setShowEditBarber(false);
+    if (wantsPublish) setShowEditBarber(false);
 
     const updateNotification = {
       id: makeId("ntf"),
       user: currentUser.username,
       type: "system",
-      title: "Business profile updated",
-      message: "Your business details were saved.",
+      title: wantsPublish ? "Stand published" : "Stand draft saved",
+      message: wantsPublish ? "Your stand is now live." : "Draft saved. You can come back and continue anytime.",
       createdAt: new Date().toISOString(),
       read: false,
     };
     appendStored("notifications", currentUser.username, updateNotification);
-    showSystemToast("Business updated", "Your business changes were saved.", "system");
+    showSystemToast(
+      wantsPublish ? "Stand published" : "Draft saved",
+      wantsPublish ? "Your stand is now live and visible to customers." : "Draft saved. You can come back and continue anytime.",
+      "success"
+    );
     fetchNotifications();
-    return true;
+    return { success: true, published: wantsPublish };
   };
 
   const deleteBarberStand = async () => {

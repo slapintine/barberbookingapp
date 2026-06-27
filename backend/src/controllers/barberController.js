@@ -14,6 +14,17 @@ import {
 } from "../services/businessVisibility.js";
 import { materializeProviderImages } from "../services/providerImageStorage.js";
 import { withCanonicalProviderFields } from "../services/providerResponse.js";
+import { createRequestLogger } from "../config/logger.js";
+import {
+  firstOwnValue,
+  getClearFields,
+  getStandPublishMissingDetails,
+  hasAnyOwn,
+  mergeDraftArray,
+  mergeDraftBoolean,
+  mergeDraftNumber,
+  mergeDraftText,
+} from "../services/standDraftMerge.js";
 
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -40,6 +51,21 @@ function all(sql, params = []) {
       else resolve(rows || []);
     });
   });
+}
+
+async function runInTransaction(work) {
+  if (typeof db.transaction === "function") {
+    return db.transaction(work);
+  }
+  await run("BEGIN IMMEDIATE");
+  try {
+    const result = await work({ run, get, all });
+    await run("COMMIT");
+    return result;
+  } catch (error) {
+    await run("ROLLBACK").catch(() => {});
+    throw error;
+  }
 }
 
 function updateUserRole(userId, role) {
@@ -92,9 +118,11 @@ function getBarberByOwnerUserId(ownerUserId) {
       b.used_trials,
       b.deleted_at,
       b.created_at,
-      u.username
+      u.username,
+      p.phone
      FROM barbers b
      JOIN users u ON u.id = b.owner_user_id
+     LEFT JOIN profiles p ON p.user_id = b.owner_user_id
      WHERE b.owner_user_id = ?`,
     [ownerUserId]
   );
@@ -271,6 +299,16 @@ function parseJsonArray(value, fallback = []) {
   }
 }
 
+function withEditableDraftFields(barber = {}) {
+  const businessName = String(barber.business_name || "");
+  const location = String(barber.location || "");
+  return {
+    ...barber,
+    business_name: /^Business stand draft \d+$/i.test(businessName) ? "" : businessName,
+    location: location === "Location not set" ? "" : location,
+  };
+}
+
 function normalizePortfolioItems(input = []) {
   return parseJsonArray(input, [])
     .map((item, index) => ({
@@ -317,7 +355,12 @@ function normalizeTeamMembers(input = []) {
     .filter((item) => item.name);
 }
 
-function seedDefaultWeeklySchedule(barberId) {
+function seedDefaultWeeklySchedule(barberId, startTime = "08:00", endTime = "20:00") {
+  const normalizedStart = normalizeScheduleTime(startTime, "08:00");
+  const normalizedEnd = normalizeScheduleTime(endTime, "20:00");
+  if (normalizedStart >= normalizedEnd) {
+    throw validationError("Closing time must be later than opening time.");
+  }
   return new Promise((resolve, reject) => {
     const stmt = db.prepare(
       `INSERT INTO barber_schedule
@@ -332,8 +375,8 @@ function seedDefaultWeeklySchedule(barberId) {
         barberId,
         day,
         isSunday ? 0 : 1,
-        "08:00",
-        "20:00",
+        normalizedStart,
+        normalizedEnd,
         "NONE",
         null
       );
@@ -446,7 +489,7 @@ function normalizeIdentityPhone(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
-async function replaceBarberServices(barberId, services = [], serviceLimit = -1) {
+async function replaceBarberServices(barberId, services = [], serviceLimit = -1, { strict = true, executor = { run } } = {}) {
   const limit = Number(serviceLimit);
   if (limit > -1 && services.length > limit) {
     throw validationError(`You have reached the ${limit} service limit for your plan. Upgrade to add more.`);
@@ -455,16 +498,17 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1)
   for (const service of services) {
     const serviceName = String(service.service_name || service.serviceName || "").trim();
     const category = String(service.category || service.service_category || service.serviceCategory || "General").trim();
-    if (!serviceName) {
+    if (strict && !serviceName) {
       throw validationError("Service name is required.");
     }
+    if (!serviceName) continue;
     const duplicateKey = `${serviceName.toLowerCase()}::${category.toLowerCase()}`;
     if (seenServices.has(duplicateKey)) {
       throw validationError(`Duplicate service "${serviceName}" in ${category}. Remove the duplicate before saving.`);
     }
     seenServices.add(duplicateKey);
   }
-  await run(`DELETE FROM barber_services WHERE barber_id = ?`, [barberId]);
+  await executor.run(`DELETE FROM barber_services WHERE barber_id = ?`, [barberId]);
 
   for (const service of services) {
     const serviceName = String(service.service_name || service.serviceName || "").trim();
@@ -484,21 +528,21 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1)
       ? rawLocationType
       : "provider_location";
 
-    if (normalizedPricingType === "fixed" && price <= 0) {
+    if (strict && normalizedPricingType === "fixed" && price <= 0) {
       throw validationError("Please enter a valid price.");
     }
-    if (normalizedPricingType === "range") {
+    if (strict && normalizedPricingType === "range") {
       if (minPrice <= 0 || maxPrice <= 0) throw validationError("Please complete the price range before saving.");
       if (maxPrice <= minPrice) throw validationError("Maximum price must be greater than minimum price.");
     }
-    if (normalizedPricingType === "starting_from" && startingPrice <= 0) {
+    if (strict && normalizedPricingType === "starting_from" && startingPrice <= 0) {
       throw validationError("Please enter a valid price.");
     }
-    if (!Number.isFinite(durationMinutes) || (durationMinutes !== 0 && (durationMinutes < 5 || durationMinutes > 1440))) {
+    if (!Number.isFinite(durationMinutes) || (strict && durationMinutes !== 0 && (durationMinutes < 5 || durationMinutes > 1440))) {
       throw validationError("Service duration must be between 5 minutes and 24 hours.");
     }
 
-    await run(
+    await executor.run(
       `INSERT INTO barber_services
        (barber_id, service_name, category, price_extra, pricing_type, min_price, max_price, starting_price, duration_minutes, location_type, description, is_available, image, is_featured)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -522,11 +566,11 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1)
   }
 }
 
-async function replaceTeamMembers(barberId, teamMembers = []) {
-  await run(`DELETE FROM barber_team_members WHERE barber_id = ?`, [barberId]);
+async function replaceTeamMembers(barberId, teamMembers = [], { executor = { run } } = {}) {
+  await executor.run(`DELETE FROM barber_team_members WHERE barber_id = ?`, [barberId]);
 
   for (const member of normalizeTeamMembers(teamMembers)) {
-    await run(
+    await executor.run(
       `INSERT INTO barber_team_members
        (barber_id, name, title, bio, image, specialties, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -659,6 +703,7 @@ function buildSubscriptionMetadata(barber, latestSubscription) {
 }
 
 export async function registerBarber(req, res, next) {
+  const requestLogger = createRequestLogger(req);
   try {
     const {
       business_name,
@@ -683,6 +728,9 @@ export async function registerBarber(req, res, next) {
       selected_plan,
       plan,
       submit_intent = "draft",
+      phone = "",
+      schedule_start = "08:00",
+      schedule_end = "20:00",
     } = req.body;
     const requestedImage = image || req.body.cover_image || req.body.coverImage || req.body.profile_image || req.body.profileImage || "";
     const requestedBusinessType = req.body.category || business_type;
@@ -714,6 +762,12 @@ export async function registerBarber(req, res, next) {
     const wantsPayment = String(submit_intent || "").trim().toLowerCase() === "payment";
     const safeBusinessName = String(business_name || "").trim() || `Business stand draft ${req.user.id}`;
     const safeLocation = String(location || "").trim() || "Location not set";
+    const safePhone = String(phone || "").trim();
+    const safeScheduleStart = normalizeScheduleTime(schedule_start, "08:00");
+    const safeScheduleEnd = normalizeScheduleTime(schedule_end, "20:00");
+    if (safeScheduleStart >= safeScheduleEnd) {
+      return res.status(400).json({ success: false, message: "Closing time must be later than opening time." });
+    }
     const normalizedName = normalizeBusinessName(safeBusinessName);
 
     if (wantsPayment && (!business_name || !location)) {
@@ -791,14 +845,16 @@ export async function registerBarber(req, res, next) {
       [req.user.id]
     );
     const profileEmail = normalizeIdentityEmail(ownerProfile?.email);
-    const profilePhone = normalizeIdentityPhone(ownerProfile?.phone);
+    const nextProfilePhone = safePhone || ownerProfile?.phone || "";
+    const profilePhone = normalizeIdentityPhone(nextProfilePhone);
     await run(
       `UPDATE profiles
-       SET normalized_email = ?,
+       SET phone = ?,
+           normalized_email = ?,
            normalized_phone = ?,
            selected_plan = COALESCE(?, selected_plan)
        WHERE user_id = ?`,
-      [profileEmail, profilePhone, wantsPayment ? selectedPlan || null : null, req.user.id]
+      [nextProfilePhone, profileEmail, profilePhone, wantsPayment ? selectedPlan || null : null, req.user.id]
     ).catch(() => {});
 
     const draftStatus = freeActivation ? "active" : wantsPayment ? "pending_payment" : "draft";
@@ -809,9 +865,9 @@ export async function registerBarber(req, res, next) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
-        business_name,
+        safeBusinessName,
         normalizedName,
-        location,
+        safeLocation,
         latitude,
         longitude,
         normalizeOptionalMoneyAmount(price_from, "Base service price"),
@@ -848,6 +904,13 @@ export async function registerBarber(req, res, next) {
     );
 
     const barberId = insertResult.lastID;
+    await run(
+      `UPDATE barbers
+       SET availability_start = ?,
+           availability_end = ?
+       WHERE id = ?`,
+      [safeScheduleStart, safeScheduleEnd, barberId]
+    );
 
     if (freeActivation) {
       await run(
@@ -859,14 +922,14 @@ export async function registerBarber(req, res, next) {
     }
 
     if (storedImages.services.length) {
-      await replaceBarberServices(barberId, storedImages.services, selectedPlanConfig.serviceLimit);
+      await replaceBarberServices(barberId, storedImages.services, selectedPlanConfig.serviceLimit, { strict: false });
     }
     if (wantsPayment && !normalizedMapIconType) {
       return res.status(400).json({ success: false, message: "Select a map icon in Business Basics before continuing." });
     }
     await replaceTeamMembers(barberId, storedImages.teamMembers);
 
-    await seedDefaultWeeklySchedule(barberId);
+    await seedDefaultWeeklySchedule(barberId, safeScheduleStart, safeScheduleEnd);
     await updateUserRole(req.user.id, "provider");
     await logAudit(req.user.id, `Registered provider profile #${barberId}`);
 
@@ -887,11 +950,13 @@ export async function registerBarber(req, res, next) {
         }),
       next_step: freeActivation ? "active" : wantsPayment ? "payment_pending" : "draft",
       barber: {
-        ...barber,
+        ...withEditableDraftFields(barber),
         ...withCanonicalProviderFields(barber, {
           services: barberServices,
           portfolio: parseJsonArray(barber.portfolio_json, storedImages.portfolio),
         }),
+        business_name: withEditableDraftFields(barber).business_name,
+        location: withEditableDraftFields(barber).location,
         image: barber.image || null,
         document_name: barber.verification_document_name || "",
         business_type: barber.business_type || normalizedBusinessType,
@@ -907,6 +972,13 @@ export async function registerBarber(req, res, next) {
       }
     });
   } catch (error) {
+    requestLogger.error({
+      err: error,
+      ownerUserId: req.user?.id,
+      providedFields: Object.keys(req.body || {}).filter((key) => !["image", "portfolio", "gallery_images", "services", "team_members"].includes(key)),
+      hasImagePayload: hasAnyOwn(req.body || {}, ["image", "cover_image", "coverImage", "profile_image", "profileImage"]),
+      hasServicesPayload: hasAnyOwn(req.body || {}, ["services"]),
+    }, "Failed to create provider stand draft");
     next(error);
   }
 }
@@ -1152,6 +1224,8 @@ export async function getMyBarberProfile(req, res, next) {
           services,
           portfolio: parseJsonArray(barber.portfolio_json, []),
         }),
+        business_name: withEditableDraftFields(barber).business_name,
+        location: withEditableDraftFields(barber).location,
         image: barber.image || null,
         document_name: barber.verification_document_name || "",
         business_type: barber.business_type || "Services",
@@ -1179,6 +1253,7 @@ export async function getMyBarberProfile(req, res, next) {
 }
 
 export async function updateMyBarberProfile(req, res, next) {
+  const requestLogger = createRequestLogger(req);
   try {
     const barber = await getBarberByOwnerUserId(req.user.id);
 
@@ -1189,45 +1264,167 @@ export async function updateMyBarberProfile(req, res, next) {
       });
     }
 
-    const {
-      business_name,
-      location,
-      latitude = null,
-      longitude = null,
-      price_from = 0,
-      accepts_wallet = barber.accepts_wallet,
-      accepts_cash = barber.accepts_cash,
-      services = [],
-      stand_type = barber.stand_type || "individual",
-      team_members = [],
-      business_type = barber.business_type || "Services",
-      map_icon_type = barber.map_icon_type || "",
-      home_service_enabled = barber.home_service_enabled || false,
-      intro_text = barber.intro_text || "",
-      portfolio = parseJsonArray(barber.portfolio_json, []),
-    } = req.body;
-    const hasVerificationDocumentUpdate =
-      Object.prototype.hasOwnProperty.call(req.body, "verification_document_name") ||
-      Object.prototype.hasOwnProperty.call(req.body, "document_name") ||
-      Object.prototype.hasOwnProperty.call(req.body, "documentName");
-    const requestedImage = req.body.image || req.body.cover_image || req.body.coverImage || req.body.profile_image || req.body.profileImage;
-    const requestedBusinessType = req.body.category || business_type;
-    const requestedIntroText = req.body.description || intro_text;
-    const requestedPortfolio = req.body.gallery_images || req.body.galleryImages || portfolio;
-    const normalizedStandType = normalizeStandType(stand_type);
-    const normalizedBusinessType = normalizeBusinessType(requestedBusinessType);
-    const normalizedMapIconType = normalizeMapIconType(map_icon_type);
-    const normalizedPortfolio = normalizePortfolioItems(
-      Array.isArray(requestedPortfolio)
-        ? requestedPortfolio.map((item) => typeof item === "string" ? { afterImage: item } : item)
-        : requestedPortfolio
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const clearFields = getClearFields(body);
+    const existingServices = await getServicesForBarber(barber.id);
+    const existingSchedule = await getScheduleForBarber(barber.id);
+    const existingTeamMembers = await getTeamMembersForBarber(barber.id);
+    const existingPortfolio = parseJsonArray(barber.portfolio_json, []);
+    const nextBusinessNameInput = mergeDraftText({
+      body,
+      keys: ["business_name", "businessName"],
+      existing: barber.business_name,
+      clearFields,
+      clearKey: "business_name",
+    });
+    const nextLocationInput = mergeDraftText({
+      body,
+      keys: ["location"],
+      existing: barber.location,
+      clearFields,
+      clearKey: "location",
+    });
+    const nextBusinessName = nextBusinessNameInput || `Business stand draft ${req.user.id}`;
+    const nextLocation = nextLocationInput || "Location not set";
+    const nextLatitude = mergeDraftNumber({
+      body,
+      keys: ["latitude"],
+      existing: barber.latitude,
+      clearFields,
+      clearKey: "latitude",
+    });
+    const nextLongitude = mergeDraftNumber({
+      body,
+      keys: ["longitude"],
+      existing: barber.longitude,
+      clearFields,
+      clearKey: "longitude",
+    });
+    const nextPriceFrom = mergeDraftNumber({
+      body,
+      keys: ["price_from", "priceFrom"],
+      existing: barber.price_from,
+      clearFields,
+      clearKey: "price_from",
+    });
+    const nextStandType = normalizeStandType(mergeDraftText({
+      body,
+      keys: ["stand_type", "standType"],
+      existing: barber.stand_type || "individual",
+      clearFields,
+      clearKey: "stand_type",
+    }));
+    const nextBusinessType = normalizeBusinessType(mergeDraftText({
+      body,
+      keys: ["category", "business_type", "businessType"],
+      existing: barber.business_type || "Services",
+      clearFields,
+      clearKey: "business_type",
+    }));
+    const nextMapIconType = normalizeMapIconType(mergeDraftText({
+      body,
+      keys: ["map_icon_type", "mapIconType"],
+      existing: barber.map_icon_type || "",
+      clearFields,
+      clearKey: "map_icon_type",
+    }));
+    const nextIntroText = mergeDraftText({
+      body,
+      keys: ["description", "intro_text", "introText"],
+      existing: barber.intro_text || "",
+      clearFields,
+      clearKey: "intro_text",
+    });
+    const nextPortfolioInput = mergeDraftArray({
+      body,
+      keys: ["gallery_images", "galleryImages", "portfolio"],
+      existing: existingPortfolio,
+      clearFields,
+      clearKey: "portfolio",
+    });
+    const nextPortfolio = normalizePortfolioItems(
+      nextPortfolioInput.map((item) => typeof item === "string" ? { afterImage: item } : item)
     );
-    const normalizedTeamMembers = normalizedStandType === "shop" ? normalizeTeamMembers(team_members) : [];
+    const nextServicesInput = mergeDraftArray({
+      body,
+      keys: ["services"],
+      existing: existingServices,
+      clearFields,
+      clearKey: "services",
+    });
+    const nextTeamMembersInput = mergeDraftArray({
+      body,
+      keys: ["team_members", "teamMembers"],
+      existing: existingTeamMembers,
+      clearFields,
+      clearKey: "team_members",
+    });
+    const nextTeamMembers = nextStandType === "shop"
+      ? normalizeTeamMembers(nextTeamMembersInput)
+      : existingTeamMembers;
+    const servicesWereProvided = hasAnyOwn(body, ["services"]);
+    const portfolioWasProvided = hasAnyOwn(body, ["gallery_images", "galleryImages", "portfolio"]);
+    const teamMembersWereProvided = hasAnyOwn(body, ["team_members", "teamMembers"]);
+    const imageWasProvided = hasAnyOwn(body, ["image", "cover_image", "coverImage", "profile_image", "profileImage"]);
+    const incomingImage = imageWasProvided
+      ? firstOwnValue(body, ["image", "cover_image", "coverImage", "profile_image", "profileImage"])
+      : undefined;
+    const finalImage = imageWasProvided && String(incomingImage || "").trim()
+      ? validateImageReference(incomingImage, "Business image")
+      : imageWasProvided && clearFields.has("image")
+      ? ""
+      : barber.image || "";
+    const nextAcceptsWallet = mergeDraftBoolean({
+      body,
+      keys: ["accepts_wallet", "acceptsWallet"],
+      existing: barber.accepts_wallet,
+    });
+    const nextAcceptsCash = mergeDraftBoolean({
+      body,
+      keys: ["accepts_cash", "acceptsCash"],
+      existing: barber.accepts_cash,
+    });
+    const nextHomeServiceEnabled = mergeDraftBoolean({
+      body,
+      keys: ["home_service_enabled", "homeServiceEnabled"],
+      existing: barber.home_service_enabled,
+    });
+    const nextPhone = mergeDraftText({
+      body,
+      keys: ["phone", "business_phone", "businessPhone"],
+      existing: barber.phone || "",
+      clearFields,
+      clearKey: "phone",
+    });
+    const nextScheduleStart = normalizeScheduleTime(mergeDraftText({
+      body,
+      keys: ["schedule_start", "scheduleStart", "availability_start"],
+      existing: barber.availability_start || existingSchedule.find((day) => Number(day.is_open) === 1)?.start_time || "08:00",
+      clearFields,
+      clearKey: "schedule_start",
+    }), "08:00");
+    const nextScheduleEnd = normalizeScheduleTime(mergeDraftText({
+      body,
+      keys: ["schedule_end", "scheduleEnd", "availability_end"],
+      existing: barber.availability_end || existingSchedule.find((day) => Number(day.is_open) === 1)?.end_time || "20:00",
+      clearFields,
+      clearKey: "schedule_end",
+    }), "20:00");
+    if (nextScheduleStart >= nextScheduleEnd) {
+      return res.status(400).json({ success: false, message: "Closing time must be later than opening time." });
+    }
+
+    const hasVerificationDocumentUpdate =
+      hasAnyOwn(body, ["verification_document_name", "document_name", "documentName"]);
     const existingVerificationDocumentName = barber.verification_document_name || "";
     const nextVerificationDocumentName = hasVerificationDocumentUpdate
-      ? normalizeVerificationDocumentName(
-          req.body.verification_document_name || req.body.document_name || req.body.documentName
-        )
+      ? normalizeVerificationDocumentName(mergeDraftText({
+          body,
+          keys: ["verification_document_name", "document_name", "documentName"],
+          existing: existingVerificationDocumentName,
+          clearFields,
+          clearKey: "verification_document_name",
+        }))
       : existingVerificationDocumentName;
     const verificationDocumentChanged = nextVerificationDocumentName !== existingVerificationDocumentName;
     const nextVerificationStatus = verificationDocumentChanged
@@ -1244,41 +1441,25 @@ export async function updateMyBarberProfile(req, res, next) {
     const nextVerificationReviewedBy = verificationDocumentChanged ? null : barber.verification_reviewed_by || null;
     const nextVerificationNotes = verificationDocumentChanged ? "" : barber.verification_notes || "";
 
-    const incomingImage = requestedImage;
-    const finalImage =
-      typeof incomingImage === "string" && incomingImage.trim() !== ""
-        ? validateImageReference(incomingImage, "Business image")
-        : barber.image || null;
-
-    if (!business_name || !location) {
-      return res.status(400).json({
-        success: false,
-        message: "Business name and location are required."
-      });
-    }
-    if (!normalizedMapIconType) {
-      return res.status(400).json({ success: false, message: "Select a map icon in Business Basics before saving the stand." });
-    }
-
-    const safeBusinessName = String(business_name || "").trim();
-    const safeLocation = String(location || "").trim();
-    const normalizedName = normalizeBusinessName(safeBusinessName);
-    const duplicateBusiness = await get(
-      `SELECT id FROM barbers
-       WHERE id <> ?
-         AND (
-           normalized_business_name = ?
-           OR LOWER(TRIM(REPLACE(REPLACE(REPLACE(business_name, '  ', ' '), '  ', ' '), '  ', ' '))) = ?
-         )
-       LIMIT 1`,
-      [barber.id, normalizedName, normalizedName]
-    );
-    if (duplicateBusiness) {
-      return res.status(409).json({
-        success: false,
-        code: "DUPLICATE_BUSINESS_NAME",
-        message: "A business with this name already exists. If this is your business, please contact support or report ownership."
-      });
+    const normalizedName = normalizeBusinessName(nextBusinessName);
+    if (hasAnyOwn(body, ["business_name", "businessName"]) && nextBusinessNameInput) {
+      const duplicateBusiness = await get(
+        `SELECT id FROM barbers
+         WHERE id <> ?
+           AND (
+             normalized_business_name = ?
+             OR LOWER(TRIM(REPLACE(REPLACE(REPLACE(business_name, '  ', ' '), '  ', ' '), '  ', ' '))) = ?
+           )
+         LIMIT 1`,
+        [barber.id, normalizedName, normalizedName]
+      );
+      if (duplicateBusiness) {
+        return res.status(409).json({
+          success: false,
+          code: "DUPLICATE_BUSINESS_NAME",
+          message: "A business with this name already exists. If this is your business, please contact support or report ownership."
+        });
+      }
     }
 
     const latestSubscriptionForLimit = await getLatestSubscription(barber.id);
@@ -1289,81 +1470,127 @@ export async function updateMyBarberProfile(req, res, next) {
     assertProviderImageLimits({
       planConfig,
       businessImage: finalImage || "",
-      services: Array.isArray(services) ? services : [],
-      portfolio: normalizedPortfolio,
-      teamMembers: normalizedTeamMembers,
+      services: nextServicesInput,
+      portfolio: nextPortfolio,
+      teamMembers: nextTeamMembers,
     });
 
     const storedImages = await materializeProviderImages({
       ownerId: req.user.id,
       businessImage: finalImage || "",
-      services: Array.isArray(services) ? services : [],
-      portfolio: normalizedPortfolio,
-      teamMembers: normalizedTeamMembers,
+      services: nextServicesInput,
+      portfolio: nextPortfolio,
+      teamMembers: nextTeamMembers,
     });
 
-    await run(
-      `UPDATE barbers
-       SET business_name = ?,
-           normalized_business_name = ?,
-           location = ?,
-           latitude = ?,
-           longitude = ?,
-           price_from = ?,
-           pricing_mode = ?,
-           requires_quote = ?,
-           image = ?,
-           accepts_wallet = ?,
-           accepts_cash = ?,
-           stand_type = ?,
-           business_type = ?,
-           map_icon_type = ?,
-           home_service_enabled = ?,
-           intro_text = ?,
-           portfolio_json = ?,
-           verification_document_name = ?,
-           verified_status = ?,
-           verification_submitted_at = ?,
-           verification_reviewed_at = ?,
-           verification_reviewed_by = ?,
-           verification_notes = ?
-       WHERE owner_user_id = ?`,
-      [
-        safeBusinessName,
-        normalizedName,
-        safeLocation,
-        latitude,
-        longitude,
-        normalizeOptionalMoneyAmount(price_from, "Base service price"),
-        String(req.body.pricing_mode || (req.body.requires_quote ? "quote" : barber.pricing_mode || "fixed")).toLowerCase(),
-        req.body.requires_quote === undefined ? Number(barber.requires_quote || 0) : req.body.requires_quote ? 1 : 0,
-        storedImages.businessImage || finalImage,
-        accepts_wallet ? 1 : 0,
-        1,
-        normalizedStandType,
-        normalizedBusinessType,
-        normalizedMapIconType,
-        home_service_enabled ? 1 : 0,
-        String(requestedIntroText || "").trim(),
-        JSON.stringify(storedImages.portfolio),
-        nextVerificationDocumentName,
-        nextVerificationStatus,
-        nextVerificationSubmittedAt,
-        nextVerificationReviewedAt,
-        nextVerificationReviewedBy,
-        nextVerificationNotes,
-        req.user.id
-      ]
-    );
+    await runInTransaction(async (tx) => {
+      await tx.run(
+        `UPDATE barbers
+         SET business_name = ?,
+             normalized_business_name = ?,
+             location = ?,
+             latitude = ?,
+             longitude = ?,
+             price_from = ?,
+             pricing_mode = ?,
+             requires_quote = ?,
+             image = ?,
+             accepts_wallet = ?,
+             accepts_cash = ?,
+             stand_type = ?,
+             business_type = ?,
+             map_icon_type = ?,
+             home_service_enabled = ?,
+             intro_text = ?,
+             portfolio_json = ?,
+             availability_start = ?,
+             availability_end = ?,
+             verification_document_name = ?,
+             verified_status = ?,
+             verification_submitted_at = ?,
+             verification_reviewed_at = ?,
+             verification_reviewed_by = ?,
+             verification_notes = ?
+         WHERE owner_user_id = ?`,
+        [
+          nextBusinessName,
+          normalizedName,
+          nextLocation,
+          nextLatitude,
+          nextLongitude,
+          normalizeOptionalMoneyAmount(nextPriceFrom ?? 0, "Base service price"),
+          String(body.pricing_mode || (body.requires_quote ? "quote" : barber.pricing_mode || "fixed")).toLowerCase(),
+          body.requires_quote === undefined ? Number(barber.requires_quote || 0) : body.requires_quote ? 1 : 0,
+          storedImages.businessImage || finalImage || "",
+          nextAcceptsWallet ? 1 : 0,
+          nextAcceptsCash ? 1 : 0,
+          nextStandType,
+          nextBusinessType,
+          nextMapIconType,
+          nextHomeServiceEnabled ? 1 : 0,
+          nextIntroText,
+          JSON.stringify(portfolioWasProvided ? storedImages.portfolio : existingPortfolio),
+          nextScheduleStart,
+          nextScheduleEnd,
+          nextVerificationDocumentName,
+          nextVerificationStatus,
+          nextVerificationSubmittedAt,
+          nextVerificationReviewedAt,
+          nextVerificationReviewedBy,
+          nextVerificationNotes,
+          req.user.id
+        ]
+      );
+      if (servicesWereProvided || clearFields.has("services")) {
+        await replaceBarberServices(barber.id, storedImages.services, planConfig.serviceLimit, { strict: false, executor: tx });
+      }
+      if (teamMembersWereProvided || clearFields.has("team_members")) {
+        await replaceTeamMembers(barber.id, storedImages.teamMembers, { executor: tx });
+      }
+      if (
+        hasAnyOwn(body, ["schedule_start", "scheduleStart", "availability_start", "schedule_end", "scheduleEnd", "availability_end"])
+      ) {
+        const scheduleToSave = existingSchedule.length
+          ? existingSchedule.map((day) => ({
+              ...day,
+              start_time: Number(day.is_open) === 1 ? nextScheduleStart : day.start_time,
+              end_time: Number(day.is_open) === 1 ? nextScheduleEnd : day.end_time,
+            }))
+          : Array.from({ length: 7 }, (_, day) => ({
+              day_of_week: day,
+              is_open: day === 0 ? 0 : 1,
+              start_time: nextScheduleStart,
+              end_time: nextScheduleEnd,
+              break_start: "NONE",
+              break_end: null,
+            }));
+        await tx.run(`DELETE FROM barber_schedule WHERE barber_id = ?`, [barber.id]);
+        for (const day of scheduleToSave) {
+          await tx.run(
+            `INSERT INTO barber_schedule
+             (barber_id, day_of_week, is_open, start_time, end_time, break_start, break_end)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              barber.id,
+              Number(day.day_of_week ?? day.dayOfWeek),
+              Number(day.is_open ?? day.isOpen) === 1 ? 1 : 0,
+              day.start_time || day.startTime || nextScheduleStart,
+              day.end_time || day.endTime || nextScheduleEnd,
+              day.break_start || day.breakStart || "NONE",
+              day.break_end || day.breakEnd || null,
+            ]
+          );
+        }
+      }
+      if (hasAnyOwn(body, ["phone", "business_phone", "businessPhone"]) || clearFields.has("phone")) {
+        await tx.run(
+          `UPDATE profiles SET phone = ?, normalized_phone = ? WHERE user_id = ?`,
+          [nextPhone, normalizeIdentityPhone(nextPhone), req.user.id]
+        );
+      }
+    });
 
-    if (Array.isArray(services)) {
-      await replaceBarberServices(barber.id, storedImages.services, planConfig.serviceLimit);
-    }
-    if (Array.isArray(team_members)) {
-      await replaceTeamMembers(barber.id, storedImages.teamMembers);
-    }
-
-    await logAudit(req.user.id, `Updated provider profile #${barber.id}`);
+    await logAudit(req.user.id, `Saved provider stand draft #${barber.id}`);
 
     const updatedBarber = await getBarberByOwnerUserId(req.user.id);
     const updatedServices = await getServicesForBarber(updatedBarber.id);
@@ -1373,17 +1600,20 @@ export async function updateMyBarberProfile(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      message: "Provider profile updated successfully.",
+      message: "Draft saved. You can come back and continue anytime.",
+      status: "draft_saved",
       barber: {
         ...updatedBarber,
         ...withCanonicalProviderFields(updatedBarber, {
           services: updatedServices,
           portfolio: parseJsonArray(updatedBarber.portfolio_json, storedImages.portfolio),
         }),
+        business_name: withEditableDraftFields(updatedBarber).business_name,
+        location: withEditableDraftFields(updatedBarber).location,
         image: updatedBarber.image || null,
         document_name: updatedBarber.verification_document_name || "",
-        business_type: updatedBarber.business_type || normalizedBusinessType,
-        map_icon_type: updatedBarber.map_icon_type || normalizedMapIconType,
+        business_type: updatedBarber.business_type || nextBusinessType,
+        map_icon_type: updatedBarber.map_icon_type || nextMapIconType,
         home_service_enabled: Number(updatedBarber.home_service_enabled || 0),
         intro_text: updatedBarber.intro_text || "",
         portfolio: parseJsonArray(updatedBarber.portfolio_json, storedImages.portfolio),
@@ -1395,6 +1625,15 @@ export async function updateMyBarberProfile(req, res, next) {
       }
     });
   } catch (error) {
+    requestLogger.error({
+      err: error,
+      ownerUserId: req.user?.id,
+      standId: req.user?.id ? (await getBarberByOwnerUserId(req.user.id).catch(() => null))?.id : null,
+      providedFields: Object.keys(req.body || {}).filter((key) => !["image", "portfolio", "gallery_images", "services", "team_members"].includes(key)),
+      hasImagePayload: hasAnyOwn(req.body || {}, ["image", "cover_image", "coverImage", "profile_image", "profileImage"]),
+      hasServicesPayload: hasAnyOwn(req.body || {}, ["services"]),
+      hasPortfolioPayload: hasAnyOwn(req.body || {}, ["portfolio", "gallery_images", "galleryImages"]),
+    }, "Failed to save provider stand draft");
     next(error);
   }
 }
@@ -1405,16 +1644,15 @@ export async function publishMyBarberStand(req, res, next) {
     if (!barber) {
       return res.status(404).json({ success: false, message: "Provider profile not found." });
     }
-    if (!String(barber.business_name || "").trim() || !String(barber.location || "").trim()) {
+    const services = await getServicesForBarber(barber.id);
+    const schedule = await getScheduleForBarber(barber.id);
+    const missing = getStandPublishMissingDetails({ stand: barber, services, schedule });
+    if (missing.length) {
       return res.status(400).json({
         success: false,
-        message: "Your stand needs a business name and location before it can be published.",
-      });
-    }
-    if (!String(barber.map_icon_type || "").trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Select a map icon in Business Basics before publishing your stand.",
+        code: "STAND_NOT_READY",
+        missing_fields: missing,
+        message: `Your draft is saved, but complete ${missing.join(", ")} before publishing.`,
       });
     }
     const currentStatus = String(barber.business_status || "").toLowerCase();
@@ -1442,7 +1680,7 @@ export async function publishMyBarberStand(req, res, next) {
     await logAudit(req.user.id, `Published provider stand #${barber.id}`);
     const updatedBarber = await getBarberByOwnerUserId(req.user.id);
     const updatedServices = await getServicesForBarber(updatedBarber.id);
-    const schedule = await getScheduleForBarber(updatedBarber.id);
+    const updatedSchedule = await getScheduleForBarber(updatedBarber.id);
     const teamMembers = await getTeamMembersForBarber(updatedBarber.id);
     const latestSubscription = await getLatestSubscription(updatedBarber.id);
     return res.status(200).json({
@@ -1461,7 +1699,7 @@ export async function publishMyBarberStand(req, res, next) {
         services: updatedServices,
         team_members: teamMembers,
         teamMembers,
-        schedule,
+        schedule: updatedSchedule,
       },
     });
   } catch (error) {

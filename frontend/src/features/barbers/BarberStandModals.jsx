@@ -29,6 +29,7 @@ import {
   getPlanImageSizeMessage,
   PROVIDER_PLANS,
 } from "../../utils/subscriptionPlans.js";
+import { PAYMENTS_ENABLED } from "../../utils/launchFlags.js";
 
 const DEFAULT_CENTER = [0.3136, 32.5811];
 const TOTAL_STEPS = 6;
@@ -550,7 +551,7 @@ function WizardNotice({ children }) {
   return <div className="wizard-note-v10">{children}</div>;
 }
 
-function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose, onSubmit, requirePlan = false, profile = {} }) {
+function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, requirePlan = false, profile = {} }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
   const [missingFields, setMissingFields] = useState([]);
@@ -558,8 +559,22 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
   const [detailsPlan, setDetailsPlan] = useState("");
   const [locationDetecting, setLocationDetecting] = useState(false);
   const [savingIntent, setSavingIntent] = useState("");
+  const [saveNotice, setSaveNotice] = useState("");
   const services = normalizeFormServices(form.services);
   const selectedPlan = PROVIDER_PLANS.find((plan) => plan.tier === form.selectedPlan) || PROVIDER_PLANS[0];
+  const profilePlan = String(
+    profile?.subscription?.tier ||
+    profile?.subscription_tier ||
+    profile?.providerPlan ||
+    profile?.plan ||
+    ""
+  ).toUpperCase();
+  const profilePlanStatus = String(profile?.subscription?.status || profile?.subscription_status || "").toLowerCase();
+  const selectedPlanAlreadyActive =
+    selectedPlan.tier !== "FREE" &&
+    profilePlan === selectedPlan.tier &&
+    !["pending", "expired", "cancelled", "canceled", "inactive", "locked"].includes(profilePlanStatus);
+  const selectedPaidPlanComingSoon = selectedPlan.tier !== "FREE" && !PAYMENTS_ENABLED && !selectedPlanAlreadyActive;
   const planFeatures = getPlanFeatures(selectedPlan.id);
   const maxServices = planFeatures.maxServices;
   const maxPhotos = planFeatures.maxPhotos;
@@ -762,17 +777,10 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
 
   const submitWizard = async (intent = "draft") => {
     if (savingIntent) return;
-    if (intent === "draft") {
-      const draftMissing = [];
-      if (!String(form.businessName || "").trim()) draftMissing.push({ key: "businessName", label: "Business name" });
-      if (!String(form.location || "").trim()) draftMissing.push({ key: "location", label: "Business location" });
-      if (draftMissing.length) {
-        setCurrentStep(draftMissing[0].key === "businessName" ? 1 : 2);
-        setMissingFields(draftMissing);
-        setError("");
-        return;
-      }
-    } else {
+    if (intent === "publish" && form.selectedPlan !== "FREE" && !PAYMENTS_ENABLED && !selectedPlanAlreadyActive) {
+      intent = "draft";
+    }
+    if (intent === "publish") {
       for (let step = 1; step <= TOTAL_STEPS - 1; step += 1) {
         const message = validateStep(step);
         if (message) {
@@ -794,10 +802,13 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
     }
     setMissingFields([]);
     setError("");
+    setSaveNotice("");
     setSavingIntent(intent);
     try {
-      const saved = await onSubmit({
+      const result = await onSubmit({
         ...form,
+        acceptsWallet: PAYMENTS_ENABLED ? Boolean(form.acceptsWallet) : false,
+        acceptsCash: true,
         submitIntent: intent,
         categories: selectedCategoryItems.map((category) => category.key),
         selectedCategories: selectedCategoryItems,
@@ -806,9 +817,18 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
         mapIconType: effectiveMapIconType,
         services,
       });
-      if (saved === false) {
-        setError(intent === "draft" ? "Could not save this draft. Please check the highlighted details and try again." : "Could not continue. Please check your business details and try again.");
+      if (result === false || result?.success === false) {
+        setError(
+          result?.message ||
+          (intent === "draft"
+            ? "We couldn’t save your stand draft. Please try again."
+            : "Your draft is saved, but complete the missing details before publishing.")
+        );
+      } else if (intent === "draft") {
+        setSaveNotice("Draft saved. You can come back and continue anytime.");
       }
+    } catch (submitError) {
+      setError(submitError?.message || "We couldn’t save your stand draft. Please try again.");
     } finally {
       setSavingIntent("");
     }
@@ -846,6 +866,11 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                     This is my business / Claim or report
                   </button>
                 ) : null}
+              </div>
+            ) : null}
+            {saveNotice ? (
+              <div className="wizard-note-v10" role="status" aria-live="polite">
+                <FiCheckCircle /> {saveNotice}
               </div>
             ) : null}
 
@@ -1317,19 +1342,23 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
 
             {currentStep === 5 ? (
               <section className="business-step-card-v10">
-                <WizardNotice>Choose how customers can pay and how your services are offered.</WizardNotice>
+                <WizardNotice>Set booking expectations, service location, and portfolio photos. Online payments are not live yet, so customers pay you directly for now.</WizardNotice>
                 {requirePlan ? (
                 <div className="payment-config-v5 business-mini-card-v10">
-                  <div className="payment-config-title-v5"><FiCreditCard /> Payment options</div>
+                  <div className="payment-config-title-v5"><FiCreditCard /> Payment readiness</div>
                   <label className="payment-config-option-v5">
                     <input
                       type="checkbox"
-                      checked={Boolean(form.acceptsWallet)}
-                      onChange={(e) => setForm((prev) => ({ ...prev, acceptsWallet: e.target.checked }))}
+                      checked={PAYMENTS_ENABLED && Boolean(form.acceptsWallet)}
+                      disabled={!PAYMENTS_ENABLED}
+                      onChange={(e) => {
+                        if (!PAYMENTS_ENABLED) return;
+                        setForm((prev) => ({ ...prev, acceptsWallet: e.target.checked }));
+                      }}
                     />
                     <span>
-                      <strong>Mobile Money payments</strong>
-                      <small>Customers can pay directly during booking where supported.</small>
+                      <strong>Mobile Money payments — Coming Soon</strong>
+                      <small>Online MTN/Airtel collection is not active yet. Keep this off until payments launch.</small>
                     </span>
                   </label>
                   <label className="payment-config-option-v5">
@@ -1340,8 +1369,8 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                       readOnly
                     />
                     <span>
-                      <strong>Cash payment - Always available</strong>
-                      <small>Customers can pay cash directly after the service.</small>
+                      <strong>Direct payment - Available now</strong>
+                      <small>Customers can pay you directly after you agree the service details.</small>
                     </span>
                   </label>
                 </div>
@@ -1388,6 +1417,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                         <span>
                           <strong>{plan.name} - {formatSubscriptionPrice(plan, "monthly")}</strong>
                           <small>{plan.summary}</small>
+                          {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? <small>Payments Coming Soon</small> : null}
                           {plan.recommended ? <small>Recommended</small> : null}
                         </span>
                       </label>
@@ -1399,19 +1429,20 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                           type="button"
                           className="mini-action-btn-v4 success"
                           onClick={() => setForm((prev) => ({ ...prev, selectedPlan: plan.tier, startFreeTrial: false }))}
+                          disabled={plan.tier !== "FREE" && !PAYMENTS_ENABLED}
                         >
-                          Choose Plan
+                          {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? "Payments Coming Soon" : "Choose Plan"}
                         </button>
                       </div>
                       {detailsPlan === plan.tier ? (
                         <div className="profile-review-text-v4">
-                          <strong>{plan.name}</strong> plan includes: {plan.features.join(", ")}. {plan.tier === "FREE" ? "No payment is required." : `Annual: ${formatSubscriptionPrice(plan, "annual")} (save ${formatMoney(plan.annualSavings)} yearly).`}
+                          <strong>{plan.name}</strong> plan includes: {plan.features.join(", ")}. {plan.tier === "FREE" ? "No payment is required." : `Annual: ${formatSubscriptionPrice(plan, "annual")} (save ${formatMoney(plan.annualSavings)} yearly). Payments are coming soon.`}
                         </div>
                       ) : null}
                     </div>
                   ))}
                   <div className="wizard-note-v10">
-                    Free starts without payment. Premium and Platinum go live only after payment confirmation.
+                    Payments are coming soon. You can continue setting up your stand and save your progress for now.
                   </div>
                 </div>
                 <div className="wizard-note-v10">
@@ -1428,7 +1459,7 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
                   <div><FiMapPin /><span>Location</span><strong>{form.location || "Not added"}</strong></div>
                   <div><FiClock /><span>Hours</span><strong>{form.scheduleStart} - {form.scheduleEnd}</strong></div>
                   <div><FiUsers /><span>Services</span><strong>{services.length}</strong></div>
-                  <div><FiCreditCard /><span>Payments</span><strong>{["Cash", form.acceptsWallet ? "Wallet" : ""].filter(Boolean).join(", ")}</strong></div>
+                  <div><FiCreditCard /><span>Payments</span><strong>Direct payment for now</strong></div>
                   <div><FiCheckCircle /><span>Verification</span><strong>{form.documentName || "Pending document review"}</strong></div>
                 </div>
                 <div className="review-list-v10">
@@ -1454,15 +1485,34 @@ function BarberStandFormModal({ show, title, submitLabel, form, setForm, onClose
               <button type="button" className="secondary-btn-v4" onClick={goBack} disabled={Boolean(savingIntent)}>Back</button>
             ) : null}
             {currentStep < TOTAL_STEPS ? (
-              <button type="button" className="primary-btn-v4" onClick={goNext} disabled={Boolean(savingIntent)}>Continue</button>
+              <>
+                <button type="button" className="secondary-btn-v4" onClick={() => submitWizard("draft")} disabled={Boolean(savingIntent)}>
+                  {savingIntent === "draft" ? "Saving..." : "Save Draft"}
+                </button>
+                <button type="button" className="primary-btn-v4" onClick={goNext} disabled={Boolean(savingIntent)}>Continue</button>
+              </>
             ) : (
               <>
                 <button type="button" className="secondary-btn-v4" onClick={() => submitWizard("draft")} disabled={!canSubmit || Boolean(savingIntent)}>
                   {savingIntent === "draft" ? "Saving..." : "Save as Draft"}
                 </button>
-                <button type="button" className="primary-btn-v4" onClick={() => submitWizard("payment")} disabled={!canSubmit || Boolean(savingIntent)}>
-                  {savingIntent === "payment" ? "Saving..." : form.selectedPlan === "FREE" ? "Start free" : "Continue to Payment"}
+                <button
+                  type="button"
+                  className="primary-btn-v4"
+                  onClick={() => submitWizard(selectedPaidPlanComingSoon ? "draft" : "publish")}
+                  disabled={!canSubmit || Boolean(savingIntent)}
+                >
+                  {savingIntent
+                    ? "Saving..."
+                    : selectedPaidPlanComingSoon
+                    ? "Save Draft"
+                    : "Publish Stand"}
                 </button>
+                {selectedPaidPlanComingSoon ? (
+                  <div className="wizard-note-v10">
+                    Payments Coming Soon. Your stand progress will be saved as a draft for now.
+                  </div>
+                ) : null}
               </>
             )}
           </div>
@@ -1479,12 +1529,10 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
     if (!show || !barber) return;
     setForm({
       businessName: barber.business_name || "",
-      phone: barber.phone || "",
+      phone: barber.phone || profile.phone || "",
       documentName: barber.verification_document_name || barber.document_name || barber.documentName || "",
       location: barber.location || "",
-      services: Array.isArray(barber.services)
-        ? barber.services.map(normalizeServiceForBooking)
-        : DEFAULT_SERVICE_TYPES.map(normalizeServiceForBooking),
+      services: Array.isArray(barber.services) ? barber.services.map(normalizeServiceForBooking) : [],
       businessType: barber.business_type || barber.businessType || "Home Services",
       mapIconType: barber.map_icon_type || barber.mapIconType || "",
       pricing: String(barber.price_from || ""),
@@ -1522,7 +1570,7 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
       setForm={setForm}
       onClose={onClose}
       onSubmit={onSubmit}
-      profile={profile}
+      profile={{ ...profile, ...barber, subscription: barber.subscription || profile.subscription }}
     />
   );
 }
@@ -1534,10 +1582,11 @@ export function RegisterBarberModal({ show, profile, onClose, onSubmit }) {
     if (!show) return;
     setForm((prev) => ({
       ...DEFAULT_FORM,
+      phone: prev.phone || profile.phone || "",
       location: prev.location || profile.address || "",
       image: prev.image || profile.profilePhoto || "",
     }));
-  }, [show, profile.address, profile.profilePhoto]);
+  }, [show, profile.address, profile.phone, profile.profilePhoto]);
 
   return (
     <BarberStandFormModal
