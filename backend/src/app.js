@@ -47,7 +47,25 @@ app.disable("x-powered-by");
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "same-origin" },
-  contentSecurityPolicy: false,
+  // The SPA + marketing site HTML are served by Nginx, which owns the page CSP.
+  // This CSP hardens the Express API's OWN responses (JSON, /api/uploads images,
+  // and any HTML error output) and does not affect the Nginx-served frontend.
+  // Strict by default (script/style fall back to helmet's 'self'); img-src allows
+  // https/data/blob for external provider + base64 images; connect-src allows the
+  // approved Queless client origins. upgrade-insecure-requests only in production
+  // so local http://localhost development keeps working.
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "default-src": ["'self'"],
+      "base-uri": ["'self'"],
+      "object-src": ["'none'"],
+      "frame-ancestors": ["'none'"],
+      "img-src": ["'self'", "data:", "blob:", "https:"],
+      "connect-src": ["'self'", ...env.clientUrls],
+      "upgrade-insecure-requests": env.nodeEnv === "production" ? [] : null,
+    },
+  },
 }));
 app.use(securityHeaders);
 app.use(cors(buildCorsOptions()));
