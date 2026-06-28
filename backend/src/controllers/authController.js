@@ -339,7 +339,9 @@ export async function loginUser(req, res, next) {
 
     const passwordMatches = user ? await bcrypt.compare(password, user.password_hash) : false;
     if (!user || !passwordMatches) {
-      return authError(res, 401, "INVALID_CREDENTIALS", "Incorrect username/email or password.");
+      // Same message whether the account is missing or the password is wrong, so
+      // the response never reveals which accounts exist (anti-enumeration).
+      return authError(res, 401, "INVALID_CREDENTIALS", "We couldn't find an account with those details. Check your email/phone and password, or create an account.");
     }
 
     const inactiveCode = getInactiveAccountCode(user);

@@ -279,7 +279,20 @@ export default function AuthScreen(props) {
           </div>
         )}
 
-        {authError && <div className="lineup-auth-error">{sanitizeErrorMessage(authError)}</div>}
+        {authError && (
+          <div className="lineup-auth-error">
+            <span>{sanitizeErrorMessage(authError)}</span>
+            {isLogin ? (
+              <button
+                type="button"
+                onClick={(event) => switchAuthMode(event, "signup")}
+                style={{ display: "block", marginTop: 8, background: "none", border: "none", padding: 0, color: "inherit", fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}
+              >
+                Create an account
+              </button>
+            ) : null}
+          </div>
+        )}
         {authSuccess && <div className="lineup-auth-success">{authSuccess}</div>}
 
         {isForgot ? (

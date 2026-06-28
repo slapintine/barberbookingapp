@@ -1,12 +1,12 @@
 import express from "express";
 import { confirmPasswordReset, getMe, loginUser, logoutSession, refreshSession, registerUser, requestPasswordReset, sendEmailVerification, sendPhoneOtp, updateAccount, verifyOtp } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
-import { otpRateLimiter } from "../middleware/securityMiddleware.js";
+import { authRateLimiter, otpRateLimiter } from "../middleware/securityMiddleware.js";
 
 const router = express.Router();
 
-router.post("/register", registerUser);
-router.post("/login", loginUser);
+router.post("/register", authRateLimiter, registerUser);
+router.post("/login", authRateLimiter, loginUser);
 router.post("/refresh", refreshSession);
 router.post("/logout", logoutSession);
 router.post("/password-reset/request", otpRateLimiter, requestPasswordReset);
