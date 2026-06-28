@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  formatProviderPlanName,
   getPlanFeatures,
+  getPlanUpgradeCta,
   getStandFinalAction,
+  hasOpenCoachAccess,
   isProviderPlanActive,
   normalizePlanId,
   normalizePlanTier,
@@ -27,7 +30,8 @@ test("frontend provider plan features gate Free, Premium, and Platinum correctly
   assert.equal(premium.promotions, true);
   assert.equal(premium.advancedAnalytics, true);
   assert.equal(premium.reviewInsights, true);
-  assert.equal(premium.aiBusinessCoach, true);
+  // Open Coach is Platinum-only, so Premium does not carry the AI coach flag.
+  assert.equal(premium.aiBusinessCoach, false);
 
   assert.equal(platinum.maxServices, Infinity);
   assert.equal(platinum.maxPhotos, 10);
@@ -89,6 +93,29 @@ test("stand final CTA publishes active Platinum directly and keeps inactive paid
     getStandFinalAction({ selectedTier: "FREE", paymentsEnabled: false }),
     { intent: "publish", label: "Publish Stand", paymentComingSoon: false }
   );
+});
+
+test("free providers keep messaging and Open Coach is Platinum-only", () => {
+  const free = PROVIDER_PLANS.find((plan) => plan.tier === "FREE");
+  assert.ok(free.features.some((f) => /messaging/i.test(f)), "Free must keep customer messaging");
+
+  const platinum = PROVIDER_PLANS.find((plan) => plan.tier === "PLATINUM");
+  assert.ok(platinum.features.some((f) => /open coach/i.test(f)), "Platinum lists Open Coach");
+  const premium = PROVIDER_PLANS.find((plan) => plan.tier === "PREMIUM");
+  assert.ok(!premium.features.some((f) => /coach/i.test(f)), "Premium does not advertise Coach");
+
+  // Open Coach access gate: active Platinum only.
+  assert.equal(hasOpenCoachAccess({ tier: "PLATINUM", status: "active" }), true);
+  assert.equal(hasOpenCoachAccess({ tier: "PREMIUM", status: "active" }), false);
+  assert.equal(hasOpenCoachAccess({ tier: "PLATINUM", status: "expired" }), false);
+});
+
+test("provider plan labels and upgrade CTAs are plan-aware", () => {
+  assert.equal(formatProviderPlanName("PREMIUM"), "Premium Provider");
+  assert.equal(formatProviderPlanName("PLATINUM"), "Platinum Provider");
+  assert.equal(formatProviderPlanName("FREE"), "Free Provider");
+  assert.equal(getPlanUpgradeCta("PLATINUM"), "Upgrade to Platinum");
+  assert.equal(getPlanUpgradeCta("PREMIUM"), "Upgrade to Premium");
 });
 
 test("plan comparison prices and feature order remain launch-ready", () => {

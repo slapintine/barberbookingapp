@@ -2,7 +2,7 @@ import { FiAward, FiBell, FiCalendar, FiClock, FiEdit2, FiEye, FiMap, FiMapPin, 
 import { lazy } from "react";
 import { PAYMENTS_ENABLED } from "../utils/launchFlags.js";
 import { getPaymentMethodLabel, isOnlinePaymentMethod } from "../utils/paymentLabels.js";
-import { formatPlanName } from "../utils/subscriptionPlans.js";
+import { formatProviderPlanName } from "../utils/subscriptionPlans.js";
 
 import ShareStandCard from "../components/share/ShareStandCard.jsx";
 
@@ -88,7 +88,7 @@ export default function DashboardPage({
     return dayDiff >= 0 && dayDiff < 7;
   }).length;
   const currentPlan = String(subscription?.tier || barber.subscription?.tier || barber.subscription_tier || barber.selected_plan || "").toUpperCase();
-  const currentPlanLabel = formatPlanName(currentPlan, "Free");
+  const currentPlanLabel = formatProviderPlanName(currentPlan, "Free Provider");
   const hasValidPlan = ["FREE", "PREMIUM", "PLATINUM"].includes(currentPlan);
   const subscriptionStatus = String(subscription?.status || barber.subscription?.status || barber.subscription_status || "").toLowerCase();
   const publishedValue = barber.is_published ?? barber.isPublished ?? barber.published;
@@ -227,8 +227,8 @@ export default function DashboardPage({
           <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={onOpenReports}>
             <FiStar /> Reports
           </button>
-          <button type="button" className={isPremium || isPlatinum ? "primary-btn-v4 compact-btn-v4" : "secondary-btn-v4 compact-btn-v4"} onClick={isPremium || isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PREMIUM")}>
-            <FiZap /> {isPremium || isPlatinum ? "Provider Coach" : "Unlock Coach"}
+          <button type="button" className={isPlatinum ? "primary-btn-v4 compact-btn-v4" : "secondary-btn-v4 compact-btn-v4"} onClick={isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PLATINUM")}>
+            <FiZap /> {isPlatinum ? "Open Coach" : "Unlock with Platinum"}
           </button>
           <button type="button" className="primary-btn-v4 compact-btn-v4" onClick={() => onOpenUpgradePlan?.(currentPlan)}>
             <FiTrendingUp /> Upgrade Plan

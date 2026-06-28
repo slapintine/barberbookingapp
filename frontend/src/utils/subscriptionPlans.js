@@ -17,10 +17,18 @@ export const PROVIDER_PLANS = [
     monthlyPrice: 0,
     annualPrice: 0,
     annualSavings: 0,
-    summary: "Start accepting bookings and make your business visible to customers.",
-    bestFor: "Start accepting bookings and make your business visible to customers.",
+    headline: "Start selling",
+    summary: "Create your stand, take bookings, and chat with customers for free.",
+    bestFor: "Create your stand, take bookings, and chat with customers for free.",
     trialAvailable: false,
-    features: ["Business profile", "Basic service listing", "Customer bookings", "Customer reviews", "Basic location display"],
+    features: [
+      "Business profile & stand",
+      "Service listings",
+      "Customer bookings & requests",
+      "Customer messaging",
+      "Customer reviews",
+      "Map & location listing",
+    ],
   },
   {
     tier: "PREMIUM",
@@ -29,11 +37,25 @@ export const PROVIDER_PLANS = [
     monthlyPrice: 12000,
     annualPrice: 120000,
     annualSavings: 24000,
-    summary: "Grow your visibility and attract more customers with better provider tools.",
-    bestFor: "Grow your visibility and attract more customers with better provider tools.",
     recommended: true,
+    headline: "Look professional and get discovered",
+    summary: "Stand out, rank higher, and understand your customers.",
+    bestFor: "Stand out, rank higher, and understand your customers.",
+    whyUpgrade: "No ads, a Premium badge, higher ranking, more services & photos, and basic analytics so more customers find and trust you.",
     trialAvailable: false,
-    features: ["Everything in Free", "More service listings", "Priority visibility", "Smart Match eligibility", "Basic analytics", "Provider Coach: 5 tips/month"],
+    features: [
+      "Everything in Free",
+      "No ads",
+      "Premium badge",
+      "Higher search & category ranking",
+      "More services & portfolio photos",
+      "Custom logo & business hours",
+      "UGX price ranges",
+      "Booking management",
+      "Basic analytics (views, bookings, profile clicks)",
+      "Limited offers",
+      "Can request verification",
+    ],
   },
   {
     tier: "PLATINUM",
@@ -42,10 +64,25 @@ export const PROVIDER_PLANS = [
     monthlyPrice: 24000,
     annualPrice: 240000,
     annualSavings: 48000,
-    summary: "Unlock advanced tools for providers who want maximum visibility and control.",
-    bestFor: "Unlock advanced tools for providers who want maximum visibility and control.",
+    headline: "Grow, manage, and dominate your category",
+    summary: "The full growth toolkit: Open Coach, top ranking, and advanced insights.",
+    bestFor: "The full growth toolkit: Open Coach, top ranking, and advanced insights.",
+    whyUpgrade: "Unlimited Open Coach, top priority placement, advanced analytics, AI offer/reply/description helpers, a weekly report and business health score, plus 'Recommended by Queless' eligibility once verified.",
     trialAvailable: false,
-    features: ["Everything in Premium", "Featured placement", "Unlimited Provider Coach", "Advanced analytics", "Review blocking up to 10 reviews", "Priority support"],
+    features: [
+      "Everything in Premium",
+      "Open Coach (unlimited)",
+      "Top priority ranking & placement",
+      "Platinum badge",
+      "Advanced analytics & conversion insights",
+      "AI offer generator & reply assistant",
+      "AI service description helper",
+      "Weekly business report & health score",
+      "Service area, delivery & mobile service",
+      "Largest photo allowance",
+      "'Recommended by Queless' eligibility (after verification)",
+      "VIP support",
+    ],
   },
 ];
 
@@ -73,7 +110,8 @@ export const PLAN_FEATURES = {
     promotions: true,
     homeService: true,
     advancedAnalytics: true,
-    aiBusinessCoach: true,
+    // Open Coach is a Platinum-only growth tool, not a Premium feature.
+    aiBusinessCoach: false,
     reviewInsights: true,
     videoUploads: false,
     verifiedBadge: false,
@@ -199,6 +237,29 @@ export function getProviderPlan(tier) {
 
 export function formatPlanName(tier, fallback = "No active plan") {
   return getProviderPlan(tier)?.name || fallback;
+}
+
+/**
+ * Provider-context plan label, e.g. "Premium Provider". Use this on provider
+ * screens so a provider's plan is never confused with the separate
+ * "Customer Premium" plan.
+ */
+export function formatProviderPlanName(tier, fallback = "No active plan") {
+  const plan = getProviderPlan(tier);
+  return plan ? `${plan.name} Provider` : fallback;
+}
+
+/** Plan-aware upgrade CTA label, e.g. "Upgrade to Platinum". */
+export function getPlanUpgradeCta(targetTier) {
+  const tier = String(targetTier || "").toUpperCase();
+  if (tier === "PLATINUM") return "Upgrade to Platinum";
+  if (tier === "PREMIUM") return "Upgrade to Premium";
+  return "Upgrade";
+}
+
+/** True only for an active Platinum provider — the gate for Open Coach. */
+export function hasOpenCoachAccess(subscription = {}) {
+  return isProviderPlanActive(subscription, "PLATINUM");
 }
 
 export function getPlanAmount(plan, billingCycle = "monthly") {
