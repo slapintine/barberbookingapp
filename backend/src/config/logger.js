@@ -14,6 +14,8 @@ export const logger = pino({
       "headers.authorization",
       "token",
       "apiKey",
+      "geminiApiKey",
+      "openAiApiKey",
       "apiSecret",
       "consumerSecret",
       "credentials.apiKey",

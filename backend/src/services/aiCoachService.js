@@ -219,6 +219,89 @@ async function getCoachData(business) {
   };
 }
 
+function clipCoachText(value, maxLength = 280) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function servicePriceSummary(service) {
+  const pricingType = String(service?.pricing_type || "fixed").toLowerCase();
+  const fixed = Number(service?.price_extra || service?.price || 0);
+  const min = Number(service?.min_price || 0);
+  const max = Number(service?.max_price || 0);
+  const starting = Number(service?.starting_price || 0);
+  if (pricingType === "quote") return "Price on inquiry";
+  if (min > 0 && max >= min) return `UGX ${Math.round(min).toLocaleString("en-UG")}–${Math.round(max).toLocaleString("en-UG")}`;
+  if (starting > 0) return `From UGX ${Math.round(starting).toLocaleString("en-UG")}`;
+  if (fixed > 0) return `UGX ${Math.round(fixed).toLocaleString("en-UG")}`;
+  return "Price missing";
+}
+
+export async function getProviderCoachChatContext(business) {
+  const data = await getCoachData(business);
+  const profile = await get(
+    `SELECT phone FROM profiles WHERE user_id = ? LIMIT 1`,
+    [business.owner_user_id]
+  );
+  const { access } = await getProviderCoachAccess(business);
+  const description = clipCoachText(business.intro_text, 700);
+  const phonePresent = Boolean(clipCoachText(profile?.phone, 40));
+  const missingFields = [];
+
+  if (!clipCoachText(business.business_name, 120)) missingFields.push("business name");
+  if (!clipCoachText(business.business_type, 80)) missingFields.push("business category");
+  if (!description) missingFields.push("stand description");
+  if (!phonePresent) missingFields.push("phone number");
+  if (!data.stats.hasLocation && !Number(business.home_service_enabled || 0)) missingFields.push("location or mobile-service area");
+  if (!data.services.length) missingFields.push("services");
+  if (data.services.length && data.stats.pricedServicesCount < data.services.length) missingFields.push("prices for every service");
+  if (!data.stats.hasHours) missingFields.push("opening hours");
+  if (!data.stats.hasBusinessPhoto) missingFields.push("main stand photo");
+  if (data.stats.photosCount < 3) missingFields.push("at least three trust-building photos");
+
+  return {
+    stand: {
+      name: clipCoachText(business.business_name, 120) || "Unnamed stand",
+      category: clipCoachText(business.business_type, 80) || "Not set",
+      description: description || "Not provided",
+      location: clipCoachText(business.location, 180) || "Not provided",
+      delivery: Number(business.home_service_enabled || 0) ? "Provider can travel to customers" : "Customer visits provider location",
+      status: Number(business.is_published || 0) === 1 ? "published" : "draft",
+      verification: clipCoachText(business.review_status || business.verified_status, 60) || "not reviewed",
+      plan: access.plan || "free",
+      planActive: Boolean(access.active),
+      profileCompleteness: data.stats.profileCompleteness,
+      missingFields,
+    },
+    services: data.services.slice(0, 30).map((service) => ({
+      name: clipCoachText(service.service_name, 120) || "Unnamed service",
+      category: clipCoachText(service.category, 80) || "Not set",
+      description: clipCoachText(service.description, 260) || "Description missing",
+      price: servicePriceSummary(service),
+      durationMinutes: Math.max(0, Number(service.duration_minutes || 0)),
+      deliveryMode: clipCoachText(service.location_type, 80) || "provider_location",
+      available: Number(service.is_available ?? 1) === 1,
+      hasPhoto: Boolean(service.image),
+    })),
+    availability: data.schedule.map((day) => ({
+      day: Number(day.day_of_week),
+      open: Number(day.is_open ?? day.open ?? 0) === 1,
+      start: clipCoachText(day.start_time, 10),
+      end: clipCoachText(day.end_time, 10),
+    })),
+    signals: {
+      bookingsAvailable: data.bookings.length > 0,
+      totalBookings: data.stats.bookingsCount,
+      completedBookings: data.stats.completedBookingsCount,
+      cancelledBookings: data.stats.cancelledBookingsCount,
+      reviewsAvailable: data.reviews.length > 0,
+      reviewCount: data.stats.reviewsCount,
+      averageRating: data.stats.averageRating || null,
+      photoCount: data.stats.photosCount,
+      portfolioPhotoCount: data.stats.portfolioCount,
+    },
+  };
+}
+
 export async function getAiCoachInsightsForBusiness(business) {
   const data = await getCoachData(business);
   return {

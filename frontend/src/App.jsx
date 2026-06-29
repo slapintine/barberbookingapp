@@ -104,7 +104,7 @@ const BookingConfirmationScreen = lazy(() => import("./features/bookings/Booking
 const QuoteRequestModal = lazy(() => import("./features/bookings/QuoteRequestModal.jsx"));
 const ChatSheet = lazy(() => import("./features/chat/ChatSheet.jsx"));
 const ReportsScreen = lazy(() => import("./features/barbers/ReportsScreen.jsx"));
-const AiCoachScreen = lazy(() => import("./features/barbers/AiCoachScreen.jsx"));
+const ProviderCoachChatScreen = lazy(() => import("./features/barbers/ProviderCoachChatScreen.jsx"));
 const SmartMatchPage = lazy(() => import("./features/smart-match/SmartMatchPage.jsx"));
 const TrialUpgradeScreen = lazy(() => import("./features/barbers/TrialUpgradeScreen.jsx"));
 const RegisterBarberModal = lazy(() =>
@@ -4774,7 +4774,7 @@ const updateBarberStand = async (payload) => {
 
   const content = (
     <>
-      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && !isAdminActive && (
+      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && activeTab !== "aiCoach" && !isAdminActive && (
       <AppHeader
         theme={theme}
         setTheme={setTheme}
@@ -4804,7 +4804,7 @@ const updateBarberStand = async (payload) => {
       />
       )}
 
-      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && !isAdminActive && (
+      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && activeTab !== "aiCoach" && !isAdminActive && (
       <AccountMenu
         show={showAccountMenu}
         isBarber={effectiveIsBarber}
@@ -5157,19 +5157,16 @@ const updateBarberStand = async (payload) => {
       )}
 
       {effectiveIsBarber && activeTab === "aiCoach" && (
-        <div className="tab-scene-v5">
-          <AiCoachScreen
+        <div className="tab-scene-v5 provider-coach-chat-scene">
+          <ProviderCoachChatScreen
             barber={myBarberProfile}
             subscription={subscriptionState}
-            onUpgradePlan={(plan = "PREMIUM") => openUpgradePlan(plan)}
-            onEditProfile={() => {
+            onBack={() => setActiveTab("dashboard")}
+            onCreateStand={() => setShowRegisterBarber(true)}
+            onEditStand={() => {
               setSelectedBarber(myBarberProfile);
               setShowEditBarber(true);
             }}
-            onOpenReports={() => setActiveTab("reports")}
-            onOpenBookings={() => setActiveTab("bookings")}
-            onOpenDashboard={() => setActiveTab("dashboard")}
-            onShowActionHint={(message) => showSystemToast("Provider Coach action", message, "system")}
           />
         </div>
       )}
@@ -5255,7 +5252,7 @@ const updateBarberStand = async (payload) => {
         </div>
       )}
 
-      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && !isAdminActive && (
+      {activeTab !== "bookingConfirmation" && activeTab !== "smartMatch" && activeTab !== "aiCoach" && !isAdminActive && (
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}

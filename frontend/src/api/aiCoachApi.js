@@ -15,3 +15,10 @@ export function requestProviderCoachAdvice(questionId, businessId) {
     body: JSON.stringify({ questionId, ...(businessId ? { businessId } : {}) }),
   });
 }
+
+export function sendProviderCoachMessage(message, history = []) {
+  return apiFetch("/api/provider-coach/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, history }),
+  });
+}
