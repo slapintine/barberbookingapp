@@ -311,7 +311,14 @@ export function normalizeServiceForBooking(item, idx = 0, options = {}) {
     max_price: item?.max_price ?? item?.maxPrice ?? "",
     starting_price: item?.starting_price ?? item?.startingPrice ?? "",
     pricing_type: normalizedPricingType,
-    location_type: ["provider_location", "customer_location", "online"].includes(locationType)
+    location_type: [
+      "provider_location",
+      "customer_location",
+      "pickup_delivery",
+      "online",
+      "mobile_area",
+      "appointment_only",
+    ].includes(locationType)
       ? locationType
       : "provider_location",
     duration_minutes: Number(item?.duration_minutes ?? item?.durationMinutes ?? fallback.duration_minutes ?? 30),
@@ -329,17 +336,17 @@ export function formatServicePrice(service = {}) {
     const amount = Number(value);
     return Number.isFinite(amount) && amount > 0 ? `UGX ${amount.toLocaleString("en-UG")}` : "";
   };
-  if (pricingType === "quote") return "Price on consultation";
+  if (pricingType === "quote") return "Request quote";
   if (pricingType === "range") {
     const min = money(service.min_price ?? service.minPrice);
     const max = money(service.max_price ?? service.maxPrice);
-    return min && max ? `${min} - ${max}` : "Price unavailable";
+    return min && max ? `${min} - ${max}` : "Request quote";
   }
   if (pricingType === "starting_from") {
     const starting = money(service.starting_price ?? service.startingPrice);
-    return starting ? `From ${starting}` : "Price unavailable";
+    return starting ? `From ${starting}` : "Request quote";
   }
-  return money(service.price_extra ?? service.price ?? service.extra) || "Price unavailable";
+  return money(service.price_extra ?? service.price ?? service.extra) || "Request quote";
 }
 
 export function getServiceBookingAmount(service = {}) {

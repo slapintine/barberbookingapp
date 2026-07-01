@@ -204,6 +204,53 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+
+.provider-coach-next-action {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 11px;
+  border: 1px solid rgba(84, 18, 95, 0.1);
+  border-radius: 12px;
+  color: #472044;
+  background: #f8edf5;
+}
+.provider-coach-next-action strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #6f285d;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.provider-coach-next-action span {
+  font-size: 0.77rem;
+  font-weight: 720;
+  line-height: 1.42;
+}
+
+.provider-coach-response-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+.provider-coach-response-chips button {
+  padding: 7px 9px;
+  border: 1px solid rgba(84, 18, 95, 0.14);
+  border-radius: 999px;
+  color: #5d2354;
+  background: #fffaf7;
+  font-size: 0.7rem;
+  font-weight: 780;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.provider-coach-response-chips button:disabled {
+  opacity: 0.58;
+  cursor: wait;
+}
 .provider-coach-message--assistant { align-self: flex-start; }
 .provider-coach-message--assistant > div {
   border: 1px solid rgba(84, 18, 95, 0.09);
@@ -390,6 +437,17 @@
   border-color: rgba(255, 239, 232, 0.09);
   color: #f7e6ef;
   background: rgba(255, 255, 255, 0.06);
+}
+.dark .provider-coach-next-action {
+  border-color: rgba(255, 239, 232, 0.1);
+  color: #f6e6ef;
+  background: rgba(255, 255, 255, 0.06);
+}
+.dark .provider-coach-next-action strong { color: #edbdd8; }
+.dark .provider-coach-response-chips button {
+  border-color: rgba(255, 239, 232, 0.12);
+  color: #f6e6ef;
+  background: rgba(255, 255, 255, 0.07);
 }
 .dark .provider-coach-composer > div { border-color: rgba(255, 239, 232, 0.12); background: rgba(255, 255, 255, 0.06); }
 

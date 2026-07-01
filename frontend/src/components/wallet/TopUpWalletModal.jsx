@@ -1,6 +1,7 @@
 import { useState } from "react";
 import PaymentFlowModal from "../payments/PaymentFlowModal.jsx";
 import { getCustomerWalletTopupStatus, initiateCustomerWalletTopup } from "../../api/walletApi.js";
+import { PAYMENTS_ENABLED, WALLET_PAYMENTS_COMING_SOON_MESSAGE } from "../../utils/launchFlags.js";
 import "./TopUpWalletModal.css";
 
 const MIN_TOPUP_AMOUNT = 1000;
@@ -51,6 +52,10 @@ export default function TopUpWalletModal({
 
   const submitTopup = async ({ amount, method, phoneNumber }) => {
     setMessage("");
+    if (!PAYMENTS_ENABLED) {
+      setMessage(WALLET_PAYMENTS_COMING_SOON_MESSAGE);
+      return false;
+    }
     if (!["mtn_mobile_money", "airtel_money"].includes(method)) {
       setMessage("Choose MTN Mobile Money or Airtel Money.");
       return false;
@@ -96,6 +101,10 @@ export default function TopUpWalletModal({
 
   const checkStatus = async (reference) => {
     if (!reference) return false;
+    if (!PAYMENTS_ENABLED) {
+      setMessage(WALLET_PAYMENTS_COMING_SOON_MESSAGE);
+      return false;
+    }
     try {
       setLoading(true);
       const data = await getCustomerWalletTopupStatus(reference);
@@ -149,6 +158,7 @@ export default function TopUpWalletModal({
       airtelReady={airtelReady}
       airtelReadinessMessage={airtelReadinessMessage}
       submitLabel="Confirm Top Up"
+      comingSoon={!PAYMENTS_ENABLED}
       onClose={onClose}
       onSubmit={submitTopup}
       onVerify={checkStatus}

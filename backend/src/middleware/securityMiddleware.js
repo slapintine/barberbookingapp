@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { isNativeAppOrigin, withNativeAppOrigins } from "../config/nativeAppOrigins.js";
 
 const rateStores = new Map();
 const rateStoreCleanup = setInterval(() => {
@@ -23,12 +24,17 @@ function isLoopbackOrigin(origin) {
 function isAllowedOrigin(origin) {
   if (!origin) return true;
 
+  if (isNativeAppOrigin(origin)) return true;
+
   if (isLoopbackOrigin(origin)) {
     return env.nodeEnv !== "production";
   }
 
   if (env.nodeEnv !== "production" && env.clientUrls.length === 0) return true;
-  const allowedOrigins = env.nodeEnv === "production" ? env.clientUrls : [...env.clientUrls, ...env.devClientUrls];
+  const allowedOrigins =
+    env.nodeEnv === "production"
+      ? withNativeAppOrigins(env.clientUrls)
+      : withNativeAppOrigins([...env.clientUrls, ...env.devClientUrls]);
   return allowedOrigins.includes(origin);
 }
 

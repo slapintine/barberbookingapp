@@ -1,5 +1,5 @@
 import { getToken, onMessage, deleteToken } from "firebase/messaging";
-import { apiFetch } from "./config/api.js";
+import { apiFetch, getAuthToken } from "./config/api.js";
 import {
   firebaseClientConfigured,
   firebaseVapidKey,
@@ -23,6 +23,20 @@ function browserLabel() {
   return navigator.userAgentData?.brands?.[0]?.brand || "Browser";
 }
 
+function isNativeAppRuntime() {
+  if (typeof window === "undefined") return false;
+  const capacitor = window.Capacitor;
+  if (!capacitor) return false;
+  if (typeof capacitor.isNativePlatform === "function") return Boolean(capacitor.isNativePlatform());
+  if (typeof capacitor.getPlatform === "function") return ["android", "ios"].includes(capacitor.getPlatform());
+  return false;
+}
+
+function hasNativePushPlugin() {
+  if (typeof window === "undefined") return false;
+  return Boolean(window.Capacitor?.Plugins?.PushNotifications);
+}
+
 function workerUrl() {
   const config = getFirebaseClientConfigForWorker();
   const params = new URLSearchParams(
@@ -38,6 +52,7 @@ export function getFirebaseServiceWorkerPath() {
 
 export function getNotificationSupportState() {
   if (typeof window === "undefined" || typeof navigator === "undefined") return "unsupported";
+  if (isNativeAppRuntime() && !hasNativePushPlugin()) return "unsupported";
   const browserState = getBrowserNotificationState({
     hasNotification: "Notification" in window,
     hasServiceWorker: "serviceWorker" in navigator,
@@ -63,6 +78,10 @@ export async function enableFirebaseNotifications() {
   const support = getNotificationSupportState();
   if (support === "unsupported" || support === "delivery_unavailable") {
     return { success: false, reason: support };
+  }
+
+  if (!getAuthToken()) {
+    return { success: false, reason: "unauthenticated" };
   }
 
   if (getFirebaseClientConfigIssues().length || !firebaseClientConfigured() || !firebaseVapidKey) {

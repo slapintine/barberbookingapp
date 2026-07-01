@@ -1,3 +1,5 @@
+import { getPublishRequirements } from "./marketplaceCapabilities.js";
+
 function owns(object, key) {
   return Object.prototype.hasOwnProperty.call(object || {}, key);
 }
@@ -81,41 +83,14 @@ export function hasMeaningfulDraftChanges(body = {}) {
   }) || getClearFields(body).size > 0;
 }
 
-export function getStandPublishMissingDetails({ stand = {}, services = [], schedule = [] } = {}) {
-  const missing = [];
-  const businessName = String(stand.business_name || "").trim();
-  const location = String(stand.location || "").trim();
-  const category = String(stand.business_type || "").trim();
-  const phone = String(stand.phone || "").trim();
-  const mapIcon = String(stand.map_icon_type || "").trim();
+export function normalizeUgandaStandPhone(value) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.startsWith("256")) digits = digits.slice(3);
+  else if (digits.startsWith("0")) digits = digits.slice(1);
+  if (!/^(?:7\d|20|31|39)\d{7}$/.test(digits)) return "";
+  return `+256${digits}`;
+}
 
-  if (!businessName || /^Business stand draft \d+$/i.test(businessName)) missing.push("business name");
-  if (!category || category.toLowerCase() === "services") missing.push("business category");
-  if (!phone) missing.push("business phone");
-  if (!location || location === "Location not set") missing.push("business location");
-  if (!mapIcon) missing.push("map icon");
-  if (!Array.isArray(services) || !services.length) {
-    missing.push("at least one service");
-  } else if (services.some((service) => {
-    if (!String(service?.service_name || service?.serviceName || "").trim()) return true;
-    const pricingType = String(service?.pricing_type || service?.pricingType || "fixed").toLowerCase();
-    if (pricingType === "fixed" && Number(service?.price_extra ?? service?.price ?? 0) <= 0) return true;
-    if (pricingType === "range" && (
-      Number(service?.min_price ?? service?.minPrice ?? 0) <= 0 ||
-      Number(service?.max_price ?? service?.maxPrice ?? 0) <= Number(service?.min_price ?? service?.minPrice ?? 0)
-    )) return true;
-    if (pricingType === "starting_from" && Number(service?.starting_price ?? service?.startingPrice ?? 0) <= 0) return true;
-    const duration = Number(service?.duration_minutes ?? service?.durationMinutes ?? 0);
-    return duration < 5 || duration > 1440;
-  })) {
-    missing.push("complete service details");
-  }
-  const hasOpeningHours = Array.isArray(schedule) && schedule.some((day) => {
-    const isOpen = day?.is_open === true || day?.isOpen === true || Number(day?.is_open ?? day?.isOpen) === 1;
-    const start = String(day?.start_time || day?.startTime || "");
-    const end = String(day?.end_time || day?.endTime || "");
-    return isOpen && /^([01]\d|2[0-3]):[0-5]\d$/.test(start) && /^([01]\d|2[0-3]):[0-5]\d$/.test(end) && start < end;
-  });
-  if (!hasOpeningHours) missing.push("opening hours");
-  return missing;
+export function getStandPublishMissingDetails({ stand = {}, services = [], products = [], schedule = [] } = {}) {
+  return getPublishRequirements({ stand, services, products, schedule }).missing;
 }

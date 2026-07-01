@@ -1,4 +1,6 @@
 import { all, get, run, transaction } from "../db/query.js";
+import { AUDIT_EVENTS, recordAuditEvent } from "../services/auditLogService.js";
+import { supportsServices } from "../services/marketplaceCapabilities.js";
 import {
   sendBookingNotification,
   sendNotificationToBusiness,
@@ -58,6 +60,7 @@ function getBarberById(barberId, client = { get }) {
        accepts_cash,
        home_service_enabled,
        stand_type,
+       marketplace_mode,
        subscription_tier,
        subscription_status,
        subscription_expires_at,
@@ -848,6 +851,9 @@ export async function createBooking(req, res, next) {
       if (!barber) {
         throw httpError(404, "Barber not found.");
       }
+      if (!supportsServices(barber)) {
+        throw httpError(400, "This stand sells products and does not accept service bookings.");
+      }
       // Prevent self-booking: a provider cannot book their own stand
       if (barber.owner_user_id && Number(barber.owner_user_id) === Number(req.user.id)) {
         throw httpError(400, "You cannot book your own stand.");
@@ -896,7 +902,9 @@ export async function createBooking(req, res, next) {
         throw httpError(400, "Choose a valid booking location.");
       }
       const serviceLocationType = String(service.location_type || "provider_location").toLowerCase();
-      const supportsCustomerLocation = Number(barber.home_service_enabled || 0) === 1 || serviceLocationType === "customer_location";
+      const supportsCustomerLocation =
+        Number(barber.home_service_enabled || 0) === 1 ||
+        ["customer_location", "pickup_delivery", "mobile_area"].includes(serviceLocationType);
       if (bookingLocationType === "customer_location" && !supportsCustomerLocation) {
         throw httpError(400, "This service is only available at the provider location.");
       }
@@ -1742,6 +1750,15 @@ export async function updateBookingStatus(req, res, next) {
     }
 
     await logAudit(req.user.id, `Updated booking #${bookingId} to ${status}`);
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.BOOKING_STATUS_CHANGED,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      targetType: "booking",
+      targetId: bookingId,
+      metadata: { status: String(status || "") },
+      req,
+    });
 
     return res.status(200).json({
       success: true,

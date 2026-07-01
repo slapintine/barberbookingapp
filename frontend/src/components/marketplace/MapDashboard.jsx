@@ -78,6 +78,13 @@ const STATUS_CHIPS = [
 
 const EMPTY_STATUS = { openNow: false, verified: false, premium: false, platinum: false };
 
+function resolveLaunchCategoryIcon(category) {
+  if (!category || category === "All") return "";
+  return CATEGORY_CHIPS.find(
+    (chip) => resolveProviderMapIconType({ business_type: category, category_name: category }) === chip.icon
+  )?.icon || "";
+}
+
 function priceRangeLabel(provider = {}) {
   if (provider.price_range) return provider.price_range;
   const from = Number(provider.price_from || 0);
@@ -355,19 +362,12 @@ export default function MapDashboard({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
-  const [activeCategoryIcon, setActiveCategoryIcon] = useState("");
+  const [activeCategoryIcon, setActiveCategoryIcon] = useState(() => resolveLaunchCategoryIcon(category));
   const [statusFilters, setStatusFilters] = useState(EMPTY_STATUS);
   const [selectedMarker, setSelectedMarker] = useState(null);
+  const [showLocationEditor, setShowLocationEditor] = useState(false);
+  const [locationDraft, setLocationDraft] = useState(locationLabel);
   const autoLocationRequestedRef = useRef(false);
-
-  // Seed the category chip from the launch category, mapped to an icon bucket.
-  useEffect(() => {
-    if (!category || category === "All") return;
-    const match = CATEGORY_CHIPS.find(
-      (chip) => resolveProviderMapIconType({ business_type: category, category_name: category }) === chip.icon
-    );
-    if (match) setActiveCategoryIcon(match.icon);
-  }, [category]);
 
   useEffect(() => {
     if (userLocation?.latitude || autoLocationRequestedRef.current) return;
@@ -397,13 +397,12 @@ export default function MapDashboard({
   }, [baseMarkers]);
 
   const cleanSearch = searchQuery.trim().toLowerCase();
-  const tierSelected = [
-    statusFilters.premium ? "PREMIUM" : null,
-    statusFilters.platinum ? "PLATINUM" : null,
-  ].filter(Boolean);
-
   const filteredMarkers = useMemo(() => {
     let list = baseMarkers;
+    const selectedTiers = [
+      statusFilters.premium ? "PREMIUM" : null,
+      statusFilters.platinum ? "PLATINUM" : null,
+    ].filter(Boolean);
     if (activeCategoryIcon) {
       list = list.filter((marker) => resolveProviderMapIconType(marker.provider, marker) === activeCategoryIcon);
     }
@@ -412,12 +411,12 @@ export default function MapDashboard({
     }
     if (statusFilters.openNow) list = list.filter((marker) => isProviderOpenNow(marker.provider));
     if (statusFilters.verified) list = list.filter((marker) => isProviderVerified(marker.provider));
-    if (tierSelected.length) list = list.filter((marker) => tierSelected.includes(getProviderTier(marker.provider)));
+    if (selectedTiers.length) list = list.filter((marker) => selectedTiers.includes(getProviderTier(marker.provider)));
 
     return list
       .map((marker) => ({ ...marker, distanceKm: getDistanceKm(userLocation, marker) }))
       .sort((a, b) => a.distanceKm - b.distanceKm);
-  }, [activeCategoryIcon, baseMarkers, cleanSearch, statusFilters, tierSelected.join(","), userLocation]);
+  }, [activeCategoryIcon, baseMarkers, cleanSearch, statusFilters, userLocation]);
 
   const activeSelectedMarker = selectedMarker && filteredMarkers.some((m) => m.id === selectedMarker.id)
     ? filteredMarkers.find((m) => m.id === selectedMarker.id)
@@ -443,6 +442,19 @@ export default function MapDashboard({
     event.preventDefault();
     setSearchQuery(searchDraft.trim());
     setSelectedMarker(null);
+  };
+
+  const submitLocation = (event) => {
+    event.preventDefault();
+    const nextLocation = locationDraft.trim();
+    if (!nextLocation) return;
+    onManualLocation?.(nextLocation);
+    setShowLocationEditor(false);
+  };
+
+  const toggleLocationEditor = () => {
+    if (!showLocationEditor) setLocationDraft(locationLabel);
+    setShowLocationEditor(!showLocationEditor);
   };
 
   const sidebarCard = (() => {
@@ -517,17 +529,53 @@ export default function MapDashboard({
               aria-label="Search services, providers, or places"
             />
           </form>
-          <button
-            type="button"
-            className="qmd-location"
-            onClick={() => {
-              const value = window.prompt("Set your location", locationLabel);
-              if (value && value.trim()) onManualLocation?.(value.trim());
-            }}
-          >
-            <FiMapPin />
-            <span>{locationLoading ? "Detecting…" : locationLabel}</span>
-          </button>
+          <div className="qmd-location-control">
+            <button
+              type="button"
+              className="qmd-location"
+              onClick={toggleLocationEditor}
+              aria-expanded={showLocationEditor}
+              aria-controls="qmd-location-editor"
+            >
+              <FiMapPin />
+              <span>{locationLoading ? "Detecting…" : locationLabel}</span>
+            </button>
+            {showLocationEditor ? (
+              <form
+                id="qmd-location-editor"
+                className="qmd-location-editor"
+                onSubmit={submitLocation}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setShowLocationEditor(false);
+                }}
+              >
+                <label htmlFor="qmd-location-input">Search from another area</label>
+                <div>
+                  <input
+                    id="qmd-location-input"
+                    value={locationDraft}
+                    onChange={(event) => setLocationDraft(event.target.value)}
+                    placeholder="Area or address"
+                    autoFocus
+                  />
+                  <button type="submit" aria-label="Apply location" disabled={!locationDraft.trim()}>
+                    <FiCheck />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="qmd-location-current"
+                  onClick={() => {
+                    onUseCurrentLocation?.();
+                    setShowLocationEditor(false);
+                  }}
+                  disabled={locationLoading}
+                >
+                  <FiNavigation /> {locationLoading ? "Detecting location…" : "Use my current location"}
+                </button>
+              </form>
+            ) : null}
+          </div>
           <button
             type="button"
             className={hasActiveFilters ? "qmd-icon-btn is-active" : "qmd-icon-btn"}

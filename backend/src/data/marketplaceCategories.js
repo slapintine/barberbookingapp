@@ -1,4 +1,4 @@
-export const MARKETPLACE_CATEGORIES = [
+const SERVICE_MARKETPLACE_CATEGORIES = [
   {
     id: "barber",
     icon: "scissors",
@@ -123,4 +123,62 @@ export const MARKETPLACE_CATEGORIES = [
   { id: "printing-stationery", icon: "briefcase", name: "Printing & Stationery", description: "Printing, photocopying, branding, stationery, and business documents.", image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "it-support", icon: "briefcase", name: "IT Support", description: "Computer setup, troubleshooting, networking, cybersecurity, and repairs.", image: "https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "security-services", icon: "briefcase", name: "Security Services", description: "Guards, CCTV, access control, alarms, and property security.", image: "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=80", active: true },
+];
+
+const PRODUCT_MARKETPLACE_CATEGORIES = [
+  {
+    id: "boutique-fashion",
+    icon: "shopping-bag",
+    name: "Boutique & Fashion",
+    description: "Clothing, shoes, bags, jewellery, and local fashion.",
+    image: "",
+    active: true,
+    kinds: ["product"],
+  },
+  {
+    id: "cosmetics",
+    icon: "sparkles",
+    name: "Cosmetics",
+    description: "Beauty products, skin care, hair care, fragrances, and makeup.",
+    image: "",
+    active: true,
+    kinds: ["product"],
+  },
+  {
+    id: "food-groceries",
+    icon: "shopping-bag",
+    name: "Food & Groceries",
+    description: "Prepared food, groceries, produce, baked goods, and pantry items.",
+    image: "",
+    active: true,
+    kinds: ["product"],
+  },
+  {
+    id: "electronics",
+    icon: "briefcase",
+    name: "Electronics",
+    description: "Phones, accessories, appliances, computers, and electronics.",
+    image: "",
+    active: true,
+    kinds: ["product"],
+  },
+  {
+    id: "hardware",
+    icon: "tool",
+    name: "Hardware",
+    description: "Tools, building materials, fittings, electrical supplies, and hardware.",
+    image: "",
+    active: true,
+    kinds: ["product"],
+  },
+];
+
+export const MARKETPLACE_CATEGORIES = [
+  ...SERVICE_MARKETPLACE_CATEGORIES.map((category) => ({
+    ...category,
+    kinds: ["events-photography", "catering-food-services", "printing-stationery"].includes(category.id)
+      ? ["service", "product"]
+      : ["service"],
+  })),
+  ...PRODUCT_MARKETPLACE_CATEGORIES,
 ];

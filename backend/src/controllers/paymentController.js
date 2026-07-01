@@ -59,7 +59,7 @@ function readWebhookToken(req) {
   ).trim();
 }
 
-function normalizeMomoStatus(value) {
+function normalizeMobileMoneyStatus(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (["successful", "success", "completed", "paid"].includes(normalized)) return "successful";
   if (["failed", "rejected", "expired", "cancelled", "canceled"].includes(normalized)) return "failed";
@@ -115,7 +115,7 @@ function serializeCheckoutPayment(payment = null) {
 }
 
 function payoutVerificationMatches({ verification, payoutRequest, expectedStatus }) {
-  const status = normalizeMomoStatus(verification?.status);
+  const status = normalizeMobileMoneyStatus(verification?.status);
   const verifiedAmount = Number(verification?.amount || 0);
   const expectedAmount = Number(payoutRequest?.amount || 0);
 
@@ -383,7 +383,7 @@ async function processPayoutWebhook({ client, providerReference, reference, stat
     [reference || payoutRequest.reference, providerReference]
   );
 
-  const normalizedStatus = normalizeMomoStatus(status);
+  const normalizedStatus = normalizeMobileMoneyStatus(status);
   const normalizedAmount = toAmount(payoutRequest.amount);
   const resolvedProviderReference = providerReference || payoutRequest.provider_reference || "";
   const payoutProvider = String(payoutRequest.provider || "mtn_mobile_money").trim().toLowerCase();
@@ -1076,6 +1076,12 @@ export async function getMtnHealth(req, res, next) {
       health,
       mode: env.mobileMoneyMode,
       liveMode: env.mobileMoneyMode === "live" || env.mtnTargetEnvironment !== "sandbox",
+      requireLive: env.nodeEnv === "production",
+      targetEnvironment: env.mtnTargetEnvironment,
+      currency: env.mtnCurrency,
+      baseUrl: env.mtnBaseUrl,
+      collectionUrl: env.mtnCollectionUrl,
+      callbackUrl: env.mtnCallbackUrl || env.mobileMoneyCallbackUrl,
     });
     if (!status.paymentsEnabled) {
       console.warn("MTN payment readiness check did not pass.", {
@@ -1187,7 +1193,7 @@ export async function getMtnPaymentStatus(req, res, next) {
         return { payment: await getPaymentRecordByReference({ reference: payment.internal_reference }, client), booking: finalized.booking };
       }
 
-      const finalStatus = normalizeMomoStatus(verification.status);
+      const finalStatus = normalizeMobileMoneyStatus(verification.status);
       if (finalStatus === "failed") {
         await client.run(
           `UPDATE payment_transactions

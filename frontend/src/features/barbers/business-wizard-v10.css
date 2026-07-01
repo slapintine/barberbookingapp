@@ -3,7 +3,7 @@
 }
 
 .business-wizard-card-v10 {
-  max-height: min(92vh, 860px);
+  max-height: min(calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 12px), 860px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -17,7 +17,7 @@ body[data-theme="dark"] .business-wizard-card-v10,
 
 .business-wizard-topbar-v10 {
   flex: 0 0 auto;
-  padding: 14px 14px 10px;
+  padding: calc(14px + var(--device-safe-top, 0px)) 14px 10px;
   border-bottom: 1px solid rgba(82, 43, 91, 0.12);
   background: rgba(255, 250, 247, 0.88);
   backdrop-filter: blur(16px);
@@ -36,9 +36,10 @@ body[data-theme="dark"] .business-wizard-topbar-v10,
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 14px 14px 98px;
+  padding: 14px 14px calc(128px + env(safe-area-inset-bottom));
   display: grid;
   gap: 14px;
+  scrollbar-width: thin;
 }
 
 .business-step-progress-v10 {
@@ -1011,7 +1012,26 @@ body[data-theme="dark"] .review-list-v10 p,
 .business-wizard-actions-v10 .primary-btn-v4,
 .business-wizard-actions-v10 .secondary-btn-v4 {
   min-height: 48px;
+  min-width: 0;
   border-radius: 16px;
+}
+
+.business-wizard-actions-v10 .primary-btn-v4 {
+  color: #fff;
+}
+
+.wizard-autosave-v10 {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 7px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #522b5b;
+  background: rgba(251, 228, 216, 0.82);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .business-wizard-actions-v10 .primary-btn-v4:only-child {
@@ -1037,5 +1057,396 @@ body[data-theme="dark"] .business-wizard-actions-v10,
 
   .business-wizard-v10 {
     padding-inline: 12px;
+  }
+}
+
+/* Stand setup clarity: validation, Uganda phone and UGX price fields */
+.required-marker-v10 {
+  margin-left: 2px;
+  color: #b4234b;
+  font-weight: 950;
+}
+
+.field-label-row-v10 {
+  display: inline-flex;
+  gap: 3px;
+  align-items: baseline;
+  width: fit-content;
+}
+
+.optional-label-v10 {
+  margin-left: 5px;
+  color: rgba(82, 43, 91, 0.62);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.field-error-v10 {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  color: #b4234b !important;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.phone-input-shell-v10,
+.currency-input-shell-v10 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(82, 43, 91, 0.2);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.phone-prefix-v10,
+.currency-prefix-v10 {
+  display: grid;
+  place-items: center;
+  min-width: 62px;
+  padding: 0 12px;
+  border-right: 1px solid rgba(82, 43, 91, 0.14);
+  color: #522b5b;
+  background: #f8ecec;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.phone-input-shell-v10 .field-input-v4,
+.currency-input-shell-v10 .field-input-v4 {
+  width: 100%;
+  min-width: 0;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  background: transparent;
+}
+
+.label-v4.missing-v10 .phone-input-shell-v10,
+.label-v4.missing-v10 .currency-input-shell-v10,
+.business-field-grid-v10.missing-v10,
+.service-editor-group-v10.missing-v10 {
+  border-color: #c82d56;
+  box-shadow: 0 0 0 3px rgba(200, 45, 86, 0.12);
+}
+
+.currency-preview-v10 {
+  display: block;
+  margin-top: 5px;
+  color: #713d74;
+  font-weight: 850;
+}
+
+.duration-custom-grid-v10 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 0.65fr);
+  gap: 8px;
+}
+
+.service-editor-help-v10 {
+  display: block;
+  margin: -2px 0 10px;
+  color: rgba(25, 0, 25, 0.64);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.location-mode-grid-v10 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Polished final-step plan chooser */
+.stand-plan-chooser-v10 {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(82, 43, 91, 0.14);
+  border-radius: 24px;
+  background: linear-gradient(160deg, #fff 0%, #fff8f6 100%);
+  box-shadow: 0 16px 36px rgba(82, 43, 91, 0.1);
+}
+
+.stand-plan-heading-v10 {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.stand-plan-heading-v10 > div {
+  display: grid;
+  gap: 3px;
+}
+
+.stand-plan-heading-v10 span {
+  color: #8d4c6e;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stand-plan-heading-v10 strong {
+  color: #260027;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.stand-plan-heading-v10 small {
+  color: rgba(38, 0, 39, 0.66);
+  line-height: 1.4;
+}
+
+.stand-plan-heading-v10 > svg {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  color: #713d74;
+}
+
+.stand-plan-billing-v10 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  padding: 5px;
+  border-radius: 16px;
+  background: #f4e8ea;
+}
+
+.stand-plan-billing-v10 button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  color: #633461;
+  background: transparent;
+  font-weight: 900;
+}
+
+.stand-plan-billing-v10 button.active {
+  color: #fff;
+  background: #522b5b;
+  box-shadow: 0 7px 18px rgba(82, 43, 91, 0.22);
+}
+
+.stand-plan-billing-v10 small {
+  display: block;
+  color: inherit;
+  font-size: 9px;
+}
+
+.stand-plan-grid-v10 {
+  display: grid;
+  gap: 12px;
+}
+
+.stand-plan-card-v10 {
+  position: relative;
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(82, 43, 91, 0.14);
+  border-radius: 19px;
+  background: #fff;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.stand-plan-card-v10.selected {
+  border-color: #713d74;
+  background: #fffaf8;
+  box-shadow: 0 10px 28px rgba(82, 43, 91, 0.16);
+  transform: translateY(-1px);
+}
+
+.stand-plan-select-v10 {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  cursor: pointer;
+}
+
+.stand-plan-select-v10 > span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.stand-plan-name-v10 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.stand-plan-name-v10 strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #260027;
+  font-size: 16px;
+}
+
+.stand-plan-name-v10 em {
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #fff;
+  background: #713d74;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.stand-plan-select-v10 b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #713d74;
+  font-size: 14px;
+}
+
+.stand-plan-select-v10 small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgba(38, 0, 39, 0.65);
+  line-height: 1.4;
+}
+
+.stand-plan-features-v10 {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stand-plan-features-v10 li {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  color: #522b5b;
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.stand-plan-features-v10 svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.stand-plan-card-actions-v10 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stand-plan-card-actions-v10 button {
+  min-height: 39px;
+  border: 1px solid rgba(82, 43, 91, 0.18);
+  border-radius: 12px;
+  color: #522b5b;
+  background: #f8ecec;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.stand-plan-card-actions-v10 button:last-child {
+  color: #fff;
+  border-color: #522b5b;
+  background: #522b5b;
+}
+
+.stand-plan-coming-soon-v10,
+.stand-plan-free-v10 {
+  width: fit-content;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #713d74;
+  background: #f3e4eb;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.stand-plan-free-v10 {
+  color: #522b5b;
+  background: #fbe4d8;
+}
+
+.stand-plan-footer-v10 {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 16px;
+  color: #fff;
+  background: #3e1646;
+}
+
+.stand-plan-footer-v10 svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.stand-plan-footer-v10 span {
+  display: grid;
+  gap: 3px;
+}
+
+.stand-plan-footer-v10 small {
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.4;
+}
+
+body[data-theme="dark"] .phone-input-shell-v10,
+body[data-theme="dark"] .currency-input-shell-v10,
+body[data-theme="dark"] .stand-plan-chooser-v10,
+body[data-theme="dark"] .stand-plan-card-v10,
+.dark .phone-input-shell-v10,
+.dark .currency-input-shell-v10,
+.dark .stand-plan-chooser-v10,
+.dark .stand-plan-card-v10 {
+  color: #fbe4d8;
+  border-color: rgba(251, 228, 216, 0.16);
+  background: #2b102f;
+}
+
+body[data-theme="dark"] .stand-plan-heading-v10 strong,
+body[data-theme="dark"] .stand-plan-name-v10 strong,
+.dark .stand-plan-heading-v10 strong,
+.dark .stand-plan-name-v10 strong {
+  color: #fbe4d8;
+}
+
+body[data-theme="dark"] .stand-plan-heading-v10 small,
+body[data-theme="dark"] .stand-plan-select-v10 small,
+body[data-theme="dark"] .service-editor-help-v10,
+.dark .stand-plan-heading-v10 small,
+.dark .stand-plan-select-v10 small,
+.dark .service-editor-help-v10 {
+  color: rgba(251, 228, 216, 0.7);
+}
+
+@media (max-width: 390px) {
+  .duration-custom-grid-v10,
+  .stand-plan-card-actions-v10 {
+    grid-template-columns: 1fr;
+  }
+
+  .location-mode-grid-v10 {
+    grid-template-columns: 1fr;
+  }
+
+  .stand-plan-chooser-v10 {
+    padding: 13px;
+    border-radius: 20px;
+  }
+
+  .business-wizard-actions-v10 > .primary-btn-v4:last-child {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 }

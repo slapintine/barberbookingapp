@@ -5,14 +5,18 @@ import {
   FiCheckCircle,
   FiMap,
   FiMapPin,
+  FiScissors,
   FiSearch,
   FiShield,
+  FiShoppingBag,
   FiStar,
   FiZap,
 } from "react-icons/fi";
 import { resolveProviderImage, getProviderInitials, buildInitialsAvatar } from "../utils/providerImage.js";
 import { getCategoryDef, HOME_CATEGORY_IDS } from "../utils/categoryRegistry.jsx";
 import heroProfessional from "../assets/queless-hero-service-professional.png";
+import ProductMarketplacePanel from "../features/products/ProductMarketplacePanel.jsx";
+import { buildAssetUrl } from "../config/api.js";
 
 // Homepage category chips — registry-driven so icons/colors stay in sync with the rest of the app
 const CATEGORY_CHIPS = HOME_CATEGORY_IDS.map(({ id, category, labelOverride }) => {
@@ -186,10 +190,12 @@ export default function HomeScreen({
   popularServices = [],
   topBarbers = [],
   filteredBarbers = [],
+  currentUser,
 }) {
   const carouselRef = useRef(null);
   const frameRef = useRef(0);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [marketplaceView, setMarketplaceView] = useState("services");
   const serviceQuery = String(query || "");
   const shortLocation = locationLoading
     ? "Detecting location..."
@@ -289,11 +295,11 @@ export default function HomeScreen({
     <main className="content-v4 customer-home" aria-label="Queless customer home">
       <section className="customer-home-hero">
         <div className="customer-home-hero-copy">
-          <span className="customer-home-eyebrow">Trusted local services</span>
-          <h1>Find trusted services near you</h1>
-          <p>New around here? Discover nearby providers, compare trust signals, and book services without guessing where to go.</p>
-          <button type="button" className="customer-home-primary-btn" onClick={submitSearch}>
-            Find Services
+          <span className="customer-home-eyebrow">Your local marketplace</span>
+          <h1>{marketplaceView === "products" ? "Shop from local sellers" : "Find trusted services near you"}</h1>
+          <p>{marketplaceView === "products" ? "Discover products listed by local businesses, chat with sellers, and request pickup or delivery." : "New around here? Discover nearby providers, compare trust signals, and book services without guessing where to go."}</p>
+          <button type="button" className="customer-home-primary-btn" onClick={marketplaceView === "products" ? () => document.querySelector(".customer-products-panel-v21, .product-coming-soon-v21")?.scrollIntoView({ behavior: "smooth" }) : submitSearch}>
+            {marketplaceView === "products" ? "Browse sellers" : "Find services"}
             <FiArrowRight aria-hidden="true" />
           </button>
         </div>
@@ -308,6 +314,37 @@ export default function HomeScreen({
         </div>
       </section>
 
+      <section className="marketplace-mode-switch-v21" aria-labelledby="marketplace-mode-title-v21">
+        <header className="marketplace-mode-switch-heading-v21">
+          <span>Explore Queless</span>
+          <h2 id="marketplace-mode-title-v21">Choose how you want to use Queless</h2>
+        </header>
+        <div className="marketplace-mode-options-v21">
+          <button
+            type="button"
+            className={marketplaceView === "services" ? "active" : ""}
+            aria-pressed={marketplaceView === "services"}
+            onClick={() => setMarketplaceView("services")}
+          >
+            <span className="marketplace-mode-icon-v21"><FiScissors /></span>
+            <span className="marketplace-mode-copy-v21"><strong>Book Services</strong><small>Appointments, bookings, and service requests</small></span>
+            <span className="marketplace-mode-action-v21">Find services <FiArrowRight /></span>
+          </button>
+          <button
+            type="button"
+            className={marketplaceView === "products" ? "active" : ""}
+            aria-pressed={marketplaceView === "products"}
+            onClick={() => setMarketplaceView("products")}
+          >
+            <span className="marketplace-mode-icon-v21"><FiShoppingBag /></span>
+            <span className="marketplace-mode-copy-v21"><strong>Shop from Sellers</strong><small>Products listed by local businesses</small></span>
+            <span className="marketplace-mode-action-v21">Browse sellers <FiArrowRight /></span>
+          </button>
+        </div>
+      </section>
+
+      {marketplaceView === "services" ? (
+        <>
       <section className="customer-home-search" aria-label="Search services">
         <label className="customer-home-search-field">
           <FiSearch aria-hidden="true" />
@@ -387,7 +424,7 @@ export default function HomeScreen({
                 >
                   <span className="customer-home-provider-media">
                     <img
-                      src={image}
+                      src={buildAssetUrl(image)}
                       alt=""
                       loading="lazy"
                       decoding="async"
@@ -492,12 +529,22 @@ export default function HomeScreen({
           ))}
         </div>
       </section>
+        </>
+      ) : (
+        <ProductMarketplacePanel
+          currentUser={currentUser}
+          shopStands={filteredBarbers}
+          onOpenShopStand={openBarber}
+          onCreateShopStand={onBecomeProvider}
+          onBrowseServices={() => setMarketplaceView("services")}
+        />
+      )}
 
       <section className="customer-home-premium-cta">
         <div>
           <small>For Local Professionals</small>
           <h2>Join Queless</h2>
-          <p>List your services, reach more customers, and grow your business.</p>
+          <p>List services or products, reach more customers, and grow your business.</p>
           <button type="button" onClick={onBecomeProvider}>
             Join Queless
             <FiArrowRight aria-hidden="true" />

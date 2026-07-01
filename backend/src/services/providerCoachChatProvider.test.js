@@ -48,7 +48,9 @@ test("Gemini with a missing API key falls back to rule_based", async () => {
   assert.equal(result.provider, "rule_based");
   assert.equal(result.fallback, true);
   assert.equal(result.fallbackReason, "missing_gemini_key");
-  assert.match(result.answer, /does not have booking history/i);
+  assert.match(result.answer, /does not have enough booking history/i);
+  assert.equal(result.topic, "bookings_help");
+  assert.ok(result.nextBestAction);
 });
 
 test("Gemini quota or API failure falls back to rule_based", async () => {
@@ -140,7 +142,14 @@ test("Gemini success uses Flash-Lite generateContent and returns its answer", as
 
   assert.match(requestUrl, /gemini-2\.5-flash-lite:generateContent$/);
   assert.equal(requestOptions.headers["x-goog-api-key"], "server-only-test-key");
+  const requestBody = JSON.parse(requestOptions.body);
+  const diagnosticPrompt = requestBody.contents.at(-1).parts[0].text;
+  assert.match(diagnosticPrompt, /"detectedIntent":"promo_help"/);
+  assert.match(diagnosticPrompt, /"standHealth":/);
+  assert.match(diagnosticPrompt, /"overallStandHealthScore":/);
   assert.equal(result.provider, "gemini");
   assert.equal(result.fallback, false);
   assert.match(result.answer, /real work photo/);
+  assert.equal(result.topic, "promo_help");
+  assert.ok(result.nextBestAction);
 });

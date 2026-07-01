@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { buildAssetUrl } from "../../config/api.js";
 import {
   FiArrowLeft,
   FiCalendar,
@@ -34,6 +35,8 @@ import {
 } from "react-icons/fi";
 import VerificationBadge from "../../components/ui/VerificationBadge.jsx";
 import { resolveProviderImage } from "../../utils/providerImage.js";
+import { supportsProducts, supportsServices } from "../../utils/marketplaceMode.js";
+import ProductMarketplacePanel from "../products/ProductMarketplacePanel.jsx";
 
 /* ── helpers ──────────────────────────────────────────── */
 
@@ -120,6 +123,37 @@ function groupServiceCategories(services = []) {
     .filter((c) => c && !seen.has(c) && seen.add(c));
 }
 
+function arrayValue(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getPortfolioImage(item) {
+  if (typeof item === "string") return item.trim();
+  return String(item?.afterImage || item?.after_image || item?.image || item?.beforeImage || item?.before_image || "").trim();
+}
+
+function getProviderPortfolio(barber = {}) {
+  const savedPortfolio = arrayValue(barber.portfolio || barber.portfolio_json);
+  const galleryImages = arrayValue(
+    barber.portfolioImages ||
+    barber.portfolio_images ||
+    barber.galleryImages ||
+    barber.gallery_images ||
+    barber.gallery
+  );
+  const entries = savedPortfolio.length
+    ? savedPortfolio
+    : galleryImages.map((image, index) => ({ id: `gallery-${index}`, image, title: "Portfolio image" }));
+  return entries.filter((item) => getPortfolioImage(item) || item?.video_url || item?.videoUrl);
+}
+
 function getPopularityTags(service = {}, index = 0, totalRating = 0, reviewCount = 0) {
   // use explicit tag if set on the service
   if (service.tag_label || service.badge || service.popularity_tag) {
@@ -174,7 +208,7 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
   const priceLabel = formatServicePrice(service);
   const duration = fmtDuration(service.duration_minutes);
   const tags = getPopularityTags(service, 0, barber.rating, barber.reviewCount);
-  const imgSrc = service.image || service.image_url || null;
+  const imgSrc = buildAssetUrl(service.image || service.image_url || "");
 
   function handleAction() {
     if (isOwner) return;
@@ -306,14 +340,6 @@ function ReviewCard({ review, canManage, blockUsage, onToggleBlock }) {
 
 /* ── main component ───────────────────────────────────── */
 
-const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "services", label: "Services" },
-  { id: "portfolio", label: "Portfolio" },
-  { id: "reviews", label: "Reviews" },
-  { id: "about", label: "About" },
-];
-
 const BIO_LIMIT = 180;
 
 export default function BarberProfileSheet({
@@ -359,7 +385,7 @@ export default function BarberProfileSheet({
     home_service_enabled: Number(
       barber.home_service_enabled || barber.homeServiceEnabled || 0
     ),
-    portfolio: Array.isArray(barber.portfolio) ? barber.portfolio : [],
+    portfolio: getProviderPortfolio(barber),
     stand_type: barber.stand_type || barber.standType || "individual",
     team_members: Array.isArray(barber.team_members || barber.teamMembers)
       ? barber.team_members || barber.teamMembers
@@ -376,6 +402,16 @@ export default function BarberProfileSheet({
     accepts_mtn_mobile_money: barber.accepts_mtn_mobile_money || false,
     social_links: barber.social_links || barber.socialLinks || {},
   };
+  const serviceStand = supportsServices(barber);
+  const shopStand = supportsProducts(barber);
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    ...(serviceStand ? [{ id: "services", label: "Services" }] : []),
+    ...(shopStand ? [{ id: "products", label: "Products" }] : []),
+    { id: "portfolio", label: shopStand && !serviceStand ? "Gallery" : "Portfolio" },
+    ...(serviceStand ? [{ id: "reviews", label: "Reviews" }] : []),
+    { id: "about", label: "Location" },
+  ];
 
   const planTier = String(
     safeBarber.subscription?.tier || barber.subscription_tier || ""
@@ -465,7 +501,7 @@ export default function BarberProfileSheet({
             {/* cover image */}
             <div className="pps-banner-bg">
               <img
-                src={safeBarber.image}
+                src={buildAssetUrl(safeBarber.image)}
                 alt=""
                 aria-hidden="true"
                 onError={(e) => {
@@ -519,7 +555,7 @@ export default function BarberProfileSheet({
             <div className="pps-hero-avatar-wrap">
               <div className="pps-hero-avatar">
                 <img
-                  src={safeBarber.image}
+                  src={buildAssetUrl(safeBarber.image)}
                   alt={safeBarber.business_name}
                   onError={(e) => {
                     e.currentTarget.src = resolveProviderImage(safeBarber);
@@ -647,7 +683,7 @@ export default function BarberProfileSheet({
               TAB BAR
           ══════════════════════════════════════════ */}
           <div className="pps-tabs" role="tablist">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -659,6 +695,9 @@ export default function BarberProfileSheet({
                 {t.label}
                 {t.id === "services" && safeBarber.services.length > 0 && (
                   <span className="pps-tab-badge">{safeBarber.services.length}</span>
+                )}
+                {t.id === "products" && Number(barber.product_count || barber.productCount || 0) > 0 && (
+                  <span className="pps-tab-badge">{Number(barber.product_count || barber.productCount)}</span>
                 )}
                 {t.id === "reviews" && safeBarber.reviewCount > 0 && (
                   <span className="pps-tab-badge">{safeBarber.reviewCount}</span>
@@ -728,7 +767,7 @@ export default function BarberProfileSheet({
                   /* visitor CTAs — Book only for customers, Message for everyone */
                   <div className="pps-cta-section">
                     <div className="pps-cta-row">
-                      {!currentUserIsBarber && safeBarber.services.length > 0 && (
+                      {serviceStand && !currentUserIsBarber && safeBarber.services.length > 0 && (
                         <button
                           type="button"
                           className="pps-btn-primary"
@@ -737,6 +776,11 @@ export default function BarberProfileSheet({
                           <FiCalendar size={17} /> Book service
                         </button>
                       )}
+                      {shopStand && !currentUserIsBarber ? (
+                        <button type="button" className="pps-btn-primary" onClick={() => setActiveTab("products")}>
+                          <FiPackage size={17} /> View products
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="pps-btn-secondary"
@@ -745,7 +789,7 @@ export default function BarberProfileSheet({
                         <FiMessageCircle size={17} /> Message
                       </button>
                     </div>
-                    {!currentUserIsBarber && quoteRelevant && (
+                    {serviceStand && !currentUserIsBarber && quoteRelevant && (
                       <button
                         type="button"
                         className="pps-btn-tertiary"
@@ -760,7 +804,7 @@ export default function BarberProfileSheet({
                 {/* availability + location + trust + payment info card */}
                 <div className="pps-info-card">
                   {/* next slot */}
-                  <div className="pps-info-row">
+                  {serviceStand ? <><div className="pps-info-row">
                     <div className="pps-info-icon-wrap">
                       <FiCalendar size={17} />
                     </div>
@@ -783,7 +827,7 @@ export default function BarberProfileSheet({
                     )}
                   </div>
 
-                  <div className="pps-info-sep" />
+                  <div className="pps-info-sep" /></> : null}
 
                   {/* service area */}
                   <div className="pps-info-row">
@@ -791,10 +835,12 @@ export default function BarberProfileSheet({
                       <FiMapPin size={17} />
                     </div>
                     <div className="pps-info-body">
-                      <span className="pps-info-label">Service area</span>
+                      <span className="pps-info-label">{shopStand && !serviceStand ? "Shop location" : "Service area"}</span>
                       <strong className="pps-info-val">{safeBarber.location}</strong>
                       <small className="pps-info-sub">
-                        {safeBarber.home_service_enabled === 1
+                        {shopStand && !serviceStand
+                          ? [barber.pickup_available ?? barber.pickupAvailable ? "Pickup" : "", barber.delivery_available ?? barber.deliveryAvailable ? "Delivery" : ""].filter(Boolean).join(" & ") || "Contact seller for fulfilment"
+                          : safeBarber.home_service_enabled === 1
                           ? "Provider location & home service available"
                           : "Provider location only"}
                       </small>
@@ -935,11 +981,17 @@ export default function BarberProfileSheet({
               </div>
             )}
 
+            {activeTab === "products" && shopStand ? (
+              <div className="pps-panel-products">
+                <ProductMarketplacePanel currentUser={currentUser} standId={safeBarber.id} compact />
+              </div>
+            ) : null}
+
             {/* ─── PORTFOLIO ─────────────────────────── */}
             {activeTab === "portfolio" && (
               <div className="pps-panel-portfolio">
                 <div className="pps-section-head">
-                  <h2 className="pps-section-title">Portfolio</h2>
+                  <h2 className="pps-section-title">{shopStand && !serviceStand ? "Gallery" : "Portfolio"}</h2>
                   {safeBarber.portfolio.length > 0 && (
                     <span className="pps-view-all-label">
                       {safeBarber.portfolio.length} item
@@ -951,9 +1003,8 @@ export default function BarberProfileSheet({
                 {safeBarber.portfolio.length > 0 ? (
                   <div className="pps-portfolio-grid">
                     {safeBarber.portfolio.map((item, i) => {
-                      const imgSrc =
-                        item.afterImage || item.image || item.beforeImage || null;
-                      const hasVideo = !!item.video_url;
+                      const imgSrc = buildAssetUrl(getPortfolioImage(item));
+                      const hasVideo = !!(item.video_url || item.videoUrl);
                       return (
                         <div key={item.id || i} className="pps-portfolio-item">
                           {imgSrc ? (
@@ -961,6 +1012,9 @@ export default function BarberProfileSheet({
                               src={imgSrc}
                               alt={item.title || "Portfolio"}
                               loading="lazy"
+                              onError={(event) => {
+                                event.currentTarget.style.display = "none";
+                              }}
                             />
                           ) : (
                             <div className="pps-portfolio-placeholder">

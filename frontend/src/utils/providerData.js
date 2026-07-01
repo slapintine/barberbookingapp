@@ -1,3 +1,6 @@
+import { buildAssetUrl } from "../config/api.js";
+import { normalizeMarketplaceFields } from "./marketplaceMode.js";
+
 const STOCK_IMAGE_HOSTS = [
   "images.unsplash.com",
   "source.unsplash.com",
@@ -23,7 +26,9 @@ export function normalizeProviderImageReference(value) {
   const reference = String(value || "").trim();
   if (!reference) return "";
   if (STOCK_IMAGE_HOSTS.some((host) => reference.toLowerCase().includes(host))) return "";
-  return reference;
+  // Make server-relative upload paths absolute so they resolve to the API origin
+  // (queless.org) everywhere, including the Android WebView (origin https://localhost).
+  return buildAssetUrl(reference);
 }
 
 export function getProviderImageCandidates(provider = {}) {
@@ -71,9 +76,14 @@ export function normalizeProviderData(provider = {}, options = {}) {
   const latitude = Number(provider.latitude ?? provider.lat ?? options.defaultLatitude);
   const longitude = Number(provider.longitude ?? provider.lng ?? options.defaultLongitude);
   const pricingMode = provider.pricingMode || provider.pricing_mode || provider.pricingType || provider.pricing_type || (provider.requires_quote ? "quote" : "fixed");
+  const marketplaceFields = normalizeMarketplaceFields(provider);
+  const coverImage = normalizeProviderImageReference(
+    provider.cover_image_url || provider.coverImageUrl || provider.coverImage || provider.cover_image || image
+  );
 
   return {
     ...provider,
+    ...marketplaceFields,
     id: provider.id,
     userId: provider.userId || provider.user_id || provider.owner_user_id || null,
     owner_user_id: provider.owner_user_id || provider.user_id || provider.userId || null,
@@ -88,8 +98,10 @@ export function normalizeProviderData(provider = {}, options = {}) {
     intro_text: provider.intro_text || provider.description || "",
     image,
     image_url: image,
-    coverImage: image,
-    cover_image: image,
+    coverImage,
+    cover_image: coverImage,
+    coverImageUrl: coverImage,
+    cover_image_url: coverImage,
     profileImage: image,
     profile_image: image,
     galleryImages,

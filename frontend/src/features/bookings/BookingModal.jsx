@@ -18,11 +18,11 @@ import {
   FiX,
 } from "react-icons/fi";
 import {
-  getBookingPaymentOptions,
-  getPaymentMethodLabel,
-  isOnlinePaymentMethod,
-} from "../../utils/paymentLabels.js";
+  MOBILE_MONEY_COMING_SOON_MESSAGE,
+  PAYMENTS_ENABLED,
+} from "../../utils/launchFlags.js";
 import { formatServicePrice, getAvailableServices, getServiceBookingAmount, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
+import { buildAssetUrl } from "../../config/api.js";
 
 function formatMoney(value) {
   return `UGX ${Number(value || 0).toLocaleString()}`;
@@ -82,18 +82,25 @@ function getBarberServices(barber) {
   return available.length ? available : barber.services.map(normalizeServiceForBooking);
 }
 
-function isValidUgandaPhone(value) {
-  return /^(\+?256|0)?[37]\d{8}$/.test(String(value || "").replace(/\s+/g, ""));
-}
-
 function getServiceLocationOptions(service, barber) {
   const serviceType = String(service?.location_type || service?.locationType || "provider_location").toLowerCase();
   const homeEnabled = Number(barber?.home_service_enabled || barber?.homeServiceEnabled || 0) === 1;
-  const options = [{ value: "provider_location", label: "At Provider", meta: barber?.location || "Provider address" }];
-  if (homeEnabled || serviceType === "customer_location") {
-    options.push({ value: "customer_location", label: "At Your Location", meta: "Provider comes to you" });
+  if (serviceType === "online") {
+    return [{ value: "provider_location", label: "Online / remote", meta: "Provider will share connection details" }];
   }
-  return serviceType === "customer_location" && !homeEnabled ? options.slice(1) : options;
+  if (serviceType === "appointment_only") {
+    return [{ value: "provider_location", label: "By appointment", meta: "Location is confirmed after acceptance" }];
+  }
+  const customerMode = ["customer_location", "mobile_area", "pickup_delivery"].includes(serviceType);
+  const options = [{ value: "provider_location", label: "At Provider", meta: barber?.location || "Provider address" }];
+  if (homeEnabled || customerMode) {
+    options.push({
+      value: "customer_location",
+      label: serviceType === "pickup_delivery" ? "Pickup & delivery" : "At Your Location",
+      meta: serviceType === "pickup_delivery" ? "Add the pickup address" : "Provider comes to you",
+    });
+  }
+  return customerMode && !homeEnabled ? options.slice(1) : options;
 }
 
 function getServicePriceState(service) {
@@ -102,7 +109,7 @@ function getServicePriceState(service) {
   const hasDirectPrice = getServiceBookingAmount(service) > 0 || ["range", "starting_from"].includes(pricingType);
   return {
     label,
-    quoteOnly: pricingType === "quote" || label === "Price unavailable" || (!hasDirectPrice && label !== "Price on consultation"),
+    quoteOnly: pricingType === "quote" || label === "Request quote" || label === "Price on inquiry" || !hasDirectPrice,
   };
 }
 
@@ -143,10 +150,13 @@ function buildDirectionsUrl(barber) {
 function getPortfolioImages(barber) {
   const raw = Array.isArray(barber?.portfolio) ? barber.portfolio : [];
   const urls = raw
-    .map((item) => (typeof item === "string" ? item : item?.url || item?.image || item?.src || ""))
+    .map((item) => (typeof item === "string"
+      ? item
+      : item?.afterImage || item?.after_image || item?.beforeImage || item?.before_image || item?.url || item?.image || item?.src || ""))
+    .map(buildAssetUrl)
     .filter(Boolean);
   if (urls.length) return urls;
-  return Array.isArray(barber?.gallery) ? barber.gallery.filter(Boolean) : [];
+  return Array.isArray(barber?.gallery) ? barber.gallery.filter(Boolean).map(buildAssetUrl) : [];
 }
 
 function getDateParts(value, fallbackLabel) {
@@ -169,6 +179,9 @@ function getMonthLabel(value) {
 function getLocationChipLabel(service, barber) {
   const type = String(service?.location_type || service?.locationType || "provider_location").toLowerCase();
   if (type === "customer_location") return "Home";
+  if (type === "pickup_delivery") return "Pickup";
+  if (type === "mobile_area") return "Mobile";
+  if (type === "appointment_only") return "Appointment";
   if (type === "online") return "Online";
   const standType = String(barber?.stand_type || barber?.standType || "").toLowerCase();
   return standType === "shop" ? "At Studio" : "Provider";
@@ -234,10 +247,6 @@ export default function BookingModal({
   setSelectedService,
   selectedTeamMemberId,
   setSelectedTeamMemberId,
-  selectedPaymentMethod,
-  setSelectedPaymentMethod,
-  paymentPhone,
-  setPaymentPhone,
   bookingLocationType,
   setBookingLocationType,
   bookingAddress,
@@ -247,16 +256,12 @@ export default function BookingModal({
   onRequestQuote,
   onMessageProvider,
   pendingPayment,
-  onVerifyPayment,
-  onlinePaymentsReady = false,
-  paymentReadinessMessage = "",
   onClose,
   onOpenSmartMatch,
   smartMatchPremiumActive = false,
   onConfirm,
   creatingBooking,
   bookingCooldownInfo,
-  walletBalance = 0,
 }) {
   const modalKey = `${show ? "open" : "closed"}|${barber?.id || ""}`;
   const [stepEntry, setStepEntry] = useState({ key: "", value: 0 });
@@ -331,17 +336,7 @@ export default function BookingModal({
   const isShopStand = String(barber.stand_type || barber.standType || "individual") === "shop";
   const requiresTeamMember = isShopStand && teamMembers.length > 0;
   const selectedTeamMember = teamMembers.find((item) => String(item.id) === String(selectedTeamMemberId));
-  const paymentOptions = getBookingPaymentOptions({
-    onlinePaymentsEnabled: onlinePaymentsReady,
-    walletPaymentsEnabled: true,
-    walletBalance,
-    bookingAmount: total,
-  });
-  const paymentAllowed = paymentOptions.some((option) => option.value === selectedPaymentMethod && !option.disabled);
-  const selectedPaymentLabel = getPaymentMethodLabel(selectedPaymentMethod);
-  const showsPlatformSplit = isOnlinePaymentMethod(selectedPaymentMethod);
-  const requiresPhone = isOnlinePaymentMethod(selectedPaymentMethod);
-  const phoneIsValid = !requiresPhone || isValidUgandaPhone(paymentPhone);
+  const paymentsComingSoon = !PAYMENTS_ENABLED;
   const locationOptions = getServiceLocationOptions(serviceObj, barber);
   const selectedLocationType = bookingLocationType || locationOptions[0]?.value || "";
   const isHomeService = selectedLocationType === "customer_location";
@@ -376,8 +371,6 @@ export default function BookingModal({
     Boolean(selectedTime) &&
     locationValid &&
     (!requiresTeamMember || Boolean(selectedTeamMember));
-  const paymentReady = paymentAllowed && phoneIsValid;
-
   const isBlocked =
     creatingBooking ||
     bookingCooldownInfo?.blocked ||
@@ -386,8 +379,6 @@ export default function BookingModal({
     !selectedTime ||
     !selectedDate ||
     !locationValid ||
-    !paymentAllowed ||
-    !phoneIsValid ||
     (requiresTeamMember && !selectedTeamMember);
 
   if (pendingPayment?.bookingId) {
@@ -408,8 +399,8 @@ export default function BookingModal({
                     <FiArrowLeft />
                   </button>
                   <div className="bk-topbar-copy">
-                    <strong>Confirm payment</strong>
-                    <span>Your slot locks in after approval</span>
+                    <strong>Online payments coming soon</strong>
+                    <span>Your booking can continue without online payment for now.</span>
                   </div>
                   <button type="button" className="bk-icon-btn" onClick={onClose} aria-label="Close">
                     <FiX />
@@ -420,26 +411,23 @@ export default function BookingModal({
                   <div className="bk-summary-head">
                     <div>
                       <strong>{barber.business_name}</strong>
-                      <span>{pendingPayment.instructions || "Approve the prompt on your phone."}</span>
+                      <span>{MOBILE_MONEY_COMING_SOON_MESSAGE}</span>
                     </div>
                     <div className="bk-summary-total">{formatMoney(pendingPayment.grossAmount || total)}</div>
                   </div>
                   <div className="bk-summary-rows">
-                    <div className="bk-summary-row"><span>Provider</span><strong>{pendingPayment.provider === "airtel_money" ? "Airtel Money" : "MTN Mobile Money"}</strong></div>
-                    <div className="bk-summary-row"><span>Customer pays</span><strong>{formatMoney(pendingPayment.grossAmount || total)}</strong></div>
-                    <div className="bk-summary-row"><span>Platform commission</span><strong>{formatMoney(pendingPayment.commissionAmount || 0)}</strong></div>
-                    <div className="bk-summary-row"><span>Provider payout</span><strong>{formatMoney(pendingPayment.barberAmount || 0)}</strong></div>
-                    <div className="bk-summary-row"><span>Reference</span><strong>{pendingPayment.reference}</strong></div>
-                    <div className="bk-summary-row"><span>Phone</span><strong>{pendingPayment.phoneNumber || "Saved profile phone"}</strong></div>
+                    <div className="bk-summary-row"><span>Status</span><strong>Payments Coming Soon</strong></div>
+                    <div className="bk-summary-row"><span>Amount</span><strong>{formatMoney(pendingPayment.grossAmount || total)}</strong></div>
+                    <div className="bk-summary-row"><span>How to pay</span><strong>Pay provider directly</strong></div>
                   </div>
                 </div>
               </div>
 
               <div className="bk-footer">
-                <button type="button" className="bk-cta-primary" onClick={() => onVerifyPayment?.(pendingPayment.bookingId)} disabled={creatingBooking}>
-                  {creatingBooking ? "Checking payment..." : "I approved the payment"}
+                <button type="button" className="bk-cta-primary" disabled>
+                  Payments Coming Soon
                 </button>
-                <div className="bk-footer-note">The platform keeps 10% and sends 90% to the provider after confirmation.</div>
+                <div className="bk-footer-note">No online payment request will be sent from Queless yet.</div>
               </div>
             </div>
           </div>
@@ -470,7 +458,7 @@ export default function BookingModal({
     : step === 0 || step === 1
     ? "Continue"
     : step === 2
-    ? "Continue to Payment"
+    ? "Review Booking"
     : creatingBooking
     ? "Confirming booking…"
     : "Confirm Booking";
@@ -548,48 +536,13 @@ export default function BookingModal({
                 <>
                   <div className="bk-section">
                     <div className="bk-section-head">
-                      <h3><FiSmartphone /> Payment method</h3>
-                      <span>Required to confirm</span>
+                      <h3><FiSmartphone /> Online payments</h3>
+                      <span>Coming soon</span>
                     </div>
-                    <div className="bk-payment-list">
-                      {paymentOptions.map((option) => (
-                        <button
-                          type="button"
-                          key={option.value}
-                          className={selectedPaymentMethod === option.value ? "bk-payment-option active" : "bk-payment-option"}
-                          disabled={option.disabled}
-                          onClick={() => setSelectedPaymentMethod(option.value)}
-                        >
-                          <span className="bk-payment-icon"><FiSmartphone /></span>
-                          <span className="bk-payment-copy">
-                            <strong>{option.label}</strong>
-                            <small>{option.meta}</small>
-                          </span>
-                          <span className="bk-payment-pill">{option.pill}</span>
-                        </button>
-                      ))}
+                    <div className="bk-warning bk-coming-soon">
+                      <strong>Payments Coming Soon</strong>
+                      <span>{MOBILE_MONEY_COMING_SOON_MESSAGE}</span>
                     </div>
-                    {!onlinePaymentsReady && paymentReadinessMessage ? (
-                      <div className="bk-warning">{paymentReadinessMessage}</div>
-                    ) : null}
-                    {requiresPhone ? (
-                      <label className="bk-field">
-                        <span>{selectedPaymentLabel} number</span>
-                        <input
-                          type="tel"
-                          value={paymentPhone || ""}
-                          onChange={(event) => setPaymentPhone?.(event.target.value)}
-                          placeholder="0772123456"
-                          inputMode="tel"
-                          autoComplete="tel"
-                        />
-                        <small>
-                          {phoneIsValid
-                            ? "We will send an approval prompt to this number."
-                            : "Use a Uganda number such as 0772123456 or +256772123456."}
-                        </small>
-                      </label>
-                    ) : null}
                   </div>
 
                   <div className="bk-summary-card">
@@ -605,13 +558,8 @@ export default function BookingModal({
                       {isShopStand ? <div className="bk-summary-row"><span>Provider</span><strong>{selectedTeamMember?.name || "Any available"}</strong></div> : null}
                       <div className="bk-summary-row"><span>When</span><strong>{selectedDateLabel} • {selectedTimeLabel}</strong></div>
                       <div className="bk-summary-row"><span>Location</span><strong>{isHomeService ? (bookingAddress || "Your location") : barber.location}</strong></div>
-                      <div className="bk-summary-row"><span>Payment</span><strong>{paymentAllowed ? selectedPaymentLabel : "Choose payment"}</strong></div>
-                      {showsPlatformSplit ? (
-                        <>
-                          <div className="bk-summary-row"><span>Platform commission</span><strong>{formatMoney(total * 0.1)}</strong></div>
-                          <div className="bk-summary-row"><span>Provider receives</span><strong>{formatMoney(total * 0.9)}</strong></div>
-                        </>
-                      ) : null}
+                      <div className="bk-summary-row"><span>Payment</span><strong>Pay provider directly</strong></div>
+                      {paymentsComingSoon ? <div className="bk-summary-row"><span>Online payment</span><strong>Coming Soon</strong></div> : null}
                     </div>
                   </div>
 
@@ -623,7 +571,7 @@ export default function BookingModal({
                   <div className="bk-hero">
                     <div className="bk-hero-avatar">
                       <img
-                        src={barber.image}
+                        src={buildAssetUrl(barber.image)}
                         alt={barber.business_name}
                         loading="lazy"
                         onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
@@ -895,7 +843,7 @@ export default function BookingModal({
                       ) : null}
                     </div>
                     <div className="bk-summary-line">
-                      <img className="bk-summary-thumb" src={serviceObj?.image || barber.image} alt="" onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} />
+                      <img className="bk-summary-thumb" src={buildAssetUrl(serviceObj?.image || barber.image)} alt="" onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} />
                       <div className="bk-summary-line-copy">
                         <strong>{serviceObj?.service_name || "Service"}</strong>
                         <span>{selectedDateLabel} • {selectedTimeLabel}</span>

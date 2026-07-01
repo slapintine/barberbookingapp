@@ -41,6 +41,25 @@ export function deriveSocketUrl() {
 }
 
 export const SOCKET_URL = deriveSocketUrl();
+
+// The origin that serves uploaded assets (e.g. https://queless.org). Empty in
+// local dev where API_URL is the relative "/api", which is fine because relative
+// asset paths resolve against the same origin there.
+export const ASSET_ORIGIN = API_URL && API_URL.startsWith("http") ? stripApiSuffix(API_URL) : "";
+
+// Single source of truth for turning a stored image reference into a usable URL.
+// data:/blob:/absolute-http(s) values pass through unchanged; server-relative
+// upload/static paths (e.g. "/api/uploads/...") are made absolute against
+// ASSET_ORIGIN so they resolve to queless.org even inside the Android WebView,
+// whose page origin is https://localhost. Returns "" for empty input.
+export function buildAssetUrl(reference) {
+  const value = String(reference || "").trim();
+  if (!value) return "";
+  if (/^(data:|blob:|https?:\/\/)/i.test(value)) return value;
+  if (value.startsWith("/")) return ASSET_ORIGIN ? `${ASSET_ORIGIN}${value}` : value;
+  return value;
+}
+
 export const SERVER_UNAVAILABLE_MESSAGE =
   "We're having trouble connecting to the server. Please try again in a moment.";
 

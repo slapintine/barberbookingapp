@@ -16,6 +16,15 @@ function cleanUrl(value) {
   return String(value || "").trim().replace(/\/$/, "");
 }
 
+export function redactUrlForReadiness(value) {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}${url.search ? "?[redacted]" : ""}`;
+  } catch {
+    return value ? "invalid URL (value hidden)" : "missing";
+  }
+}
+
 function cleanFilesystemPath(value) {
   return String(value || "").trim().replace(/\\/g, "/").replace(/\/$/, "");
 }
@@ -41,6 +50,22 @@ function isTargetCallback(value) {
     return url.origin === TARGET_ORIGIN && url.pathname === REQUIRED_MTN_CALLBACK_PATH;
   } catch {
     return false;
+  }
+}
+
+export function getMtnCallbackSecurityStatus(value, expectedToken) {
+  if (!isTargetCallback(value)) return { ok: false, detail: "URL must use the production MTN callback path" };
+
+  const token = String(expectedToken || "").trim();
+  if (token.length < 32) return { ok: false, detail: "configured webhook token is missing or shorter than 32 characters" };
+
+  try {
+    const callbackToken = new URL(value).searchParams.get("token") || "";
+    if (!callbackToken) return { ok: false, detail: "callback URL has no token query parameter" };
+    if (callbackToken !== token) return { ok: false, detail: "callback URL token does not match MOBILE_MONEY_WEBHOOK_TOKEN" };
+    return { ok: true, detail: "callback URL token matches the configured webhook token" };
+  } catch {
+    return { ok: false, detail: "callback URL is invalid" };
   }
 }
 
@@ -265,8 +290,12 @@ export async function getEnvironmentReadinessChecks() {
   const callbackUrl = env.mtnCallbackUrl || env.mobileMoneyCallbackUrl || "";
   const apiPublicUrl = cleanUrl(env.appPublicUrl);
   const shouldVerifyMtn = env.nodeEnv === "production" && env.bookingOnlinePaymentsEnabled;
+  const shouldRequireWebhookToken =
+    env.nodeEnv === "production" &&
+    (env.bookingOnlinePaymentsEnabled || ["sandbox", "provider", "live", "auto"].includes(env.mobileMoneyMode));
   const firebaseServiceAccount = getFirebaseServiceAccountStatus();
   const mtnCollectionCredentialDetail = getMtnCollectionCredentialDetail();
+  const mtnCallbackSecurity = getMtnCallbackSecurityStatus(callbackUrl, env.mobileMoneyWebhookToken);
 
   const checks = [
     status("node_env", "NODE_ENV", env.nodeEnv === "production", `current=${env.nodeEnv}`, "blocker", "Set NODE_ENV=production on the VPS before final launch."),
@@ -275,7 +304,7 @@ export async function getEnvironmentReadinessChecks() {
       "same_origin_api",
       "Same-origin /api",
       apiPublicUrl === TARGET_ORIGIN,
-      apiPublicUrl ? `APP_PUBLIC_URL=${apiPublicUrl}` : "APP_PUBLIC_URL is missing",
+      apiPublicUrl ? `APP_PUBLIC_URL=${redactUrlForReadiness(apiPublicUrl)}` : "APP_PUBLIC_URL is missing",
       "blocker",
       "Set APP_PUBLIC_URL=https://queless.org and build the frontend with VITE_API_URL=https://queless.org/api."
     ),
@@ -284,8 +313,8 @@ export async function getEnvironmentReadinessChecks() {
       "Production CORS allowlist",
       env.nodeEnv !== "production" || (cors.missing.length === 0 && cors.devOrigins.length === 0 && !env.allowLocalDevOrigins),
       cors.missing.length || cors.devOrigins.length || env.allowLocalDevOrigins
-        ? `missing=${cors.missing.join(", ") || "none"}; devOrigins=${cors.devOrigins.join(", ") || "none"}; allowLocalDevOrigins=${env.allowLocalDevOrigins}`
-        : `CLIENT_URL=${cors.configured.join(", ")}`,
+        ? `missing=${cors.missing.map(redactUrlForReadiness).join(", ") || "none"}; devOrigins=${cors.devOrigins.map(redactUrlForReadiness).join(", ") || "none"}; allowLocalDevOrigins=${env.allowLocalDevOrigins}`
+        : `CLIENT_URL=${cors.configured.map(redactUrlForReadiness).join(", ")}`,
       "blocker",
       "Set CLIENT_URL=https://queless.org,https://www.queless.org and keep DEV_CLIENT_URL empty with ALLOW_LOCAL_DEV_ORIGINS=false."
     ),
@@ -308,12 +337,26 @@ export async function getEnvironmentReadinessChecks() {
     ),
     status("cash_bookings", "Cash bookings", true, "Cash booking flow remains available", "info"),
     status(
+      "webhook_token",
+      "Payment webhook token",
+      !shouldRequireWebhookToken || (present(env.mobileMoneyWebhookToken) && env.mobileMoneyWebhookToken.length >= 32),
+      shouldRequireWebhookToken
+        ? present(env.mobileMoneyWebhookToken) && env.mobileMoneyWebhookToken.length >= 32
+          ? "configured and at least 32 characters (value hidden)"
+          : "missing or shorter than 32 characters"
+        : "not required in the current mode",
+      "blocker",
+      "Set a unique MOBILE_MONEY_WEBHOOK_TOKEN with at least 32 characters before using provider callbacks."
+    ),
+    status(
       "mtn_callback",
       "MTN callback URL",
-      !env.bookingOnlinePaymentsEnabled || isTargetCallback(callbackUrl),
-      callbackUrl || "not required while online payments are off",
+      !env.bookingOnlinePaymentsEnabled || mtnCallbackSecurity.ok,
+      env.bookingOnlinePaymentsEnabled
+        ? `${redactUrlForReadiness(callbackUrl)}; ${mtnCallbackSecurity.detail}`
+        : "not required while online payments are off",
       "blocker",
-      "Set MTN_CALLBACK_URL=https://queless.org/api/payments/mtn/callback and mirror it in MOBILE_MONEY_CALLBACK_URL."
+      "Set MTN_CALLBACK_URL to the production callback path with a token query parameter that matches MOBILE_MONEY_WEBHOOK_TOKEN, and mirror it in MOBILE_MONEY_CALLBACK_URL."
     ),
     status("mtn_credentials", "MTN collection credentials", !env.bookingOnlinePaymentsEnabled || hasMtnCredentials(), env.bookingOnlinePaymentsEnabled ? mtnCollectionCredentialDetail : "not required while online payments are off", "blocker", "Configure MTN consumer credentials or MTN_API_USER_ID, MTN_API_KEY, and collection subscription key before enabling online payments."),
     status("mtn_disbursement_credentials", "MTN payout credentials", !env.bookingOnlinePaymentsEnabled || hasMtnDisbursementCredentials() || present(env.mtnConsumerKey), env.bookingOnlinePaymentsEnabled ? "required before provider payouts" : "not required while online payments are off", "warning", "Configure MTN_DISBURSEMENT_SUBSCRIPTION_KEY before enabling live provider withdrawals."),
@@ -327,7 +370,19 @@ export async function getEnvironmentReadinessChecks() {
       "Set backend FIREBASE_SERVICE_ACCOUNT_JSON to a valid Firebase Admin service account JSON before launch push testing."
     ),
     status("firebase_routes", "Firebase notification routes", true, "register-token, unregister-token, and test routes are protected and mounted", "info"),
-    status("paid_feature_routes", "Paid feature route guards", true, "Smart Match uses customer Premium middleware; Provider Coach uses provider-only plan checks", "info"),
+    status(
+      "provider_coach_ai",
+      "Provider Coach AI",
+      true,
+      env.aiProvider === "gemini" && present(env.geminiApiKey)
+        ? `primary=gemini; model=${env.geminiModel}; API key configured (value hidden); rule-based fallback ready`
+        : env.aiProvider === "openai" && present(env.openAiApiKey)
+        ? `primary=openai; model=${env.openAiModel}; API key configured (value hidden); rule-based fallback ready`
+        : `requested=${env.aiProvider}; external AI unavailable or invalid; rule-based fallback ready`,
+      "info",
+      "For Gemini-first coaching, set AI_PROVIDER=gemini and GEMINI_API_KEY in the active backend .env. OpenAI is optional."
+    ),
+    status("paid_feature_routes", "Paid feature route guards", true, "Smart Match and legacy Coach advice retain plan guards; Provider Coach chat verifies authenticated stand ownership", "info"),
   ];
 
   if (shouldVerifyMtn) {

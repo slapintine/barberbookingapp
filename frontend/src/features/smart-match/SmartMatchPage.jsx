@@ -7,6 +7,7 @@ import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
 import { reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
 import { CUSTOMER_PREMIUM_PLAN } from "../../utils/subscriptionPlans.js";
 import { PAYMENTS_COMING_SOON_MESSAGE } from "../../utils/launchFlags.js";
+import { buildAssetUrl } from "../../config/api.js";
 import {
   AI_REASON_SETS,
   LOCATION_OPTIONS,
@@ -287,7 +288,7 @@ function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap
   const score = Number(match.score || 0);
   const chips = getMatchChips(match, provider);
   const primaryReason = Array.isArray(match.reasons) && match.reasons.length ? match.reasons[0] : "";
-  const providerImage = match.imageUrl || provider?.image || "";
+  const providerImage = buildAssetUrl(match.imageUrl || provider?.image || "");
   const hasRating = Number(match.rating) > 0;
   return (
     <article className="smart-match-result-card">

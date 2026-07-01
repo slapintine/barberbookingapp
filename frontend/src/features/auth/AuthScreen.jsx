@@ -2,13 +2,9 @@ import { useEffect, useState } from "react";
 import { FiEye, FiEyeOff, FiLock, FiMail, FiUser } from "react-icons/fi";
 import logo from "../../assets/queless-logo-full.png";
 import { sanitizeErrorMessage } from "../../utils/errorMessages.js";
+import { normalizeAppBasePath } from "../../utils/appBasePath.js";
 
-function normalizeBasePath(value) {
-  const trimmed = String(value || "").trim().replace(/^\/+|\/+$/g, "");
-  return trimmed ? `/${trimmed}` : "";
-}
-
-const APP_BASE_PATH = normalizeBasePath(import.meta.env.VITE_BASE_PATH || import.meta.env.BASE_URL);
+const APP_BASE_PATH = normalizeAppBasePath(import.meta.env.VITE_BASE_PATH || import.meta.env.BASE_URL);
 
 function appPath(path) {
   const normalized = String(path || "/").startsWith("/") ? String(path || "/") : `/${path}`;

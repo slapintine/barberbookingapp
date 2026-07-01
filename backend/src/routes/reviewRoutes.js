@@ -3,14 +3,16 @@ import { protect } from "../middleware/authMiddleware.js";
 import { requireRole } from "../middleware/roleMiddleware.js";
 import { createReview, deleteReview, getManagedReviewsForBarber, getMyReviews, getReviewsForBarber, setReviewPublicBlock, updateReview } from "../controllers/reviewController.js";
 import { reviewRateLimiter } from "../middleware/securityMiddleware.js";
+import { validateRequest } from "../middleware/validateRequest.js";
+import { schemas } from "../validation/schemas.js";
 
 const router = express.Router();
 
-router.post("/", protect, reviewRateLimiter, createReview);
+router.post("/", protect, reviewRateLimiter, validateRequest(schemas.reviewCreate), createReview);
 router.get("/me", protect, getMyReviews);
 router.get("/barber/:barberId/manage", protect, requireRole("barber", "admin"), getManagedReviewsForBarber);
 router.patch("/:reviewId/public-block", protect, requireRole("barber", "admin"), reviewRateLimiter, setReviewPublicBlock);
-router.patch("/:reviewId", protect, reviewRateLimiter, updateReview);
+router.patch("/:reviewId", protect, reviewRateLimiter, validateRequest(schemas.reviewUpdate), updateReview);
 router.delete("/:reviewId", protect, reviewRateLimiter, deleteReview);
 router.get("/barber/:barberId", getReviewsForBarber);
 

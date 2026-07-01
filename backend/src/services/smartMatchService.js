@@ -453,6 +453,7 @@ export async function findSmartMatches(criteria = {}) {
      JOIN barber_services s ON s.barber_id = b.id AND COALESCE(s.is_available, 1) = 1
      LEFT JOIN barber_schedule sch ON sch.barber_id = b.id AND sch.day_of_week = ?
      WHERE ${publicBusinessWhere("b")}
+       AND b.marketplace_mode IN ('service', 'hybrid')
      ORDER BY b.id DESC, s.id ASC`,
     [dayOfWeek ?? -1, ...publicBusinessParams(now)]
   );

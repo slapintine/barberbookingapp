@@ -106,6 +106,10 @@ export default function ProviderCoachChatScreen({
   const messageSequenceRef = useRef(0);
   const planLabel = useMemo(() => getPlanLabel(subscription, barber), [subscription, barber]);
   const standStatus = Number(barber?.is_published ?? barber?.isPublished ?? 0) === 1 ? "Live stand" : "Draft stand";
+  const latestAssistantId = useMemo(
+    () => [...messages].reverse().find((item) => item.role === "assistant" && item.id !== WELCOME_MESSAGE.id)?.id || "",
+    [messages]
+  );
 
   useEffect(() => {
     setMessages(readStoredMessages(barber?.id));
@@ -131,7 +135,7 @@ export default function ProviderCoachChatScreen({
     const history = messages
       .filter((item) => item.id !== WELCOME_MESSAGE.id)
       .slice(-8)
-      .map(({ role, content }) => ({ role, content }));
+      .map(({ role, content, intent, topic }) => ({ role, content, intent, topic }));
 
     setMessages((current) => [...current, userMessage]);
     setDraft("");
@@ -148,6 +152,10 @@ export default function ProviderCoachChatScreen({
           role: "assistant",
           content: result?.answer || "I couldn’t prepare an answer just now. Please try again.",
           contextSummary: result?.contextSummary || null,
+          intent: result?.intent || "",
+          topic: result?.topic || "",
+          nextBestAction: result?.nextBestAction || "",
+          suggestedChips: Array.isArray(result?.suggestedChips) ? result.suggestedChips.slice(0, 6) : [],
         },
       ]);
     } catch (requestError) {
@@ -225,6 +233,24 @@ export default function ProviderCoachChatScreen({
             <div>
               <small>{message.role === "assistant" ? "Provider Coach" : "You"}</small>
               <p>{message.content}</p>
+              {message.role === "assistant" && message.nextBestAction ? (
+                <aside className="provider-coach-next-action">
+                  <strong><FiZap /> Next best action</strong>
+                  <span>{message.nextBestAction}</span>
+                </aside>
+              ) : null}
+              {message.role === "assistant" &&
+              message.id === latestAssistantId &&
+              Array.isArray(message.suggestedChips) &&
+              message.suggestedChips.length ? (
+                <div className="provider-coach-response-chips" aria-label="Suggested follow-up questions">
+                  {message.suggestedChips.map((chip) => (
+                    <button type="button" key={chip} onClick={() => submitQuestion(chip)} disabled={sending}>
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </article>
         ))}

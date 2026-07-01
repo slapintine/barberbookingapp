@@ -1,4 +1,5 @@
 import { apiFetch } from "../config/api.js";
+import { createComingSoonError, SMS_COMING_SOON_MESSAGE, SMS_ENABLED } from "../utils/launchFlags.js";
 
 export function registerUser({ username, email, password, role = "customer" }) {
   return apiFetch("/api/auth/register", {
@@ -56,6 +57,9 @@ export function sendEmailVerification(email) {
 }
 
 export function sendPhoneOtp(phone) {
+  if (!SMS_ENABLED) {
+    return Promise.reject(createComingSoonError(SMS_COMING_SOON_MESSAGE, "SMS_COMING_SOON"));
+  }
   return apiFetch("/api/auth/send-phone-otp", {
     method: "POST",
     body: JSON.stringify({ phone }),
@@ -63,6 +67,9 @@ export function sendPhoneOtp(phone) {
 }
 
 export function verifyOtp({ channel, destination, code, purpose = "account_verification" }) {
+  if (String(channel || "").toLowerCase() === "sms" && !SMS_ENABLED) {
+    return Promise.reject(createComingSoonError(SMS_COMING_SOON_MESSAGE, "SMS_COMING_SOON"));
+  }
   return apiFetch("/api/auth/verify-otp", {
     method: "POST",
     body: JSON.stringify({ channel, destination, code, purpose }),

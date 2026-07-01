@@ -30,8 +30,10 @@ import {
   verifyCustomerSubscriptionUpgrade,
 } from "./api/customerSubscriptionsApi.js";
 import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
+import { createProduct, removeProduct, updateProduct } from "./api/productsApi.js";
 import { normalizeProviderData } from "./utils/providerData.js";
 import { buildStandDraftUpdatePayload } from "./utils/standDraftPayload.js";
+import { getMarketplaceMode, supportsProducts, supportsServices } from "./utils/marketplaceMode.js";
 import { getCustomerWallet, getMyWallet, requestWalletWithdrawal } from "./api/walletApi.js";
 import AppHeader from "./components/ui/AppHeader.jsx";
 import AccountMenu from "./components/ui/AccountMenu.jsx";
@@ -65,6 +67,7 @@ import {
   splitPhoneNumber,
 } from "./utils/profileUtils.js";
 import { appendStored, readStored, writeStored } from "./utils/storage.js";
+import { normalizeAppBasePath } from "./utils/appBasePath.js";
 import {
   DEFAULT_SERVICE_TYPES,
   getAvailableServices,
@@ -120,6 +123,32 @@ function upsertById(list = [], item) {
   const next = [...list];
   next[index] = { ...next[index], ...item };
   return next;
+}
+
+function isPersistedProductId(value) {
+  return Number.isInteger(Number(value)) && Number(value) > 0 && !String(value).startsWith("local-product-");
+}
+
+async function syncStagedStandProducts(payload = {}) {
+  if (!supportsProducts(getMarketplaceMode(payload.marketplaceMode || payload.marketplace_mode))) return [];
+  const deletedIds = [...new Set(Array.isArray(payload.deletedProductIds) ? payload.deletedProductIds : [])]
+    .filter(isPersistedProductId);
+  for (const productId of deletedIds) {
+    await removeProduct(productId);
+  }
+
+  const savedProducts = [];
+  for (const product of Array.isArray(payload.products) ? payload.products : []) {
+    const id = product?.id;
+    const body = { ...(product || {}) };
+    delete body.id;
+    delete body.localOnly;
+    const response = isPersistedProductId(id)
+      ? await updateProduct(id, body)
+      : await createProduct(body);
+    if (response?.product) savedProducts.push(response.product);
+  }
+  return savedProducts;
 }
 
 function uniqueById(list = []) {
@@ -350,11 +379,6 @@ const BOOKING_ONLINE_PAYMENTS_ENABLED =
   PAYMENTS_ENABLED && String(import.meta.env.VITE_BOOKING_ONLINE_PAYMENTS_ENABLED || "").toLowerCase() === "true";
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin", "super-admin"]);
 const PROVIDER_ROLES = new Set(["barber", "provider", "business", "salon", "spa"]);
-
-function normalizeAppBasePath(value) {
-  const trimmed = String(value || "").trim().replace(/^\/+|\/+$/g, "");
-  return trimmed ? `/${trimmed}` : "";
-}
 
 function stripAppBasePath(pathname) {
   const normalized = String(pathname || "/").replace(/\/+$/, "") || "/";
@@ -886,6 +910,14 @@ function isStrongPassword(value) {
   return text.length >= 8 && /[A-Za-z]/.test(text) && /\d/.test(text);
 }
 
+function getBookingCreationErrorMessage(error) {
+  const message = sanitizeErrorMessage(error, "Could not create booking.");
+  if (/booking_details.*(?:must|should).*string/i.test(message)) {
+    return "We couldn't submit the extra booking details. Please review them and try again.";
+  }
+  return message;
+}
+
 function readAuthUser() {
   return (
     safeJsonParse(localStorage.getItem("lineup_user"), null) ||
@@ -1004,7 +1036,7 @@ function App() {
   const [screen, setScreen] = useState(() => getScreenFromPath(window.location.pathname, Boolean(getAuthToken())));
   const [authMode, setAuthMode] = useState(() => getAuthModeFromPath(window.location.pathname));
   const [theme, setTheme] = useTheme();
-  const [initialLoadingStage, setInitialLoadingStage] = useState("visible");
+  const [showInitialLoadingScreen, setShowInitialLoadingScreen] = useState(true);
   const [token, setToken] = useState(getAuthToken());
   const [currentUser, setCurrentUser] = useState(readAuthUser);
   const [sessionExpiresAt, setSessionExpiresAt] = useState(
@@ -1015,6 +1047,7 @@ function App() {
   const [sessionChecked, setSessionChecked] = useState(() => !getAuthToken());
 
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname, readAuthUser()));
+  const [providerDashboardSection, setProviderDashboardSection] = useState("products");
   const initialSearchRoute = readSearchRouteParams();
   const [query, setQuery] = useState(initialSearchRoute.query || "");
   const [searchResultsQuery, setSearchResultsQuery] = useState(initialSearchRoute.query || "");
@@ -1097,12 +1130,9 @@ function App() {
   const [dismissedToastIds, setDismissedToastIds] = useState([]);
 
   useEffect(() => {
-    // Launch splash: brief brand moment on initial boot only.
-    const hideTimer = window.setTimeout(() => setInitialLoadingStage("hiding"), 1600);
-    const removeTimer = window.setTimeout(() => setInitialLoadingStage("hidden"), 2160);
+    const removeTimer = window.setTimeout(() => setShowInitialLoadingScreen(false), 1800);
 
     return () => {
-      window.clearTimeout(hideTimer);
       window.clearTimeout(removeTimer);
     };
   }, []);
@@ -1834,8 +1864,37 @@ function App() {
       selectedBarber.ownerUsername === currentUser.username ||
       selectedBarber.owner_username === currentUser.username ||
       Number(selectedBarber.owner_user_id || selectedBarber.ownerUserId || 0) === Number(currentUser.id || 0);
-    if (ownsProfile) fetchManagedReviewsForBarber(selectedBarber.id);
-  }, [selectedBarber?.id, currentUser?.username, currentUser?.id]);
+    const providerTier = String(
+      selectedBarber.subscription?.tier ||
+      selectedBarber.subscription_tier ||
+      subscriptionState?.tier ||
+      ""
+    ).toUpperCase();
+    const providerPlanStatus = String(
+      selectedBarber.subscription?.status ||
+      selectedBarber.subscription_status ||
+      subscriptionState?.status ||
+      ""
+    ).toLowerCase();
+    const canManageReviews =
+      providerTier === "PLATINUM" &&
+      !["expired", "cancelled", "canceled", "inactive", "locked", "pending_payment"].includes(providerPlanStatus);
+    if (ownsProfile && canManageReviews) fetchManagedReviewsForBarber(selectedBarber.id);
+  }, [
+    selectedBarber?.id,
+    selectedBarber?.ownerUsername,
+    selectedBarber?.owner_username,
+    selectedBarber?.owner_user_id,
+    selectedBarber?.ownerUserId,
+    selectedBarber?.subscription?.tier,
+    selectedBarber?.subscription?.status,
+    selectedBarber?.subscription_tier,
+    selectedBarber?.subscription_status,
+    subscriptionState?.tier,
+    subscriptionState?.status,
+    currentUser?.username,
+    currentUser?.id,
+  ]);
 
   useEffect(() => {
     if (!selectedBarber) return;
@@ -2922,6 +2981,9 @@ const fetchBarbers = async () => {
 const registerBarber = async (payload) => {
     if (!currentUser?.username) return { success: false, message: "Please log in to save your stand draft." };
     const wantsPublish = payload.submitIntent === "publish";
+    const quietSave = Boolean(payload.autoSave || payload.silent);
+    const marketplaceMode = getMarketplaceMode(payload.marketplaceMode || payload.marketplace_mode);
+    const serviceMode = supportsServices(marketplaceMode);
     const selectedServices = Array.isArray(payload.services)
       ? payload.services.map((service, index) => normalizeServiceForBooking(service, index, { preserveEmptyTitle: true }))
       : String(payload.services || "")
@@ -2938,7 +3000,7 @@ const registerBarber = async (payload) => {
 
     if (alreadyHasBarberStand) {
       const message = "This account already has a business profile. Open Edit Stand to continue.";
-      setGlobalError(message);
+      if (!quietSave) setGlobalError(message);
       return { success: false, message };
     }
 
@@ -2955,6 +3017,7 @@ const registerBarber = async (payload) => {
     }
 
     let data;
+    let productSyncError = "";
     try {
       data = await registerBarberStand({
         business_name: payload.businessName,
@@ -2968,25 +3031,43 @@ const registerBarber = async (payload) => {
         categories: Array.isArray(payload.categories) ? payload.categories : [],
         primary_category: payload.primaryCategory || null,
         stand_type: payload.standType || "individual",
+        marketplace_mode: marketplaceMode,
         business_type: payload.businessType || "Services",
         map_icon_type: payload.mapIconType || payload.iconCategory || "",
-        home_service_enabled: Boolean(payload.homeServiceEnabled),
+        cover_image_url: payload.coverImage || "",
+        business_hours: payload.businessHours || {},
+        pickup_available: Boolean(payload.pickupAvailable),
+        delivery_available: Boolean(payload.deliveryAvailable),
+        delivery_areas: Array.isArray(payload.deliveryAreas) ? payload.deliveryAreas : [],
+        delivery_fee: payload.deliveryFee === "" ? null : Number(payload.deliveryFee),
+        delivery_notes: payload.deliveryNotes || "",
+        ...(serviceMode ? { home_service_enabled: Boolean(payload.homeServiceEnabled) } : {}),
         intro_text: payload.introText || "",
         verification_document_name: payload.documentName || "",
         document_name: payload.documentName || "",
         portfolio: Array.isArray(payload.portfolio) ? payload.portfolio : [],
-        team_members: payload.standType === "shop" ? parseTeamMembers(payload.teamMembers) : [],
-        schedule_start: payload.scheduleStart || "08:00",
-        schedule_end: payload.scheduleEnd || "20:00",
+        team_members: serviceMode && payload.standType === "shop" ? parseTeamMembers(payload.teamMembers) : [],
+        ...(serviceMode ? {
+          schedule_start: payload.scheduleStart || "08:00",
+          schedule_end: payload.scheduleEnd || "20:00",
+        } : {}),
         accepts_wallet: Boolean(payload.acceptsWallet),
         accepts_cash: true,
-        selected_plan: "",
+        selected_plan: String(payload.selectedPlan || "FREE").toUpperCase(),
         submit_intent: "draft",
         access_type: "subscription",
         start_free_trial: false,
       });
 
-      if (wantsPublish) {
+      if (supportsProducts(marketplaceMode)) {
+        try {
+          await syncStagedStandProducts(payload);
+        } catch (syncError) {
+          productSyncError = syncError?.message || "Your stand draft was saved, but the product catalogue could not be saved.";
+        }
+      }
+
+      if (wantsPublish && !productSyncError) {
         const publishData = await publishMyBarberStand();
         data = { ...data, ...publishData, next_step: "active" };
       }
@@ -3049,13 +3130,14 @@ const registerBarber = async (payload) => {
     };
     appendStored("notifications", upgradedUser.username, uploadNotification);
     fetchNotifications();
-    setGlobalError("");
+    setGlobalError(productSyncError);
+    const didPublish = wantsPublish && !productSyncError && data?.next_step === "active";
     showSystemToast(
-      wantsPublish ? "Stand published" : "Draft saved",
-      wantsPublish ? "Your stand is now live and visible to customers." : "Draft saved. You can come back and continue anytime.",
-      "success"
+      productSyncError ? "Draft saved, products need attention" : didPublish ? "Stand published" : "Draft saved",
+      productSyncError || (didPublish ? "Your stand is now live and visible to customers." : "Draft saved. You can come back and continue anytime."),
+      productSyncError ? "system" : "success"
     );
-    return { success: true, published: wantsPublish, message: data?.message };
+    return { success: true, published: didPublish, draftSaved: true, message: productSyncError || data?.message };
   };
 
   const publishBarberStand = async () => {
@@ -3084,6 +3166,8 @@ const updateBarberStand = async (payload) => {
       return { success: false, message: "We couldn’t load your saved stand. Refresh and try again." };
     }
     const wantsPublish = payload.submitIntent === "publish";
+    const quietSave = Boolean(payload.autoSave || payload.silent);
+    const marketplaceMode = getMarketplaceMode(payload.marketplaceMode || payload.marketplace_mode || myBarberProfile);
     const selectedServices = Array.isArray(payload.services)
       ? payload.services.map((service, index) => normalizeServiceForBooking(service, index, { preserveEmptyTitle: true }))
       : String(payload.services || "")
@@ -3116,9 +3200,13 @@ const updateBarberStand = async (payload) => {
       },
       myBarberProfile
     );
+    let syncedProducts = null;
 
     try {
       let data = await updateMyBarberStand(draftPayload);
+      if (!quietSave && supportsProducts(marketplaceMode)) {
+        syncedProducts = await syncStagedStandProducts(payload);
+      }
       if (wantsPublish) {
         data = await publishMyBarberStand();
       }
@@ -3133,14 +3221,17 @@ const updateBarberStand = async (payload) => {
       const message = draftWasSaved
         ? error?.message || "Your draft is saved, but complete the missing details before publishing."
         : error?.message || "We couldn’t save your stand draft. Please try again.";
-      setGlobalError(message);
-      if (draftWasSaved) {
+      if (!quietSave) setGlobalError(message);
+      if (draftWasSaved && !quietSave) {
         showSystemToast("Draft saved, not published", message, "system");
       }
       return { success: false, draftSaved: draftWasSaved, message };
     }
 
     if (wantsPublish) setShowEditBarber(false);
+    if (quietSave) {
+      return { success: true, published: false, autoSaved: true };
+    }
 
     const updateNotification = {
       id: makeId("ntf"),
@@ -3158,7 +3249,7 @@ const updateBarberStand = async (payload) => {
       "success"
     );
     fetchNotifications();
-    return { success: true, published: wantsPublish };
+    return { success: true, published: wantsPublish, products: syncedProducts };
   };
 
   const deleteBarberStand = async () => {
@@ -3266,7 +3357,7 @@ const updateBarberStand = async (payload) => {
       const serviceLocationType = String(serviceObj.location_type || "provider_location").toLowerCase();
       const homeServiceAllowed =
         Number(selectedBarber.home_service_enabled || selectedBarber.homeServiceEnabled || 0) === 1 ||
-        serviceLocationType === "customer_location";
+        ["customer_location", "pickup_delivery", "mobile_area"].includes(serviceLocationType);
       if (normalizedLocationType === "customer_location" && !homeServiceAllowed) {
         throw new Error("This service is only available at the provider location.");
       }
@@ -3349,7 +3440,7 @@ const updateBarberStand = async (payload) => {
       fetchNotifications();
       fetchWallet();
     } catch (error) {
-      setGlobalError(error.message || "Could not create booking.");
+      setGlobalError(getBookingCreationErrorMessage(error));
     } finally {
       setCreatingBooking(false);
     }
@@ -3439,9 +3530,17 @@ const updateBarberStand = async (payload) => {
   const getFriendlyPaymentError = (error) => {
     const code = String(error?.code || "").toUpperCase();
     const status = Number(error?.status || 0);
+    const details = error?.payload?.details || {};
 
     // Map known backend error codes to clear, safe, user-facing guidance.
     const byCode = {
+      INVALID_PROMO_CODE: "Invalid promo code.",
+      PROMO_CODE_EXPIRED: error?.message || "This promo code has expired.",
+      PROMO_PLAN_MISMATCH: error?.message || "This promo code is not valid for this plan.",
+      PROMO_ALREADY_USED: error?.message || "This promo code has already been used.",
+      PROMO_CODE_REQUIRED: error?.message || "Enter a promo code to continue.",
+      PARTIAL_PROMO_PAYMENT_COMING_SOON: details.message || error?.message || PARTIAL_PROMO_COMING_SOON_MESSAGE,
+      PLAN_PRICE_MISMATCH: error?.message || "Plan details could not be loaded. Please choose a plan again.",
       INVALID_PHONE_NUMBER: error?.message || "This phone number is not valid for mobile money. Please check the number and try again.",
       WRONG_PROVIDER_FOR_NUMBER: error?.message || "This number does not match the selected mobile money network.",
       PAYMENT_PROVIDER_UNAVAILABLE: "Payment service is temporarily unavailable. Please try again shortly.",
@@ -3526,14 +3625,15 @@ const updateBarberStand = async (payload) => {
         tier,
         provider,
       } : null);
+      const successMessage = data?.message || providerActiveMessage;
       if ((provider === "trial" || activatedImmediately) && data?.subscription) {
         setSubscriptionState(nextSubscription);
         setPendingSubscriptionPayment(null);
         if (activatedImmediately && provider !== "trial") {
           const isFreeActivation = tier === "FREE" || provider === "free";
           showSystemToast(
-            isFreeActivation ? "Free plan activated" : "Payment successful",
-            data?.message || providerActiveMessage,
+            isFreeActivation ? "Free plan activated" : "Plan activated",
+            successMessage,
             "system"
           );
         }
@@ -3541,15 +3641,11 @@ const updateBarberStand = async (payload) => {
         fetchBarbers();
         setActiveTab(effectiveIsBarber ? "dashboard" : "profile");
       }
-      setSubscriptionMessage(activatedImmediately ? providerActiveMessage : data?.message || "Plan selected. Mobile money confirmation is required to activate your business.");
-      return true;
+      setSubscriptionMessage(activatedImmediately ? successMessage : data?.message || "Plan selected. Mobile money confirmation is required to activate your business.");
+      return { success: true, ...data };
     } catch (error) {
-      // A partial promo while payments are off fails with a payment-required error
-      // (not a promo-validity error). Show the Coming Soon discount message instead.
-      const isPromoError = /promo/i.test(error?.message || "");
-      setSubscriptionMessage(
-        promoOnly && !isPromoError ? PARTIAL_PROMO_COMING_SOON_MESSAGE : getFriendlyPaymentError(error)
-      );
+      const promoDetails = error?.payload?.details || {};
+      setSubscriptionMessage(promoDetails.message || getFriendlyPaymentError(error));
       return false;
     } finally {
       setSubscriptionLoading(false);
@@ -4873,6 +4969,7 @@ const updateBarberStand = async (payload) => {
             selectedCategory={selectedCategory}
             setSelectedCategory={setSelectedCategory}
             filteredBarbers={filteredBarbers}
+            currentUser={currentUser}
             topBarbers={topBarbers}
             selectedBarber={selectedBarber}
             openBarber={openProviderProfile}
@@ -5139,6 +5236,8 @@ const updateBarberStand = async (payload) => {
           formatMoney={formatMoney}
           getBadgeLabel={getBadgeLabel}
           formatTimeLabel={formatTimeLabel}
+          productWorkspaceTab={providerDashboardSection}
+          onProductWorkspaceTabChange={setProviderDashboardSection}
         />
         </div>
       )}
@@ -5259,6 +5358,12 @@ const updateBarberStand = async (payload) => {
         isBarber={effectiveIsBarber}
         isAdmin={isAdmin}
         currentUser={currentUser}
+        marketplaceMode={myBarberProfile}
+        providerDashboardSection={providerDashboardSection}
+        onOpenProviderDashboardSection={(section) => {
+          setProviderDashboardSection(section);
+          setActiveTab("dashboard");
+        }}
         unreadMessages={unreadMessages}
         unreadNotifications={unreadNotifications.length}
         onOpenMap={() => openMarketplaceMap("All")}
@@ -5520,7 +5625,7 @@ const updateBarberStand = async (payload) => {
         mtnReady={walletTopupReady}
         mtnReadinessMessage={walletTopupReadinessMessage}
         airtelReady={false}
-        submitLabel="Confirm Premium Payment"
+        submitLabel={PAYMENTS_ENABLED ? "Confirm Premium Payment" : "Apply Premium Promo"}
         comingSoon={!PAYMENTS_ENABLED}
         promoEnabled
         allowPromoOnly
@@ -5570,16 +5675,22 @@ const updateBarberStand = async (payload) => {
         <>
           <button
             type="button"
-            className="booking-overlay-v4 open"
+            className="delete-stand-backdrop-v16"
             onClick={() => setDeleteStandConfirmOpen(false)}
             disabled={deleteStandLoading}
             aria-label="Close delete confirmation"
           />
-          <section className="delete-stand-confirm-v16" role="dialog" aria-modal="true" aria-labelledby="delete-stand-title">
+          <section
+            className="delete-stand-confirm-v16"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-stand-title"
+            aria-describedby="delete-stand-description"
+          >
             <div className="delete-stand-icon-v16"><FiAlertTriangle /></div>
             <div>
               <h2 id="delete-stand-title">Delete stand?</h2>
-              <p>Are you sure you want to delete this stand? This action may remove the business from public search and bookings.</p>
+              <p id="delete-stand-description">Are you sure you want to delete this stand? This action may remove the business from public search and bookings.</p>
             </div>
             {globalError ? <div className="form-error-v4">{globalError}</div> : null}
             <div className="delete-stand-actions-v16">
@@ -5599,8 +5710,6 @@ const updateBarberStand = async (payload) => {
   const appContent = content;
 
   const isAuthScreen = screen === "login";
-  const showInitialLoadingScreen = initialLoadingStage !== "hidden";
-
   return (
     <div className={`app-wrap-v4 ${theme} ${isAuthScreen ? "app-auth-v4" : ""}`}>
       <div className={`phone-frame-v4 ${isAuthScreen ? "phone-frame-auth-v4" : ""}`}>
@@ -5636,7 +5745,7 @@ const updateBarberStand = async (payload) => {
               </PageErrorBoundary>
             )}
           </Suspense>
-          {showInitialLoadingScreen ? <LoadingScreen visible={initialLoadingStage === "visible"} /> : null}
+          {showInitialLoadingScreen ? <LoadingScreen /> : null}
         </div>
       </div>
     </div>

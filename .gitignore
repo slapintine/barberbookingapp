@@ -26,6 +26,7 @@ logs/
 # Local deploy bundle artifacts (not committed)
 frontend/*.tgz
 *.tgz
+*.apk
 *.sqlite
 *.sqlite3
 *.db

@@ -1,5 +1,9 @@
 import { apiFetch } from "../config/api.js";
 
+export function getMyQuoteRequests() {
+  return apiFetch("/api/marketplace/quote-requests/me");
+}
+
 export function createQuoteRequest(payload) {
   const idempotencyKey = String(payload.idempotencyKey || "").trim();
   return apiFetch("/api/marketplace/quote-requests", {

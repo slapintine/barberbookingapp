@@ -1,4 +1,5 @@
 import { apiFetch } from "../config/api.js";
+import { createComingSoonError, SMS_COMING_SOON_MESSAGE, SMS_ENABLED } from "../utils/launchFlags.js";
 
 export function getAdminOverview() {
   return apiFetch("/api/admin/overview");
@@ -95,6 +96,9 @@ export function getAdminSmsMessages(params = {}) {
 }
 
 export function sendAdminSms(payload) {
+  if (!SMS_ENABLED) {
+    return Promise.reject(createComingSoonError(SMS_COMING_SOON_MESSAGE, "SMS_COMING_SOON"));
+  }
   return apiFetch("/api/sms/send", {
     method: "POST",
     body: JSON.stringify(payload),

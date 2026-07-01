@@ -2533,7 +2533,7 @@ body[data-lineup-theme="light"] #root {
   top: 0;
   z-index: 30;
   margin-bottom: 14px;
-  padding: 4px 0 8px;
+  padding: calc(4px + var(--safe-top, 0px)) 0 8px;
   backdrop-filter: blur(12px);
 }
 
@@ -5041,7 +5041,7 @@ body[data-lineup-theme="dark"] .screen-v4 {
   grid-template-columns: auto minmax(160px, 1fr) minmax(180px, 360px) auto auto auto;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: calc(12px + var(--safe-top, 0px)) 12px 12px;
   border: 1px solid rgba(82, 43, 91, 0.1);
   border-radius: 8px;
   background: rgba(255, 250, 247, 0.88);
@@ -6770,15 +6770,29 @@ body[data-lineup-theme="dark"] .screen-v4 {
 .dark .dashboard-coach-btn-v15 { background: #6b21a8; }
 .dark .dashboard-coach-btn-v15:hover { background: #7c3aed; }
 
-/* ─── Dashboard publish card ───────────────────────────────────── */
-.dashboard-publish-card-v9 {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 20px !important;
+/* ─── Dashboard publish card ─────────────────────────────────────
+   Mobile-first and override-proof. Scoped under .dashboard-page-v9 and the
+   layout properties are forced with !important so no .simple-card-v4 or other
+   dashboard rule (which have higher specificity) can re-introduce the old
+   squeezed "narrow text column + side buttons" layout that wrapped text
+   letter-by-letter.
+
+   Phone:  row 1 = icon + full text block; row 2 = full-width stacked buttons.
+   >=720px: icon | text | buttons side by side, with the text always minmax(0,1fr)
+   so it can never be crushed. */
+.dashboard-page-v9 .dashboard-publish-card-v9 {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  grid-template-areas:
+    "icon body"
+    "actions actions" !important;
+  gap: 12px 14px !important;
+  align-items: start !important;
+  padding: 18px !important;
 }
-.dashboard-publish-icon-v9 {
-  flex-shrink: 0;
+.dashboard-page-v9 .dashboard-publish-icon-v9 {
+  grid-area: icon !important;
+  flex: none;
   width: 44px;
   height: 44px;
   border-radius: 12px;
@@ -6789,52 +6803,159 @@ body[data-lineup-theme="dark"] .screen-v4 {
   justify-content: center;
   font-size: 20px;
 }
-.dashboard-publish-body-v9 {
-  flex: 1;
-  min-width: 0;
+.dashboard-page-v9 .dashboard-publish-body-v9 {
+  grid-area: body !important;
+  min-width: 0 !important;
 }
-.dashboard-publish-body-v9 strong {
+.dashboard-page-v9 .dashboard-publish-body-v9 strong {
   display: block;
   font-size: 1rem;
   font-weight: 700;
+  line-height: 1.3;
   color: #221126;
-  margin-bottom: 4px;
+  margin: 0 0 4px;
 }
-.dashboard-publish-body-v9 p {
+.dashboard-page-v9 .dashboard-publish-body-v9 p {
   margin: 0 0 8px;
   font-size: 0.875rem;
   color: #4d1d64;
   line-height: 1.45;
 }
-.dashboard-publish-missing-v9 {
+.dashboard-page-v9 .dashboard-publish-missing-v9 {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
   background: rgba(255,180,0,0.08);
   border: 1px solid rgba(255,180,0,0.28);
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: 10px;
   font-size: 0.8rem;
   color: #7a5300;
-  margin-top: 8px;
 }
-.dashboard-publish-missing-v9 ul {
-  margin: 4px 0 0 16px;
-  padding: 0;
+.dashboard-page-v9 .dashboard-publish-missing-v9 ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
-.dashboard-publish-missing-v9 li {
+.dashboard-page-v9 .dashboard-publish-missing-v9 li {
   margin-bottom: 2px;
 }
-.dashboard-publish-actions-v9 {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-end;
+.dashboard-page-v9 .dashboard-publish-actions-v9 {
+  grid-area: actions !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+  width: 100%;
 }
-@media (max-width: 520px) {
-  .dashboard-publish-card-v9 { flex-direction: column; }
-  .dashboard-publish-actions-v9 { flex-direction: row; align-items: stretch; width: 100%; }
-  .dashboard-publish-actions-v9 button { flex: 1; justify-content: center; }
+.dashboard-page-v9 .dashboard-publish-actions-v9 button {
+  width: 100% !important;
+  justify-content: center;
 }
+/* No viewport-width side-by-side layout: the Queless /app shell always renders in
+   a narrow mobile column (small max-width even on a desktop browser), so a
+   `min-width` media query keyed off the VIEWPORT would wrongly switch to a
+   3-column layout inside a ~280px card and squeeze the text letter-by-letter.
+   The card stays stacked at every width. If a genuinely wide card is ever needed,
+   gate the side-by-side layout on a @container query (the card's own width),
+   never on the viewport. */
 .dark .dashboard-publish-icon-v9 { background: #6b21a8; }
 .dark .dashboard-publish-body-v9 strong { color: #f3e8ff; }
 .dark .dashboard-publish-body-v9 p { color: #c4b5d4; }
 .dark .dashboard-publish-missing-v9 { background: rgba(255,200,50,0.06); border-color: rgba(255,200,50,0.2); color: #d4a800; }
+
+/* Mobile payment/plan and reports safety fixes */
+.trial-upgrade-overlay-v14 {
+  padding: calc(10px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)) !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.trial-upgrade-sheet-v14.trial-upgrade-screen-v12,
+.trial-upgrade-sheet-v14.trial-upgrade-panel-v13 {
+  max-height: calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 18px) !important;
+  overflow-y: auto !important;
+  padding-bottom: calc(22px + env(safe-area-inset-bottom)) !important;
+}
+
+.trial-promo-row-v16 {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.trial-promo-row-v16 input,
+.trial-promo-row-v16 button,
+.trial-readonly-row-v13,
+.trial-readonly-row-v13 strong,
+.trial-payment-summary-v13,
+.trial-payment-summary-v13 strong {
+  min-width: 0;
+}
+
+.trial-promo-row-v16 input {
+  width: 100%;
+}
+
+.trial-promo-row-v16 button {
+  white-space: nowrap;
+}
+
+.trial-readonly-row-v13 {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr) !important;
+  gap: 10px;
+}
+
+.trial-readonly-row-v13 strong,
+.trial-payment-summary-v13 strong {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.reports-page-v9,
+.reports-page-v11,
+.reports-page-v11 > *,
+.reports-section-v11,
+.reports-header-v11,
+.reports-summary-grid-v11,
+.reports-info-grid-v11,
+.reports-service-table-v11,
+.reports-review-summary-v11 {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reports-page-v9,
+.reports-page-v11 {
+  overflow-x: hidden;
+  padding-bottom: calc(94px + env(safe-area-inset-bottom));
+}
+
+.reports-date-tabs-v11 {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  gap: 8px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.reports-date-tabs-v11 button {
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+@media (max-width: 390px) {
+  .trial-promo-row-v16 {
+    grid-template-columns: 1fr;
+  }
+
+  .trial-promo-row-v16 button {
+    width: 100%;
+  }
+
+  .trial-readonly-row-v13 {
+    grid-template-columns: 1fr !important;
+  }
+}

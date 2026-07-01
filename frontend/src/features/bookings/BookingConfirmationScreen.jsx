@@ -11,11 +11,12 @@ import {
   FiUser,
 } from "react-icons/fi";
 import logo from "../../assets/queless-logo-full.png";
+import { PAYMENTS_ENABLED } from "../../utils/launchFlags.js";
 import { getPaymentMethodLabel } from "../../utils/paymentLabels.js";
 
 function formatMoney(value) {
   const amount = Number(value || 0);
-  if (!Number.isFinite(amount) || amount <= 0) return "Price on consultation";
+  if (!Number.isFinite(amount) || amount <= 0) return "Price on inquiry";
   return `UGX ${amount.toLocaleString()}`;
 }
 
@@ -109,7 +110,12 @@ export default function BookingConfirmationScreen({
             <SummaryRow icon={<FiCreditCard />} label="Price" value={formatMoney(booking?.price)} />
             <SummaryRow icon={<FiShield />} label="Status" value={booking?.status || "pending"} />
           </div>
-          <SummaryRow icon={<FiCreditCard />} label="Payment method" value={getPaymentMethodLabel(booking?.paymentMethod)} />
+          <SummaryRow
+            icon={<FiCreditCard />}
+            label="Payment"
+            value={PAYMENTS_ENABLED ? getPaymentMethodLabel(booking?.paymentMethod) : "Pay provider directly"}
+            description={PAYMENTS_ENABLED ? "" : "Online payments are coming soon. No card, wallet, or Mobile Money charge was started."}
+          />
         </div>
       </div>
 

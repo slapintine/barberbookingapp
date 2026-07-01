@@ -1,6 +1,6 @@
 import { FiGrid } from "react-icons/fi";
 import { MARKETPLACE_CATEGORIES } from "../utils/serviceCatalog.js";
-import { getCategoryDef } from "../utils/categoryRegistry.jsx";
+import { CategoryBadge, getCategoryDef } from "../utils/categoryRegistry.jsx";
 
 export default function CategoriesPage({ selectedCategory, setSelectedCategory, onOpenCategory }) {
   const categories = Array.isArray(MARKETPLACE_CATEGORIES) ? MARKETPLACE_CATEGORIES.filter((item) => item.active) : [];
@@ -18,7 +18,7 @@ export default function CategoriesPage({ selectedCategory, setSelectedCategory, 
       <div className="queless-category-page-grid">
         {categories.map((category) => {
           const def = getCategoryDef(category.id);
-          const { Icon, primaryColor, softBg, borderColor } = def;
+          const { primaryColor, softBg, borderColor } = def;
           const active = selectedCategory === category.name;
           return (
             <button
@@ -31,21 +31,7 @@ export default function CategoriesPage({ selectedCategory, setSelectedCategory, 
                 onOpenCategory?.(category.name);
               }}
             >
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 42,
-                  height: 42,
-                  borderRadius: "50%",
-                  background: softBg,
-                  border: `1.5px solid ${borderColor}`,
-                  flexShrink: 0,
-                }}
-              >
-                <Icon size={20} style={{ color: primaryColor }} aria-hidden="true" />
-              </span>
+              <CategoryBadge categoryId={category.id} size="md" label={category.name} />
               <strong>{category.name}</strong>
               <small>{category.description}</small>
             </button>

@@ -15,10 +15,17 @@ import {
 } from "../services/paymentService.js";
 import { getMobileMoneyService } from "../services/mobileMoneyService.js";
 
-function httpError(statusCode, message) {
+function httpError(statusCode, message, options = {}) {
   const error = new Error(message);
   error.statusCode = statusCode;
+  if (options.code) error.code = options.code;
+  if (options.details) error.details = options.details;
   return error;
+}
+
+function formatUgMoney(value) {
+  const amount = Number(value || 0);
+  return `UGX ${amount.toLocaleString("en-UG")}`;
 }
 
 function addDays(days) {
@@ -70,10 +77,10 @@ async function resolveProviderPromo({ client, userId, barberId, rawCode, price }
 
   const expiresAt = env.providerPromoExpiresAt ? new Date(env.providerPromoExpiresAt) : null;
   if (env.providerPromoExpiresAt && (!expiresAt || !Number.isFinite(expiresAt.getTime()))) {
-    throw httpError(400, "This promo code has expired.");
+    throw httpError(400, "This promo code has expired.", { code: "PROMO_CODE_EXPIRED" });
   }
   if (expiresAt && expiresAt.getTime() < Date.now()) {
-    throw httpError(400, "This promo code has expired.");
+    throw httpError(400, "This promo code has expired.", { code: "PROMO_CODE_EXPIRED" });
   }
 
   const promoOptions = [
@@ -86,7 +93,11 @@ async function resolveProviderPromo({ client, userId, barberId, rawCode, price }
       normalizePromoCode(env.customerPremiumPromoFreeCode),
       normalizePromoCode(env.customerPremiumPromoPercentCode),
     ].filter(Boolean);
-    throw httpError(400, customerCodes.includes(code) ? "This promo code is not valid for this plan." : "Invalid promo code.");
+    throw httpError(
+      400,
+      customerCodes.includes(code) ? "This promo code is not valid for this plan." : "Invalid promo code.",
+      { code: customerCodes.includes(code) ? "PROMO_PLAN_MISMATCH" : "INVALID_PROMO_CODE" }
+    );
   }
 
   const promoHash = hashPromoCode(code);
@@ -100,7 +111,7 @@ async function resolveProviderPromo({ client, userId, barberId, rawCode, price }
     [userId, `%"promoHash":"${promoHash}"%`]
   );
   if (used) {
-    throw httpError(409, "This promo code has already been used.");
+    throw httpError(409, "This promo code has already been used.", { code: "PROMO_ALREADY_USED" });
   }
 
   const discountAmount = Math.min(price, Math.round((price * matched.discountPercent) / 100));
@@ -114,6 +125,38 @@ async function resolveProviderPromo({ client, userId, barberId, rawCode, price }
       expiresAt: expiresAt ? expiresAt.toISOString() : null,
     },
   };
+}
+
+function buildProviderPromoSummary({ tierConfig, billingCycle, originalAmount, promoResult }) {
+  const finalAmount = Number(promoResult?.finalAmount ?? originalAmount ?? 0);
+  const discountAmount = Number(promoResult?.discountAmount || 0);
+  const discountPercent = Number(promoResult?.promo?.discountPercent || 0);
+  const fullyCovered = Boolean(promoResult?.promo && finalAmount <= 0);
+  const applied = Boolean(promoResult?.promo);
+  const planName = tierConfig?.name || "Selected plan";
+  const summary = {
+    applied,
+    fullyCovered,
+    tier: tierConfig?.code || "",
+    planName,
+    billingCycle,
+    originalAmount: Number(originalAmount || 0),
+    discountAmount,
+    discountPercent,
+    finalAmount,
+    remainingAmount: finalAmount,
+    currency: "UGX",
+    paymentsComingSoon: finalAmount > 0,
+    canActivate: fullyCovered,
+  };
+
+  if (applied && fullyCovered) {
+    summary.message = `${planName} is fully covered by this promo code and is active now.`;
+  } else if (applied) {
+    summary.message = `Promo applied: ${formatUgMoney(discountAmount)} off ${planName}. Remaining balance ${formatUgMoney(finalAmount)} cannot be paid online yet because payments are Coming Soon.`;
+  }
+
+  return summary;
 }
 
 function getTrialEndDate(startedAt) {
@@ -385,19 +428,25 @@ export async function startSubscriptionUpgrade(req, res, next) {
     const requestedTierRaw = req.body.planId || req.body.tier;
     const billingCycleRaw = req.body.billingCycle || req.body.billing_cycle || "monthly";
     const provider = String(req.body.provider || req.body.method || "mtn_mobile_money").trim().toLowerCase();
+    const rawPromoCode = req.body.promoCode || req.body.promo_code || "";
+    const hasPromoCode = Boolean(normalizePromoCode(rawPromoCode));
     const idempotencyKey = String(req.body.idempotencyKey || req.get("Idempotency-Key") || "").trim().slice(0, 120);
     const { requestedTier, cycle: billingCycle, tierConfig, price } = getOfficialPlanOrThrow(requestedTierRaw, billingCycleRaw);
     requestedTierForError = requestedTier;
     if (req.body.price !== undefined && Number(req.body.price) !== price) {
-      throw httpError(400, "Plan details could not be loaded. Please choose a plan again.");
-    }
-
-    if (requestedTier !== "FREE" && !["mtn_mobile_money", "airtel_money"].includes(provider)) {
-      throw httpError(400, "Choose MTN Mobile Money or Airtel Money.");
+      throw httpError(400, "Plan details could not be loaded. Please choose a plan again.", { code: "PLAN_PRICE_MISMATCH" });
     }
 
     if (provider === "trial") {
       throw httpError(400, "Provider trials have been replaced by the Free plan. Choose Free to activate without payment.");
+    }
+
+    if (requestedTier !== "FREE" && provider === "promo" && !hasPromoCode) {
+      throw httpError(400, "Enter a promo code to unlock this plan while online payments are Coming Soon.", { code: "PROMO_CODE_REQUIRED" });
+    }
+
+    if (requestedTier !== "FREE" && !["mtn_mobile_money", "airtel_money", "promo"].includes(provider)) {
+      throw httpError(400, "Choose MTN Mobile Money, Airtel Money, or apply a promo code.");
     }
 
     if (req.user?.role === "admin") {
@@ -590,12 +639,19 @@ export async function startSubscriptionUpgrade(req, res, next) {
         client,
         userId: req.user.id,
         barberId: barber.id,
-        rawCode: req.body.promoCode || req.body.promo_code || "",
+        rawCode: rawPromoCode,
         price,
       });
       const payableAmount = promoResult.finalAmount;
+      const promoSummary = buildProviderPromoSummary({
+        tierConfig,
+        billingCycle,
+        originalAmount: price,
+        promoResult,
+      });
       const paymentMetadata = {
         ...(promoResult.promo ? { promo: promoResult.promo } : {}),
+        ...(promoResult.promo ? { promoSummary } : {}),
         officialPrice: price,
         payableAmount,
         discountAmount: promoResult.discountAmount,
@@ -629,6 +685,18 @@ export async function startSubscriptionUpgrade(req, res, next) {
            WHERE id = ?`,
           [tierConfig.code, tierConfig.id, expiresAt, publish.businessStatus, publish.isPublished, barber.id]
         );
+        await client.run(
+          `UPDATE profiles
+           SET subscription_status = 'active',
+               selected_plan = ?
+           WHERE user_id = ?`,
+          [tierConfig.code, req.user.id]
+        ).catch(() => {});
+        await client.run(
+          `INSERT INTO subscription_events (user_id, business_id, event_type, plan_id, status, metadata)
+           VALUES (?, ?, 'promo_plan_activated', ?, 'active', ?)`,
+          [req.user.id, barber.id, tierConfig.code, JSON.stringify({ activatedAt, expiresAt, promo: promoSummary })]
+        ).catch(() => {});
         return {
           subscription: await client.get(`SELECT * FROM barber_subscriptions WHERE id = ?`, [insertResult.lastID]),
           payment: {
@@ -639,8 +707,20 @@ export async function startSubscriptionUpgrade(req, res, next) {
           },
           barber: await getOwnedBarber(req.user.id, client),
           promoActivated: true,
+          promoSummary,
           verificationApproved: publish.verificationApproved,
         };
+      }
+
+      if (provider === "promo" && promoResult.promo) {
+        throw httpError(402, promoSummary.message, {
+          code: "PARTIAL_PROMO_PAYMENT_COMING_SOON",
+          details: {
+            ...promoSummary,
+            canActivate: false,
+            paymentsComingSoon: true,
+          },
+        });
       }
 
       if (!phoneNumber) {
@@ -704,6 +784,7 @@ export async function startSubscriptionUpgrade(req, res, next) {
         subscription,
         payment,
         barber,
+        promoSummary: promoResult.promo ? promoSummary : null,
       };
     });
 
@@ -723,6 +804,12 @@ export async function startSubscriptionUpgrade(req, res, next) {
         provider: result.payment.provider,
         amount: Number(result.payment.gross_amount || 0),
         billingCycle: result.subscription?.billing_cycle || billingCycle,
+      },
+      promo: result.promoSummary || null,
+      activation: {
+        status: result.promoActivated || result.freeActivated ? "active" : result.trialStarted ? "trialing" : "pending",
+        activatedImmediately: Boolean(result.promoActivated || result.freeActivated || result.trialStarted),
+        paymentsComingSoon: Boolean(result.promoSummary?.paymentsComingSoon),
       },
     });
   } catch (error) {

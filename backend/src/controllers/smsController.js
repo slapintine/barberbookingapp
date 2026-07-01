@@ -1,7 +1,14 @@
 import crypto from "crypto";
 import { all, get, run } from "../db/query.js";
 import { env } from "../config/env.js";
-import { getSmsConfig, normalizePhoneNumber, sendAutoReply, sendSms } from "../services/smsService.js";
+import {
+  getSmsConfig,
+  maskPhone,
+  normalizePhoneNumber,
+  sanitizeSmsLogText,
+  sendAutoReply,
+  sendSms,
+} from "../services/smsService.js";
 
 function httpError(statusCode, message) {
   const error = new Error(message);
@@ -95,6 +102,31 @@ function extractProviderMessageId(response) {
   return String(recipient?.messageId || recipient?.message_id || response?.messageId || "").trim();
 }
 
+function safeProviderResponse(response) {
+  const recipient =
+    response?.SMSMessageData?.Recipients?.[0] ||
+    response?.SMSMessageData?.recipients?.[0] ||
+    response?.recipients?.[0] ||
+    null;
+  return {
+    status: String(recipient?.status || response?.status || "submitted"),
+    statusCode: recipient?.statusCode ?? recipient?.status_code ?? response?.statusCode ?? null,
+    messageId: extractProviderMessageId(response) || null,
+  };
+}
+
+function safeIncomingWebhookSummary(payload = {}) {
+  const from = firstValue(payload, ["from", "sender", "msisdn", "phoneNumber", "phone_number", "sourceAddress"]);
+  const to = firstValue(payload, ["to", "recipient", "shortCode", "shortcode", "linkId", "destinationAddress"]);
+  const text = firstValue(payload, ["text", "message", "body", "messageText", "keyword"]);
+  return {
+    from: from ? maskPhone(normalizePhoneNumber(from) || from) : "missing",
+    to: to ? maskPhone(normalizePhoneNumber(to) || to) : "missing",
+    hasText: Boolean(text),
+    payloadKeys: Object.keys(payload).slice(0, 25),
+  };
+}
+
 async function logOutgoingSms({ to, message, status, response = {}, errorMessage = "", metadata = {} }) {
   const phoneNumber = normalizePhoneNumber(to);
   const providerMessageId = extractProviderMessageId(response);
@@ -122,7 +154,7 @@ export async function receiveIncomingSms(req, res) {
   try {
     const parsed = parseIncomingPayload(payload);
     if (!parsed.from || !parsed.text) {
-      req.log?.warn({ payload }, "Malformed incoming SMS webhook payload");
+      req.log?.warn(safeIncomingWebhookSummary(payload), "Malformed incoming SMS webhook payload");
       return res.status(200).json({ success: true, received: true, ignored: true });
     }
 
@@ -170,7 +202,10 @@ export async function receiveIncomingSms(req, res) {
           metadata: { incomingSmsId: insert.lastID, source: "auto_reply" },
         });
       } catch (error) {
-        req.log?.warn({ err: error, incomingSmsId: insert.lastID }, "SMS auto-reply failed");
+        req.log?.warn(
+          { error: sanitizeSmsLogText(error?.message), incomingSmsId: insert.lastID },
+          "SMS auto-reply failed"
+        );
         await logOutgoingSms({
           to: parsed.phoneNumber || parsed.from,
           message: env.africasTalkingDefaultAutoReply,
@@ -183,7 +218,7 @@ export async function receiveIncomingSms(req, res) {
 
     return res.status(200).json({ success: true, received: true });
   } catch (error) {
-    req.log?.error({ err: error }, "Incoming SMS webhook failed");
+    req.log?.error({ error: sanitizeSmsLogText(error?.message) }, "Incoming SMS webhook failed");
     return res.status(200).json({ success: true, received: true });
   }
 }
@@ -199,7 +234,7 @@ export async function sendSmsFromAdmin(req, res, next) {
     try {
       const result = await sendSms({ to, message, metadata: { source: "admin_manual", adminUserId: req.user?.id } });
       await logOutgoingSms({ to, message, status: "sent", response: result.response, metadata: { source: "admin_manual", adminUserId: req.user?.id } });
-      return res.status(200).json({ success: true, message: "SMS sent.", providerResponse: result.response });
+      return res.status(200).json({ success: true, message: "SMS sent.", providerResponse: safeProviderResponse(result.response) });
     } catch (error) {
       await logOutgoingSms({ to, message, status: "failed", errorMessage: error.message || "SMS send failed.", metadata: { source: "admin_manual", adminUserId: req.user?.id } }).catch(() => {});
       throw error;

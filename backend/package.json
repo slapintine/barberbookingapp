@@ -21,6 +21,7 @@
     "qa:seed-plans": "node src/scripts/seedPlanQaFixtures.js",
     "qa:verify-plans": "node src/scripts/verifyPlanQaFixtures.js",
     "user:upsert": "node src/scripts/upsertUser.js",
+    "sms:check": "node src/scripts/checkSmsIntegration.js",
     "mtn:check": "node src/scripts/checkMtnIntegration.js",
     "mtn:provision": "node src/scripts/provisionMtnSandbox.js"
   },

@@ -16,6 +16,7 @@ import {
 } from "react-icons/fi";
 import { formatMoney, formatPlanName, formatSubscriptionPrice, getPlanAmount, normalizePlanTier, PROVIDER_PLANS } from "../../utils/subscriptionPlans.js";
 import { PAYMENTS_COMING_SOON_MESSAGE, PAYMENTS_ENABLED } from "../../utils/launchFlags.js";
+import { getMarketplacePlanContent, supportsProducts, supportsServices } from "../../utils/marketplaceMode.js";
 
 const PLANS = PROVIDER_PLANS.map((plan) => ({
   ...plan,
@@ -88,12 +89,16 @@ export default function TrialUpgradeScreen({
   const [expandedPlan, setExpandedPlan] = useState("");
   const [billingCycle, setBillingCycle] = useState("monthly");
   const [promoCode, setPromoCode] = useState("");
-  const [promoApplied, setPromoApplied] = useState("");
 
-  const selectedPlan = useMemo(
-    () => PLANS.find((plan) => plan.tier === selectedTier) || PLANS[0],
-    [selectedTier]
+  const plans = useMemo(
+    () => PLANS.map((plan) => getMarketplacePlanContent(plan, barber)),
+    [barber]
   );
+  const selectedPlan = useMemo(
+    () => plans.find((plan) => plan.tier === selectedTier) || plans[0],
+    [plans, selectedTier]
+  );
+  const productOnly = supportsProducts(barber) && !supportsServices(barber);
   const selectedIsFree = selectedPlan?.tier === "FREE";
   const selectedPaidComingSoon = !selectedIsFree && !PAYMENTS_ENABLED;
   const selectedPaymentMethod = PAYMENT_METHODS.find((method) => method.id === selectedMethod);
@@ -101,7 +106,6 @@ export default function TrialUpgradeScreen({
   const currentTierLabel = formatPlanName(currentTier, "Plan required");
   const visibleMessage = localMessage || message || "";
   const planAmount = getPlanAmount(selectedPlan, billingCycle);
-  const promoPreviewAmount = promoApplied ? planAmount : planAmount;
 
   useEffect(() => {
     const normalized = normalizePlanTier(initialSelectedTier);
@@ -156,18 +160,18 @@ export default function TrialUpgradeScreen({
     // step so the user can still enter and apply a promo code.
     setStep("payment");
     setStatus("");
-    setLocalMessage(PAYMENTS_ENABLED ? "" : "Online payments are Coming Soon. Enter a promo code to unlock your plan.");
+    setLocalMessage(PAYMENTS_ENABLED ? "" : "Online payments are Coming Soon. A 100% promo code unlocks this plan now; partial promos show the remaining balance.");
   };
 
   const validatePayment = () => {
     if (!currentUser?.username) return "Your session has expired. Please log in again.";
     // While payments are off, only the promo path is available.
     if (!PAYMENTS_ENABLED) {
-      return promoApplied || promoCode.trim()
+      return promoCode.trim()
         ? ""
         : "Enter a promo code to continue while online payments are Coming Soon.";
     }
-    if ((promoApplied || promoCode.trim()) && !selectedMethod) return "";
+    if (promoCode.trim() && !selectedMethod) return "";
     if (!selectedMethod) return "Choose MTN Mobile Money or Airtel Money before paying.";
     if (!phoneNumber.trim()) return "Enter a phone number for Mobile Money payment.";
     return "";
@@ -183,20 +187,20 @@ export default function TrialUpgradeScreen({
 
     if (isAdmin) {
       setStatus("success");
-      setLocalMessage("Payment successful. Admin preview mode did not change a real subscription.");
+      setLocalMessage("Admin preview completed. No live payment was made.");
       return;
     }
 
     try {
       setStatus("processing");
-      setLocalMessage("Processing payment...");
+      setLocalMessage(PAYMENTS_ENABLED ? "Processing payment..." : "Validating promo code...");
       const ok = await onUpgrade?.({
         tier: selectedTier,
         method: selectedMethod,
         provider: selectedMethod,
         phoneNumber: phoneNumber.trim(),
         billingCycle,
-        promoCode: promoApplied || promoCode.trim(),
+        promoCode: promoCode.trim(),
       });
       if (ok) {
         if (PAYMENTS_ENABLED) {
@@ -224,7 +228,7 @@ export default function TrialUpgradeScreen({
       return;
     }
     setStatus("success");
-    setLocalMessage("Payment successful. Admin preview mode did not change a real subscription.");
+    setLocalMessage("Admin preview completed. No live payment was made.");
   };
 
   const verifyPayment = async () => {
@@ -259,7 +263,7 @@ export default function TrialUpgradeScreen({
             <FiArrowLeft />
           </button>
           <div>
-            <h1 id="trial-upgrade-title">Choose your Queless plan</h1>
+            <h1 id="trial-upgrade-title">Upgrade your stand</h1>
             {isAdmin ? <span>Admin preview mode</span> : null}
           </div>
           <button type="button" className="trial-close-icon-btn-v14" onClick={onClose} aria-label="Close upgrade">
@@ -272,7 +276,7 @@ export default function TrialUpgradeScreen({
             {isAdmin ? <FiEye /> : <FiLock />}
             {isAdmin ? "Admin preview mode" : currentTier === "LOCKED" ? "Plan setup" : `Current plan: ${currentTierLabel}`}
           </div>
-          <p>Start free or upgrade when you are ready.</p>
+          <p>Start free, unlock more visibility when ready.</p>
         </section>
 
         <div className="trial-billing-toggle-v15" role="group" aria-label="Billing cycle">
@@ -290,7 +294,7 @@ export default function TrialUpgradeScreen({
         </div>
 
         <section className="trial-plans-v12" aria-label="Choose a business plan">
-          {PLANS.map((plan) => (
+          {plans.map((plan) => (
             <article
               className={`trial-plan-card-v12 ${selectedTier === plan.tier ? "selected" : ""}`}
               key={plan.tier}
@@ -298,7 +302,7 @@ export default function TrialUpgradeScreen({
               <button type="button" className="trial-plan-select-v13" onClick={() => selectPlan(plan.tier)}>
                 <span className="trial-plan-top-v12">
                   <span>{plan.name}</span>
-                  {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? <em>Coming Soon</em> : plan.badge ? <em>{plan.badge}</em> : null}
+                  {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? <em>Promo unlock</em> : plan.badge ? <em>{plan.badge}</em> : null}
                 </span>
                 <strong>{formatSubscriptionPrice(plan, billingCycle)}</strong>
                 <small>{plan.summary}</small>
@@ -310,7 +314,7 @@ export default function TrialUpgradeScreen({
                 ))}
               </span>
               <button type="button" className="trial-select-btn-v13" onClick={() => selectPlan(plan.tier)}>
-                {selectedTier === plan.tier ? "Selected" : plan.tier === "FREE" ? "Start free" : `${plan.name} Coming Soon`}
+                {selectedTier === plan.tier ? "Selected" : plan.tier === "FREE" ? "Start now" : "Unlock with promo code"}
               </button>
               <button
                 type="button"
@@ -322,7 +326,13 @@ export default function TrialUpgradeScreen({
               </button>
               {expandedPlan === plan.tier ? (
                 <div className="trial-plan-preview-v14">
-                  {(PLAN_PREVIEWS[plan.tier] || []).map(({ title, text, icon: Icon }) => (
+                  {(productOnly && plan.tier === "FREE"
+                    ? [
+                        { title: "Product catalogue", text: "List up to 5 active products with clear prices and photos.", icon: FiCheck },
+                        { title: "Order requests", text: "Receive pickup or delivery requests without online payment.", icon: FiDollarSign },
+                        { title: "Customer messages", text: "Answer product questions and agree fulfilment details directly.", icon: FiStar },
+                      ]
+                    : PLAN_PREVIEWS[plan.tier] || []).map(({ title, text, icon: Icon }) => (
                     <div className="trial-preview-card-v14" key={`${plan.tier}-${title}`}>
                       <span><Icon /></span>
                       <strong>{title}</strong>
@@ -345,10 +355,10 @@ export default function TrialUpgradeScreen({
               </div>
               {visibleMessage ? <p className="trial-message-v12">{visibleMessage}</p> : null}
               <button type="button" className="trial-primary-btn-v12" onClick={openPayment} disabled={loading}>
-                {selectedIsFree ? "Start free" : PAYMENTS_ENABLED ? "Continue" : "Continue — apply promo code"} <FiArrowRight />
+                {selectedIsFree ? "Continue with Free" : PAYMENTS_ENABLED ? "Continue" : "Apply promo code"} <FiArrowRight />
               </button>
               {selectedPaidComingSoon ? (
-                <p className="trial-message-v12">Online payments are Coming Soon. You can still apply a promo code to unlock {selectedPlan.name} now.</p>
+                <p className="trial-message-v12">Unlock {selectedPlan.name} with a 100% promo code while online payments are Coming Soon. Partial promos show the remaining balance.</p>
               ) : null}
               <button type="button" className="trial-secondary-btn-v12" onClick={onChooseLater}>
                 Choose later
@@ -393,6 +403,7 @@ export default function TrialUpgradeScreen({
             <div className="trial-payment-summary-v13">
               <span>{selectedPlan.name}</span>
               <strong>{formatSubscriptionPrice(selectedPlan, billingCycle)}</strong>
+              <small>{billingCycle === "annual" ? "Annual billing" : "Monthly billing"}</small>
               {isAdmin ? <em>Admin preview mode</em> : null}
             </div>
 
@@ -432,24 +443,21 @@ export default function TrialUpgradeScreen({
                     value={promoCode}
                     onChange={(event) => {
                       setPromoCode(event.target.value);
-                      setPromoApplied("");
+                      setStatus("");
+                      setLocalMessage("");
                     }}
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      setPromoApplied(promoCode.trim());
-                      setStatus("");
-                      setLocalMessage("Promo code applied.");
-                    }}
-                    disabled={!promoCode.trim()}
+                    onClick={submitPayment}
+                    disabled={!promoCode.trim() || loading || status === "processing"}
                   >
                     Apply
                   </button>
                 </span>
               </label>
               {!PAYMENTS_ENABLED ? (
-                <p className="trial-message-v12">Have a promo code? Apply it here — promo codes are active while online payments are being prepared. A full promo unlocks {selectedPlan.name} now.</p>
+                <p className="trial-message-v12">Have a promo code? Apply it here. A 100% promo unlocks {selectedPlan.name} now; partial promos show the remaining balance while online payments are Coming Soon.</p>
               ) : null}
               {PAYMENTS_ENABLED ? (
                 <div className="trial-readonly-row-v13">
@@ -460,20 +468,24 @@ export default function TrialUpgradeScreen({
             </div>
 
             <div className="trial-readonly-row-v13">
-              <span>Amount</span>
+              <span>Original amount</span>
               <strong>{formatMoney(planAmount)}</strong>
             </div>
             <div className="trial-readonly-row-v13">
-              <span>Final amount payable</span>
-              <strong>{promoApplied ? "Calculated after server validation" : formatMoney(promoPreviewAmount)}</strong>
+              <span>Discount</span>
+              <strong>{promoCode.trim() ? "Validated by backend" : "Enter a promo code"}</strong>
             </div>
             <div className="trial-readonly-row-v13">
-              <span>Plan</span>
-              <strong>{selectedPlan.name} - {billingCycle === "annual" ? "Annual" : "Monthly"}</strong>
+              <span>Final amount</span>
+              <strong>{promoCode.trim() ? "Shown after validation" : formatMoney(planAmount)}</strong>
             </div>
             <div className="trial-readonly-row-v13">
-              <span>After payment</span>
-              <strong>Activation happens only after backend payment confirmation.</strong>
+              <span>Activation</span>
+              <strong>
+                {!PAYMENTS_ENABLED
+                  ? "100% promo activates now. Partial promo waits for payments."
+                  : "Paid plan activates after payment confirmation."}
+              </strong>
             </div>
 
             {visibleMessage ? (
@@ -504,7 +516,7 @@ export default function TrialUpgradeScreen({
             {status === "success" ? (
               <div className="trial-success-inline-v13">
                 <FiCheck />
-                <strong>Payment successful. Your plan has been upgraded.</strong>
+                <strong>Plan access updated. No live online payment is shown unless payments are enabled.</strong>
               </div>
             ) : null}
           </section>

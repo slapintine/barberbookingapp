@@ -56,7 +56,7 @@ body[data-theme="dark"] {
   position: sticky;
   top: 0;
   min-height: 58px;
-  padding: 8px 14px;
+  padding: calc(8px + var(--device-safe-top, 0px)) 14px 8px;
   gap: 7px;
   background: color-mix(in srgb, var(--customer-home-surface) 94%, transparent);
   border-bottom: 1px solid var(--customer-home-line);
@@ -402,7 +402,7 @@ body[data-theme="dark"] .customer-home-location-pill svg {
   width: 46px;
   height: 44px;
   margin-left: 0;
-  background: linear-gradient(135deg, #e24aa5, #6b1f8f);
+  background: linear-gradient(135deg, var(--qh-primary), var(--qh-secondary));
 }
 
 .customer-home-section {
@@ -879,8 +879,8 @@ body[data-theme="dark"] .customer-home-premium-card {
   place-items: center;
   border-radius: 15px;
   color: #fff;
-  background: linear-gradient(135deg, #e24aa5, #6b1f8f);
-  box-shadow: 0 12px 22px rgba(107, 31, 143, 0.18);
+  background: linear-gradient(135deg, var(--qh-primary), var(--qh-secondary));
+  box-shadow: 0 10px 20px rgba(25, 0, 25, 0.18);
 }
 
 .customer-home-premium-card span:nth-child(2) {

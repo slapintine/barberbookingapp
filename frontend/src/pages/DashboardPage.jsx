@@ -1,12 +1,13 @@
+import { useState } from "react";
 import { FiAward, FiBell, FiCalendar, FiClock, FiEdit2, FiEye, FiMap, FiMapPin, FiScissors, FiShield, FiStar, FiTrendingUp, FiUpload, FiZap } from "react-icons/fi";
-import { lazy } from "react";
 import { PAYMENTS_ENABLED } from "../utils/launchFlags.js";
 import { getPaymentMethodLabel, isOnlinePaymentMethod } from "../utils/paymentLabels.js";
 import { formatProviderPlanName } from "../utils/subscriptionPlans.js";
+import ScheduleWorkspace from "../features/barbers/ScheduleWorkspace.jsx";
+import ProviderProductWorkspace from "../features/products/ProviderProductWorkspace.jsx";
+import { getMarketplaceModeLabel, supportsProducts, supportsServices } from "../utils/marketplaceMode.js";
 
 import ShareStandCard from "../components/share/ShareStandCard.jsx";
-
-const ScheduleWorkspace = lazy(() => import("../features/barbers/ScheduleWorkspace.jsx"));
 
 export default function DashboardPage({
   barber,
@@ -31,7 +32,18 @@ export default function DashboardPage({
   formatMoney,
   getBadgeLabel,
   formatTimeLabel,
+  productWorkspaceTab = "products",
+  onProductWorkspaceTabChange,
 }) {
+  const [shopSummary, setShopSummary] = useState({
+    checked: false,
+    enabled: false,
+    productCount: Number(barber?.product_count || barber?.productCount || 0),
+    activeProductCount: Number(barber?.active_product_count || barber?.activeProductCount || barber?.product_count || barber?.productCount || 0),
+    orderCount: Number(barber?.product_order_count || barber?.productOrderCount || 0),
+    newOrderCount: Number(barber?.new_product_order_count || barber?.newProductOrderCount || 0),
+  });
+
   if (!barber) {
     return (
       <div className="content-v4 app-page-v4">
@@ -98,13 +110,54 @@ export default function DashboardPage({
   const planVisibilityLabel = subscription?.features?.topBarberBadge ? "Top business badge active" : subscription?.features?.visibilityLabel || "Basic visibility";
   const isPlatinum = currentPlan === "PLATINUM";
   const isPremium = currentPlan === "PREMIUM";
+  const serviceStand = supportsServices(barber);
+  const shopStand = supportsProducts(barber);
+  const marketplaceModeLabel = getMarketplaceModeLabel(barber);
 
   function getPublishMissing() {
     const missing = [];
-    if (!String(barber.business_name || "").trim()) missing.push("Business name");
-    if (!String(barber.location || "").trim()) missing.push("Business location");
-    const services = Array.isArray(barber.services) ? barber.services : [];
-    if (!services.length) missing.push("At least one service");
+    const businessName = String(barber.business_name || "").trim();
+    const businessType = String(barber.business_type || barber.businessType || "").trim();
+    const location = String(barber.location || "").trim();
+    const phone = String(barber.phone || "").trim();
+    const mapIcon = String(barber.map_icon_type || barber.mapIconType || "").trim();
+    if (!businessName || /^Business stand draft \d+$/i.test(businessName)) missing.push("Business name");
+    if (!businessType || businessType.toLowerCase() === "services") missing.push("Business category");
+    if (!phone) missing.push("Business phone");
+    if (!location || location === "Location not set") missing.push("Business location");
+    if (!mapIcon) missing.push("Map icon");
+    if (serviceStand) {
+      const services = Array.isArray(barber.services) ? barber.services : [];
+      if (!services.length) {
+        missing.push("At least one service");
+      } else if (services.some((service) => {
+        if (!String(service.service_name || service.serviceName || "").trim()) return true;
+        const pricingType = String(service.pricing_type || service.pricingType || "fixed").toLowerCase();
+        if (pricingType === "fixed" && Number(service.price_extra ?? service.price ?? 0) <= 0) return true;
+        if (pricingType === "range" && (
+          Number(service.min_price ?? service.minPrice ?? 0) <= 0 ||
+          Number(service.max_price ?? service.maxPrice ?? 0) <= Number(service.min_price ?? service.minPrice ?? 0)
+        )) return true;
+        if (pricingType === "starting_from" && Number(service.starting_price ?? service.startingPrice ?? 0) <= 0) return true;
+        const duration = Number(service.duration_minutes ?? service.durationMinutes ?? 0);
+        return duration < 5 || duration > 43200;
+      })) {
+        missing.push("Complete service details");
+      }
+      const start = String(barber.availability?.start || barber.availability_start || "");
+      const end = String(barber.availability?.end || barber.availability_end || "");
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end) || start >= end) {
+        missing.push("Opening hours");
+      }
+    }
+    if (shopStand) {
+      const pickupAvailable = Boolean(barber.pickup_available ?? barber.pickupAvailable);
+      const deliveryAvailable = Boolean(barber.delivery_available ?? barber.deliveryAvailable);
+      if (!pickupAvailable && !deliveryAvailable) missing.push("Pickup or delivery");
+      if (shopSummary.checked && shopSummary.enabled && shopSummary.activeProductCount < 1) {
+        missing.push("At least one active product");
+      }
+    }
     return missing;
   }
 
@@ -118,9 +171,10 @@ export default function DashboardPage({
             <div className="panel-title-v4">{barber.business_name}</div>
             <div className="profile-sub-v4" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span className="booking-badge-v4 status-pending">Not published yet</span>
+              <span className="booking-badge-v4">{marketplaceModeLabel}</span>
             </div>
             <div className="profile-sub-v4">
-              Your business stand is saved as a draft. Publish it when you're ready for customers to find you.
+              Your {shopStand && !serviceStand ? "shop" : "business stand"} is saved as a draft. Publish it when you're ready for customers to find you.
             </div>
           </div>
           <div className="dashboard-hero-actions-v4">
@@ -136,7 +190,11 @@ export default function DashboardPage({
           </div>
           <div className="dashboard-publish-body-v9">
             <strong>Publish your stand</strong>
-            <p>Once published, customers will be able to find your business on the map, view your services, and make bookings.</p>
+            <p>
+              Once published, customers will be able to find your business
+              {serviceStand ? ", view your services, and make bookings" : ""}
+              {shopStand ? `${serviceStand ? ", as well as" : ","} browse products and send order requests` : ""}.
+            </p>
             {!canPublish && (
               <div className="dashboard-publish-missing-v9">
                 <span>Complete these before publishing:</span>
@@ -180,6 +238,16 @@ export default function DashboardPage({
           </div>
           <span className="booking-badge-v4 status-pending">{hasValidPlan ? currentPlan : "No plan"}</span>
         </div>
+
+        {shopStand ? (
+          <ProviderProductWorkspace
+            stand={barber}
+            currentUser={currentUser}
+            onSummary={setShopSummary}
+            activeTab={productWorkspaceTab}
+            onTabChange={onProductWorkspaceTabChange}
+          />
+        ) : null}
       </div>
     );
   }
@@ -195,10 +263,17 @@ export default function DashboardPage({
             ) : (
               <span className="booking-badge-v4 status-confirmed">Live</span>
             )}
+            <span className="booking-badge-v4">{marketplaceModeLabel}</span>
           </div>
-          <div className="profile-sub-v4">Your stand is public. Customers can find it on the map, search, and nearby providers.</div>
+          <div className="profile-sub-v4">
+            Your stand is public. Customers can find it on the map and search
+            {serviceStand ? " and request service bookings" : ""}
+            {shopStand ? `${serviceStand ? ", or" : " and"} browse your products` : ""}.
+          </div>
           <div className="profile-sub-v4"><FiMapPin /> {barber.location}</div>
-          <div className="profile-sub-v4"><FiClock /> {barber.availability?.start} - {barber.availability?.end}</div>
+          {serviceStand ? (
+            <div className="profile-sub-v4"><FiClock /> {barber.availability?.start} - {barber.availability?.end}</div>
+          ) : null}
           {hasValidPlan ? (
             <div className="profile-sub-v4">{currentPlanLabel} plan · {planVisibilityLabel}</div>
           ) : (
@@ -239,18 +314,40 @@ export default function DashboardPage({
       <ShareStandCard barber={barber} />
 
       <div className="dashboard-stats-v4 dashboard-stats-v4-large">
-        <div className="simple-card-v4 stat-card-v4">
-          <div className="stat-value-v4">{todayBookings.length}</div>
-          <div className="stat-label-v4">Today</div>
-        </div>
-        <div className="simple-card-v4 stat-card-v4">
-          <div className="stat-value-v4">{paidBookings.length}</div>
-          <div className="stat-label-v4">Paid bookings</div>
-        </div>
-        <div className="simple-card-v4 stat-card-v4">
-          <div className="stat-value-v4">{formatMoney(expectedEarnings || monthRevenue)}</div>
-          <div className="stat-label-v4">Expected earnings</div>
-        </div>
+        {serviceStand ? (
+          <>
+            <div className="simple-card-v4 stat-card-v4">
+              <div className="stat-value-v4">{todayBookings.length}</div>
+              <div className="stat-label-v4">Bookings today</div>
+            </div>
+            <div className="simple-card-v4 stat-card-v4">
+              <div className="stat-value-v4">{paidBookings.length}</div>
+              <div className="stat-label-v4">Paid bookings</div>
+            </div>
+            <div className="simple-card-v4 stat-card-v4">
+              <div className="stat-value-v4">{formatMoney(expectedEarnings || monthRevenue)}</div>
+              <div className="stat-label-v4">Service earnings</div>
+            </div>
+          </>
+        ) : null}
+        {shopStand ? (
+          <>
+            <div className="simple-card-v4 stat-card-v4">
+              <div className="stat-value-v4">{shopSummary.productCount}</div>
+              <div className="stat-label-v4">Products</div>
+            </div>
+            <div className="simple-card-v4 stat-card-v4">
+              <div className="stat-value-v4">{shopSummary.newOrderCount}</div>
+              <div className="stat-label-v4">New orders</div>
+            </div>
+            {!serviceStand ? (
+              <div className="simple-card-v4 stat-card-v4">
+                <div className="stat-value-v4">{shopSummary.orderCount}</div>
+                <div className="stat-label-v4">Product orders</div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
         <div className="simple-card-v4 stat-card-v4">
           <div className="stat-value-v4">{barber.rating ? Number(barber.rating).toFixed(1) : "New"}</div>
           <div className="stat-label-v4">Rating</div>
@@ -260,7 +357,10 @@ export default function DashboardPage({
       <div className="simple-card-v4 dashboard-plan-card-v9">
         <div>
           <div className="panel-title-v4">Plan & features</div>
-          <div className="profile-sub-v4">{thisWeekCount} bookings this week · {completedPayments.length} completed payments</div>
+          <div className="profile-sub-v4">
+            {serviceStand ? `${thisWeekCount} bookings this week` : `${shopSummary.productCount} products listed`}
+            {shopStand ? ` · ${shopSummary.newOrderCount} new product orders` : ` · ${completedPayments.length} completed payments`}
+          </div>
         </div>
         <span className="booking-badge-v4 status-confirmed">{hasValidPlan ? currentPlan : "No plan"}</span>
       </div>
@@ -268,8 +368,8 @@ export default function DashboardPage({
       <div className={`dashboard-plan-experience-v15 ${isPlatinum ? "platinum" : isPremium ? "premium" : "free"}`}>
         <div className="simple-card-v4 dashboard-plan-feature-v15">
           <FiTrendingUp />
-          <strong>{isPlatinum ? "Advanced analytics active" : isPremium ? "Booking analytics active" : "Basic reports"}</strong>
-          <span>{isPlatinum ? "Profile views, retention, visibility, and growth prompts are unlocked." : isPremium ? "Track service performance, promotions, and repeat customers." : "Track bookings, earnings, completed jobs, and rating."}</span>
+          <strong>{isPlatinum ? "Advanced analytics active" : isPremium ? `${serviceStand ? "Booking" : "Shop"} analytics active` : "Basic reports"}</strong>
+          <span>{isPlatinum ? "Profile views, retention, visibility, and growth prompts are unlocked." : isPremium ? `Track ${serviceStand ? "service performance" : "products and order requests"}, promotions, and repeat customers.` : `Track ${serviceStand ? "bookings and completed jobs" : "products and order requests"}, visibility, and rating.`}</span>
         </div>
         <div className="simple-card-v4 dashboard-plan-feature-v15">
           {isPlatinum ? <FiShield /> : isPremium ? <FiAward /> : <FiStar />}
@@ -287,7 +387,7 @@ export default function DashboardPage({
             </div>
           </div>
           <p className="dashboard-coach-desc-v15">
-            Get practical recommendations based on your stand, bookings, reviews, and customer activity.
+            Get practical recommendations based on your stand, {serviceStand ? "bookings" : "product activity"}, reviews, and customer activity.
           </p>
           <div className="dashboard-coach-status-v15">
             {isPlatinum || isPremium ? (
@@ -312,17 +412,29 @@ export default function DashboardPage({
         </div>
       </div>
 
-      <ScheduleWorkspace
-        barber={barber}
-        bookings={myBookings}
-        pendingCount={pending.length}
-        confirmedCount={confirmed.length}
-        completedCount={completed.length}
-        onApproveBooking={approveBooking}
-        onRejectBooking={rejectBooking}
-        onCompleteBooking={completeBooking}
-        onOpenConversation={onOpenConversation}
-      />
+      {serviceStand ? (
+        <ScheduleWorkspace
+          barber={barber}
+          bookings={myBookings}
+          pendingCount={pending.length}
+          confirmedCount={confirmed.length}
+          completedCount={completed.length}
+          onApproveBooking={approveBooking}
+          onRejectBooking={rejectBooking}
+          onCompleteBooking={completeBooking}
+          onOpenConversation={onOpenConversation}
+        />
+      ) : null}
+
+      {shopStand ? (
+        <ProviderProductWorkspace
+          stand={barber}
+          currentUser={currentUser}
+          onSummary={setShopSummary}
+          activeTab={productWorkspaceTab}
+          onTabChange={onProductWorkspaceTabChange}
+        />
+      ) : null}
 
       <div className="simple-card-v4">
         <div className="panel-title-v4">Recent alerts</div>
@@ -337,46 +449,50 @@ export default function DashboardPage({
         )}
       </div>
 
-      <div className="panel-head-v4">
-        <div className="panel-title-v4">Recent activity</div>
-        <div className="panel-link-v4">{myBookings.length} total</div>
-      </div>
+      {serviceStand ? (
+        <>
+          <div className="panel-head-v4">
+            <div className="panel-title-v4">Recent booking activity</div>
+            <div className="panel-link-v4">{myBookings.length} total</div>
+          </div>
 
-      <div className="booking-list-v4 dashboard-activity-v9">
-        {recentActivity.length === 0 ? (
-          <div className="empty-state-v7 compact">
-            <FiCalendar />
-            <strong>No recent activity</strong>
-            <span>New bookings, payments, and updates will appear here.</span>
+          <div className="booking-list-v4 dashboard-activity-v9">
+            {recentActivity.length === 0 ? (
+              <div className="empty-state-v7 compact">
+                <FiCalendar />
+                <strong>No recent booking activity</strong>
+                <span>New bookings, payments, and updates will appear here.</span>
+              </div>
+            ) : recentActivity.map((booking) => (
+              <div key={booking.id} className="simple-card-v4">
+                <div className="booking-name-v4">{booking.customerName || booking.customerUsername}</div>
+                {booking.teamMemberName ? (
+                  <div className="booking-meta-v4"><FiScissors /> Provider: {booking.teamMemberName}</div>
+                ) : null}
+                <div className="booking-meta-v4"><FiCalendar /> {booking.date} - {booking.timeLabel || formatTimeLabel(booking.time)}</div>
+                <div className="booking-meta-v4"><FiScissors /> {booking.service}</div>
+                <div className="booking-meta-v4">Payment: {getPaymentMethodLabel(booking.paymentMethod)} - {booking.paymentStatus || "unpaid"}</div>
+                <div className="inline-actions-v4">
+                  <span className={`booking-badge-v4 status-${booking.status}`}>{booking.status}</span>
+                  {booking.status === "pending" && (
+                    <>
+                      <button type="button" className="mini-action-btn-v4 success" onClick={() => approveBooking(booking.id)}>Approve</button>
+                      <button type="button" className="mini-action-btn-v4 danger" onClick={() => rejectBooking(booking.id)}>Reject</button>
+                    </>
+                  )}
+                  {booking.status === "confirmed" && (
+                    <button type="button" className="mini-action-btn-v4 success" onClick={() => completeBooking(booking.id)}>Mark done</button>
+                  )}
+                  {booking.paymentMethod === "cash" && booking.paymentStatus !== "paid" && (
+                    <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmCashPayment(booking.id)}>Confirm cash</button>
+                  )}
+                  <button type="button" className="mini-action-btn-v4" onClick={() => onOpenConversation(booking)}>Message</button>
+                </div>
+              </div>
+            ))}
           </div>
-        ) : recentActivity.map((booking) => (
-          <div key={booking.id} className="simple-card-v4">
-            <div className="booking-name-v4">{booking.customerName || booking.customerUsername}</div>
-            {booking.teamMemberName ? (
-              <div className="booking-meta-v4"><FiScissors /> Provider: {booking.teamMemberName}</div>
-            ) : null}
-            <div className="booking-meta-v4"><FiCalendar /> {booking.date} - {booking.timeLabel || formatTimeLabel(booking.time)}</div>
-            <div className="booking-meta-v4"><FiScissors /> {booking.service}</div>
-            <div className="booking-meta-v4">Payment: {getPaymentMethodLabel(booking.paymentMethod)} - {booking.paymentStatus || "unpaid"}</div>
-            <div className="inline-actions-v4">
-              <span className={`booking-badge-v4 status-${booking.status}`}>{booking.status}</span>
-              {booking.status === "pending" && (
-                <>
-                  <button type="button" className="mini-action-btn-v4 success" onClick={() => approveBooking(booking.id)}>Approve</button>
-                  <button type="button" className="mini-action-btn-v4 danger" onClick={() => rejectBooking(booking.id)}>Reject</button>
-                </>
-              )}
-              {booking.status === "confirmed" && (
-                <button type="button" className="mini-action-btn-v4 success" onClick={() => completeBooking(booking.id)}>Mark done</button>
-              )}
-              {booking.paymentMethod === "cash" && booking.paymentStatus !== "paid" && (
-                <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmCashPayment(booking.id)}>Confirm cash</button>
-              )}
-              <button type="button" className="mini-action-btn-v4" onClick={() => onOpenConversation(booking)}>Message</button>
-            </div>
-          </div>
-        ))}
-      </div>
+        </>
+      ) : null}
     </div>
   );
 }

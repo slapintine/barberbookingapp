@@ -782,8 +782,8 @@ body[data-theme="dark"] .queless-empty-actions-v18 button:not(.primary) {
   place-items: center;
   border-radius: 16px;
   color: #fff;
-  background: linear-gradient(135deg, #e24aa5, #6b1f8f);
-  box-shadow: 0 12px 22px rgba(107, 31, 143, 0.18);
+  background: linear-gradient(135deg, var(--queless-dark), var(--queless-mid));
+  box-shadow: 0 10px 20px rgba(25, 0, 25, 0.18);
 }
 
 .queless-smart-card-v18 div {

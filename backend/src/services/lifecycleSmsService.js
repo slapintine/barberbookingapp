@@ -1,6 +1,6 @@
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
-import { getSmsConfig, normalizePhoneNumber, sendLoggedSms } from "./smsService.js";
+import { getSmsConfig, normalizePhoneNumber, sanitizeSmsLogText, sendLoggedSms } from "./smsService.js";
 import { get } from "../db/query.js";
 
 function compact(value, maxLength = 320) {
@@ -83,7 +83,10 @@ async function sendLifecycleFallback({
       },
     });
   } catch (error) {
-    logger.warn({ err: error, userId, eventKey }, "Lifecycle SMS fallback failed");
+    logger.warn(
+      { error: sanitizeSmsLogText(error?.message), userId, eventKey },
+      "Lifecycle SMS fallback failed"
+    );
     return { skipped: false, failed: true, error: error.message || "SMS failed" };
   }
 }

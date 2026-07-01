@@ -915,37 +915,6 @@ body[data-theme="dark"] .app-wrap-v4.dark .textarea-v4 {
   border-color: var(--border) !important;
 }
 
-body[data-theme="dark"] .queless-loading-screen,
-.app-wrap-v4.dark .queless-loading-screen {
-  color: var(--text-primary) !important;
-  background:
-    radial-gradient(circle at 50% 34%, rgba(52, 45, 64, 0.92) 0%, rgba(34, 29, 43, 0.88) 34%, transparent 58%),
-    linear-gradient(180deg, #18141f 0%, #201a28 58%, #17131d 100%) !important;
-}
-
-body[data-theme="dark"] .queless-loading-screen::before,
-.app-wrap-v4.dark .queless-loading-screen::before {
-  background:
-    radial-gradient(ellipse at 50% 100%, rgba(185, 140, 255, 0.18), transparent 64%),
-    linear-gradient(180deg, transparent 0%, rgba(52, 45, 64, 0.54) 76%, rgba(34, 29, 43, 0.82) 100%) !important;
-}
-
-body[data-theme="dark"] .queless-loading-glow,
-.app-wrap-v4.dark .queless-loading-glow {
-  background:
-    radial-gradient(ellipse, rgba(185, 140, 255, 0.18) 0%, rgba(255, 141, 182, 0.12) 44%, transparent 72%) !important;
-}
-
-body[data-theme="dark"] .queless-loading-copy,
-.app-wrap-v4.dark .queless-loading-copy {
-  color: var(--text-primary) !important;
-}
-
-body[data-theme="dark"] .queless-loading-tagline,
-.app-wrap-v4.dark .queless-loading-tagline {
-  color: var(--text-secondary) !important;
-}
-
 body[data-theme="dark"] .app-wrap-v4.dark .queless-map-search svg,
 body[data-theme="dark"] .app-wrap-v4.dark .queless-map-appbar button svg,
 body[data-theme="dark"] .app-wrap-v4.dark .queless-map-locate svg {
@@ -1015,4 +984,30 @@ body[data-theme="dark"] .app-wrap-v4.dark .queless-map-message small {
 .wallet-visual-card-v5::after,
 .customer-pay-glow-v15 {
   display: none !important;
+}
+
+/* ── Dark-mode text recovery ──────────────────────────────────────────────
+   Provider Coach, the stand-setup wizard, and Customer Premium hardcode
+   light-mode dark-purple text/icons (e.g. #180019, #26002f, #522b5b) and never
+   received a dark override, so that text was invisible on dark surfaces. Map
+   their generic text tags onto the semantic dark tokens, keeping hierarchy
+   (headings/strong = primary near-white, body/labels = secondary lavender) and
+   leaving semantic-colored text (errors, success, ready pills, badges, chips)
+   alone so it keeps its meaning. Scoped to these families only — the rest of the
+   app already reads correctly once the .dark class is active. */
+.dark :is([class*="provider-coach-"], [class*="qpc-"], [class*="customer-premium-"], .business-wizard-card-v10)
+  :is(h1, h2, h3, h4, h5, strong, b):not(:is([class*="error"], [class*="danger"])) {
+  color: var(--text-primary);
+}
+.dark :is([class*="provider-coach-"], [class*="qpc-"], [class*="customer-premium-"], .business-wizard-card-v10)
+  :is(p, span, li, summary, label, dt, dd, small):not(:is([class*="error"], [class*="danger"], [class*="success"], [class*="ready"], [class*="pill"], [class*="badge"], [class*="chip"])) {
+  color: var(--text-secondary);
+}
+/* Decorative category/metric glyphs that used dark purple — lift to the light
+   brand accent so they stay visible against dark surfaces. */
+.dark .business-category-chip-v10 svg,
+.dark .map-icon-preview-v10 > span,
+.dark .provider-coach-metric-grid svg,
+.dark .provider-coach-topic-toggle > svg {
+  color: var(--brand);
 }

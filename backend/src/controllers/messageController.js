@@ -132,9 +132,13 @@ function conversationIdFor(row = {}) {
 }
 
 function parseConversationId(conversationId = "") {
-  const [barberId, ...usernameParts] = String(conversationId || "").split(":");
+  const [rawBarberId, ...usernameParts] = String(conversationId || "").split(":");
+  // barber_id is an INTEGER column. Coerce to a clean positive integer (or null)
+  // so a malformed id (e.g. a legacy "5-3" dash form) can never reach Postgres as
+  // a non-integer and crash the query with a 500 — it resolves to no rows instead.
+  const barberId = Number.parseInt(rawBarberId, 10);
   return {
-    barberId,
+    barberId: Number.isInteger(barberId) && barberId > 0 ? barberId : null,
     customerUsername: usernameParts.join(":"),
   };
 }

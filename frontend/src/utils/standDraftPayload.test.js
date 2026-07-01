@@ -61,6 +61,34 @@ test("editing only description leaves services, images, phone, location, and hou
   );
 });
 
+test("team member text from the editor preserves saved team member objects", () => {
+  const savedTeam = [
+    { id: 1, name: "Ada", title: "Senior barber", image: "/uploads/ada.webp", is_active: 1 },
+    { id: 2, name: "Ben", title: "Barber", image: "/uploads/ben.webp", is_active: 1 },
+  ];
+  assert.deepEqual(
+    buildStandDraftUpdatePayload(
+      editableForm({ standType: "shop", teamMembers: "Ada, Ben" }),
+      { ...existing, stand_type: "shop", team_members: savedTeam }
+    ),
+    { submit_intent: "draft" }
+  );
+});
+
+test("portfolio_json is treated as saved portfolio data during partial edits", () => {
+  assert.deepEqual(
+    buildStandDraftUpdatePayload(
+      editableForm({ introText: "Updated description" }),
+      {
+        ...existing,
+        portfolio: undefined,
+        portfolio_json: JSON.stringify(existing.portfolio),
+      }
+    ),
+    { submit_intent: "draft", intro_text: "Updated description" }
+  );
+});
+
 test("an explicit image removal is represented by clear_fields", () => {
   assert.deepEqual(
     buildStandDraftUpdatePayload(editableForm({ image: "" }), existing),
@@ -72,5 +100,50 @@ test("an explicit service removal does not affect other saved collections", () =
   assert.deepEqual(
     buildStandDraftUpdatePayload(editableForm({ services: [] }), existing),
     { submit_intent: "draft", services: [], clear_fields: ["services"] }
+  );
+});
+
+test("intentionally edited opening hours are sent even when local provider state already reflects them", () => {
+  assert.deepEqual(
+    buildStandDraftUpdatePayload(
+      editableForm({
+        scheduleStart: "09:00",
+        scheduleEnd: "17:00",
+        dirtyFields: ["scheduleStart", "scheduleEnd"],
+      }),
+      {
+        ...existing,
+        availability: { start: "09:00", end: "17:00" },
+      }
+    ),
+    {
+      submit_intent: "draft",
+      schedule_start: "09:00",
+      schedule_end: "17:00",
+    }
+  );
+});
+
+test("marketplace fulfilment fields are explicit and do not disturb saved services or images", () => {
+  assert.deepEqual(
+    buildStandDraftUpdatePayload(
+      editableForm({
+        marketplaceMode: "product",
+        pickupAvailable: true,
+        deliveryAvailable: true,
+        deliveryAreas: ["Kampala", "Wakiso"],
+        deliveryFee: "5000",
+        deliveryNotes: "Same-day delivery",
+      }),
+      { ...existing, marketplace_mode: "service", pickup_available: 1, delivery_available: 0 }
+    ),
+    {
+      submit_intent: "draft",
+      marketplace_mode: "product",
+      delivery_available: true,
+      delivery_areas: ["Kampala", "Wakiso"],
+      delivery_fee: 5000,
+      delivery_notes: "Same-day delivery",
+    }
   );
 });

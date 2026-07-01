@@ -1,7 +1,9 @@
 import { all, get, run, transaction } from "../db/query.js";
+import { AUDIT_EVENTS, recordAuditEvent } from "../services/auditLogService.js";
 import { MARKETPLACE_CATEGORIES } from "../data/marketplaceCategories.js";
 import { publicBusinessParams, publicBusinessWhere } from "../services/businessVisibility.js";
 import { withCanonicalProviderFields } from "../services/providerResponse.js";
+import { env } from "../config/env.js";
 
 const SUPPORT_TOPICS = new Set([
   "Contact Support",
@@ -57,7 +59,15 @@ function normalizeProvider(row = {}, services = []) {
     longitude: row.longitude,
     service_area: row.location || "",
     profile_image: row.image || "",
-    cover_image: row.cover_image || row.image || "",
+    cover_image_url: row.cover_image_url || "",
+    cover_image: row.cover_image_url || row.image || "",
+    marketplace_mode: row.marketplace_mode || "service",
+    business_hours_json: row.business_hours_json || "{}",
+    delivery_available: Number(row.delivery_available || 0),
+    pickup_available: Number(row.pickup_available ?? 1),
+    delivery_areas_json: row.delivery_areas_json || "[]",
+    delivery_fee: row.delivery_fee ?? null,
+    delivery_notes: row.delivery_notes || "",
     price_from: Number(row.price_from || 0),
     pricing_mode: row.pricing_mode || "fixed",
     requires_quote: Boolean(row.requires_quote),
@@ -102,7 +112,11 @@ function normalizeService(row = {}) {
 
 export async function getCategories(req, res, next) {
   try {
-    res.json({ success: true, categories: MARKETPLACE_CATEGORIES });
+    res.json({
+      success: true,
+      categories: MARKETPLACE_CATEGORIES,
+      features: { productMarketplaceEnabled: env.productMarketplaceEnabled },
+    });
   } catch (error) {
     next(error);
   }
@@ -159,6 +173,7 @@ export async function getServiceListings(req, res, next) {
        FROM barber_services s
        JOIN barbers b ON b.id = s.barber_id
        WHERE ${publicBusinessWhere("b")}
+         AND b.marketplace_mode IN ('service', 'hybrid')
        ORDER BY s.id DESC`,
       publicBusinessParams(now)
     );
@@ -337,6 +352,15 @@ export async function createSupportRequest(req, res, next) {
       [req.user.id, normalizedTopic, name, contact, bookingReference, message]
     );
 
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.SUPPORT_REQUEST_CREATED,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      targetType: "support_request",
+      targetId: result.lastID,
+      metadata: { topic: normalizedTopic },
+      req,
+    });
     res.status(201).json({
       success: true,
       support_request: {

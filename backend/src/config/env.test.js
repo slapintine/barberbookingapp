@@ -92,7 +92,7 @@ test("validateEnv clearly fails when MTN API user ID is missing", async () => {
 
     assert.throws(
       () => validateEnv(),
-      /MTN_API_USER_ID for MTN MoMo API user/
+      /MTN_API_USER_ID for the MTN Mobile Money API user/
     );
   } finally {
     restoreEnv(originalEnv);

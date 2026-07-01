@@ -1,4 +1,5 @@
 import { apiFetch } from "../config/api.js";
+import { createComingSoonError, PAYMENTS_COMING_SOON_MESSAGE, PAYMENTS_ENABLED } from "../utils/launchFlags.js";
 
 export function getMyBookings() {
   return apiFetch("/api/bookings/me");
@@ -21,6 +22,9 @@ export function createBookingRequest(payload) {
 }
 
 export function verifyBookingPaymentRequest(bookingId) {
+  if (!PAYMENTS_ENABLED) {
+    return Promise.reject(createComingSoonError(PAYMENTS_COMING_SOON_MESSAGE, "PAYMENTS_COMING_SOON"));
+  }
   return apiFetch(`/api/bookings/${bookingId}/payment/verify`, {
     method: "POST",
   });
@@ -41,6 +45,9 @@ export function rescheduleBookingRequest(bookingId, { date, time }) {
 }
 
 export function confirmCashPaymentRequest(bookingId) {
+  if (!PAYMENTS_ENABLED) {
+    return Promise.reject(createComingSoonError(PAYMENTS_COMING_SOON_MESSAGE, "PAYMENTS_COMING_SOON"));
+  }
   return apiFetch(`/api/bookings/${bookingId}/payment/cash`, {
     method: "PATCH",
   });

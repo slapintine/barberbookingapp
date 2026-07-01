@@ -53,6 +53,11 @@ export const env = {
   host: (process.env.HOST || "127.0.0.1").trim(),
   logLevel: (process.env.LOG_LEVEL || (process.env.NODE_ENV === "production" ? "info" : "debug")).trim().toLowerCase(),
   jwtSecret: process.env.JWT_SECRET,
+  // Server-side salt for hashing IP / user-agent in security audit logs so raw
+  // values are never stored. Production should set AUDIT_LOG_SALT; if missing we
+  // fall back to a deployment-stable secret (JWT_SECRET) so hashes still differ
+  // per deployment, and finally to an empty salt in local/dev.
+  auditLogSalt: process.env.AUDIT_LOG_SALT || process.env.JWT_SECRET || "",
   jwtExpiresIn: (process.env.JWT_EXPIRES_IN || "15m").trim(),
   refreshTokenDays: Math.max(1, Number(process.env.REFRESH_TOKEN_DAYS || 30)),
   clientUrls: configuredClientUrls,
@@ -60,6 +65,13 @@ export const env = {
   allowLocalDevOrigins: String(process.env.ALLOW_LOCAL_DEV_ORIGINS || "").trim().toLowerCase() === "true",
   appPublicUrl: configuredPublicUrl || configuredClientUrls[0] || "",
   apiBaseUrl: (process.env.API_BASE_URL || (configuredPublicUrl ? `${configuredPublicUrl}/api` : "")).trim().replace(/\/$/, ""),
+  androidAppVersion: (process.env.ANDROID_APP_VERSION || "1.0.0").trim(),
+  androidApkUrl: (process.env.ANDROID_APK_URL || "https://queless.org/downloads/queless-latest.apk").trim(),
+  androidReleaseNotes: (process.env.ANDROID_RELEASE_NOTES || "Initial Queless Android release").trim(),
+  androidForceUpdate: String(process.env.ANDROID_FORCE_UPDATE || "false").trim().toLowerCase() === "true",
+  androidReleaseDate: (process.env.ANDROID_RELEASE_DATE || "").trim(),
+  androidApkSize: (process.env.ANDROID_APK_SIZE || "").trim(),
+  productMarketplaceEnabled: String(process.env.PRODUCT_MARKETPLACE_ENABLED || "false").trim().toLowerCase() === "true",
   dbClient: (process.env.DB_CLIENT || "sqlite").trim().toLowerCase(),
   dbPath: process.env.DB_PATH || "./src/db/barber_app.sqlite",
   databaseUrl: (process.env.DATABASE_URL || "").trim(),
@@ -280,8 +292,8 @@ export function validateEnv() {
     if (env.mobileMoneyDefaultProvider === "mtn") {
       const hasConsumerCredentials = Boolean(env.mtnConsumerKey && env.mtnConsumerSecret);
       if (!hasConsumerCredentials) {
-        if (!env.mtnApiUserId) missing.push("MTN_API_USER_ID for MTN MoMo API user");
-        if (!env.mtnApiKey) missing.push("MTN_API_KEY for MTN MoMo");
+        if (!env.mtnApiUserId) missing.push("MTN_API_USER_ID for the MTN Mobile Money API user");
+        if (!env.mtnApiKey) missing.push("MTN_API_KEY for MTN Mobile Money");
         if (!env.mtnCollectionSubscriptionKey) {
           missing.push("MTN_SUBSCRIPTION_KEY, MTN_COLLECTION_PRIMARY_KEY, or MTN_COLLECTION_SECONDARY_KEY");
         }
@@ -303,9 +315,9 @@ export function validateEnv() {
   if (
     env.nodeEnv === "production" &&
     (env.bookingOnlinePaymentsEnabled || ["sandbox", "provider", "live", "auto"].includes(env.mobileMoneyMode)) &&
-    !env.mobileMoneyWebhookToken
+    env.mobileMoneyWebhookToken.length < 32
   ) {
-    missing.push("MOBILE_MONEY_WEBHOOK_TOKEN for public payment callbacks");
+    missing.push("MOBILE_MONEY_WEBHOOK_TOKEN with at least 32 characters for public payment callbacks");
   }
 
   if (env.nodeEnv === "production" && env.africasTalkingLifecycleSmsEnabled) {

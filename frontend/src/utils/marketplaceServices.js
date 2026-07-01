@@ -157,7 +157,7 @@ export function getServicePrice(service = {}, provider = {}) {
   const base = Number(provider.price_from || 0);
   if (base > 0 && String(service.pricing_type || "fixed") === "fixed") {
     const total = base + getServiceBookingAmount(service);
-    return total > 0 ? `From UGX ${total.toLocaleString()}` : "Price on consultation";
+    return total > 0 ? `From UGX ${total.toLocaleString()}` : "Request quote";
   }
   return formatServicePrice(service);
 }

@@ -4,6 +4,7 @@ import {
   sanitizeErrorMessage,
   looksLikeServerHtml,
   getFriendlyApiErrorMessage,
+  getErrorMessage,
   SERVER_UNAVAILABLE_FALLBACK,
 } from "./errorMessages.js";
 
@@ -66,4 +67,22 @@ test("getFriendlyApiErrorMessage maps status codes to friendly copy", () => {
   assert.match(getFriendlyApiErrorMessage(429), /too many attempts/i);
   assert.equal(getFriendlyApiErrorMessage(502), SERVER_UNAVAILABLE_FALLBACK);
   assert.equal(getFriendlyApiErrorMessage(500), SERVER_UNAVAILABLE_FALLBACK);
+});
+
+test("getErrorMessage extracts a string from every common error shape", () => {
+  assert.equal(getErrorMessage("plain string"), "plain string");
+  assert.equal(getErrorMessage(new Error("boom")), "boom");
+  assert.equal(getErrorMessage({ userMessage: "friendly" }), "friendly");
+  assert.equal(getErrorMessage({ message: "from message" }), "from message");
+  assert.equal(getErrorMessage({ error: "from error" }), "from error");
+  assert.equal(getErrorMessage({ errors: [{ message: "field bad" }] }), "field bad");
+});
+
+test("[object Object] is never rendered for a raw error object (the live login bug)", () => {
+  const fallback = "x";
+  assert.equal(getErrorMessage({}, fallback), fallback);
+  assert.ok(!getErrorMessage({ a: { b: 1 } }).includes("[object Object]"));
+  // sanitizeErrorMessage is what the login form calls — it must coerce, not stringify.
+  assert.ok(!sanitizeErrorMessage({}).includes("[object Object]"));
+  assert.equal(sanitizeErrorMessage({ message: "Incorrect username/email or password." }), "Incorrect username/email or password.");
 });

@@ -34,6 +34,17 @@ test("a logo-only stand uses the logo (normalizer and image helper agree)", () =
   assert.equal(getProviderImageUrl(raw), "/api/uploads/providers/9/logo.png");
 });
 
+test("snake_case portfolio images are usable provider image candidates", () => {
+  const raw = {
+    id: 10,
+    business_name: "Portfolio Stand",
+    portfolio_json: JSON.stringify([{ id: "work", after_image: "/api/uploads/providers/10/work.png" }]),
+  };
+  const normalized = normalizeProviderData(raw);
+  assert.equal(normalized.image, "/api/uploads/providers/10/work.png");
+  assert.equal(getProviderImageUrl(raw), "/api/uploads/providers/10/work.png");
+});
+
 test("real uploaded references pass through unchanged", () => {
   for (const ref of ["/api/uploads/providers/1/a.png", "https://cdn.example.com/a.jpg", "data:image/png;base64,AAAA", "blob:http://x/y"]) {
     assert.equal(normalizeProviderImageReference(ref), ref);
@@ -42,4 +53,19 @@ test("real uploaded references pass through unchanged", () => {
 
 test("numeric prices still render normally", () => {
   assert.equal(formatProviderPrice({ price_from: 15000 }), "UGX 15,000");
+});
+
+test("provider normalization exposes marketplace capabilities and fulfilment", () => {
+  const normalized = normalizeProviderData({
+    id: 11,
+    marketplace_mode: "hybrid",
+    pickup_available: 1,
+    delivery_available: 0,
+    delivery_areas_json: '["Kampala"]',
+  });
+  assert.equal(normalized.supportsServices, true);
+  assert.equal(normalized.supportsProducts, true);
+  assert.equal(normalized.pickupAvailable, true);
+  assert.equal(normalized.deliveryAvailable, false);
+  assert.deepEqual(normalized.deliveryAreas, ["Kampala"]);
 });

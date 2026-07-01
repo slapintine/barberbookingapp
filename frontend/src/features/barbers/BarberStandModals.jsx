@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./business-wizard-v10.css";
 import {
   FiArrowLeft,
@@ -10,7 +10,9 @@ import {
   FiImage,
   FiMapPin,
   FiNavigation,
+  FiPackage,
   FiPlus,
+  FiShoppingBag,
   FiTrash2,
   FiUsers,
   FiX,
@@ -20,7 +22,6 @@ import { getMapIconOption, getMapIconTypeForCategory } from "../../utils/mapIcon
 import { getCategoryDef, getCategoryList, CategorySelectorItem } from "../../utils/categoryRegistry.jsx";
 import { getGeolocationErrorMessage, reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
 import {
-  formatMoney,
   formatSubscriptionPrice,
   getPlanFeatures,
   getPlanImageCountMessage,
@@ -32,6 +33,23 @@ import {
   isProviderPlanActive,
 } from "../../utils/subscriptionPlans.js";
 import { PAYMENTS_ENABLED } from "../../utils/launchFlags.js";
+import { toUgLocalDigits } from "../../utils/ugandaPhone.js";
+import ProductCatalogueEditor from "../products/ProductCatalogueEditor.jsx";
+import useProductMarketplaceAvailability from "../../hooks/useProductMarketplaceAvailability.js";
+import { getMarketplaceMode, getMarketplacePlanContent, MARKETPLACE_MODES, supportsProducts, supportsServices } from "../../utils/marketplaceMode.js";
+import { getMyProducts } from "../../api/productsApi.js";
+import { buildAssetUrl } from "../../config/api.js";
+import {
+  MAX_SERVICE_DURATION_MINUTES,
+  SERVICE_DELIVERY_MODES,
+  SERVICE_DURATION_PRESETS,
+  convertDurationToMinutes,
+  formatServiceDuration,
+  getUgandaStandPhoneError,
+  inferDurationInput,
+  normalizeUgandaStandPhone,
+  requiresFixedBusinessLocation,
+} from "../../utils/standSetupUtils.js";
 
 const DEFAULT_CENTER = [0.3136, 32.5811];
 const TOTAL_STEPS = 6;
@@ -62,7 +80,62 @@ const DEFAULT_FORM = {
   portfolio: [],
   selectedPlan: "FREE",
   startFreeTrial: false,
+  durationUnit: "minutes",
+  dirtyFields: [],
+  marketplaceMode: MARKETPLACE_MODES.SERVICE,
+  subcategory: "",
+  coverImage: "",
+  businessHours: {},
+  pickupAvailable: true,
+  deliveryAvailable: false,
+  deliveryAreas: [],
+  deliveryFee: "",
+  deliveryNotes: "",
+  products: [],
+  deletedProductIds: [],
 };
+
+function getStandBackupKey(kind, value) {
+  const suffix = String(value || "guest").replace(/[^\w.-]+/g, "-").slice(0, 80) || "guest";
+  return `queless_stand_setup_backup_${kind}_${suffix}`;
+}
+
+function readStandFormBackup(key, savedAt = 0) {
+  if (typeof window === "undefined" || !key) return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "null");
+    if (!parsed?.form || Number(parsed.updatedAt || 0) <= Number(savedAt || 0)) return null;
+    return parsed.form;
+  } catch {
+    return null;
+  }
+}
+
+function writeStandFormBackup(key, form) {
+  if (typeof window === "undefined" || !key) return false;
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ form, updatedAt: Date.now() }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function arrayFromMaybeJson(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function booleanFromApi(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  return [true, 1, "1", "true", "yes"].includes(value);
+}
 
 function createBlankService(category = SERVICE_CATEGORIES[0]) {
   return {
@@ -89,13 +162,21 @@ const PRICING_MODES = [
   { value: "quote", label: "Quote", hint: "Customer requests quote" },
 ];
 
-const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
+const PRODUCT_CATEGORIES = [
+  "Boutique & Fashion",
+  "Cosmetics & Beauty Products",
+  "Food & Groceries",
+  "Electronics",
+  "Home & Living",
+  "Hardware",
+  "Health Products",
+  "Gifts & Crafts",
+  "Other Products",
+];
 
 function getServiceLocationLabel(service = {}) {
   const type = String(service.location_type || "provider_location").toLowerCase();
-  if (type === "customer_location") return "Customer location";
-  if (type === "online") return "Online";
-  return "Provider location";
+  return SERVICE_DELIVERY_MODES.find((mode) => mode.value === type)?.label || "Customer visits stand";
 }
 
 function getServiceReadiness(service = {}) {
@@ -107,7 +188,7 @@ function getServiceReadiness(service = {}) {
     if (Number(service.max_price) <= Number(service.min_price)) return "Check range";
   }
   if (pricingType === "starting_from" && Number(service.starting_price || 0) <= 0) return "Add start price";
-  if (Number(service.duration_minutes || 0) < 5) return "Add duration";
+  if (Number(service.duration_minutes || 0) < 5 || Number(service.duration_minutes) > MAX_SERVICE_DURATION_MINUTES) return "Add duration";
   return pricingType === "quote" ? "Quote required" : "Ready";
 }
 
@@ -148,6 +229,8 @@ const FIELD_TO_STEP = {
   phone: 1,
   location: 2,
   services: 4,
+  fulfilment: 2,
+  products: 4,
 };
 
 // A business stand is created against the authenticated account id. We do NOT
@@ -157,14 +240,29 @@ const FIELD_TO_STEP = {
 export function validateBusinessStand(data = {}) {
   const form = data && typeof data === "object" ? data : {};
   const services = normalizeFormServices(form.services);
+  const marketplaceMode = getMarketplaceMode(form.marketplaceMode || form.marketplace_mode);
+  const serviceStand = supportsServices(marketplaceMode);
+  const shopStand = supportsProducts(marketplaceMode);
+  const products = Array.isArray(form.products) ? form.products : [];
   const missing = [];
 
   if (!String(form.businessName || "").trim()) missing.push({ key: "businessName", label: "Business name is required" });
   if (!String(form.businessType || "").trim()) missing.push({ key: "businessType", label: "Business category is required" });
-  if (!String(form.phone || "").trim()) missing.push({ key: "phone", label: "Phone number is required" });
-  if (!String(form.location || "").trim() && (!form.latitude || !form.longitude)) missing.push({ key: "location", label: "Business location is required" });
-  if (!services.length) missing.push({ key: "services", label: "At least one service is required" });
-  if (services.some((service) => !String(service.service_name || "").trim())) missing.push({ key: "services", label: "Each service needs a clear listing title" });
+  if (getUgandaStandPhoneError(form.phone)) missing.push({ key: "phone", label: "Valid Uganda phone number is required" });
+  if (
+    serviceStand &&
+    requiresFixedBusinessLocation(services) &&
+    !String(form.location || "").trim()
+  ) missing.push({ key: "location", label: "Business or service-area location is required" });
+  if (shopStand && !String(form.location || "").trim()) missing.push({ key: "location", label: "Shop location is required" });
+  if (serviceStand && !services.length) missing.push({ key: "services", label: "At least one service is required" });
+  if (serviceStand && services.some((service) => !String(service.service_name || "").trim())) missing.push({ key: "services", label: "Each service needs a clear listing title" });
+  if (shopStand && !form.pickupAvailable && !form.deliveryAvailable) {
+    missing.push({ key: "fulfilment", label: "Choose pickup or delivery" });
+  }
+  if (shopStand && !products.some((product) => (product.is_active ?? product.isActive ?? true) && !product.is_deleted)) {
+    missing.push({ key: "products", label: "At least one active product is required" });
+  }
 
   return missing;
 }
@@ -379,7 +477,7 @@ function ImageUploadInput({
       </div>
       <button type="button" className="image-upload-preview-v9" onClick={() => imageInputRef.current?.click()}>
         {image ? (
-          <img src={image} alt={previewAlt} />
+          <img src={buildAssetUrl(image)} alt={previewAlt} />
         ) : (
           <span className="image-upload-empty-v9">
             <FiCamera />
@@ -521,7 +619,7 @@ function PortfolioImageInput({ portfolio = [], onChange, maxPhotos = Infinity, p
             const image = item.afterImage || item.beforeImage || item.image;
             return image ? (
               <div key={item.id || index} className="portfolio-preview-v9">
-                <img src={image} alt="Portfolio preview" />
+                <img src={buildAssetUrl(image)} alt="Portfolio preview" />
                 <button type="button" aria-label="Remove portfolio image" onClick={() => removePortfolioItem(index)}>
                   <FiX />
                 </button>
@@ -534,16 +632,16 @@ function PortfolioImageInput({ portfolio = [], onChange, maxPhotos = Infinity, p
   );
 }
 
-function StepHeader({ currentStep, stepTitle }) {
+function StepHeader({ currentStep, totalSteps = TOTAL_STEPS, stepTitle }) {
   return (
     <div className="business-step-progress-v10">
       <div className="business-step-progress-copy-v10">
-        <span>Step {currentStep} of {TOTAL_STEPS} - {stepTitle}</span>
+        <span>Step {currentStep} of {totalSteps} - {stepTitle}</span>
         <strong>{stepTitle}</strong>
         <small>Takes about 3 minutes.</small>
       </div>
       <div className="progress-track-v10">
-        <div className="progress-fill-v10" style={{ width: `${(currentStep / TOTAL_STEPS) * 100}%` }} />
+        <div className="progress-fill-v10" style={{ width: `${(currentStep / totalSteps) * 100}%` }} />
       </div>
     </div>
   );
@@ -553,7 +651,15 @@ function WizardNotice({ children }) {
   return <div className="wizard-note-v10">{children}</div>;
 }
 
-function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, requirePlan = false, profile = {} }) {
+function RequiredMark() {
+  return <span className="required-marker-v10" aria-label="required">*</span>;
+}
+
+function FieldMessage({ message }) {
+  return message ? <small className="field-error-v10">{message}</small> : null;
+}
+
+function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, requirePlan = false, profile = {}, backupKey = "", autoSaveEnabled = false }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
   const [missingFields, setMissingFields] = useState([]);
@@ -562,8 +668,24 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const [locationDetecting, setLocationDetecting] = useState(false);
   const [savingIntent, setSavingIntent] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState("");
+  const [planBilling, setPlanBilling] = useState("monthly");
+  const autoSaveTimerRef = useRef(null);
+  const lastAutoSaveSnapshotRef = useRef("");
+  const marketplaceAvailability = useProductMarketplaceAvailability(show);
+  const marketplaceMode = getMarketplaceMode(form.marketplaceMode || form.marketplace_mode);
+  const serviceStand = supportsServices(marketplaceMode);
+  const shopStand = supportsProducts(marketplaceMode);
+  const productOnly = shopStand && !serviceStand;
+  const stepSequence = productOnly ? [1, 2, 4, 6] : [1, 2, 3, 4, 5, 6];
+  const stepPosition = Math.max(0, stepSequence.indexOf(currentStep));
+  const totalSteps = stepSequence.length;
+  const lastStep = stepSequence[stepSequence.length - 1];
   const services = normalizeFormServices(form.services);
-  const selectedPlan = PROVIDER_PLANS.find((plan) => plan.tier === form.selectedPlan) || PROVIDER_PLANS[0];
+  const products = Array.isArray(form.products) ? form.products : [];
+  const activeProducts = products.filter((product) => (product.is_active ?? product.isActive ?? true) && !product.is_deleted);
+  const normalizedSelectedPlan = String(form.selectedPlan || "FREE").toUpperCase();
+  const selectedPlan = PROVIDER_PLANS.find((plan) => plan.tier === normalizedSelectedPlan) || PROVIDER_PLANS[0];
   const profilePlan = String(
     profile?.subscription?.tier ||
     profile?.subscription_tier ||
@@ -584,7 +706,20 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const planFeatures = getPlanFeatures(selectedPlan.id);
   const maxServices = planFeatures.maxServices;
   const maxPhotos = planFeatures.maxPhotos;
+  const productLimits = selectedPlan.tier === "PLATINUM"
+    ? { products: -1, images: 10 }
+    : selectedPlan.tier === "PREMIUM"
+    ? { products: 50, images: 6 }
+    : { products: 5, images: 3 };
   const imageStats = useMemo(() => getFormImageStats({ ...form, services }), [form, services]);
+  const businessCategoryOptions = useMemo(
+    () => [...new Set([
+      ...(serviceStand ? SERVICE_CATEGORIES : []),
+      ...(shopStand ? PRODUCT_CATEGORIES : []),
+      form.businessType,
+    ].filter(Boolean))],
+    [form.businessType, serviceStand, shopStand]
+  );
   const selectedCategories = useMemo(
     () => [...new Set(services.flatMap((service) => (service.category ? [service.category] : [])))],
     [services]
@@ -600,29 +735,43 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   );
   // The Step 1 manual choice is the only source of truth for the map marker.
   const effectiveMapIconType = form.mapIconType;
-  const effectiveMapIconOption = effectiveMapIconType ? getMapIconOption(effectiveMapIconType) : null;
-  const mapPreviewTitle = effectiveMapIconOption?.label || "No map icon selected";
-  const mapPreviewText = !effectiveMapIconOption
-    ? "Pick your map icon in Step 1 (Business basics)."
-    : "This icon will appear on the Queless map.";
   const canSubmit = true;
   const missingFieldKeys = useMemo(() => new Set(missingFields.map((item) => item.key)), [missingFields]);
   const fieldClass = (key, base = "label-v4") => (missingFieldKeys.has(key) ? `${base} missing-v10` : base);
+  const fieldError = (key) => missingFields.find((item) => item.key === key)?.message || "";
 
-  const stepTitles = [
-    "Business Basics",
-    "Location & Availability",
-    "Service Categories",
-    "Add Services",
-    "Payments & Booking",
-    "Review & Submit",
-  ];
+  const stepTitles = productOnly
+    ? {
+        1: "Shop Info",
+        2: "Delivery & Pickup",
+        4: "Products",
+        6: "Review & Publish",
+      }
+    : {
+        1: "Business Basics",
+        2: "Location & Availability",
+        3: "Service Categories",
+        4: "Add Services",
+        5: shopStand ? "Products & Fulfilment" : "Payments & Booking",
+        6: "Review & Submit",
+      };
 
   useEffect(() => {
     if (activeServiceIndex > services.length - 1) {
       setActiveServiceIndex(Math.max(0, services.length - 1));
     }
   }, [activeServiceIndex, services.length]);
+
+  useEffect(() => {
+    if (!show) return;
+    setAutoSaveStatus("");
+    lastAutoSaveSnapshotRef.current = "";
+  }, [show]);
+
+  useEffect(() => {
+    if (!show || !backupKey) return;
+    writeStandFormBackup(backupKey, form);
+  }, [backupKey, form, show]);
 
   const updateService = (index, updates) => {
     setForm((prev) => {
@@ -710,96 +859,232 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
     );
   };
 
-  const validateStep = (step = currentStep) => {
+  const getStepIssues = (step = currentStep) => {
+    const issues = [];
+    const addIssue = (key, label, message, serviceIndex = null) => {
+      issues.push({ key, label, message, step, serviceIndex });
+    };
     if (step === 1) {
-      if (!form.businessName?.trim()) return "Please enter your business name.";
-      if (!form.businessType?.trim()) return "Please select your main business category.";
-      if (!form.mapIconType?.trim()) return "Please select the map icon customers should see.";
-      if (!form.phone?.trim()) return "Please add a business phone number.";
+      if (!form.businessName?.trim()) addIssue("businessName", "business name", "Enter your business name.");
+      if (!form.businessType?.trim()) addIssue("businessType", "business category", "Choose your main business category.");
+      if (!form.mapIconType?.trim()) addIssue("mapIconType", "map icon", "Choose the map icon customers should see.");
+      const phoneError = getUgandaStandPhoneError(form.phone);
+      if (phoneError) addIssue("phone", "phone number", phoneError);
       if (String(form.documentName || "").trim().length > 120 || /[<>]/.test(String(form.documentName || ""))) {
-        return "Verification document reference must be 120 characters or fewer and cannot contain HTML.";
+        addIssue("documentName", "verification reference", "Use 120 characters or fewer and remove angle brackets.");
       }
     }
     if (step === 2) {
-      if (!form.location?.trim() && (!form.latitude || !form.longitude)) return "Please add your business location or use current location.";
-      if (!form.scheduleStart || !form.scheduleEnd) return "Please add your opening and closing time.";
+      if (shopStand && !form.location?.trim()) {
+        addIssue("location", "shop location", "Add your shop location or pickup area.");
+      } else if (
+        serviceStand &&
+        services.length > 0 &&
+        requiresFixedBusinessLocation(services) &&
+        !form.location?.trim()
+      ) {
+        addIssue("location", "location / service area", "Add a stand location or the area you serve.");
+      }
+      if (serviceStand) {
+        if (!form.scheduleStart) addIssue("scheduleStart", "opening time", "Choose an opening time.");
+        if (!form.scheduleEnd) addIssue("scheduleEnd", "closing time", "Choose a closing time.");
+        if (form.scheduleStart && form.scheduleEnd && form.scheduleStart >= form.scheduleEnd) {
+          addIssue("scheduleEnd", "business hours", "Closing time must be later than opening time.");
+        }
+      }
+      if (shopStand && !form.pickupAvailable && !form.deliveryAvailable) {
+        addIssue("fulfilment", "pickup or delivery", "Choose at least one way customers can receive products.");
+      }
+      if (shopStand && form.deliveryAvailable && !String((form.deliveryAreas || []).join?.(",") || form.deliveryAreas || "").trim()) {
+        addIssue("deliveryAreas", "delivery areas", "Add at least one area you deliver to.");
+      }
     }
-    if (step === 3) {
-      if (!selectedCategories.length) return "Please select at least one service category.";
+    if (step === 3 && serviceStand) {
+      if (!selectedCategories.length) addIssue("services", "service category", "Choose at least one service category.");
     }
-    if (step === 4) {
-      if (!services.length) return "Please add at least one service.";
-      if (Number.isFinite(maxServices) && services.length > maxServices) return `You have reached the ${selectedPlan.name} limit of ${maxServices} services. Upgrade to add more.`;
-      const incomplete = services.find((service) => !service.service_name?.trim());
-      if (incomplete) return "Please give each service a clear listing title.";
+    if (step === 4 && productOnly) {
+      if (!activeProducts.length) addIssue("products", "at least one product", "Add at least one active product.");
+      if (productLimits.products >= 0 && activeProducts.length > productLimits.products) {
+        addIssue("products", "product limit", `${selectedPlan.name} allows ${productLimits.products} active products.`);
+      }
+    }
+    if (step === 4 && serviceStand) {
+      if (!services.length) addIssue("services", "at least one service", "Add at least one service.");
+      if (Number.isFinite(maxServices) && services.length > maxServices) {
+        addIssue("services", "service limit", `${selectedPlan.name} allows ${maxServices} services. Remove extras or choose another plan.`);
+      }
       const duplicateNames = new Set();
-      for (const service of services) {
+      services.forEach((service, index) => {
+        if (!service.service_name?.trim()) addIssue(`serviceName-${index}`, `service ${index + 1} title`, "Give this service a clear title.", index);
         const key = `${String(service.service_name || "").trim().toLowerCase()}|${String(service.category || "").trim().toLowerCase()}`;
-        if (duplicateNames.has(key)) return "Please remove duplicate services in the same category.";
+        if (service.service_name?.trim() && duplicateNames.has(key)) {
+          addIssue(`serviceName-${index}`, `service ${index + 1} duplicate`, "Remove this duplicate service or give it a distinct title.", index);
+        }
         duplicateNames.add(key);
         const pricingType = String(service.pricing_type || "fixed");
-        if (pricingType === "fixed" && Number(service.price_extra || 0) <= 0) return "Please enter a valid price.";
-        if (pricingType === "range") {
-          if (Number(service.min_price || 0) <= 0 || Number(service.max_price || 0) <= 0) return "Please complete the price range before saving.";
-          if (Number(service.max_price) <= Number(service.min_price)) return "Maximum price must be greater than minimum price.";
+        if (pricingType === "fixed" && Number(service.price_extra || 0) <= 0) {
+          addIssue(`servicePrice-${index}`, `service ${index + 1} price`, "Enter a valid fixed price in UGX.", index);
         }
-        if (pricingType === "starting_from" && Number(service.starting_price || 0) <= 0) return "Please enter a valid price.";
-        if (Number(service.duration_minutes || 0) < 5) return "Please set a realistic duration for each service.";
-      }
+        if (pricingType === "range") {
+          if (Number(service.min_price || 0) <= 0 || Number(service.max_price || 0) <= 0) {
+            addIssue(`servicePrice-${index}`, `service ${index + 1} price range`, "Enter both minimum and maximum prices in UGX.", index);
+          } else if (Number(service.max_price) <= Number(service.min_price)) {
+            addIssue(`servicePrice-${index}`, `service ${index + 1} price range`, "Maximum price must be greater than minimum price.", index);
+          }
+        }
+        if (pricingType === "starting_from" && Number(service.starting_price || 0) <= 0) {
+          addIssue(`servicePrice-${index}`, `service ${index + 1} starting price`, "Enter a valid starting price in UGX.", index);
+        }
+        const duration = Number(service.duration_minutes || 0);
+        if (duration < 5 || duration > MAX_SERVICE_DURATION_MINUTES) {
+          addIssue(
+            `serviceDuration-${index}`,
+            `service ${index + 1} duration`,
+            "Choose a duration between 5 minutes and 30 days.",
+            index
+          );
+        }
+        if (!SERVICE_DELIVERY_MODES.some((mode) => mode.value === String(service.location_type || ""))) {
+          addIssue(`serviceMode-${index}`, `service ${index + 1} work mode`, "Choose how this service is delivered.", index);
+        }
+      });
     }
     if (step === 5) {
-      if (!canSubmit) return "Please choose at least one payment option.";
       const limits = getPlanImageLimits(selectedPlan.tier);
-      if (imageStats.logo.count > limits.logoImages) return getPlanImageCountMessage(selectedPlan.tier, "logo");
-      if (imageStats.logo.bytes > limits.logoTotalBytes) return getPlanImageSizeMessage(selectedPlan.tier, "logo");
-      if (imageStats.portfolio.count > limits.portfolioImages) return getPlanImageCountMessage(selectedPlan.tier, "portfolio");
-      if (imageStats.portfolio.bytes > limits.portfolioTotalBytes) return getPlanImageSizeMessage(selectedPlan.tier, "portfolio");
+      if (imageStats.logo.count > limits.logoImages) addIssue("images", "business image", getPlanImageCountMessage(selectedPlan.tier, "logo"));
+      if (imageStats.logo.bytes > limits.logoTotalBytes) addIssue("images", "business image size", getPlanImageSizeMessage(selectedPlan.tier, "logo"));
+      if (imageStats.portfolio.count > limits.portfolioImages) addIssue("images", "portfolio images", getPlanImageCountMessage(selectedPlan.tier, "portfolio"));
+      if (imageStats.portfolio.bytes > limits.portfolioTotalBytes) addIssue("images", "portfolio image size", getPlanImageSizeMessage(selectedPlan.tier, "portfolio"));
       if (services.some((service) => getImageReferenceStats(service.image).bytes > limits.serviceTotalBytes)) {
-        return getPlanImageSizeMessage(selectedPlan.tier, "service");
+        addIssue("images", "service image size", getPlanImageSizeMessage(selectedPlan.tier, "service"));
+      }
+      if (shopStand) {
+        if (!form.pickupAvailable && !form.deliveryAvailable) {
+          addIssue("fulfilment", "pickup or delivery", "Choose at least one way customers can receive products.");
+        }
+        if (!activeProducts.length) addIssue("products", "at least one product", "Add at least one active product.");
+        if (productLimits.products >= 0 && activeProducts.length > productLimits.products) {
+          addIssue("products", "product limit", `${selectedPlan.name} allows ${productLimits.products} active products.`);
+        }
       }
     }
-    if (requirePlan && step === 6 && form.startFreeTrial) {
-      if (!form.selectedPlan) return "Please choose a plan before creating your business.";
-    }
-    return "";
+    return issues;
+  };
+
+  const focusIssue = (issue) => {
+    if (!issue) return;
+    if (Number.isInteger(issue.serviceIndex)) setActiveServiceIndex(issue.serviceIndex);
+    window.setTimeout(() => {
+      const target = document.querySelector(`[data-validation-key="${issue.key}"]`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.querySelector?.("input, select, textarea, button")?.focus?.({ preventScroll: true });
+    }, 80);
+  };
+
+  const showIssues = (issues) => {
+    setMissingFields(issues);
+    if (!issues.length) return false;
+    const first = issues[0];
+    setCurrentStep(first.step || currentStep);
+    const labels = [...new Set(issues.map((item) => item.label))];
+    setError(`Please complete: ${labels.slice(0, 4).join(", ")}${labels.length > 4 ? ` and ${labels.length - 4} more` : ""}.`);
+    focusIssue(first);
+    return true;
   };
 
   const goNext = () => {
-    const message = validateStep(currentStep);
-    if (message) {
-      setError(message);
-      return;
-    }
+    if (showIssues(getStepIssues(currentStep))) return;
     setError("");
     setMissingFields([]);
-    setCurrentStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
+    setCurrentStep(stepSequence[Math.min(stepPosition + 1, stepSequence.length - 1)]);
   };
 
   const goBack = () => {
     setError("");
     setMissingFields([]);
-    setCurrentStep((prev) => Math.max(1, prev - 1));
+    setCurrentStep(stepSequence[Math.max(0, stepPosition - 1)]);
   };
+
+  const buildSubmitPayload = useCallback((intent = "draft", extras = {}) => ({
+    ...form,
+    phone: normalizeUgandaStandPhone(form.phone),
+    selectedPlan: normalizedSelectedPlan || "FREE",
+    acceptsWallet: PAYMENTS_ENABLED ? Boolean(form.acceptsWallet) : false,
+    acceptsCash: true,
+    submitIntent: intent,
+    marketplaceMode,
+    marketplace_mode: marketplaceMode,
+    categories: serviceStand ? selectedCategoryItems.map((category) => category.key) : [effectiveMapIconType].filter(Boolean),
+    selectedCategories: serviceStand ? selectedCategoryItems : [],
+    primaryCategory: serviceStand && selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : effectiveMapIconType || null,
+    businessType: serviceStand && selectedCategories.length ? selectedCategories[0] : form.businessType,
+    mapIconType: effectiveMapIconType,
+    services,
+    products,
+    ...extras,
+  }), [effectiveMapIconType, form, marketplaceMode, normalizedSelectedPlan, products, selectedCategories, selectedCategoryItems, serviceStand, services]);
+
+  const autoSaveSnapshot = useMemo(
+    () => JSON.stringify(buildSubmitPayload("draft", { autoSave: true })),
+    [buildSubmitPayload]
+  );
+
+  useEffect(() => {
+    if (!show || !autoSaveEnabled || requirePlan || savingIntent || !onSubmit) return undefined;
+    const hasDraftContent = Boolean(
+      String(form.businessName || "").trim() ||
+      String(form.phone || "").trim() ||
+      String(form.location || "").trim() ||
+      String(form.image || "").trim() ||
+      services.length ||
+      products.length ||
+      (Array.isArray(form.portfolio) && form.portfolio.length)
+    );
+    if (!hasDraftContent || autoSaveSnapshot === lastAutoSaveSnapshotRef.current) return undefined;
+    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+    setAutoSaveStatus("Saving...");
+    autoSaveTimerRef.current = window.setTimeout(async () => {
+      try {
+        const result = await onSubmit(buildSubmitPayload("draft", { autoSave: true, silent: true }));
+        if (result === false || result?.success === false) {
+          throw new Error(result?.message || "Auto-save failed.");
+        }
+        lastAutoSaveSnapshotRef.current = autoSaveSnapshot;
+        setAutoSaveStatus("Saved");
+      } catch {
+        setAutoSaveStatus("Couldn't auto-save");
+      }
+    }, 2600);
+
+    return () => {
+      if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [autoSaveEnabled, autoSaveSnapshot, buildSubmitPayload, form, onSubmit, products.length, requirePlan, savingIntent, services.length, show]);
 
   const submitWizard = async (intent = "draft") => {
     if (savingIntent) return;
+    if (intent === "draft" && form.phone && getUgandaStandPhoneError(form.phone)) {
+      showIssues([{
+        key: "phone",
+        label: "phone number",
+        message: getUgandaStandPhoneError(form.phone),
+        step: 1,
+      }]);
+      return;
+    }
     if (intent === "publish" && selectedPlan.tier !== "FREE" && !PAYMENTS_ENABLED && !selectedPlanAlreadyActive) {
       intent = "draft";
     }
     if (intent === "publish") {
-      for (let step = 1; step <= TOTAL_STEPS - 1; step += 1) {
-        const message = validateStep(step);
-        if (message) {
-          setCurrentStep(step);
-          setMissingFields([]);
-          setError(message);
-          return;
-        }
+      const publishIssues = [];
+      for (const step of stepSequence.filter((step) => step !== lastStep)) {
+        publishIssues.push(...getStepIssues(step));
       }
-      const missing = validateBusinessStand({ ...form, services });
+      if (showIssues(publishIssues)) return;
+      const missing = validateBusinessStand({ ...form, marketplaceMode, products, services });
       if (missing.length) {
-        setCurrentStep(TOTAL_STEPS);
-        setMissingFields(missing);
+        setCurrentStep(lastStep);
+        setMissingFields(missing.map((item) => ({ ...item, message: item.label, step: FIELD_TO_STEP[item.key] || lastStep })));
         // Single source of truth: the validation summary renders the headline +
         // list. Do not also set `error` or the same message shows twice.
         setError("");
@@ -809,20 +1094,10 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
     setMissingFields([]);
     setError("");
     setSaveNotice("");
+    setAutoSaveStatus("");
     setSavingIntent(intent);
     try {
-      const result = await onSubmit({
-        ...form,
-        acceptsWallet: PAYMENTS_ENABLED ? Boolean(form.acceptsWallet) : false,
-        acceptsCash: true,
-        submitIntent: intent,
-        categories: selectedCategoryItems.map((category) => category.key),
-        selectedCategories: selectedCategoryItems,
-        primaryCategory: selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : null,
-        businessType: selectedCategories[0] || form.businessType,
-        mapIconType: effectiveMapIconType,
-        services,
-      });
+      const result = await onSubmit(buildSubmitPayload(intent));
       if (result === false || result?.success === false) {
         setError(
           result?.message ||
@@ -830,8 +1105,13 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
             ? "We couldn’t save your stand draft. Please try again."
             : "Your draft is saved, but complete the missing details before publishing.")
         );
-      } else if (intent === "draft") {
+      } else {
+        if (Array.isArray(result?.products)) {
+          setForm((current) => ({ ...current, products: result.products, deletedProductIds: [] }));
+        }
+        if (intent !== "draft") return;
         setSaveNotice("Draft saved. You can come back and continue anytime.");
+        lastAutoSaveSnapshotRef.current = autoSaveSnapshot;
       }
     } catch (submitError) {
       setError(submitError?.message || "We couldn’t save your stand draft. Please try again.");
@@ -845,6 +1125,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const activeService = services[activeServiceIndex];
   const activePricingType = String(activeService?.pricing_type || "fixed").toLowerCase();
   const activeServiceReadiness = activeService ? getServiceReadiness(activeService) : "";
+  const activeDurationInput = inferDurationInput(activeService?.duration_minutes);
 
   return (
     <>
@@ -862,7 +1143,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
           </div>
 
           <div className="business-wizard-v10">
-            <StepHeader currentStep={currentStep} stepTitle={stepTitles[currentStep - 1]} />
+            <StepHeader currentStep={stepPosition + 1} totalSteps={totalSteps} stepTitle={stepTitles[currentStep]} />
 
             {error ? (
               <div className="auth-error business-wizard-error-v10">
@@ -879,6 +1160,11 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                 <FiCheckCircle /> {saveNotice}
               </div>
             ) : null}
+            {!saveNotice && autoSaveStatus ? (
+              <div className="wizard-autosave-v10" role="status" aria-live="polite">
+                <FiCheckCircle /> {autoSaveStatus}
+              </div>
+            ) : null}
 
             {/* Single source of truth for field-completeness validation. Rendered
                 once here (not per-step, not duplicated in the banner). Each item
@@ -893,9 +1179,12 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                       <button
                         type="button"
                         className="business-missing-jump-v10"
-                        onClick={() => setCurrentStep(FIELD_TO_STEP[item.key] || currentStep)}
+                        onClick={() => {
+                          setCurrentStep(item.step || FIELD_TO_STEP[item.key] || currentStep);
+                          focusIssue(item);
+                        }}
                       >
-                        {item.label}
+                        {item.label}: {item.message}
                       </button>
                     </li>
                   ))}
@@ -906,6 +1195,59 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
             {currentStep === 1 ? (
               <section className="business-step-card-v10">
                 <WizardNotice>This helps customers understand who you are and what you offer.</WizardNotice>
+                <div className="marketplace-mode-picker-v21">
+                  <div className="marketplace-mode-heading-v21">
+                    <span>Stand type</span>
+                    <strong>What type of stand do you want to create?</strong>
+                  </div>
+                  <div className="marketplace-mode-grid-v21">
+                    {[
+                      {
+                        value: MARKETPLACE_MODES.SERVICE,
+                        title: "Service Stand",
+                        description: "For appointments, bookings, and service requests.",
+                        Icon: FiUsers,
+                      },
+                      {
+                        value: MARKETPLACE_MODES.PRODUCT,
+                        title: "Shop Stand",
+                        description: "For selling products with pickup or delivery.",
+                        Icon: FiShoppingBag,
+                      },
+                      {
+                        value: MARKETPLACE_MODES.HYBRID,
+                        title: "Both",
+                        description: "For businesses that offer services and sell products.",
+                        Icon: FiPackage,
+                      },
+                    ].map(({ value, title: modeTitle, description, Icon }) => {
+                      const productMode = value !== MARKETPLACE_MODES.SERVICE;
+                      const disabled = productMode && !marketplaceAvailability.enabled && marketplaceMode !== value;
+                      return (
+                        <label className={`${marketplaceMode === value ? "selected" : ""}${disabled ? " disabled" : ""}`} key={value}>
+                          <input
+                            type="radio"
+                            name="marketplaceMode"
+                            value={value}
+                            checked={marketplaceMode === value}
+                            disabled={disabled}
+                            onChange={() => {
+                              setForm((prev) => ({ ...prev, marketplaceMode: value }));
+                              setSaveNotice(value === MARKETPLACE_MODES.SERVICE
+                                ? ""
+                                : "Stand type changed. Complete the new requirements before republishing.");
+                            }}
+                          />
+                          <Icon />
+                          <span><strong>{modeTitle}</strong><small>{description}</small></span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {marketplaceAvailability.checked && !marketplaceAvailability.enabled ? (
+                    <small className="marketplace-coming-soon-v21">Shop stands are coming soon. Existing service stands continue to work normally.</small>
+                  ) : null}
+                </div>
                 <ImageUploadInput
                   image={form.image}
                   onChange={(image) => setForm((prev) => ({ ...prev, image }))}
@@ -920,38 +1262,58 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   currentImageStats={imageStats}
                 />
                 <div className="business-field-grid-v10">
-                  <label className={fieldClass("businessName")}>
-                    Business name
+                  <label className={fieldClass("businessName")} data-validation-key="businessName">
+                    <span className="field-label-row-v10">Business name <RequiredMark /></span>
                     <input
                       className="field-input-v4 profile-input-v4"
                       value={form.businessName}
                       placeholder="Example: Prime Service Studio"
                       onChange={(e) => setForm((prev) => ({ ...prev, businessName: e.target.value }))}
                     />
+                    <FieldMessage message={fieldError("businessName")} />
                   </label>
-                  <label className={fieldClass("businessType")}>
-                    Main category
+                  <label className={fieldClass("businessType")} data-validation-key="businessType">
+                    <span className="field-label-row-v10">Main category <RequiredMark /></span>
                     <select
                       className="field-input-v4 profile-input-v4"
                       value={form.businessType}
                       onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value }))}
                     >
-                      {SERVICE_CATEGORIES.map((category) => (
+                      {businessCategoryOptions.map((category) => (
                         <option key={category} value={category}>{category}</option>
                       ))}
                     </select>
+                    <FieldMessage message={fieldError("businessType")} />
                   </label>
-                  <label className={fieldClass("phone")}>
-                    Business phone
+                  <label className="label-v4">
+                    Subcategory <span className="optional-label-v10">Optional</span>
                     <input
                       className="field-input-v4 profile-input-v4"
-                      value={form.phone}
-                      placeholder="+256 700 000 000"
-                      onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      value={form.subcategory || ""}
+                      placeholder={productOnly ? "Example: Women's clothing" : "Example: Bridal styling"}
+                      onChange={(e) => setForm((prev) => ({ ...prev, subcategory: e.target.value }))}
                     />
                   </label>
-                  <div className="label-v4">
-                    Map icon
+                  <label className={fieldClass("phone")} data-validation-key="phone">
+                    <span className="field-label-row-v10">Uganda business phone <RequiredMark /></span>
+                    <span className="phone-input-shell-v10">
+                      <span className="phone-prefix-v10">+256</span>
+                      <input
+                        className="field-input-v4 profile-input-v4"
+                        value={toUgLocalDigits(form.phone)}
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        maxLength={9}
+                        placeholder="7XX XXX XXX"
+                        aria-invalid={missingFieldKeys.has("phone")}
+                        onChange={(e) => setForm((prev) => ({ ...prev, phone: toUgLocalDigits(e.target.value) }))}
+                      />
+                    </span>
+                    <small className="profile-sub-v4">Enter the 9 digits after +256. We save it as +256XXXXXXXXX.</small>
+                    <FieldMessage message={fieldError("phone")} />
+                  </label>
+                  <div className={fieldClass("mapIconType", "label-v4")} data-validation-key="mapIconType">
+                    <span className="field-label-row-v10">Map icon <RequiredMark /></span>
                     <div className="ql-icon-selector-grid">
                       {getCategoryList().map((def) => (
                         <CategorySelectorItem
@@ -974,17 +1336,22 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                         </div>
                       );
                     })()}
+                    <FieldMessage message={fieldError("mapIconType")} />
                   </div>
-                  <label className="label-v4">
-                    Price from
-                    <input
-                      className="field-input-v4 profile-input-v4"
-                      value={form.pricing}
-                      inputMode="numeric"
-                      placeholder="20000"
-                      onChange={(e) => setForm((prev) => ({ ...prev, pricing: e.target.value }))}
-                    />
-                  </label>
+                  {!productOnly ? <label className="label-v4">
+                    General price guide <span className="optional-label-v10">Optional</span>
+                    <span className="currency-input-shell-v10">
+                      <span className="currency-prefix-v10">UGX</span>
+                      <input
+                        className="field-input-v4 profile-input-v4"
+                        value={form.pricing}
+                        inputMode="numeric"
+                        placeholder="20,000"
+                        onChange={(e) => setForm((prev) => ({ ...prev, pricing: e.target.value.replace(/\D/g, "") }))}
+                      />
+                    </span>
+                    {Number(form.pricing || 0) > 0 ? <small className="currency-preview-v10">UGX {Number(form.pricing).toLocaleString("en-UG")}</small> : null}
+                  </label> : null}
                   <label className="label-v4">
                     Short intro
                     <textarea
@@ -994,14 +1361,15 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                       onChange={(e) => setForm((prev) => ({ ...prev, introText: e.target.value }))}
                     />
                   </label>
-                  <label className={fieldClass("documentName")}>
-                    Verification document or reference
+                  <label className={fieldClass("documentName")} data-validation-key="documentName">
+                    Verification document or reference <span className="optional-label-v10">Optional</span>
                     <input
                       className="field-input-v4 profile-input-v4"
                       value={form.documentName}
                       placeholder="National ID, business permit, trade license, or secure upload reference"
                       onChange={(e) => setForm((prev) => ({ ...prev, documentName: e.target.value }))}
                     />
+                    <FieldMessage message={fieldError("documentName")} />
                   </label>
                 </div>
               </section>
@@ -1009,37 +1377,53 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
 
             {currentStep === 2 ? (
               <section className="business-step-card-v10">
-                <WizardNotice>Set where customers can find you and when you are usually available.</WizardNotice>
-                <label className={fieldClass("location")}>
-                  Business location
+                <WizardNotice>
+                  {productOnly
+                    ? "Add your shop location, then choose how customers can receive their orders."
+                    : "Add your stand location or the main area you serve. Online providers can describe their remote coverage here."}
+                </WizardNotice>
+                <label className={fieldClass("location")} data-validation-key="location">
+                  <span className="field-label-row-v10">{productOnly ? "Shop location or pickup area" : "Location or service area"} <RequiredMark /></span>
                   <input
                     className="field-input-v4 profile-input-v4"
                     value={form.location}
-                    placeholder="Example: Gayaza Town, Kampala Road"
+                    placeholder={productOnly ? "Example: Gayaza Town, Kampala Road" : "Example: Gayaza Town, Kampala Road, or Online across Uganda"}
                     onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
                   />
+                  <small className="profile-sub-v4">{productOnly ? "Customers see this as your seller location or pickup area." : "This becomes a visit address only for services where customers come to you."}</small>
+                  <FieldMessage message={fieldError("location")} />
                 </label>
                 <button type="button" className="location-action-btn-v10" onClick={fillCurrentLocation} disabled={locationDetecting}>
                   <FiNavigation /> {locationDetecting ? "Detecting location..." : form.location || "Use my current location"}
                 </button>
-                <div className="business-field-grid-v10 two-v10">
-                  <label className="label-v4">
-                    Opening time
+                {serviceStand ? <><div className="business-field-grid-v10 two-v10">
+                  <label className={fieldClass("scheduleStart")} data-validation-key="scheduleStart">
+                    <span className="field-label-row-v10">Opening time <RequiredMark /></span>
                     <input
                       className="field-input-v4 profile-input-v4"
                       type="time"
                       value={form.scheduleStart}
-                      onChange={(e) => setForm((prev) => ({ ...prev, scheduleStart: e.target.value }))}
+                      onChange={(e) => setForm((prev) => ({
+                        ...prev,
+                        scheduleStart: e.target.value,
+                        dirtyFields: [...new Set([...(prev.dirtyFields || []), "scheduleStart"])],
+                      }))}
                     />
+                    <FieldMessage message={fieldError("scheduleStart")} />
                   </label>
-                  <label className="label-v4">
-                    Closing time
+                  <label className={fieldClass("scheduleEnd")} data-validation-key="scheduleEnd">
+                    <span className="field-label-row-v10">Closing time <RequiredMark /></span>
                     <input
                       className="field-input-v4 profile-input-v4"
                       type="time"
                       value={form.scheduleEnd}
-                      onChange={(e) => setForm((prev) => ({ ...prev, scheduleEnd: e.target.value }))}
+                      onChange={(e) => setForm((prev) => ({
+                        ...prev,
+                        scheduleEnd: e.target.value,
+                        dirtyFields: [...new Set([...(prev.dirtyFields || []), "scheduleEnd"])],
+                      }))}
                     />
+                    <FieldMessage message={fieldError("scheduleEnd")} />
                   </label>
                 </div>
                 {requirePlan ? <div className="payment-config-v5 business-mini-card-v10">
@@ -1080,6 +1464,67 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     />
                     <small className="profile-sub-v4">Separate names with commas. You can edit this later.</small>
                   </label>
+                ) : null}</> : null}
+                {shopStand ? (
+                  <div className={fieldClass("fulfilment", "shop-fulfilment-card-v21")} data-validation-key="fulfilment">
+                    <div className="payment-config-title-v5"><FiShoppingBag /> Selling preferences</div>
+                    <label className="payment-config-option-v5">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form.pickupAvailable)}
+                        onChange={(event) => setForm((prev) => ({ ...prev, pickupAvailable: event.target.checked }))}
+                      />
+                      <span><strong>Pickup available</strong><small>Customers can collect confirmed orders from your shop or pickup point.</small></span>
+                    </label>
+                    <label className="payment-config-option-v5">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form.deliveryAvailable)}
+                        onChange={(event) => setForm((prev) => ({ ...prev, deliveryAvailable: event.target.checked }))}
+                      />
+                      <span><strong>Delivery available</strong><small>Customers can request delivery. No online payment is collected.</small></span>
+                    </label>
+                    {form.deliveryAvailable ? (
+                      <div className="business-field-grid-v10 two-v10">
+                        <label className={fieldClass("deliveryAreas")} data-validation-key="deliveryAreas">
+                          Delivery areas <RequiredMark />
+                          <textarea
+                            className="textarea-v4"
+                            value={Array.isArray(form.deliveryAreas) ? form.deliveryAreas.join(", ") : form.deliveryAreas || ""}
+                            placeholder="Kampala Central, Ntinda, Gayaza"
+                            onChange={(event) => setForm((prev) => ({
+                              ...prev,
+                              deliveryAreas: event.target.value.split(",").map((item) => item.trim()).filter(Boolean),
+                            }))}
+                          />
+                          <FieldMessage message={fieldError("deliveryAreas")} />
+                        </label>
+                        <label className="label-v4">
+                          Delivery fee <span className="optional-label-v10">Optional</span>
+                          <span className="currency-input-shell-v10">
+                            <span className="currency-prefix-v10">UGX</span>
+                            <input
+                              className="field-input-v4 profile-input-v4"
+                              inputMode="numeric"
+                              value={form.deliveryFee || ""}
+                              placeholder="5,000"
+                              onChange={(event) => setForm((prev) => ({ ...prev, deliveryFee: event.target.value.replace(/\D/g, "") }))}
+                            />
+                          </span>
+                        </label>
+                        <label className="label-v4">
+                          Delivery notes <span className="optional-label-v10">Optional</span>
+                          <textarea
+                            className="textarea-v4"
+                            value={form.deliveryNotes || ""}
+                            placeholder="Estimated delivery time, minimum order, or delivery instructions."
+                            onChange={(event) => setForm((prev) => ({ ...prev, deliveryNotes: event.target.value }))}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                    <FieldMessage message={fieldError("fulfilment")} />
+                  </div>
                 ) : null}
                 <details className="advanced-location-v10">
                   <summary>Advanced map coordinates</summary>
@@ -1121,21 +1566,34 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   <strong>{selectedCategories.length}</strong>
                   <span>{selectedCategories.length === 1 ? "category selected" : "categories selected"}</span>
                 </div>
-                <div className={effectiveMapIconOption ? "map-icon-preview-v10" : "map-icon-preview-v10 empty"}>
-                  {effectiveMapIconOption ? (
-                    <span dangerouslySetInnerHTML={{ __html: effectiveMapIconOption.svg }} />
-                  ) : (
-                    <span><FiMapPin /></span>
-                  )}
-                  <div>
-                    <strong>{mapPreviewTitle}</strong>
-                    <small>{mapPreviewText}</small>
-                  </div>
-                </div>
               </section>
             ) : null}
 
-            {currentStep === 4 ? (
+            {currentStep === 4 && productOnly ? (
+              <section className={missingFieldKeys.has("products") ? "business-step-card-v10 missing-v10" : "business-step-card-v10"} data-validation-key="products">
+                <WizardNotice>Add products customers can request for pickup or delivery. Queless does not collect payment in this flow.</WizardNotice>
+                {!marketplaceAvailability.enabled ? (
+                  <div className="product-feature-off-v21">Shop stands are coming soon. Your saved shop details remain available, but product changes need the local feature flag enabled.</div>
+                ) : null}
+                <ProductCatalogueEditor
+                  products={products}
+                  productLimit={productLimits.products}
+                  imageLimit={productLimits.images}
+                  disabled={!marketplaceAvailability.enabled}
+                  onChange={(nextProducts) => setForm((prev) => ({ ...prev, products: nextProducts }))}
+                  onRemove={(product) => setForm((prev) => ({
+                    ...prev,
+                    products: (prev.products || []).filter((item) => String(item.id) !== String(product.id)),
+                    deletedProductIds: String(product.id || "").startsWith("local-product-")
+                      ? prev.deletedProductIds || []
+                      : [...new Set([...(prev.deletedProductIds || []), product.id])],
+                  }))}
+                />
+                <FieldMessage message={fieldError("products")} />
+              </section>
+            ) : null}
+
+            {currentStep === 4 && serviceStand ? (
               <section className={missingFieldKeys.has("services") ? "business-step-card-v10 missing-v10" : "business-step-card-v10"}>
                 <WizardNotice>Add the actual services customers can book. Use quote-required only when the price depends on scope.</WizardNotice>
                 <div className="service-summary-list-v10">
@@ -1152,12 +1610,12 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                       onClick={() => setActiveServiceIndex(index)}
                     >
                       <span className="service-summary-image-v10">
-                        {service.image ? <img src={service.image} alt={service.service_name || "Service"} /> : <FiImage />}
+                        {service.image ? <img src={buildAssetUrl(service.image)} alt={service.service_name || "Service"} /> : <FiImage />}
                       </span>
                       <span className="service-summary-copy-v10">
                         <strong>{service.service_name || service.category || "Service"}</strong>
                         <small>{service.category || "Service"} - {formatServicePrice(service)}</small>
-                        <em>{Number(service.duration_minutes || 0) > 0 ? `${service.duration_minutes} mins - ` : ""}{getServiceLocationLabel(service)}</em>
+                        <em>{Number(service.duration_minutes || 0) > 0 ? `${formatServiceDuration(service.duration_minutes)} - ` : ""}{getServiceLocationLabel(service)}</em>
                       </span>
                       <span className={getServiceReadiness(service) === "Ready" ? "service-ready-pill-v10 ready" : "service-ready-pill-v10"}>
                         {getServiceReadiness(service)}
@@ -1185,7 +1643,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                       <div>
                         <span>Customer sees</span>
                         <strong>{activeService.service_name || "Service title"}</strong>
-                        <small>{formatServicePrice(activeService)}{Number(activeService.duration_minutes || 0) > 0 ? ` - ${activeService.duration_minutes} mins` : ""} - {getServiceLocationLabel(activeService)}</small>
+                        <small>{formatServicePrice(activeService)}{Number(activeService.duration_minutes || 0) > 0 ? ` - ${formatServiceDuration(activeService.duration_minutes)}` : ""} - {getServiceLocationLabel(activeService)}</small>
                       </div>
                       <em>{activePricingType === "quote" ? "Quote flow" : "Direct booking"}</em>
                     </div>
@@ -1198,13 +1656,17 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                       <span>Available for booking</span>
                     </label>
                     <div className="business-field-grid-v10 two-v10">
-                      <label className="label-v4">
-                        Service title
+                      <label
+                        className={fieldClass(`serviceName-${activeServiceIndex}`)}
+                        data-validation-key={`serviceName-${activeServiceIndex}`}
+                      >
+                        <span className="field-label-row-v10">Service title <RequiredMark /></span>
                         <input
                           className="field-input-v4 profile-input-v4"
                           value={activeService.service_name || ""}
                           onChange={(e) => updateService(activeServiceIndex, { service_name: e.target.value })}
                         />
+                        <FieldMessage message={fieldError(`serviceName-${activeServiceIndex}`)} />
                       </label>
                       <label className="label-v4">
                         Category
@@ -1236,71 +1698,119 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                       </div>
                     </div>
                     {activePricingType === "fixed" ? (
-                      <label className="label-v4">
-                        Fixed price
-                        <input className="field-input-v4 profile-input-v4" type="number" min="1" value={activeService.price_extra || ""} onChange={(e) => updateService(activeServiceIndex, { price_extra: Number(e.target.value || 0) })} />
+                      <label
+                        className={fieldClass(`servicePrice-${activeServiceIndex}`)}
+                        data-validation-key={`servicePrice-${activeServiceIndex}`}
+                      >
+                        <span className="field-label-row-v10">Fixed price <RequiredMark /></span>
+                        <span className="currency-input-shell-v10">
+                          <span className="currency-prefix-v10">UGX</span>
+                          <input className="field-input-v4 profile-input-v4" inputMode="numeric" value={activeService.price_extra || ""} onChange={(e) => updateService(activeServiceIndex, { price_extra: Number(e.target.value.replace(/\D/g, "") || 0) })} />
+                        </span>
+                        {Number(activeService.price_extra || 0) > 0 ? <small className="currency-preview-v10">UGX {Number(activeService.price_extra).toLocaleString("en-UG")}</small> : null}
+                        <FieldMessage message={fieldError(`servicePrice-${activeServiceIndex}`)} />
                       </label>
                     ) : null}
                     {activePricingType === "range" ? (
-                      <div className="business-field-grid-v10 two-v10">
+                      <div
+                        className={fieldClass(`servicePrice-${activeServiceIndex}`, "business-field-grid-v10 two-v10")}
+                        data-validation-key={`servicePrice-${activeServiceIndex}`}
+                      >
                         <label className="label-v4">
-                          Minimum price
-                          <input className="field-input-v4 profile-input-v4" type="number" min="1" value={activeService.min_price || ""} onChange={(e) => updateService(activeServiceIndex, { min_price: Number(e.target.value || 0) })} />
+                          <span className="field-label-row-v10">Minimum price <RequiredMark /></span>
+                          <span className="currency-input-shell-v10">
+                            <span className="currency-prefix-v10">UGX</span>
+                            <input className="field-input-v4 profile-input-v4" inputMode="numeric" value={activeService.min_price || ""} onChange={(e) => updateService(activeServiceIndex, { min_price: Number(e.target.value.replace(/\D/g, "") || 0) })} />
+                          </span>
                         </label>
                         <label className="label-v4">
-                          Maximum price
-                          <input className="field-input-v4 profile-input-v4" type="number" min="1" value={activeService.max_price || ""} onChange={(e) => updateService(activeServiceIndex, { max_price: Number(e.target.value || 0) })} />
+                          <span className="field-label-row-v10">Maximum price <RequiredMark /></span>
+                          <span className="currency-input-shell-v10">
+                            <span className="currency-prefix-v10">UGX</span>
+                            <input className="field-input-v4 profile-input-v4" inputMode="numeric" value={activeService.max_price || ""} onChange={(e) => updateService(activeServiceIndex, { max_price: Number(e.target.value.replace(/\D/g, "") || 0) })} />
+                          </span>
                         </label>
+                        <FieldMessage message={fieldError(`servicePrice-${activeServiceIndex}`)} />
                       </div>
                     ) : null}
                     {activePricingType === "starting_from" ? (
-                      <label className="label-v4">
-                        Starting price
-                        <input className="field-input-v4 profile-input-v4" type="number" min="1" value={activeService.starting_price || ""} onChange={(e) => updateService(activeServiceIndex, { starting_price: Number(e.target.value || 0) })} />
+                      <label
+                        className={fieldClass(`servicePrice-${activeServiceIndex}`)}
+                        data-validation-key={`servicePrice-${activeServiceIndex}`}
+                      >
+                        <span className="field-label-row-v10">Starting price <RequiredMark /></span>
+                        <span className="currency-input-shell-v10">
+                          <span className="currency-prefix-v10">UGX</span>
+                          <input className="field-input-v4 profile-input-v4" inputMode="numeric" value={activeService.starting_price || ""} onChange={(e) => updateService(activeServiceIndex, { starting_price: Number(e.target.value.replace(/\D/g, "") || 0) })} />
+                        </span>
+                        <FieldMessage message={fieldError(`servicePrice-${activeServiceIndex}`)} />
                       </label>
                     ) : null}
                     {activePricingType === "quote" ? (
                       <div className="wizard-note-v10">Customers will see Request quote and cannot directly book this service until you agree on price and scope.</div>
                     ) : null}
-                    <div className="service-editor-group-v10">
-                      <div className="service-editor-label-v10">Duration</div>
+                    <div
+                      className={fieldClass(`serviceDuration-${activeServiceIndex}`, "service-editor-group-v10")}
+                      data-validation-key={`serviceDuration-${activeServiceIndex}`}
+                    >
+                      <div className="service-editor-label-v10"><span className="field-label-row-v10">Duration <RequiredMark /></span></div>
                       <div className="duration-chip-grid-v10">
-                        {DURATION_PRESETS.map((minutes) => (
+                        {SERVICE_DURATION_PRESETS.map((preset) => (
                           <button
                             type="button"
-                            key={minutes}
-                            className={Number(activeService.duration_minutes || 0) === minutes ? "duration-chip-v10 active" : "duration-chip-v10"}
-                            onClick={() => updateService(activeServiceIndex, { duration_minutes: minutes })}
+                            key={preset.minutes}
+                            className={Number(activeService.duration_minutes || 0) === preset.minutes ? "duration-chip-v10 active" : "duration-chip-v10"}
+                            onClick={() => updateService(activeServiceIndex, { duration_minutes: preset.minutes })}
                           >
-                            {minutes}m
+                            {preset.label}
                           </button>
                         ))}
                       </div>
                       <label className="label-v4">
-                        Custom duration minutes
+                        Custom duration
+                        <span className="duration-custom-grid-v10">
                         <input
                           className="field-input-v4 profile-input-v4"
                           type="number"
-                          min="5"
-                          value={activeService.duration_minutes || ""}
-                          onChange={(e) => updateService(activeServiceIndex, { duration_minutes: e.target.value ? Number(e.target.value) : "" })}
+                          min={1}
+                          step={activeDurationInput.unit === "hours" ? "0.5" : "1"}
+                          value={activeDurationInput.value}
+                          onChange={(e) => updateService(activeServiceIndex, {
+                            duration_minutes: convertDurationToMinutes(e.target.value, activeDurationInput.unit) || "",
+                          })}
                         />
+                        <select
+                          className="field-input-v4 profile-input-v4"
+                          value={activeDurationInput.unit}
+                          onChange={(e) => updateService(activeServiceIndex, {
+                            duration_minutes: convertDurationToMinutes(activeDurationInput.value || 1, e.target.value),
+                          })}
+                        >
+                          <option value="minutes">Minutes</option>
+                          <option value="hours">Hours</option>
+                          <option value="days">Days</option>
+                          <option value="weeks">Weeks</option>
+                        </select>
+                        </span>
+                        <small className="profile-sub-v4">Up to 30 days for long jobs and projects.</small>
                       </label>
+                      <FieldMessage message={fieldError(`serviceDuration-${activeServiceIndex}`)} />
                     </div>
-                    <div className="service-editor-group-v10">
-                      <div className="service-editor-label-v10">Where this service happens</div>
+                    <div
+                      className={fieldClass(`serviceMode-${activeServiceIndex}`, "service-editor-group-v10")}
+                      data-validation-key={`serviceMode-${activeServiceIndex}`}
+                    >
+                      <div className="service-editor-label-v10"><span className="field-label-row-v10">How this service is delivered <RequiredMark /></span></div>
+                      <small className="service-editor-help-v10">Choose the work mode that customers should expect for this service.</small>
                       <div className="pricing-mode-grid-v10 location-mode-grid-v10">
-                        {[
-                          ["provider_location", "Provider location", form.location || "Your business address"],
-                          ["customer_location", "Customer location", "Home service or on-site visit"],
-                        ].map(([value, label, hint]) => (
+                        {SERVICE_DELIVERY_MODES.map(({ value, label, hint }) => (
                           <button
                             type="button"
                             key={value}
                             className={String(activeService.location_type || "provider_location") === value ? "pricing-mode-card-v10 active" : "pricing-mode-card-v10"}
                             onClick={() => {
                               updateService(activeServiceIndex, { location_type: value });
-                              if (value === "customer_location") {
+                              if (["customer_location", "pickup_delivery", "mobile_area"].includes(value)) {
                                 setForm((prev) => ({ ...prev, homeServiceEnabled: true }));
                               }
                             }}
@@ -1310,6 +1820,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                           </button>
                         ))}
                       </div>
+                      <FieldMessage message={fieldError(`serviceMode-${activeServiceIndex}`)} />
                     </div>
                     <ImageUploadInput
                       compact
@@ -1326,11 +1837,11 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                       imageType="service"
                     />
                     <label className="label-v4">
-                      Service description
+                      Service description & custom instructions <span className="optional-label-v10">Optional</span>
                       <textarea
                         className="textarea-v4"
                         value={activeService.description || ""}
-                        placeholder="Describe what is included in this service."
+                        placeholder="Describe what is included, areas covered, pickup details, or how remote appointments work."
                         onChange={(e) => updateService(activeServiceIndex, { description: e.target.value })}
                       />
                     </label>
@@ -1403,17 +1914,64 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   planTier={selectedPlan.tier}
                   currentImageStats={imageStats}
                 />
+                {shopStand ? (
+                  <div data-validation-key="products">
+                    <WizardNotice>Products use order requests and stay separate from service bookings.</WizardNotice>
+                    <ProductCatalogueEditor
+                      products={products}
+                      productLimit={productLimits.products}
+                      imageLimit={productLimits.images}
+                      disabled={!marketplaceAvailability.enabled}
+                      onChange={(nextProducts) => setForm((prev) => ({ ...prev, products: nextProducts }))}
+                      onRemove={(product) => setForm((prev) => ({
+                        ...prev,
+                        products: (prev.products || []).filter((item) => String(item.id) !== String(product.id)),
+                        deletedProductIds: String(product.id || "").startsWith("local-product-")
+                          ? prev.deletedProductIds || []
+                          : [...new Set([...(prev.deletedProductIds || []), product.id])],
+                      }))}
+                    />
+                    <FieldMessage message={fieldError("products")} />
+                  </div>
+                ) : null}
               </section>
             ) : null}
 
             {currentStep === 6 ? (
               <section className="business-step-card-v10">
-                <WizardNotice>Review everything before creating your business profile.</WizardNotice>
-                <div className="payment-config-v5 business-mini-card-v10">
-                  <div className="payment-config-title-v5"><FiCreditCard /> Provider plan</div>
-                  {PROVIDER_PLANS.map((plan) => (
-                    <div key={plan.tier} className="profile-review-card-v4">
-                      <label className="payment-config-option-v5">
+                <WizardNotice>Review your {productOnly ? "shop" : "stand"}, choose the plan that fits today, and publish when every required detail is ready.</WizardNotice>
+                <div className="stand-plan-chooser-v10">
+                  <div className="stand-plan-heading-v10">
+                    <div>
+                      <span>Provider plan</span>
+                      <strong>Upgrade your stand</strong>
+                      <small>Start free, unlock more visibility with a promo code while payments are Coming Soon.</small>
+                    </div>
+                    <FiCreditCard />
+                  </div>
+                  <div className="stand-plan-billing-v10" role="group" aria-label="Billing cycle preview">
+                    {["monthly", "annual"].map((cycle) => (
+                      <button
+                        type="button"
+                        key={cycle}
+                        className={planBilling === cycle ? "active" : ""}
+                        aria-pressed={planBilling === cycle}
+                        onClick={() => setPlanBilling(cycle)}
+                      >
+                        {cycle === "monthly" ? "Monthly" : "Annual"}
+                        {cycle === "annual" ? <small>Save more</small> : null}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="stand-plan-grid-v10">
+                  {PROVIDER_PLANS.map((basePlan) => {
+                    const plan = getMarketplacePlanContent(basePlan, marketplaceMode);
+                    return (
+                    <article
+                      key={plan.tier}
+                      className={form.selectedPlan === plan.tier ? "stand-plan-card-v10 selected" : "stand-plan-card-v10"}
+                    >
+                      <label className="stand-plan-select-v10">
                         <input
                           type="radio"
                           name="selectedPlan"
@@ -1421,41 +1979,56 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                           onChange={() => setForm((prev) => ({ ...prev, selectedPlan: plan.tier, startFreeTrial: false }))}
                         />
                         <span>
-                          <strong>{plan.name} - {formatSubscriptionPrice(plan, "monthly")}</strong>
+                          <span className="stand-plan-name-v10">
+                            <strong>{plan.name}</strong>
+                            {plan.recommended ? <em>Recommended</em> : null}
+                          </span>
+                          <b>{formatSubscriptionPrice(plan, planBilling)}</b>
                           <small>{plan.summary}</small>
-                          {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? <small>Payments Coming Soon</small> : null}
-                          {plan.recommended ? <small>Recommended</small> : null}
                         </span>
                       </label>
-                      <div className="inline-actions-v4">
-                        <button type="button" className="mini-action-btn-v4" onClick={() => setDetailsPlan((current) => (current === plan.tier ? "" : plan.tier))}>
-                          {detailsPlan === plan.tier ? "Hide Plan Details" : "View Plan Details"}
+                      <ul className={detailsPlan === plan.tier ? "stand-plan-features-v10 open" : "stand-plan-features-v10"}>
+                        {(detailsPlan === plan.tier ? plan.features : plan.features.slice(0, 3)).map((feature) => (
+                          <li key={feature}><FiCheckCircle /> {feature}</li>
+                        ))}
+                      </ul>
+                      <div className="stand-plan-card-actions-v10">
+                        <button type="button" onClick={() => setDetailsPlan((current) => (current === plan.tier ? "" : plan.tier))}>
+                          {detailsPlan === plan.tier ? "Show less" : "Compare features"}
                         </button>
                         <button
                           type="button"
-                          className="mini-action-btn-v4 success"
                           onClick={() => setForm((prev) => ({ ...prev, selectedPlan: plan.tier, startFreeTrial: false }))}
-                          disabled={plan.tier !== "FREE" && !PAYMENTS_ENABLED}
                         >
-                          {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? "Payments Coming Soon" : "Choose Plan"}
+                          {form.selectedPlan === plan.tier ? "Selected" : "Select plan"}
                         </button>
                       </div>
-                      {detailsPlan === plan.tier ? (
-                        <div className="profile-review-text-v4">
-                          <strong>{plan.name}</strong> plan includes: {plan.features.join(", ")}. {plan.tier === "FREE" ? "No payment is required." : `Annual: ${formatSubscriptionPrice(plan, "annual")} (save ${formatMoney(plan.annualSavings)} yearly). Payments are coming soon.`}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                  <div className="wizard-note-v10">
-                    Payments are coming soon. You can continue setting up your stand and save your progress for now.
+                      {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? (
+                        <div className="stand-plan-coming-soon-v10">Promo code unlock</div>
+                      ) : (
+                        <div className="stand-plan-free-v10">No payment required</div>
+                      )}
+                    </article>
+                    );
+                  })}
+                  </div>
+                  <div className="stand-plan-footer-v10">
+                    <FiCheckCircle />
+                    <span>
+                      <strong>{selectedPlan.name} selected</strong>
+                      <small>
+                        {selectedPaidPlanComingSoon
+                          ? "Save this draft now, then use Upgrade Plan to activate this paid plan with a 100% promo code."
+                          : "You can publish this stand without entering payment details."}
+                      </small>
+                    </span>
                   </div>
                 </div>
                 <div className="wizard-note-v10">
-                  Verification pending: Queless may review your phone, service area, profile image, documents, pricing, and service list before customers can book you publicly.
+                  Verification pending: Queless may review your phone, location, profile image, documents, and {productOnly ? "product catalogue before customers can order from you" : "service list before customers can book you"} publicly.
                 </div>
                 <div className="review-business-card-v10">
-                  {form.image ? <img src={form.image} alt="Business preview" /> : <span><FiCamera /></span>}
+                  {form.image ? <img src={buildAssetUrl(form.image)} alt="Business preview" /> : <span><FiCamera /></span>}
                   <div>
                     <strong>{form.businessName || "Business name missing"}</strong>
                     <small>{form.businessType || "Category missing"} - {getMapIconOption(effectiveMapIconType).label} map icon</small>
@@ -1463,16 +2036,18 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                 </div>
                 <div className="review-grid-v10">
                   <div><FiMapPin /><span>Location</span><strong>{form.location || "Not added"}</strong></div>
-                  <div><FiClock /><span>Hours</span><strong>{form.scheduleStart} - {form.scheduleEnd}</strong></div>
-                  <div><FiUsers /><span>Services</span><strong>{services.length}</strong></div>
-                  <div><FiCreditCard /><span>Payments</span><strong>Direct payment for now</strong></div>
+                  {serviceStand ? <div><FiClock /><span>Hours</span><strong>{form.scheduleStart} - {form.scheduleEnd}</strong></div> : null}
+                  {serviceStand ? <div><FiUsers /><span>Services</span><strong>{services.length}</strong></div> : null}
+                  {shopStand ? <div><FiPackage /><span>Products</span><strong>{activeProducts.length}</strong></div> : null}
+                  {shopStand ? <div><FiShoppingBag /><span>Fulfilment</span><strong>{[form.pickupAvailable ? "Pickup" : "", form.deliveryAvailable ? "Delivery" : ""].filter(Boolean).join(" & ") || "Not selected"}</strong></div> : null}
+                  <div><FiCreditCard /><span>Payments</span><strong>{shopStand ? "Agreed after order request" : "Direct payment for now"}</strong></div>
                   <div><FiCheckCircle /><span>Verification</span><strong>{form.documentName || "Pending document review"}</strong></div>
                 </div>
-                <div className="review-list-v10">
+                {serviceStand ? <div className="review-list-v10">
                   <strong>Service categories</strong>
                   <p>{selectedCategories.join(", ") || "No categories selected"}</p>
-                </div>
-                <div className="review-list-v10">
+                </div> : null}
+                {serviceStand ? <div className="review-list-v10">
                   <strong>Services added</strong>
                   {services.length ? (
                     services.map((service, index) => (
@@ -1481,7 +2056,15 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   ) : (
                     <p>No services added</p>
                   )}
-                </div>
+                </div> : null}
+                {shopStand ? (
+                  <div className="review-list-v10">
+                    <strong>Products added</strong>
+                    {activeProducts.length
+                      ? activeProducts.map((product) => <p key={product.id || product.name}>{product.name} - UGX {Number(product.sale_price ?? product.salePrice ?? product.price ?? 0).toLocaleString("en-UG")}</p>)
+                      : <p>No active products added</p>}
+                  </div>
+                ) : null}
               </section>
             ) : null}
           </div>
@@ -1490,7 +2073,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
             {currentStep > 1 ? (
               <button type="button" className="secondary-btn-v4" onClick={goBack} disabled={Boolean(savingIntent)}>Back</button>
             ) : null}
-            {currentStep < TOTAL_STEPS ? (
+            {currentStep !== lastStep ? (
               <>
                 <button type="button" className="secondary-btn-v4" onClick={() => submitWizard("draft")} disabled={Boolean(savingIntent)}>
                   {savingIntent === "draft" ? "Saving..." : "Save Draft"}
@@ -1530,16 +2113,20 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
 
 export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit }) {
   const [form, setForm] = useState(DEFAULT_FORM);
+  const backupKey = barber ? getStandBackupKey("edit", barber.id || barber.business_name || profile.username) : "";
 
   useEffect(() => {
     if (!show || !barber) return;
-    setForm({
+    const baseForm = {
       businessName: barber.business_name || "",
-      phone: barber.phone || profile.phone || "",
+      phone: toUgLocalDigits(barber.phone || profile.phone || ""),
       documentName: barber.verification_document_name || barber.document_name || barber.documentName || "",
       location: barber.location || "",
-      services: Array.isArray(barber.services) ? barber.services.map(normalizeServiceForBooking) : [],
+      services: Array.isArray(barber.services)
+        ? barber.services.map((service, index) => normalizeServiceForBooking(service, index, { preserveEmptyTitle: true }))
+        : [],
       businessType: barber.business_type || barber.businessType || "Home Services",
+      subcategory: barber.subcategory || "",
       mapIconType: barber.map_icon_type || barber.mapIconType || "",
       pricing: String(barber.price_from || ""),
       scheduleStart: barber.availability?.start || "08:00",
@@ -1547,6 +2134,7 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
       latitude: String(barber.latitude || DEFAULT_CENTER[0]),
       longitude: String(barber.longitude || DEFAULT_CENTER[1]),
       image: barber.image || "",
+      coverImage: barber.cover_image_url || barber.coverImageUrl || "",
       acceptsWallet: Number(barber.accepts_wallet ?? barber.acceptsWallet ?? 0) === 1,
       acceptsCash: Number(barber.accepts_cash ?? barber.acceptsCash ?? 1) === 1,
       homeServiceEnabled: Number(barber.home_service_enabled ?? barber.homeServiceEnabled ?? 0) === 1,
@@ -1560,11 +2148,43 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
             })
             .join(", ")
         : "",
-      portfolio: Array.isArray(barber.portfolio) ? barber.portfolio : [],
-      selectedPlan: barber.subscription?.tier || barber.subscription_tier || "FREE",
+      portfolio: arrayFromMaybeJson(barber.portfolio ?? barber.portfolio_json ?? barber.galleryImages ?? barber.gallery_images),
+      marketplaceMode: getMarketplaceMode(barber),
+      businessHours: barber.business_hours || barber.businessHours || {},
+      pickupAvailable: booleanFromApi(barber.pickup_available ?? barber.pickupAvailable, true),
+      deliveryAvailable: booleanFromApi(barber.delivery_available ?? barber.deliveryAvailable, false),
+      deliveryAreas: arrayFromMaybeJson(barber.delivery_areas ?? barber.deliveryAreas),
+      deliveryFee: barber.delivery_fee ?? barber.deliveryFee ?? "",
+      deliveryNotes: barber.delivery_notes || barber.deliveryNotes || "",
+      products: Array.isArray(barber.products) ? barber.products : [],
+      deletedProductIds: [],
+      selectedPlan: String(barber.selected_plan || barber.subscription?.tier || barber.subscription_tier || "FREE").toUpperCase(),
       startFreeTrial: false,
-    });
-  }, [show, barber]);
+      dirtyFields: [],
+    };
+    const savedAt = new Date(barber.updated_at || barber.updatedAt || 0).getTime();
+    const backup = readStandFormBackup(backupKey, savedAt) || {};
+    setForm({ ...baseForm, ...backup });
+  }, [backupKey, show, barber, profile.phone, setForm]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!show || !barber || !supportsProducts(barber)) return undefined;
+    getMyProducts()
+      .then((data) => {
+        if (cancelled) return;
+        const standProducts = (data?.products || []).filter((product) => (
+          !product.stand_id && !product.standId
+        ) || String(product.stand_id || product.standId) === String(barber.id));
+        setForm((current) => current.products?.length ? current : { ...current, products: standProducts });
+      })
+      .catch(() => {
+        // The feature flag may be off. The saved stand and local backup remain intact.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [barber, setForm, show]);
 
   return (
     <BarberStandFormModal
@@ -1576,29 +2196,33 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
       setForm={setForm}
       onClose={onClose}
       onSubmit={onSubmit}
-      profile={{ ...profile, ...barber, subscription: barber.subscription || profile.subscription }}
+      profile={{ ...profile, ...(barber || {}), subscription: barber?.subscription || profile?.subscription }}
+      backupKey={backupKey}
+      autoSaveEnabled
     />
   );
 }
 
 export function RegisterBarberModal({ show, profile, onClose, onSubmit }) {
   const [form, setForm] = useState(DEFAULT_FORM);
+  const backupKey = getStandBackupKey("new", profile?.username || profile?.id || "guest");
 
   useEffect(() => {
     if (!show) return;
-    setForm((prev) => ({
+    const seedForm = {
       ...DEFAULT_FORM,
-      phone: prev.phone || profile.phone || "",
-      location: prev.location || profile.address || "",
-      image: prev.image || profile.profilePhoto || "",
-    }));
-  }, [show, profile.address, profile.phone, profile.profilePhoto]);
+      phone: toUgLocalDigits(profile?.phone || ""),
+      location: profile?.address || "",
+      image: profile?.profilePhoto || "",
+    };
+    setForm({ ...seedForm, ...(readStandFormBackup(backupKey, 0) || {}) });
+  }, [backupKey, show, profile?.address, profile?.phone, profile?.profilePhoto, setForm]);
 
   return (
     <BarberStandFormModal
       key={show ? `register-${profile?.id || profile?.username || "open"}` : "register-closed"}
       show={show}
-      title="List Your Service"
+      title="Create Stand"
       submitLabel="Create business account"
       form={form}
       setForm={setForm}
@@ -1606,6 +2230,7 @@ export function RegisterBarberModal({ show, profile, onClose, onSubmit }) {
       onSubmit={onSubmit}
       requirePlan
       profile={profile}
+      backupKey={backupKey}
     />
   );
 }

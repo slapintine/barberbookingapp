@@ -2420,6 +2420,38 @@
   color: #ffb4c6;
 }
 
+.bk-warning.bk-coming-soon {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(82, 43, 91, 0.14);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(226, 74, 165, 0.12), transparent 36%),
+    rgba(251, 228, 216, 0.6);
+  color: #3a1645;
+}
+
+.bk-warning.bk-coming-soon strong {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.bk-warning.bk-coming-soon span {
+  color: rgba(58, 22, 69, 0.76);
+  font-weight: 750;
+}
+
+.dark .bk-warning.bk-coming-soon {
+  border-color: rgba(251, 228, 216, 0.16);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(226, 74, 165, 0.16), transparent 36%),
+    rgba(255, 255, 255, 0.07);
+  color: #fff8f4;
+}
+
+.dark .bk-warning.bk-coming-soon span {
+  color: rgba(255, 248, 244, 0.72);
+}
+
 /* Footer */
 .bk-footer {
   flex: 0 0 auto;

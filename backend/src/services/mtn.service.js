@@ -1,7 +1,12 @@
 import crypto from "crypto";
 import { env } from "../config/env.js";
 import { normalizeMoneyAmount, normalizeUgandaPhoneNumber } from "./paymentService.js";
-import { logProviderRequest, logProviderResponse } from "./providerLoggingService.js";
+import {
+  logMtnCollectionAttempt,
+  logMtnCollectionOutcome,
+  logProviderRequest,
+  logProviderResponse,
+} from "./providerLoggingService.js";
 
 const MTN_PROVIDER = "mtn_mobile_money";
 
@@ -15,7 +20,7 @@ function httpError(statusCode, message, details = {}) {
 function ensureConfigured() {
   const missing = [];
 
-  if (!hasMomoCollectionCredentials() && !usesConsumerCredentials()) {
+  if (!hasMtnCollectionCredentials() && !usesConsumerCredentials()) {
     if (!env.mtnApiUserId) missing.push("MTN_API_USER_ID");
     if (!env.mtnApiKey) missing.push("MTN_API_KEY");
     if (!env.mtnCollectionSubscriptionKey) {
@@ -24,8 +29,29 @@ function ensureConfigured() {
   }
 
   if (missing.length) {
-    throw httpError(500, `MTN Mobile Money is not fully configured: ${missing.join(", ")}`);
+    throw httpError(503, "Mobile money payments are not fully configured yet.", {
+      code: "MISSING_PAYMENT_CONFIG",
+      publicMessage: "Mobile money payments are not fully configured yet.",
+      missingConfig: missing,
+    });
   }
+}
+
+function classifyMode() {
+  const mode = String(env.mobileMoneyMode || "").trim().toLowerCase();
+  return ["mock", "sandbox", "provider", "live", "auto"].includes(mode) ? mode : "unknown";
+}
+
+function classifyTargetEnvironment() {
+  const target = String(env.mtnTargetEnvironment || "").trim().toLowerCase();
+  if (target === "sandbox") return "sandbox";
+  if (target === "mtnuganda") return "mtnuganda";
+  return "unknown";
+}
+
+function classifyCurrency() {
+  const currency = String(env.mtnCurrency || "").trim().toUpperCase();
+  return ["UGX", "EUR"].includes(currency) ? currency : "unknown";
 }
 
 function validatePhone(phoneNumber) {
@@ -86,11 +112,11 @@ function usesConsumerCredentials() {
   return Boolean(env.mtnConsumerKey && env.mtnConsumerSecret);
 }
 
-function hasMomoCollectionCredentials() {
+function hasMtnCollectionCredentials() {
   return Boolean(env.mtnApiUserId && env.mtnApiKey && env.mtnCollectionSubscriptionKey);
 }
 
-function hasMomoDisbursementCredentials() {
+function hasMtnDisbursementCredentials() {
   return Boolean(env.mtnApiUserId && env.mtnApiKey && env.mtnDisbursementSubscriptionKey);
 }
 
@@ -196,7 +222,7 @@ function inferLikelyCause({ statusCode, message = "", endpoint = "", flow = "" }
     return "wrong credentials or wrong auth format";
   }
   if ([401, 403].includes(Number(statusCode || 0))) {
-    if (flow === "oauth" && normalizedEndpoint.includes("/v1/oauth/access_token")) {
+    if (flow === "oauth_consumer" && normalizedEndpoint.includes("/v1/oauth/access_token")) {
       return "wrong Consumer Key/Secret, app not approved for OAuth product, or Mobile Money Collections not enabled";
     }
     return "wrong auth format, missing subscription key, or product not enabled";
@@ -248,7 +274,7 @@ async function requestOAuthAccessToken({ useBasicAuth = false } = {}) {
   return data.access_token;
 }
 
-async function getMomoAccessToken(scope) {
+async function getMtnApiUserAccessToken(scope) {
   const isCollection = scope === "collection";
   const endpoint = isCollection ? buildCollectionTokenUrl() : buildDisbursementTokenUrl();
   const subscriptionKey = isCollection ? env.mtnCollectionSubscriptionKey : env.mtnDisbursementSubscriptionKey;
@@ -268,7 +294,7 @@ async function getMomoAccessToken(scope) {
     throw httpError(response.status || 502, message, {
       providerResponse: data,
       diagnostic: {
-        flow: "momo",
+        flow: "mtn_api_user",
         endpoint,
         statusCode: response.status,
         tokenEndpointReached: true,
@@ -283,12 +309,19 @@ async function getMomoAccessToken(scope) {
 async function getAccessToken(scope) {
   ensureConfigured();
 
-  if (scope === "collection" && hasMomoCollectionCredentials()) {
-    return getMomoAccessToken(scope);
+  // Apps approved in the MTN Developer Portal are issued a Consumer Key and
+  // Consumer Secret. Prefer that complete credential set for Collections even
+  // if legacy API-user credentials are still present in the environment.
+  if (scope === "collection" && usesConsumerCredentials()) {
+    return requestOAuthAccessToken();
   }
 
-  if (scope === "disbursement" && hasMomoDisbursementCredentials()) {
-    return getMomoAccessToken(scope);
+  if (scope === "collection" && hasMtnCollectionCredentials()) {
+    return getMtnApiUserAccessToken(scope);
+  }
+
+  if (scope === "disbursement" && hasMtnDisbursementCredentials()) {
+    return getMtnApiUserAccessToken(scope);
   }
 
   if (usesConsumerCredentials()) {
@@ -299,24 +332,25 @@ async function getAccessToken(scope) {
 }
 
 async function getAuthHealth() {
-  const credentialsLoaded = usesConsumerCredentials() || hasMomoCollectionCredentials();
+  const credentialsLoaded = usesConsumerCredentials() || hasMtnCollectionCredentials();
   const callbackConfigured = Boolean(env.mtnCallbackUrl || env.mobileMoneyCallbackUrl);
 
   if (!credentialsLoaded) {
     return {
       credentialsLoaded: false,
       callbackConfigured,
+      authFlow: "missing",
       authStatus: "not_tested",
       statusCode: undefined,
       sanitizedError: "No complete MTN credential set was loaded.",
     };
   }
 
-  const preferredFlow = hasMomoCollectionCredentials() ? "momo" : "oauth";
+  const preferredFlow = usesConsumerCredentials() ? "oauth_consumer" : "mtn_api_user";
 
   try {
-    if (preferredFlow === "momo") {
-      await getMomoAccessToken("collection");
+    if (preferredFlow === "mtn_api_user") {
+      await getMtnApiUserAccessToken("collection");
     } else {
       await requestOAuthAccessToken({ useBasicAuth: false });
     }
@@ -324,6 +358,7 @@ async function getAuthHealth() {
     return {
       credentialsLoaded: true,
       callbackConfigured,
+      authFlow: preferredFlow,
       authStatus: "success",
       statusCode: 200,
       sanitizedError: undefined,
@@ -333,7 +368,7 @@ async function getAuthHealth() {
     let sanitizedError = error?.diagnostic?.sanitizedError || error.message || "MTN authentication failed.";
 
     if (
-      preferredFlow === "oauth" &&
+      preferredFlow === "oauth_consumer" &&
       [400, 401, 403].includes(Number(statusCode || 0)) &&
       usesConsumerCredentials()
     ) {
@@ -342,6 +377,7 @@ async function getAuthHealth() {
         return {
           credentialsLoaded: true,
           callbackConfigured,
+          authFlow: "oauth_consumer",
           authStatus: "success",
           statusCode: 200,
           sanitizedError: undefined,
@@ -361,13 +397,14 @@ async function getAuthHealth() {
 
     if ([401, 403].includes(Number(statusCode || 0)) || String(sanitizedError).toLowerCase().includes("product")) {
       console.warn(
-        "MTN authentication is configured, but Mobile Money Collections may not be enabled for this app. Contact MTN or enable/subscribe to Collections/MoMo product in the developer portal."
+        "MTN authentication is configured, but the MTN Collection / Request to Pay product may not be enabled for this app. Check the approved products in the MTN Developer Portal."
       );
     }
 
     return {
       credentialsLoaded: true,
       callbackConfigured,
+      authFlow: preferredFlow,
       authStatus: "failed",
       statusCode,
       sanitizedError: `${sanitizedError} Likely cause: ${likelyCause}.`,
@@ -525,29 +562,74 @@ export const mtnService = {
       payeeNote: String(reference || "barber-booking-payment").slice(0, 160),
     };
 
-    const { response, data } = await requestJson({
-      endpoint: env.mtnCollectionUrl,
-      method: "POST",
-      operation: "collection",
-      headers: buildAuthorizedHeaders({
-        accessToken,
-        referenceId: providerReference,
-        callbackUrl: buildCallbackUrl(callbackUrl || env.mobileMoneyCallbackUrl),
-        subscriptionKey: env.mtnCollectionSubscriptionKey,
-      }),
-      body: requestPayload,
+    logMtnCollectionAttempt({
+      mode: classifyMode(),
+      targetEnvironment: classifyTargetEnvironment(),
+      currency: classifyCurrency(),
+      amount: requestPayload.amount,
+      phoneNumber: normalizedPhone,
+      reference: requestPayload.externalId,
+      providerReference,
+    });
+
+    let response;
+    let data;
+    try {
+      ({ response, data } = await requestJson({
+        endpoint: env.mtnCollectionUrl,
+        method: "POST",
+        operation: "collection",
+        headers: buildAuthorizedHeaders({
+          accessToken,
+          referenceId: providerReference,
+          callbackUrl: buildCallbackUrl(callbackUrl || env.mobileMoneyCallbackUrl),
+          subscriptionKey: env.mtnCollectionSubscriptionKey,
+        }),
+        body: requestPayload,
+      }));
+    } catch (networkError) {
+      logMtnCollectionOutcome({
+        statusCode: Number(networkError?.statusCode || 0),
+        providerCode: networkError?.code || "NETWORK_ERROR",
+        providerMessage: "MTN collection request could not reach the provider.",
+        reference: requestPayload.externalId,
+        providerReference,
+        outcome: "network_failure",
+      });
+      throw httpError(503, "Payment service is temporarily unavailable. Please try again shortly.", {
+        code: "PAYMENT_PROVIDER_UNAVAILABLE",
+        publicMessage: "Payment service is temporarily unavailable. Please try again shortly.",
+        providerStatusCode: Number(networkError?.statusCode || 0),
+        safeProviderCode: String(networkError?.code || "NETWORK_ERROR").slice(0, 80),
+        safeProviderMessage: "MTN collection request could not reach the provider.",
+      });
+    }
+
+    const providerMessage = sanitizedProviderMessage(data);
+    const providerCode = String(data?.code || data?.error || data?.reason?.code || "").slice(0, 80);
+
+    logMtnCollectionOutcome({
+      statusCode: response.status,
+      providerCode,
+      providerMessage: providerMessage || (response.status === 202 ? "Request accepted." : "Request rejected."),
+      reference: requestPayload.externalId,
+      providerReference,
+      outcome: response.status === 202 ? "accepted" : "rejected",
     });
 
     if (response.status !== 202) {
-      const providerMessage = data?.message || data?.error_description || data?.error || "";
       const unauthorized = [401, 403].includes(response.status);
       throw httpError(
-        response.status || 502,
+        503,
         unauthorized
           ? "MTN Mobile Money Collections may not be enabled for this app yet."
-          : providerMessage || "Could not start MTN Mobile Money payment.",
+          : "Payment service is temporarily unavailable. Please try again shortly.",
         {
-        providerResponse: data,
+          code: "PAYMENT_PROVIDER_UNAVAILABLE",
+          publicMessage: "Payment service is temporarily unavailable. Please try again shortly.",
+          providerStatusCode: response.status,
+          safeProviderCode: providerCode,
+          safeProviderMessage: providerMessage || "MTN request-to-pay was rejected.",
         }
       );
     }

@@ -35,6 +35,10 @@ const STATE_COPY = {
     label: "Notifications need another try",
     text: `Browser permission is on, but this device couldn't be registered for alerts. Please retry. ${IN_APP_NOTE}`,
   },
+  unauthenticated: {
+    label: "Sign in for notifications",
+    text: `Sign in again before registering this device for alerts. ${IN_APP_NOTE}`,
+  },
   default: {
     label: "Turn on notifications",
     text: "Get booking updates, reminders, and provider messages.",

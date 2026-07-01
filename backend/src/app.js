@@ -7,6 +7,7 @@ import helmet from "helmet";
 import { Server } from "socket.io";
 
 import { env, validateEnv } from "./config/env.js";
+import { withNativeAppOrigins } from "./config/nativeAppOrigins.js";
 import { authenticateAccessToken } from "./services/authSessionService.js";
 import {
   buildCorsOptions,
@@ -17,6 +18,7 @@ import {
   bookingRateLimiter,
 } from "./middleware/securityMiddleware.js";
 import healthRoutes from "./routes/healthRoutes.js";
+import appVersionRoutes from "./routes/appVersionRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
 import barberRoutes from "./routes/barberRoutes.js";
@@ -34,6 +36,9 @@ import marketplaceRoutes from "./routes/marketplaceRoutes.js";
 import aiCoachRoutes from "./routes/aiCoachRoutes.js";
 import providerCoachChatRoutes from "./routes/providerCoachChatRoutes.js";
 import smsRoutes from "./routes/smsRoutes.js";
+import productRoutes from "./routes/productRoutes.js";
+import productOrderRoutes from "./routes/productOrderRoutes.js";
+import productInquiryRoutes from "./routes/productInquiryRoutes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorMiddleware.js";
 import { createRequestLogger, logger } from "./config/logger.js";
 import db from "./config/db.js";
@@ -78,7 +83,7 @@ app.use("/api", apiRateLimiter);
 // limit is applied exclusively to those path prefixes.
 const STANDARD_JSON_LIMIT = "1mb";
 const IMAGE_JSON_LIMIT = "150mb";
-const IMAGE_BODY_PREFIXES = ["/api/barbers", "/api/profiles"];
+const IMAGE_BODY_PREFIXES = ["/api/barbers", "/api/profiles", "/api/products"];
 const standardJsonParser = express.json({ limit: STANDARD_JSON_LIMIT });
 const imageJsonParser = express.json({ limit: IMAGE_JSON_LIMIT });
 app.use((req, res, next) => {
@@ -113,6 +118,7 @@ app.use((req, res, next) => {
 });
 
 app.use("/api/health", healthRoutes);
+app.use("/api/app-version", appVersionRoutes);
 app.get("/api/health/ready", async (req, res, next) => {
   try {
     if (db.client === "postgres") {
@@ -157,6 +163,9 @@ app.use("/api/payments", paymentRateLimiter, paymentRoutes);
 app.use("/api/sms", smsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/marketplace", marketplaceRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/product-orders", productOrderRoutes);
+app.use("/api/product-inquiries", productInquiryRoutes);
 app.use("/api", marketplaceRoutes);
 
 app.get("/api", (req, res) => {
@@ -188,14 +197,14 @@ function attachSocketServer(server) {
       ? new Server(server, {
           path: "/socket.io",
           cors: {
-            origin: env.clientUrls,
+            origin: withNativeAppOrigins(env.clientUrls),
             credentials: true,
           },
         })
       : new Server(server, {
           path: "/socket.io",
           cors: {
-            origin: env.clientUrls.length ? env.clientUrls : true,
+            origin: env.clientUrls.length ? withNativeAppOrigins(env.clientUrls) : true,
             credentials: true,
           },
         });

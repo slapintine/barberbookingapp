@@ -2,6 +2,7 @@ import http from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
 import { env, validateEnv } from "./config/env.js";
+import { withNativeAppOrigins } from "./config/nativeAppOrigins.js";
 import { initDb } from "./db/initDb.js";
 import db from "./config/db.js";
 import { logger } from "./config/logger.js";
@@ -25,14 +26,14 @@ const io =
     ? new Server(server, {
         path: "/socket.io",
         cors: {
-          origin: env.clientUrls,
+          origin: withNativeAppOrigins(env.clientUrls),
           credentials: true,
         },
       })
     : new Server(server, {
         path: "/socket.io",
         cors: {
-          origin: env.clientUrls.length ? env.clientUrls : true,
+          origin: env.clientUrls.length ? withNativeAppOrigins(env.clientUrls) : true,
           credentials: true,
         },
       });

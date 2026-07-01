@@ -46,7 +46,7 @@ body[data-theme="dark"] {
   --map-popup-text: #ffffff;
   --map-popup-muted: #d8c2ea;
   --map-popup-border: rgba(216, 178, 255, 0.22);
-  --map-popup-button-bg: #8b4dff;
+  --map-popup-button-bg: #854f6c;
   --map-popup-button-text: #ffffff;
   --primary: var(--accent);
   --primary-soft: var(--bg-soft);
@@ -1069,7 +1069,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 12px;
   margin: -14px -14px 14px;
-  padding: 14px;
+  padding: calc(14px + var(--safe-top, 0px)) 14px 14px;
   background: var(--queless-header-bg);
   border-bottom: 1px solid var(--queless-border);
   backdrop-filter: blur(16px);

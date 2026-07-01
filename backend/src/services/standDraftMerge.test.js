@@ -8,6 +8,7 @@ import {
   mergeDraftBoolean,
   mergeDraftNumber,
   mergeDraftText,
+  normalizeUgandaStandPhone,
 } from "./standDraftMerge.js";
 
 test("draft merge preserves stored values when fields are omitted or blank by accident", () => {
@@ -64,7 +65,7 @@ test("publish validation is strict without affecting draft merge", () => {
       services: [],
       schedule: [],
     }),
-    ["business name", "business category", "business phone", "business location", "map icon", "at least one service", "opening hours"]
+    ["business name", "business category", "valid Uganda business phone", "business or service-area location", "map icon", "at least one service", "opening hours"]
   );
 
   assert.deepEqual(
@@ -77,6 +78,32 @@ test("publish validation is strict without affecting draft merge", () => {
         map_icon_type: "barber",
       },
       services: [{ service_name: "Haircut", pricing_type: "fixed", price_extra: 15000, duration_minutes: 30 }],
+      schedule: [{ day_of_week: 1, is_open: 1, start_time: "08:00", end_time: "18:00" }],
+    }),
+    []
+  );
+});
+
+test("Uganda stand phones are normalized and long services can publish", () => {
+  assert.equal(normalizeUgandaStandPhone("0772 123 456"), "+256772123456");
+  assert.equal(normalizeUgandaStandPhone("1234"), "");
+
+  assert.deepEqual(
+    getStandPublishMissingDetails({
+      stand: {
+        business_name: "Remote Design Studio",
+        business_type: "Design",
+        phone: "0772123456",
+        location: "Location not set",
+        map_icon_type: "design",
+      },
+      services: [{
+        service_name: "Brand project",
+        pricing_type: "fixed",
+        price_extra: 150000,
+        duration_minutes: 10080,
+        location_type: "online",
+      }],
       schedule: [{ day_of_week: 1, is_open: 1, start_time: "08:00", end_time: "18:00" }],
     }),
     []

@@ -1,7 +1,7 @@
 :root {
   --queless-purple: #2f0755;
   --queless-purple-2: #5f16b8;
-  --queless-purple-3: #7d2df0;
+  --queless-purple-3: #854f6c;
   --queless-pink: #df3f88;
   --queless-soft: rgba(95, 22, 184, 0.14);
   --queless-ink: #160326;
@@ -113,7 +113,7 @@
   width: 64px;
   height: 64px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(125, 45, 240, 0.32) 0%, rgba(125, 45, 240, 0.16) 45%, rgba(125, 45, 240, 0) 72%);
+  background: radial-gradient(circle, rgba(133, 79, 108, 0.32) 0%, rgba(133, 79, 108, 0.16) 45%, rgba(133, 79, 108, 0) 72%);
   transform: translate(-50%, -10px);
   z-index: 0;
   pointer-events: none;
@@ -176,7 +176,7 @@
 }
 
 .service-map-marker--own .service-map-marker__bubble {
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.28), 0 7px 18px var(--marker-shadow);
+  box-shadow: 0 0 0 4px rgba(133, 79, 108, 0.26), 0 7px 18px var(--marker-shadow);
 }
 
 .queless-cluster {

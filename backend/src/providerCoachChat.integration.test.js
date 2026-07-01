@@ -163,6 +163,11 @@ test("provider coach chat uses server-fetched stand data and returns a coach res
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
   assert.match(body.answer, /Is my pricing okay/);
+  assert.equal(body.intent, "pricing_help");
+  assert.equal(body.topic, "pricing_help");
+  assert.ok(body.nextBestAction);
+  assert.ok(Array.isArray(body.suggestedChips));
+  assert.ok(body.standHealth.overallStandHealthScore > 0);
   assert.equal(body.contextSummary.plan, "platinum");
   assert.equal(capturedContext.stand.name, "coach_success_provider Studio");
   assert.equal(capturedContext.services[0].price, "UGX 85,000");

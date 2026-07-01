@@ -248,6 +248,7 @@
 .admin-access-test-v16 input,
 .admin-access-test-v16 select,
 .admin-confirm-typed-v23 input,
+.admin-confirm-typed-v23 textarea,
 .admin-support-action-v23 textarea,
 .admin-support-action-v23 select {
   width: 100%;
@@ -286,6 +287,7 @@
 .admin-access-test-v16 input:focus,
 .admin-access-test-v16 select:focus,
 .admin-confirm-typed-v23 input:focus,
+.admin-confirm-typed-v23 textarea:focus,
 .admin-support-action-v23 textarea:focus,
 .admin-support-action-v23 select:focus {
   border-color: rgba(190, 63, 136, 0.45);
@@ -1034,6 +1036,13 @@ button:disabled,
   color: var(--admin-muted);
   font-size: 12px;
   font-weight: 900;
+}
+
+.admin-confirm-typed-v23 textarea {
+  min-height: 96px;
+  padding: 10px 12px;
+  resize: vertical;
+  line-height: 1.45;
 }
 
 .admin-detail-backdrop-v20 {

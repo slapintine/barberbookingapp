@@ -42,15 +42,14 @@ test.after(async () => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("login to a non-existent account returns a friendly, non-enumerating message", async () => {
+test("login to a non-existent account returns the exact generic, non-enumerating message", async () => {
   const res = await login({ username: "nobody@example.test", password: "whatever123" });
   assert.equal(res.status, 401);
   const body = await res.json();
   assert.equal(body.code, "INVALID_CREDENTIALS");
-  assert.match(body.message, /couldn't find an account/i);
-  assert.ok(/create an account/i.test(body.message), "should guide the user to create an account");
-  // The old confusing wording must be gone.
-  assert.ok(!/incorrect username\/email or password/i.test(body.message));
+  // Exactly the generic message — no hint about whether the account exists.
+  assert.equal(body.message, "Invalid email or password.");
+  assert.ok(!/not found|doesn't exist|no account|create an account/i.test(body.message));
 });
 
 test("repeated failed logins are rate limited (429) on /api/auth/login", async () => {

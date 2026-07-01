@@ -24,6 +24,8 @@ let server;
 let baseUrl;
 let token;
 
+const TINY_PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nQAAAABJRU5ErkJggg==";
+
 async function request(pathname, options = {}) {
   return fetch(`${baseUrl}${pathname}`, {
     ...options,
@@ -70,6 +72,13 @@ test.after(async () => {
 });
 
 test("stand draft create, reopen, partial edit, explicit removal, and publish flow preserves data", async () => {
+  const unauthorizedSave = await request("/api/barbers/me", {
+    method: "PATCH",
+    headers: { Authorization: "" },
+    body: JSON.stringify({ business_name: "Should not save" }),
+  });
+  assert.equal(unauthorizedSave.status, 401);
+
   const createResponse = await request("/api/barbers/register", {
     method: "POST",
     body: JSON.stringify({
@@ -86,6 +95,17 @@ test("stand draft create, reopen, partial edit, explicit removal, and publish fl
   assert.equal(created.barber.location, "");
   assert.equal(created.barber.phone, "+256700123456");
   assert.equal(Number(created.barber.is_published), 0);
+
+  const duplicateCreate = await request("/api/barbers/register", {
+    method: "POST",
+    body: JSON.stringify({ business_name: "Duplicate", submit_intent: "draft" }),
+  });
+  assert.equal(duplicateCreate.status, 409);
+  assert.equal((await duplicateCreate.json()).code, "PROVIDER_PROFILE_EXISTS");
+
+  const refreshedSession = await request("/api/auth/me");
+  assert.equal(refreshedSession.status, 200);
+  assert.equal((await refreshedSession.json()).user.role, "provider");
 
   const firstReload = await request("/api/barbers/me");
   assert.equal(firstReload.status, 200);
@@ -108,9 +128,9 @@ test("stand draft create, reopen, partial edit, explicit removal, and publish fl
       location: "Nakasero, Kampala",
       latitude: 0.315,
       longitude: 32.581,
-      image: "https://queless.org/uploads/logo.webp",
+      image: TINY_PNG_DATA_URL,
       portfolio: [
-        { id: "one", afterImage: "https://queless.org/uploads/work-one.webp" },
+        { id: "one", afterImage: TINY_PNG_DATA_URL },
         { id: "two", afterImage: "https://queless.org/uploads/work-two.webp" },
       ],
       services: [{
@@ -119,7 +139,7 @@ test("stand draft create, reopen, partial edit, explicit removal, and publish fl
         pricing_type: "fixed",
         price_extra: 20000,
         duration_minutes: 30,
-        image: "https://queless.org/uploads/haircut.webp",
+        image: TINY_PNG_DATA_URL,
       }],
       schedule_start: "09:00",
       schedule_end: "18:00",
@@ -127,6 +147,13 @@ test("stand draft create, reopen, partial edit, explicit removal, and publish fl
     }),
   });
   assert.equal(completeDraftResponse.status, 200);
+  const completedDraft = await completeDraftResponse.json();
+  const savedLogo = completedDraft.barber.image;
+  const savedPortfolioImage = completedDraft.barber.portfolio[0].afterImage;
+  const savedServiceImage = completedDraft.barber.services[0].image;
+  assert.match(savedLogo, /^\/api\/uploads\//);
+  assert.match(savedPortfolioImage, /^\/api\/uploads\//);
+  assert.match(savedServiceImage, /^\/api\/uploads\//);
 
   const descriptionResponse = await request("/api/barbers/me", {
     method: "PATCH",
@@ -136,8 +163,13 @@ test("stand draft create, reopen, partial edit, explicit removal, and publish fl
   const afterDescription = (await descriptionResponse.json()).barber;
   assert.equal(afterDescription.phone, "+256700123456");
   assert.equal(afterDescription.location, "Nakasero, Kampala");
+  assert.equal(Number(afterDescription.latitude), 0.315);
+  assert.equal(Number(afterDescription.longitude), 32.581);
   assert.equal(afterDescription.services.length, 1);
   assert.equal(afterDescription.portfolio.length, 2);
+  assert.equal(afterDescription.image, savedLogo);
+  assert.equal(afterDescription.portfolio[0].afterImage, savedPortfolioImage);
+  assert.equal(afterDescription.services[0].image, savedServiceImage);
   assert.equal(afterDescription.schedule.find((day) => Number(day.is_open) === 1).start_time, "09:00");
 
   const noChangeResponse = await request("/api/barbers/me", {
@@ -146,9 +178,26 @@ test("stand draft create, reopen, partial edit, explicit removal, and publish fl
   });
   assert.equal(noChangeResponse.status, 200);
   const afterNoChange = (await noChangeResponse.json()).barber;
-  assert.equal(afterNoChange.image, "https://queless.org/uploads/logo.webp");
+  assert.equal(afterNoChange.image, savedLogo);
   assert.equal(afterNoChange.services.length, 1);
   assert.equal(afterNoChange.portfolio.length, 2);
+  assert.equal(afterNoChange.portfolio[0].afterImage, savedPortfolioImage);
+  assert.equal(afterNoChange.services[0].image, savedServiceImage);
+
+  const accidentalEmptyDefaultsResponse = await request("/api/barbers/me", {
+    method: "PATCH",
+    body: JSON.stringify({
+      image: "",
+      services: [],
+      portfolio: [],
+      submit_intent: "draft",
+    }),
+  });
+  assert.equal(accidentalEmptyDefaultsResponse.status, 200);
+  const afterAccidentalEmptyDefaults = (await accidentalEmptyDefaultsResponse.json()).barber;
+  assert.equal(afterAccidentalEmptyDefaults.image, savedLogo);
+  assert.equal(afterAccidentalEmptyDefaults.services.length, 1);
+  assert.equal(afterAccidentalEmptyDefaults.portfolio.length, 2);
 
   const removeOnePhotoResponse = await request("/api/barbers/me", {
     method: "PATCH",
@@ -160,7 +209,7 @@ test("stand draft create, reopen, partial edit, explicit removal, and publish fl
   assert.equal(removeOnePhotoResponse.status, 200);
   const afterRemoval = (await removeOnePhotoResponse.json()).barber;
   assert.equal(afterRemoval.portfolio.length, 1);
-  assert.equal(afterRemoval.image, "https://queless.org/uploads/logo.webp");
+  assert.equal(afterRemoval.image, savedLogo);
   assert.equal(afterRemoval.services.length, 1);
 
   const publishResponse = await request("/api/barbers/me/publish", { method: "POST" });

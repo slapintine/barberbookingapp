@@ -42,6 +42,12 @@ export default function useTheme(storageKey = "queless-theme", fallback = "light
       document.body.dataset.theme = nextTheme;
       document.body.dataset.lineupTheme = nextTheme;
       document.body.dataset.cutzTheme = nextTheme;
+      // Component dark styles are authored as `.dark .foo`; the class must be set
+      // (alongside data-theme) for those overrides to apply. Only present in dark
+      // mode, so light mode styling is never affected.
+      const isDark = nextTheme === "dark";
+      document.documentElement.classList.toggle("dark", isDark);
+      document.body.classList.toggle("dark", isDark);
     }
   }, [theme]);
 

@@ -18,6 +18,12 @@ if (typeof document !== 'undefined') {
   document.body.dataset.theme = savedTheme
   document.body.dataset.lineupTheme = savedTheme
   document.body.dataset.cutzTheme = savedTheme
+  // Component-level dark styles are written as `.dark .foo`, so the class must be
+  // present (alongside data-theme) or those overrides stay dead and dark text
+  // renders on dark backgrounds. Only added in dark mode, so light mode is untouched.
+  const isDark = savedTheme === 'dark'
+  document.documentElement.classList.toggle('dark', isDark)
+  document.body.classList.toggle('dark', isDark)
 }
 
 // Build marker — confirms the browser loaded the freshly deployed bundle and not

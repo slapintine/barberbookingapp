@@ -5,12 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run build:web",
+    "build:web": "cross-env VITE_BASE_PATH=/app/ VITE_ENABLE_PAYMENTS=false VITE_ENABLE_SMS=false vite build",
+    "build:android": "cross-env VITE_BASE_PATH=./ VITE_API_URL=https://queless.org/api VITE_ENABLE_PAYMENTS=false VITE_ENABLE_SMS=false vite build",
+    "assets:android": "capacitor-assets generate --android --assetPath resources --iconBackgroundColor=#2B063A --iconBackgroundColorDark=#180222 --splashBackgroundColor=#FFF8F5 --splashBackgroundColorDark=#FFF8F5 --logoSplashScale=0.18",
     "lint": "eslint .",
     "test": "node --test",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "firebase": "^12.13.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.14.0",
@@ -22,8 +28,10 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^10.0.1",
     "@vitejs/plugin-react": "^6.0.1",
+    "cross-env": "^10.1.0",
     "eslint": "^10.5.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",

@@ -1,4 +1,5 @@
 import { all, get, run, transaction } from "../db/query.js";
+import { AUDIT_EVENTS, recordAuditEvent } from "../services/auditLogService.js";
 import { getCustomerPremiumPlan, getCustomerPremiumPrice, getCustomerSubscriptionEndDate, getFutureDateSqlPredicate, isActiveCustomerPremium, mapCustomerSubscription } from "../services/customerSubscriptionService.js";
 import { getDeploymentReadiness, getPaidFeatureSafety, remediatePaidFeatureEntitlements, softDisableDemoBusinesses } from "../services/deploymentReadiness.js";
 import { FREE_TRIAL_DAYS, getPlanPrice, getSubscriptionEndDate, getSubscriptionTierConfig, normalizeBillingCycle } from "../services/paymentService.js";
@@ -535,6 +536,15 @@ export async function updateAdminCustomerSubscription(req, res, next) {
       return nextSubscription;
     });
 
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.ADMIN_CUSTOMER_SUBSCRIPTION_CHANGED,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      targetType: "customer",
+      targetId: req.params.userId,
+      metadata: { action: String(req.body.action || ""), plan: String(req.body.plan || ""), status: String(req.body.status || "") },
+      req,
+    });
     res.json({ success: true, message: "Customer subscription updated.", subscription: mapCustomerSubscription(result) });
   } catch (error) {
     next(error);
@@ -620,6 +630,15 @@ export async function updateAdminProviderSubscription(req, res, next) {
       return { subscription: nextSubscription };
     });
 
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.ADMIN_PROVIDER_SUBSCRIPTION_CHANGED,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      targetType: "business",
+      targetId: req.params.businessId,
+      metadata: { plan: String(req.body.plan || ""), status: String(req.body.status || "") },
+      req,
+    });
     res.json({ success: true, message: "Provider subscription updated.", subscription: result.subscription });
   } catch (error) {
     next(error);

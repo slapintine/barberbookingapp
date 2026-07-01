@@ -64,11 +64,22 @@ function getProviderCategory(provider = {}, service = {}) {
   return service?.category || provider.category_name || provider.business_type || provider.category || "Services";
 }
 
+function arrayValue(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function getProviderImage(provider = {}, service = {}) {
-  const portfolioImage = (Array.isArray(provider.portfolio) ? provider.portfolio : [])
-    .flatMap((item) => [item?.afterImage, item?.beforeImage, item?.image].filter(Boolean))
+  const portfolioImage = arrayValue(provider.portfolio || provider.portfolio_json)
+    .flatMap((item) => [item?.afterImage, item?.beforeImage, item?.after_image, item?.before_image, item?.image].filter(Boolean))
     .find(Boolean);
-  const galleryImage = (Array.isArray(provider.gallery) ? provider.gallery : []).find(Boolean);
+  const galleryImage = arrayValue(provider.galleryImages || provider.gallery_images || provider.gallery || provider.portfolioImages || provider.portfolio_images).find(Boolean);
   return service?.image || service?.image_url || service?.photo || portfolioImage || galleryImage || provider.image || "";
 }
 

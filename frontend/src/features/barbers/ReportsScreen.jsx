@@ -15,6 +15,8 @@ import {
 } from "react-icons/fi";
 import { getAiCoachInsights, getProviderCoachQuestions } from "../../api/aiCoachApi.js";
 import { getPlanFeatures } from "../../utils/subscriptionPlans.js";
+import { ProviderCoachPreviewCard } from "./ProviderCoachComponents.jsx";
+import { getCoachPlanState, rankProviderCoachQuestions } from "./providerCoachModel.js";
 
 const PLAN_RANKS = {
   FREE: 1,
@@ -244,33 +246,12 @@ function buildCoachSuggestions({ profileViews, filteredBookings, completedBookin
   return "Your business has healthy activity. Keep your availability fresh and use a featured promotion to convert more repeat bookings.";
 }
 
-function getCoachStatusLabel(usage, plan) {
-  if (usage?.unlimited || plan.rank >= 3) return "Platinum unlocked";
-  if (usage?.plan === "premium" || plan.rank >= 2) return "5 tips/month";
-  return "Platinum feature";
-}
-
-function getCoachQuestionPreview(questionsData) {
-  const fallback = [
-    "How can I get more bookings?",
-    "What should I improve on my stand?",
-    "How can I respond to reviews?",
-    "How should I price my services?",
-    "What promotion should I run?",
-    "How can I make customers trust me?",
-  ];
-  const questions = questionsData?.questions?.map((item) => item.question).filter(Boolean) || [];
-  return (questions.length ? questions : fallback).slice(0, 6);
-}
-
 export default function ReportsScreen({ barber, reviews = [], bookings = [], subscription: subscriptionProp, onUpgradePlan, onOpenAiCoach }) {
   const [dateFilter, setDateFilter] = useState("This month");
   const [showReviews, setShowReviews] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("All");
   const [reviewSort, setReviewSort] = useState("Newest");
   const [reportedReviews, setReportedReviews] = useState({});
-  const [coachOpen, setCoachOpen] = useState(false);
-  const [coachPrompt, setCoachPrompt] = useState("How can I get more bookings?");
   const [coachPreviewState, setCoachPreviewState] = useState({ loading: true, insights: null, questions: null });
 
   const subscription = subscriptionProp || barber?.subscription || {};
@@ -295,8 +276,8 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
       }
       setCoachPreviewState((prev) => ({ ...prev, loading: true }));
       const [insightsResult, questionsResult] = await Promise.allSettled([
-        getAiCoachInsights(barber.id),
-        getProviderCoachQuestions(barber.id),
+        getAiCoachInsights(),
+        getProviderCoachQuestions(),
       ]);
       if (cancelled) return;
       setCoachPreviewState({
@@ -417,19 +398,16 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
   const promotionSuggestion = bestEarningService
     ? `Feature ${bestEarningService.service} with a small discount this week.`
     : "Create a starter offer for your most bookable service.";
-  const coachPrompts = [
-    "How can I get more bookings?",
-    "What should I improve this week?",
-    "How can I improve my reviews?",
-    "How should I price my services?",
-    "What promotion should I run?",
-  ];
   const coachUsage = coachPreviewState.questions?.usage;
-  const coachAccess = coachPreviewState.questions?.access;
-  const coachStatusLabel = getCoachStatusLabel(coachUsage, plan);
+  const coachInsights = coachPreviewState.insights?.insights || {};
+  const coachPlanState = getCoachPlanState({ subscription, barber, questionsData: coachPreviewState.questions });
   const coachWeeklyFocus = coachPreviewState.insights?.weeklyGrowthFocus || coachSuggestion;
-  const coachQuestionPreview = getCoachQuestionPreview(coachPreviewState.questions);
-  const coachLocked = coachAccess?.upgradeRequired || plan.rank < 2;
+  const coachQuestionModel = rankProviderCoachQuestions({
+    questionsData: coachPreviewState.questions,
+    insights: coachInsights,
+    barber,
+  });
+  const coachLocked = !coachPlanState.enabled || plan.rank < 2;
   const coachLimitReached = coachUsage?.plan === "premium" && Number(coachUsage.remainingThisMonth || 0) <= 0;
 
   return (
@@ -579,49 +557,17 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
       </ReportSection>
 
       <ReportSection title="Queless Provider Coach" icon={<FiMessageCircle />}>
-        <div className={`reports-coach-card-v15 ${coachLocked ? "locked" : ""}`}>
-          <div className="reports-coach-card-head-v16">
-            <div>
-              <strong>Queless Provider Coach</strong>
-              <span>Get practical tips to improve your stand, attract customers, and grow bookings.</span>
-            </div>
-            <span className={`reports-coach-status-v16 ${coachUsage?.plan || (plan.rank >= 3 ? "platinum" : plan.rank >= 2 ? "premium" : "free")}`}>{coachStatusLabel}</span>
-          </div>
-          <div className="reports-weekly-focus-v16">
-            <small>Weekly Growth Focus</small>
-            <p>
-              {coachLocked
-                ? "Grow faster with Queless Provider Coach. Get smart tips on improving your stand, pricing, reviews, services, and bookings."
-                : coachLimitReached
-                ? "You've used your monthly coach tips. Upgrade to Platinum for unlimited Provider Coach guidance."
-                : coachPreviewState.loading
-                ? "Reading your provider stand signals..."
-                : coachWeeklyFocus}
-            </p>
-          </div>
-          <div className="reports-coach-actions-v16">
-            <button
-              type="button"
-              className="primary-btn-v4 compact-btn-v4"
-              onClick={() => {
-                if (coachLocked || coachLimitReached) onUpgradePlan?.("PLATINUM");
-                else (onOpenAiCoach || (() => setCoachOpen(true)))();
-              }}
-            >
-              {coachLocked || coachLimitReached ? "Upgrade to Platinum" : "Open Provider Coach"}
-            </button>
-            {!coachLocked && coachUsage?.plan === "premium" ? <span>{coachUsage.remainingThisMonth} tips left this month</span> : null}
-          </div>
-          {!coachLocked ? (
-            <div className="reports-coach-chip-list-v16">
-              {coachQuestionPreview.map((item) => (
-                <button key={item} type="button" onClick={onOpenAiCoach || (() => { setCoachPrompt(item); setCoachOpen(true); })}>
-                  {item}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <ProviderCoachPreviewCard
+          loading={coachPreviewState.loading}
+          focus={coachLimitReached ? "Your monthly coach tips are used. Platinum keeps guidance available without limits." : coachWeeklyFocus}
+          planState={coachPlanState}
+          usage={coachUsage}
+          locked={coachLocked}
+          limitReached={coachLimitReached}
+          questionModel={coachQuestionModel}
+          onOpen={onOpenAiCoach}
+          onUpgrade={onUpgradePlan}
+        />
       </ReportSection>
 
       {showReviews ? (
@@ -668,42 +614,6 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
         </>
       ) : null}
 
-      {coachOpen ? (
-        <>
-          <button
-            type="button"
-            className="booking-overlay-v4 open"
-            onClick={() => setCoachOpen(false)}
-            aria-label="Close provider coach"
-          />
-          <div className="reports-coach-sheet-v15 open">
-            <div className="reports-coach-modal-v15">
-              <div className="barber-profile-topbar-v4">
-                <button type="button" className="profile-back-btn-v4" onClick={() => setCoachOpen(false)}><FiX /></button>
-                <div className="profile-top-title-v4">Queless Provider Coach</div>
-                <span className="profile-back-btn-v4 ghost-spacer-v10" />
-              </div>
-              <div className="reports-coach-chat-v15">
-                <div className="reports-coach-bubble-v15 coach">
-                  <strong>Queless Coach</strong>
-                  <span>{coachSuggestion}</span>
-                </div>
-                <div className="reports-chip-list-v11">
-                  {coachPrompts.map((prompt) => (
-                    <button type="button" key={prompt} onClick={() => setCoachPrompt(prompt)} className={coachPrompt === prompt ? "active" : ""}>
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-                <div className="reports-coach-bubble-v15 user">
-                  <strong>{coachPrompt}</strong>
-                  <span>{coachPrompt === "What promotion should I run?" ? promotionSuggestion : coachSuggestion}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }

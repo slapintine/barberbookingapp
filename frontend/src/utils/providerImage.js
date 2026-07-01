@@ -9,11 +9,11 @@
 import { normalizeProviderImageReference } from "./providerData.js";
 
 const AVATAR_PALETTE = [
-  ["#0EA5A5", "#0B1D3A"],
-  ["#0B1D3A", "#0EA5A5"],
-  ["#22C55E", "#0B1D3A"],
-  ["#155E75", "#0EA5A5"],
-  ["#1E3A8A", "#0EA5A5"],
+  ["#190019", "#522b5b"],
+  ["#2b124c", "#854f6c"],
+  ["#522b5b", "#dfb6b2"],
+  ["#3b004d", "#7b3a67"],
+  ["#854f6c", "#2b124c"],
 ];
 
 /** 1-2 letter initials from the first non-empty business / person name. */
@@ -71,12 +71,23 @@ export const NEUTRAL_PLACEHOLDER = `data:image/svg+xml;utf8,${encodeURIComponent
   </svg>`
 )}`;
 
+function arrayValue(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /** First real uploaded image for a provider/service, or "" when none exists. */
 export function getProviderImageUrl(provider = {}, service = {}) {
-  const portfolioImage = (Array.isArray(provider.portfolio) ? provider.portfolio : [])
-    .flatMap((item) => [item?.afterImage, item?.beforeImage, item?.image].filter(Boolean))
+  const portfolioImage = arrayValue(provider.portfolio || provider.portfolio_json)
+    .flatMap((item) => [item?.afterImage, item?.beforeImage, item?.after_image, item?.before_image, item?.image].filter(Boolean))
     .find(Boolean);
-  const galleryImage = (Array.isArray(provider.gallery) ? provider.gallery : []).find(Boolean);
+  const galleryImage = arrayValue(provider.galleryImages || provider.gallery_images || provider.gallery || provider.portfolioImages || provider.portfolio_images).find(Boolean);
   return [
     service?.image,
     service?.image_url,

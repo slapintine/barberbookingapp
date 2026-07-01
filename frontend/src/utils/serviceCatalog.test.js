@@ -24,4 +24,6 @@ test("formats structured service prices", () => {
   assert.equal(formatServicePrice({ pricing_type: "fixed", price_extra: 10000 }), "UGX 10,000");
   assert.equal(formatServicePrice({ pricing_type: "range", min_price: 10000, max_price: 20000 }), "UGX 10,000 - UGX 20,000");
   assert.equal(formatServicePrice({ pricing_type: "starting_from", starting_price: 10000 }), "From UGX 10,000");
+  assert.equal(formatServicePrice({ pricing_type: "quote", price_extra: 0 }), "Request quote");
+  assert.equal(formatServicePrice({ pricing_type: "fixed", price_extra: 0 }), "Request quote");
 });

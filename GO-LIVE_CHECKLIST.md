@@ -22,6 +22,8 @@ CLIENT_URL=https://queless.org,https://www.queless.org
 DEV_CLIENT_URL=
 ALLOW_LOCAL_DEV_ORIGINS=false
 JWT_SECRET=replace-with-a-32-plus-character-random-secret
+RESEND_API_KEY=replace-with-the-production-resend-api-key
+EMAIL_FROM=Queless <info@queless.org>
 DB_CLIENT=postgres
 DATABASE_URL=postgresql://USERNAME:PASSWORD@HOST:5432/DATABASE_NAME
 DATABASE_SSL=true
@@ -33,17 +35,20 @@ AFRICASTALKING_SHORTCODE=
 AFRICASTALKING_ENV=production
 AFRICASTALKING_LIFECYCLE_SMS_ENABLED=false
 BOOKING_ONLINE_PAYMENTS_ENABLED=false
-MOBILE_MONEY_MODE=provider
+MOBILE_MONEY_MODE=live
 ENABLE_MOCK_PAYMENTS=false
 MOBILE_MONEY_DEFAULT_PROVIDER=mtn
 MOBILE_MONEY_CURRENCY=UGX
-MOBILE_MONEY_CALLBACK_URL=https://queless.org/api/payments/mtn/callback
-MTN_CALLBACK_URL=https://queless.org/api/payments/mtn/callback
+MOBILE_MONEY_WEBHOOK_TOKEN=replace-with-a-32-plus-character-random-callback-token
+MOBILE_MONEY_CALLBACK_URL=https://queless.org/api/payments/mtn/callback?token=replace-with-the-same-callback-token
+MTN_CALLBACK_URL=https://queless.org/api/payments/mtn/callback?token=replace-with-the-same-callback-token
 MTN_WEBHOOK_URL=https://queless.org/api/payments/webhooks/mtn
-AIRTEL_CALLBACK_URL=https://queless.org/api/payments/airtel/callback
+AIRTEL_CALLBACK_URL=https://queless.org/api/payments/airtel/callback?token=replace-with-the-same-callback-token
 AIRTEL_WEBHOOK_URL=https://queless.org/api/payments/webhooks/airtel
-MTN_BASE_URL=
-MTN_TARGET_ENVIRONMENT=
+MTN_CONSUMER_KEY=
+MTN_CONSUMER_SECRET=
+MTN_TARGET_ENVIRONMENT=mtnuganda
+MTN_CURRENCY=UGX
 MTN_API_USER_ID=
 MTN_API_KEY=
 MTN_COLLECTION_SUBSCRIPTION_KEY=
@@ -54,6 +59,7 @@ MTN_DISBURSEMENT_URL=
 ```
 
 Keep `BOOKING_ONLINE_PAYMENTS_ENABLED=false` until live MTN initiation, status, and callback have been proven.
+Generate one strong callback token, put it in `MOBILE_MONEY_WEBHOOK_TOKEN`, and substitute the same URL-encoded value in callback URLs. Never paste the real token into terminal output, tickets, or deployment logs.
 
 ## 2. Frontend Production Env
 
@@ -132,9 +138,8 @@ Routes to verify:
 
 Required before enabling live online booking payments:
 
-1. Fill MTN production or approved sandbox credentials.
-   `MTN_API_USER_ID` must contain the MTN API user ID. Do not put the API user ID in `MTN_API_SECRET` or `MOBILE_MONEY_API_SECRET`; those secret fields are not accepted as user-id fallbacks.
-2. Confirm callback URL is registered as `https://queless.org/api/payments/mtn/callback`.
+1. For Uganda live mode, fill the approved `MTN_CONSUMER_KEY`, `MTN_CONSUMER_SECRET`, and `MTN_COLLECTION_SUBSCRIPTION_KEY`; keep `MTN_TARGET_ENVIRONMENT=mtnuganda` and currency `UGX`. `MTN_API_USER_ID` and `MTN_API_KEY` are the alternative sandbox API-user flow, and secret fields are never accepted as user-ID fallbacks.
+2. Confirm the provider has the full `MTN_CALLBACK_URL` registered, including the token query parameter. Read it from the private VPS env; do not print it in command output.
 3. Run admin auth check and confirm MTN auth succeeds.
 4. Initiate a real test payment and approve the phone prompt.
 5. Confirm status transitions remain pending until provider confirmation.
@@ -167,7 +172,13 @@ Setup steps:
 
 ## 7. Deployment Verification
 
-Run locally and on the VPS after env is filled:
+Run locally to exercise syntax, tests, migrations, builds, and data audits:
+
+```bash
+npm run verify:launch
+```
+
+A normal development env is expected to reach the final gate and return `NO_GO` for `NODE_ENV`; do not weaken that safeguard. The authoritative run is on the VPS after the production backend env, frontend build env, PostgreSQL connection, durable upload path, and Firebase Admin credentials are installed:
 
 ```bash
 npm run verify:launch
@@ -182,7 +193,7 @@ curl -i https://queless.org/api/payments/mtn/health
 curl -i https://queless.org/api/barbers
 ```
 
-`verify:launch` must return `GO` before traffic is considered launch-ready.
+The VPS `verify:launch` run must return `GO` before traffic is considered launch-ready. Its console report omits secrets and record-level customer/provider data.
 
 ## 8. Rollback Notes
 

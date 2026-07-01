@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   formatProviderPlanName,
   getPlanFeatures,
+  getPlanImageCountMessage,
+  getPlanImageLimits,
   getPlanUpgradeCta,
   getStandFinalAction,
   hasOpenCoachAccess,
@@ -127,4 +129,14 @@ test("plan comparison prices and feature order remain launch-ready", () => {
       ["platinum", 24000],
     ]
   );
+});
+
+test("free plan image limits keep logo, service, and portfolio counts separate", () => {
+  const limits = getPlanImageLimits("FREE");
+  assert.equal(limits.logoImages, 1);
+  assert.equal(limits.serviceImages, 1);
+  assert.equal(limits.portfolioImages, 2);
+  assert.equal(limits.maxImages, limits.portfolioImages);
+  assert.match(getPlanImageCountMessage("FREE", "portfolio"), /2 portfolio photos/i);
+  assert.match(getPlanImageCountMessage("FREE", "service"), /each service can have one image/i);
 });

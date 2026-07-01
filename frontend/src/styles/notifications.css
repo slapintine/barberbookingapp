@@ -571,3 +571,99 @@
   opacity: 0.07;
   filter: invert(1) grayscale(1);
 }
+
+/* =============================================================
+   PUSH NOTIFICATION SETTINGS CARD
+   Keep this scoped: the shared settings header is used elsewhere.
+   ============================================================= */
+
+.push-settings-v1 {
+  min-width: 0;
+  gap: 18px;
+}
+
+.push-settings-v1 .settings-section-head-v6 {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.push-settings-v1 .settings-section-head-v6 > svg {
+  width: 42px;
+  height: 42px;
+  flex: none;
+}
+
+.push-settings-v1 .settings-section-head-v6 > div {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding-top: 1px;
+}
+
+.push-settings-v1 .settings-section-head-v6 strong,
+.push-settings-v1 .settings-section-head-v6 span {
+  min-width: 0;
+  margin: 0;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.push-settings-v1 .settings-section-head-v6 strong {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.push-settings-v1 .settings-section-head-v6 span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.push-settings-v1 .push-settings-actions-v1 {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0;
+}
+
+.push-settings-v1 .push-settings-actions-v1 > button {
+  width: min(100%, 220px);
+  min-width: 180px;
+  min-height: 46px;
+  padding: 11px 16px;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.push-settings-v1 > .auth-success,
+.push-settings-v1 > .auth-error {
+  margin: 0;
+  line-height: 1.45;
+}
+
+@media (max-width: 480px) {
+  .push-settings-v1 {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .push-settings-v1 .settings-section-head-v6 {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 11px;
+  }
+
+  .push-settings-v1 .settings-section-head-v6 > svg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .push-settings-v1 .push-settings-actions-v1 > button {
+    width: 100%;
+    min-width: 0;
+  }
+}

@@ -21,12 +21,22 @@ function isLiveConfigured() {
   );
 }
 
+function missingPaymentConfigError(reasonCode = "CONFIG_MISSING") {
+  return Object.assign(new Error("Mobile money payments are not fully configured yet."), {
+    statusCode: 503,
+    code: "MISSING_PAYMENT_CONFIG",
+    publicMessage: "Mobile money payments are not fully configured yet.",
+    safeProviderCode: reasonCode,
+    safeProviderMessage: "Mobile money provider configuration is incomplete or disabled.",
+  });
+}
+
 function resolveDefaultService() {
   const mode = String(env.mobileMoneyMode || "mock").trim().toLowerCase();
 
   if (mode === "mock") {
     if (env.nodeEnv === "production") {
-      throw Object.assign(new Error("Mock mobile money is disabled in production."), { statusCode: 503 });
+      throw missingPaymentConfigError("PROVIDER_DISABLED");
     }
     return mockMobileMoneyService;
   }
@@ -38,7 +48,7 @@ function resolveDefaultService() {
   }
 
   if (env.nodeEnv === "production") {
-    throw Object.assign(new Error("Mobile money is not configured for production."), { statusCode: 503 });
+    throw missingPaymentConfigError();
   }
 
   return mockMobileMoneyService;
@@ -50,7 +60,7 @@ function resolveProviderService(provider) {
 
   if (normalizedProvider === "mock" && mode === "mock") {
     if (env.nodeEnv === "production") {
-      throw Object.assign(new Error("Mock mobile money is disabled in production."), { statusCode: 503 });
+      throw missingPaymentConfigError("PROVIDER_DISABLED");
     }
     return mockMobileMoneyService;
   }
@@ -61,7 +71,7 @@ function resolveProviderService(provider) {
 
   if (mode === "mock") {
     if (env.nodeEnv === "production") {
-      throw Object.assign(new Error("Mock mobile money is disabled in production."), { statusCode: 503 });
+      throw missingPaymentConfigError("PROVIDER_DISABLED");
     }
     return mockMobileMoneyService;
   }

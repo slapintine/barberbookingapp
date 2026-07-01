@@ -26,7 +26,17 @@ body[data-lineup-theme="light"] {
      bottom paddings build on these so nothing hides behind the system bar. */
   --bottom-nav-height: 68px;
   --bottom-nav-float-gap: 12px;
-  --device-safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Single source of truth for device safe areas (iOS notch / Dynamic Island,
+     Android status + nav bars). These are 0 on desktop/web, so they add NO gap
+     there; they become nonzero only inside the APK/PWA because the viewport
+     meta sets viewport-fit=cover. Apply them on each fixed/sticky bar (never on
+     both a bar and its container) so nothing is double-padded. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Back-compat aliases — existing rules use these; routed through the canonical
+     vars above so there is one definition point. */
+  --device-safe-top: var(--safe-top);
+  --device-safe-bottom: var(--safe-bottom);
   --bottom-nav-total-height: calc(var(--bottom-nav-height) + var(--bottom-nav-float-gap) + var(--device-safe-bottom));
   --bg-dark: linear-gradient(180deg, #18051f 0%, #2b124c 60%, #522b5b 100%);
   --bg-light: linear-gradient(180deg, #fff8f4 0%, #f7ede8 100%);

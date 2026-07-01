@@ -53,11 +53,40 @@ export function looksLikeServerHtml(message) {
   );
 }
 
-// Returns a safe, human-friendly string. If `message` looks like HTML/a server
-// error page, is empty, or is missing, the friendly `fallback` is returned instead.
+// Coerces ANY thrown value (string, Error, API error object, validation payload)
+// into a readable string. This is the single source of truth so a raw object can
+// never reach the UI as "[object Object]".
+export function getErrorMessage(error, fallback = "Something went wrong. Please try again.") {
+  if (error === null || error === undefined) return fallback;
+  if (typeof error === "string") return error.trim() || fallback;
+  if (typeof error === "number" || typeof error === "boolean") return String(error);
+
+  // Pull the first usable string from common error shapes, in priority order.
+  const firstFieldError =
+    Array.isArray(error.errors) && error.errors.length
+      ? error.errors[0]?.message || error.errors[0]
+      : null;
+  const candidates = [
+    error.userMessage,
+    error.message,
+    error.error,
+    error.detail,
+    firstFieldError,
+    error.statusText,
+    error.payload?.message,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+  return fallback;
+}
+
+// Returns a safe, human-friendly string. Coerces any shape via getErrorMessage
+// first (so objects never render as "[object Object]"), then guards against raw
+// HTML/server error pages. Empty/missing/HTML → the friendly `fallback`.
 export function sanitizeErrorMessage(message, fallback = SERVER_UNAVAILABLE_FALLBACK) {
   if (message === null || message === undefined) return fallback;
-  const value = String(message).trim();
+  const value = getErrorMessage(message, "").trim();
   if (!value) return fallback;
   if (looksLikeServerHtml(value)) return fallback;
   return value;

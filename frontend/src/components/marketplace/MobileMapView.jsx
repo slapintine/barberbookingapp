@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { AttributionControl, MapContainer, TileLayer, useMap } from "react-leaflet";
 import {
   FiArrowRight,
@@ -14,6 +14,7 @@ import {
   FiMinus,
   FiNavigation,
   FiPlus,
+  FiRefreshCw,
   FiSearch,
   FiScissors,
   FiSliders,
@@ -65,6 +66,12 @@ const CATEGORY_CHIPS = [
     }),
 ];
 
+function resolveLaunchCategoryIcon(category) {
+  if (!category || category === "All") return "";
+  const resolved = resolveProviderMapIconType({ business_type: category, category_name: category });
+  return CATEGORY_CHIPS.find((chip) => chip.icon && (chip.icon === resolved || chip.icon === category))?.icon || "";
+}
+
 
 /* Grabs the Leaflet map instance so external buttons can call zoomIn/zoomOut */
 function MapCaptureRef({ mapRef }) {
@@ -75,8 +82,7 @@ function MapCaptureRef({ mapRef }) {
 
 /* ── Category icon inside nearby cards ─────────────── */
 function CategoryIconSmall({ iconType }) {
-  const Icon = getCategoryIconComponent(iconType || "default");
-  return <Icon size={11} />;
+  return createElement(getCategoryIconComponent(iconType || "default"), { size: 11 });
 }
 
 /* ── Full provider bottom sheet ─────────────────────── */
@@ -191,7 +197,7 @@ function ProviderSheet({ marker, isOwner, isFavorite, onOpenProvider, onToggleFa
 }
 
 /* ── Nearby provider card ────────────────────────────── */
-function NearbyCard({ marker, isFavorite, onOpenProvider, onToggleFavorite, onSelectOnMap }) {
+function NearbyCard({ marker, isFavorite, onToggleFavorite, onSelectOnMap }) {
   const provider = marker.provider || {};
   const open = isProviderOpenNow(provider);
   const distanceText = Number.isFinite(marker.distanceKm) ? `${marker.distanceKm.toFixed(1)} km` : "";
@@ -206,7 +212,11 @@ function NearbyCard({ marker, isFavorite, onOpenProvider, onToggleFavorite, onSe
       role="button"
       tabIndex={0}
       onClick={() => onSelectOnMap?.(marker)}
-      onKeyDown={(e) => e.key === "Enter" && onSelectOnMap?.(marker)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key)) return;
+        event.preventDefault();
+        onSelectOnMap?.(marker);
+      }}
     >
       <div className="qmm-nearby-img">
         <img
@@ -217,7 +227,9 @@ function NearbyCard({ marker, isFavorite, onOpenProvider, onToggleFavorite, onSe
           onError={handleProviderImageError(provider)}
         />
         {(tier === "PREMIUM" || tier === "PLATINUM") && (
-          <span className="qmm-nearby-top-badge">⭐ Top rated</span>
+          <span className={`qmm-nearby-plan-badge qmm-nearby-plan-badge--${tier.toLowerCase()}`}>
+            {tier === "PLATINUM" ? "Platinum" : "Premium"}
+          </span>
         )}
         <button
           type="button"
@@ -235,8 +247,11 @@ function NearbyCard({ marker, isFavorite, onOpenProvider, onToggleFavorite, onSe
           {marker.category || marker.title || "Services"}
         </span>
         <div className="qmm-nearby-stats">
-          <FiStar className="qmm-star-icon" />
-          <b>{ratingLabel}</b>
+          {ratingLabel === "New" ? (
+            <span className="qmm-new-badge">New</span>
+          ) : (
+            <><FiStar className="qmm-star-icon" /><b>{ratingLabel}</b></>
+          )}
           {reviewCount > 0 && (
             <span className="qmm-muted">({reviewCount > 120 ? "120+" : reviewCount})</span>
           )}
@@ -258,7 +273,6 @@ function NearbyCard({ marker, isFavorite, onOpenProvider, onToggleFavorite, onSe
 /* ── Main component ──────────────────────────────────── */
 export default function MobileMapView({
   theme = "light",
-  setTheme,
   currentUser = null,
   category = "All",
   providers,
@@ -266,20 +280,21 @@ export default function MobileMapView({
   locationLabel = "Near you",
   locationLoading = false,
   locationMessage = "",
+  providersLoading = false,
+  providersError = "",
   favorites = [],
-  unreadCount = 0,
   onClose,
   onNavigate,
   onUseCurrentLocation,
   onManualLocation,
   onClearLocation,
+  onRefreshProviders,
   onOpenProvider,
   onToggleFavorite,
-  onOpenNotifications,
-  onOpenMenu,
   onMessageProvider,
 }) {
-  const [activeCategoryIcon, setActiveCategoryIcon] = useState("");
+  const [activeCategoryIcon, setActiveCategoryIcon] = useState(() => resolveLaunchCategoryIcon(category));
+  const [openNowOnly, setOpenNowOnly] = useState(false);
   const [searchDraft, setSearchDraft] = useState("");
   const [selectedMarkerId, setSelectedMarkerId] = useState("");
   const [showLocMenu, setShowLocMenu] = useState(false);
@@ -311,14 +326,6 @@ export default function MobileMapView({
     setManualLocDraft("");
     setShowLocMenu(false);
   };
-
-  // Seed the category chip from the launch category prop
-  useEffect(() => {
-    if (!category || category === "All") return;
-    const resolved = resolveProviderMapIconType({ business_type: category, category_name: category });
-    const match = CATEGORY_CHIPS.find((chip) => chip.icon && (chip.icon === resolved || chip.icon === category));
-    if (match) setActiveCategoryIcon(match.icon);
-  }, [category]);
 
   // Scroll active chip into view
   useEffect(() => {
@@ -352,10 +359,14 @@ export default function MobileMapView({
     if (cleanSearch) {
       list = list.filter((m) => getProviderSearchText(m.provider, m).includes(cleanSearch));
     }
+    if (openNowOnly) list = list.filter((m) => isProviderOpenNow(m.provider));
     return list
       .map((m) => ({ ...m, distanceKm: getDistanceKm(userLocation, m) }))
       .sort((a, b) => a.distanceKm - b.distanceKm);
-  }, [activeCategoryIcon, baseMarkers, cleanSearch, userLocation]);
+  }, [activeCategoryIcon, baseMarkers, cleanSearch, openNowOnly, userLocation]);
+
+  const showInitialLoading = providersLoading && !baseMarkers.length;
+  const showProvidersError = Boolean(providersError && !baseMarkers.length);
 
   const cardMarker = filteredMarkers.find((m) => m.id === selectedMarkerId) || null;
   const cardIsOwner = isOwnProvider(cardMarker?.provider, currentUser);
@@ -580,15 +591,13 @@ export default function MobileMapView({
           {/* Filter FAB */}
           <button
             type="button"
-            className="qmm-fab qmm-fab--left"
-            onClick={() => {
-              // Toggle open-now filter as a simple filter action
-              setActiveCategoryIcon((prev) => prev);
-            }}
-            aria-label="Filter"
+            className={openNowOnly ? "qmm-fab qmm-fab--left is-active" : "qmm-fab qmm-fab--left"}
+            onClick={() => setOpenNowOnly((active) => !active)}
+            aria-label="Show open providers only"
+            aria-pressed={openNowOnly}
           >
             <FiSliders />
-            <span>Filter</span>
+            <span>{openNowOnly ? "Open now" : "Filter"}</span>
           </button>
 
           {/* List FAB */}
@@ -603,6 +612,21 @@ export default function MobileMapView({
             <FiList />
             <span>List</span>
           </button>
+
+          {showInitialLoading ? (
+            <div className="qmm-map-state" role="status">
+              <span className="qmm-spinner" aria-hidden="true" />
+              <strong>Loading nearby providers…</strong>
+            </div>
+          ) : null}
+
+          {showProvidersError ? (
+            <div className="qmm-map-state" role="alert">
+              <strong>We couldn't load providers</strong>
+              <span>Check your connection and try again.</span>
+              <button type="button" onClick={onRefreshProviders}><FiRefreshCw /> Retry</button>
+            </div>
+          ) : null}
         </div>
 
         {/* Nearby providers */}
@@ -618,14 +642,20 @@ export default function MobileMapView({
             </button>
           </div>
 
-          {filteredMarkers.length > 0 ? (
+          {showInitialLoading ? (
+            <div className="qmm-nearby-empty" role="status"><p>Loading nearby providers…</p></div>
+          ) : showProvidersError ? (
+            <div className="qmm-nearby-empty" role="alert">
+              <p>Nearby providers are unavailable right now.</p>
+              <button type="button" className="qmm-link" onClick={onRefreshProviders}>Try again</button>
+            </div>
+          ) : filteredMarkers.length > 0 ? (
             <div className="qmm-nearby-rail">
               {filteredMarkers.slice(0, 12).map((marker) => (
                 <NearbyCard
                   key={marker.id}
                   marker={marker}
                   isFavorite={favorites.includes(Number(marker.provider?.id))}
-                  onOpenProvider={onOpenProvider}
                   onToggleFavorite={onToggleFavorite}
                   onSelectOnMap={handleSelectMarker}
                 />
@@ -634,13 +664,14 @@ export default function MobileMapView({
           ) : (
             <div className="qmm-nearby-empty">
               <p>No providers found nearby</p>
-              {activeCategoryIcon && (
+              {(activeCategoryIcon || cleanSearch || openNowOnly) && (
                 <button
                   type="button"
                   className="qmm-link"
                   onClick={() => {
                     setActiveCategoryIcon("");
                     setSearchDraft("");
+                    setOpenNowOnly(false);
                     setSelectedMarkerId("");
                   }}
                 >

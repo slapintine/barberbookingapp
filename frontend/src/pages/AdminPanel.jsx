@@ -62,6 +62,7 @@ import {
   updateAdminProviderSubscription,
   updateAdminSupportRequest,
 } from "../api/adminApi.js";
+import { SMS_COMING_SOON_MESSAGE, SMS_ENABLED } from "../utils/launchFlags.js";
 
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin", "super-admin"]);
 const PROVIDER_PLANS = ["FREE", "PREMIUM", "PLATINUM"];
@@ -260,10 +261,13 @@ function AdminTable({ columns, rows, getKey, emptyTitle, emptyText }) {
 function ConfirmModal({ confirmState, onCancel }) {
   const confirmKey = `${confirmState?.requiredText || ""}|${confirmState?.title || ""}`;
   const [typedConfirmationEntry, setTypedConfirmationEntry] = useState({ key: "", value: "" });
+  const [reasonEntry, setReasonEntry] = useState({ key: "", value: "" });
   const typedConfirmation = typedConfirmationEntry.key === confirmKey ? typedConfirmationEntry.value : "";
   if (!confirmState) return null;
   const requiredText = confirmState.requiredText || "";
-  const confirmationMatches = !requiredText || typedConfirmation.trim() === requiredText;
+  const reason = reasonEntry.key === confirmKey ? reasonEntry.value : (confirmState.initialReason || "");
+  const reasonRequired = Boolean(confirmState.reasonLabel);
+  const confirmationMatches = (!requiredText || typedConfirmation.trim() === requiredText) && (!reasonRequired || Boolean(reason.trim()));
   return (
     <div className="admin-confirm-backdrop-v17" role="presentation" onClick={onCancel}>
       <section className="admin-confirm-modal-v17" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
@@ -285,9 +289,21 @@ function ConfirmModal({ confirmState, onCancel }) {
             />
           </label>
         ) : null}
+        {reasonRequired ? (
+          <label className="admin-confirm-typed-v23">
+            <span>{confirmState.reasonLabel}</span>
+            <textarea
+              value={reason}
+              onChange={(event) => setReasonEntry({ key: confirmKey, value: event.target.value })}
+              rows={4}
+              maxLength={500}
+              autoFocus={!requiredText}
+            />
+          </label>
+        ) : null}
         <div className="admin-confirm-actions-v17">
           <button type="button" onClick={onCancel}>Cancel</button>
-          <button type="button" className="danger" onClick={confirmState.onConfirm} disabled={!confirmationMatches}>
+          <button type="button" className="danger" onClick={() => confirmState.onConfirm(reason.trim())} disabled={!confirmationMatches}>
             {confirmState.confirmLabel || "Confirm"}
           </button>
         </div>
@@ -296,7 +312,7 @@ function ConfirmModal({ confirmState, onCancel }) {
   );
 }
 
-export default function AdminPanel({ currentUser, initialSection = "dashboard", onBackToApp, onGoDashboard }) {
+export default function AdminPanel({ currentUser, initialSection = "dashboard", onBackToApp }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessageText] = useState("");
@@ -662,15 +678,17 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
     ["settings", "Settings", FiSettings],
   ];
 
-  const openConfirm = ({ title, body, confirmLabel, requiredText = "", action }) => {
+  const openConfirm = ({ title, body, confirmLabel, requiredText = "", reasonLabel = "", initialReason = "", action }) => {
     setConfirmState({
       title,
       body,
       confirmLabel,
       requiredText,
-      onConfirm: async () => {
+      reasonLabel,
+      initialReason,
+      onConfirm: async (...args) => {
         setConfirmState(null);
-        await action();
+        await action(...args);
       },
     });
   };
@@ -689,24 +707,18 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
     };
 
     const needsReason = ["request_changes", "ban", "suspend"].includes(payload.action);
-    let reason = payload.reason || reasonByAction[payload.action] || "Admin business action.";
+    const reason = payload.reason || reasonByAction[payload.action] || "Admin business action.";
 
-    if (needsReason) {
-      // eslint-disable-next-line no-alert
-      const input = window.prompt(
-        `Enter a reason for "${payload.action}" on ${business.business_name} (shown to provider):`,
-        reason,
-      );
-      if (input === null) return; // cancelled
-      if (input.trim()) reason = input.trim();
-    }
-
-    const actionPayload = { ...payload, reason };
     openConfirm({
       title: `Update ${business.business_name}`,
-      body: `Action: ${actionPayload.action}. Reason: ${reason}`,
+      body: needsReason
+        ? `Action: ${payload.action}. Add a clear reason; it will be shown to the provider.`
+        : `Action: ${payload.action}. Reason: ${reason}`,
       confirmLabel: "Apply change",
-      action: async () => {
+      reasonLabel: needsReason ? "Reason shown to provider" : "",
+      initialReason: needsReason ? reason : "",
+      action: async (confirmedReason = "") => {
+        const actionPayload = { ...payload, reason: needsReason ? confirmedReason : reason };
         try {
           setMessage("Updating business...");
           await updateAdminBusiness(business.id, actionPayload);
@@ -901,6 +913,10 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
 
   const submitAdminSms = async (event) => {
     event.preventDefault();
+    if (!SMS_ENABLED) {
+      setMessage(SMS_COMING_SOON_MESSAGE);
+      return;
+    }
     try {
       setMessage("Sending SMS...");
       await sendAdminSms(smsDraft);
@@ -1520,7 +1536,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
 
   const renderSms = () => (
     <div className="admin-view-v17">
-      <PageIntro icon={FiMessageSquare} title="SMS Monitor" text="Review Africa's Talking incoming and outgoing SMS, linked users, auto-replies, and failed sends." />
+      <PageIntro icon={FiMessageSquare} title="SMS Monitor" text="Review historical SMS records. New SMS sending is coming soon and is not active yet." />
       <section className="admin-overview-grid-v13">
         <AdminStatCard label="SMS records" value={smsMessages.length} icon={FiMessageSquare} />
         <AdminStatCard label="Incoming" value={smsMessages.filter((row) => row.direction === "incoming").length} icon={FiArrowDownLeft} tone="success" />
@@ -1530,20 +1546,20 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
       <section className="admin-card-v17">
         <div className="admin-section-head-v17">
           <div>
-            <strong>Send test SMS</strong>
-            <span>{smsConfig?.enabled ? `Africa's Talking ${smsConfig.env || "sandbox"} is configured` : "SMS sending is unavailable until backend credentials are configured"}</span>
+            <strong>SMS Coming Soon</strong>
+            <span>{SMS_COMING_SOON_MESSAGE}</span>
           </div>
         </div>
         <form className="admin-form-grid-v17" onSubmit={submitAdminSms}>
           <label>
             <span>Recipient phone</span>
-            <input value={smsDraft.to} onChange={(event) => setSmsDraft((prev) => ({ ...prev, to: event.target.value }))} placeholder="+256700000000" />
+            <input value={smsDraft.to} onChange={(event) => setSmsDraft((prev) => ({ ...prev, to: event.target.value }))} placeholder="+256700000000" disabled={!SMS_ENABLED} />
           </label>
           <label>
             <span>Message</span>
-            <textarea value={smsDraft.message} onChange={(event) => setSmsDraft((prev) => ({ ...prev, message: event.target.value }))} maxLength={918} rows={3} placeholder="Your Queless booking has been confirmed." />
+            <textarea value={smsDraft.message} onChange={(event) => setSmsDraft((prev) => ({ ...prev, message: event.target.value }))} maxLength={918} rows={3} placeholder="SMS notifications will be available soon." disabled={!SMS_ENABLED} />
           </label>
-          <button type="submit" className="admin-primary-v17">Send SMS</button>
+          <button type="submit" className="admin-primary-v17" disabled={!SMS_ENABLED}>{SMS_ENABLED ? "Send message" : "SMS Coming Soon"}</button>
         </form>
       </section>
       <FilterBar>

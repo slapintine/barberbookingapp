@@ -12,18 +12,25 @@ import {
   publicBusinessParams,
   publicBusinessWhere,
 } from "../services/businessVisibility.js";
-import { materializeProviderImages } from "../services/providerImageStorage.js";
+import { materializeImageReference, materializeProviderImages } from "../services/providerImageStorage.js";
 import { withCanonicalProviderFields } from "../services/providerResponse.js";
 import { createRequestLogger } from "../config/logger.js";
+import { env } from "../config/env.js";
+import { AUDIT_EVENTS, recordAuditEvent } from "../services/auditLogService.js";
+import {
+  getMarketplaceMode,
+  getPublishRequirements,
+  supportsServices,
+} from "../services/marketplaceCapabilities.js";
 import {
   firstOwnValue,
   getClearFields,
-  getStandPublishMissingDetails,
   hasAnyOwn,
   mergeDraftArray,
   mergeDraftBoolean,
   mergeDraftNumber,
   mergeDraftText,
+  normalizeUgandaStandPhone,
 } from "../services/standDraftMerge.js";
 
 function run(sql, params = []) {
@@ -98,10 +105,18 @@ function getBarberByOwnerUserId(ownerUserId) {
       b.accepts_cash,
       b.stand_type,
       b.business_type,
+      b.marketplace_mode,
       b.map_icon_type,
       b.home_service_enabled,
       b.intro_text,
       b.portfolio_json,
+      b.cover_image_url,
+      b.business_hours_json,
+      b.delivery_available,
+      b.pickup_available,
+      b.delivery_areas_json,
+      b.delivery_fee,
+      b.delivery_notes,
       b.subscription_tier,
       b.selected_plan,
       b.subscription_status,
@@ -165,6 +180,70 @@ function normalizeStandType(value) {
 function normalizeBusinessType(value) {
   const normalized = String(value || "").trim();
   return normalized || "Services";
+}
+
+function normalizeBusinessHours(value, fallback = {}) {
+  if (value === undefined || value === null || value === "") return fallback;
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw validationError("Business hours must use a valid structured format.");
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw validationError("Business hours must use a valid structured format.");
+  }
+  const entries = Object.entries(parsed).slice(0, 14);
+  return Object.fromEntries(entries.map(([key, hours]) => [
+    String(key).trim().slice(0, 30),
+    typeof hours === "string"
+      ? String(hours).trim().slice(0, 100)
+      : {
+          open: String(hours?.open || "").trim().slice(0, 10),
+          close: String(hours?.close || "").trim().slice(0, 10),
+          closed: Boolean(hours?.closed),
+        },
+  ]));
+}
+
+function normalizeDeliveryAreas(value, fallback = []) {
+  if (value === undefined || value === null || value === "") return fallback;
+  let areas = value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      areas = Array.isArray(parsed) ? parsed : value.split(",");
+    } catch {
+      areas = value.split(",");
+    }
+  }
+  if (!Array.isArray(areas)) throw validationError("Delivery areas must be a list.");
+  return [...new Set(areas.map((area) => String(area || "").replace(/[<>]/g, "").trim().slice(0, 120)).filter(Boolean))].slice(0, 100);
+}
+
+function normalizeDeliveryFee(value, fallback = null) {
+  if (value === undefined || value === "") return fallback;
+  if (value === null) return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000_000) {
+    throw validationError("Delivery fee must be a valid non-negative amount.");
+  }
+  return amount;
+}
+
+function normalizeDeliveryNotes(value, fallback = "") {
+  if (value === undefined || value === null) return fallback;
+  return String(value).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/[<>]/g, "").trim().slice(0, 2000);
+}
+
+function requireMarketplaceFeatureForMode(mode) {
+  if (mode === "service" || env.productMarketplaceEnabled) return;
+  const error = new Error("Product marketplace features are not available yet.");
+  error.statusCode = 404;
+  error.code = "PRODUCT_MARKETPLACE_DISABLED";
+  throw error;
 }
 
 function normalizeMapIconType(value, fallback = "") {
@@ -402,6 +481,47 @@ function validationError(message) {
   return error;
 }
 
+// Filesystem/storage failure codes that mean "the server could not write the
+// uploaded image right now" rather than "the user sent something invalid".
+const STORAGE_FAILURE_CODES = new Set([
+  "EACCES",
+  "EROFS",
+  "ENOSPC",
+  "EDQUOT",
+  "EPERM",
+  "EMFILE",
+  "ENFILE",
+  "ENOENT",
+]);
+
+function isStorageFailure(error) {
+  return STORAGE_FAILURE_CODES.has(String(error?.code || ""));
+}
+
+function imageStorageUnavailableError() {
+  const error = new Error(
+    "We saved your other details, but couldn't store your uploaded image just now. Please try again, or remove the image and save."
+  );
+  error.statusCode = 503;
+  error.publicMessage = error.message;
+  error.code = "IMAGE_STORAGE_UNAVAILABLE";
+  return error;
+}
+
+// Wraps image persistence so a transient disk/permission failure surfaces as a
+// helpful, retry-able message instead of a generic 500. Genuine validation
+// errors (statusCode already set) are passed through unchanged so the user still
+// sees the specific reason (e.g. unsupported image type or plan photo limits).
+async function materializeProviderImagesSafe(payload) {
+  try {
+    return await materializeProviderImages(payload);
+  } catch (error) {
+    if (error?.statusCode) throw error;
+    if (isStorageFailure(error)) throw imageStorageUnavailableError();
+    throw error;
+  }
+}
+
 function normalizeScheduleTime(value, fallback = null) {
   const normalized = String(value || fallback || "").trim();
   if (!normalized) return null;
@@ -524,7 +644,14 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1,
       ? 0
       : Number(rawDuration);
     const rawLocationType = String(service.location_type || service.locationType || "provider_location").trim().toLowerCase();
-    const locationType = ["provider_location", "customer_location"].includes(rawLocationType)
+    const locationType = [
+      "provider_location",
+      "customer_location",
+      "pickup_delivery",
+      "online",
+      "mobile_area",
+      "appointment_only",
+    ].includes(rawLocationType)
       ? rawLocationType
       : "provider_location";
 
@@ -538,8 +665,8 @@ async function replaceBarberServices(barberId, services = [], serviceLimit = -1,
     if (strict && normalizedPricingType === "starting_from" && startingPrice <= 0) {
       throw validationError("Please enter a valid price.");
     }
-    if (!Number.isFinite(durationMinutes) || (strict && durationMinutes !== 0 && (durationMinutes < 5 || durationMinutes > 1440))) {
-      throw validationError("Service duration must be between 5 minutes and 24 hours.");
+    if (!Number.isFinite(durationMinutes) || (strict && durationMinutes !== 0 && (durationMinutes < 5 || durationMinutes > 43200))) {
+      throw validationError("Service duration must be between 5 minutes and 30 days.");
     }
 
     await executor.run(
@@ -716,6 +843,7 @@ export async function registerBarber(req, res, next) {
       accepts_cash = true,
       services = [],
       stand_type = "individual",
+      marketplace_mode = "service",
       team_members = [],
       business_type = "Services",
       map_icon_type = "",
@@ -731,12 +859,23 @@ export async function registerBarber(req, res, next) {
       phone = "",
       schedule_start = "08:00",
       schedule_end = "20:00",
+      cover_image_url = "",
+      business_hours = {},
+      delivery_available = false,
+      pickup_available = true,
+      delivery_areas = [],
+      delivery_fee = null,
+      delivery_notes = "",
     } = req.body;
     const requestedImage = image || req.body.cover_image || req.body.coverImage || req.body.profile_image || req.body.profileImage || "";
     const requestedBusinessType = req.body.category || business_type;
     const requestedIntroText = req.body.description || intro_text;
     const requestedPortfolio = req.body.gallery_images || req.body.galleryImages || portfolio;
     const normalizedStandType = normalizeStandType(stand_type);
+    const normalizedMarketplaceMode = getMarketplaceMode(
+      req.body.marketplaceMode || marketplace_mode
+    );
+    requireMarketplaceFeatureForMode(normalizedMarketplaceMode);
     const normalizedBusinessType = normalizeBusinessType(requestedBusinessType);
     const normalizedMapIconType = normalizeMapIconType(map_icon_type);
     const normalizedPortfolio = normalizePortfolioItems(
@@ -748,6 +887,29 @@ export async function registerBarber(req, res, next) {
     const normalizedVerificationDocumentName = normalizeVerificationDocumentName(
       verification_document_name || document_name || documentName
     );
+    const normalizedBusinessHours = normalizeBusinessHours(
+      req.body.business_hours_json || req.body.businessHours || business_hours,
+      {}
+    );
+    const normalizedDeliveryAreas = normalizeDeliveryAreas(
+      req.body.delivery_areas_json || req.body.deliveryAreas || delivery_areas,
+      []
+    );
+    const normalizedDeliveryFee = normalizeDeliveryFee(
+      req.body.deliveryFee ?? delivery_fee,
+      null
+    );
+    const normalizedDeliveryNotes = normalizeDeliveryNotes(
+      req.body.deliveryNotes ?? delivery_notes,
+      ""
+    );
+    const requestedCoverImage = validateImageReference(
+      req.body.coverImageUrl || cover_image_url,
+      "Cover image"
+    );
+    if (getImageReferenceBytes(requestedCoverImage) > 10 * 1024 * 1024) {
+      throw validationError("Cover image must be 10MB or smaller.");
+    }
     const verificationStatus = normalizedVerificationDocumentName ? "Pending verification" : "New";
     const verificationApproved = isVerificationApprovedStatus(verificationStatus);
     const verificationSubmittedAt = normalizedVerificationDocumentName ? new Date().toISOString() : null;
@@ -762,10 +924,18 @@ export async function registerBarber(req, res, next) {
     const wantsPayment = String(submit_intent || "").trim().toLowerCase() === "payment";
     const safeBusinessName = String(business_name || "").trim() || `Business stand draft ${req.user.id}`;
     const safeLocation = String(location || "").trim() || "Location not set";
-    const safePhone = String(phone || "").trim();
+    const rawPhone = String(phone || "").trim();
+    const safePhone = rawPhone ? normalizeUgandaStandPhone(rawPhone) : "";
+    if (rawPhone && !safePhone) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_UGANDA_PHONE",
+        message: "Enter a valid Uganda mobile number using the +256 country code.",
+      });
+    }
     const safeScheduleStart = normalizeScheduleTime(schedule_start, "08:00");
     const safeScheduleEnd = normalizeScheduleTime(schedule_end, "20:00");
-    if (safeScheduleStart >= safeScheduleEnd) {
+    if (supportsServices(normalizedMarketplaceMode) && safeScheduleStart >= safeScheduleEnd) {
       return res.status(400).json({ success: false, message: "Closing time must be later than opening time." });
     }
     const normalizedName = normalizeBusinessName(safeBusinessName);
@@ -811,15 +981,13 @@ export async function registerBarber(req, res, next) {
       });
     }
 
-    const selectedPlan = wantsPayment ? normalizeProviderPlan(selected_plan || plan) : "";
+    const selectedPlan = normalizeProviderPlan(selected_plan || plan || "FREE") || "FREE";
     const freeActivation = wantsPayment && selectedPlan === "FREE";
-    if (selected_plan || plan) {
-      if (!isValidProviderPlan(selectedPlan)) {
-        return res.status(402).json({
-          success: false,
-          message: "Please choose a plan before creating your business."
-        });
-      }
+    if (!isValidProviderPlan(selectedPlan)) {
+      return res.status(400).json({
+        success: false,
+        message: "Choose Free, Premium, or Platinum for this stand."
+      });
     }
     const selectedPlanConfig = getSubscriptionTierConfig(selectedPlan || "FREE");
     assertProviderImageLimits({
@@ -830,12 +998,16 @@ export async function registerBarber(req, res, next) {
       teamMembers: normalizedTeamMembers,
     });
 
-    const storedImages = await materializeProviderImages({
+    const storedImages = await materializeProviderImagesSafe({
       ownerId: req.user.id,
       businessImage: requestedImage,
       services: Array.isArray(services) ? services : [],
       portfolio: normalizedPortfolio,
       teamMembers: normalizedTeamMembers,
+    });
+    const storedCoverImage = await materializeImageReference(requestedCoverImage, {
+      ownerId: req.user.id,
+      kind: "business-cover",
     });
 
     const ownerProfile = await get(
@@ -854,15 +1026,20 @@ export async function registerBarber(req, res, next) {
            normalized_phone = ?,
            selected_plan = COALESCE(?, selected_plan)
        WHERE user_id = ?`,
-      [nextProfilePhone, profileEmail, profilePhone, wantsPayment ? selectedPlan || null : null, req.user.id]
+      [nextProfilePhone, profileEmail, profilePhone, selectedPlan, req.user.id]
     ).catch(() => {});
 
     const draftStatus = freeActivation ? "active" : wantsPayment ? "pending_payment" : "draft";
     const subscriptionStatus = freeActivation ? "active" : wantsPayment ? "pending_payment" : "none";
+    // subscription_tier is NOT NULL in production Postgres (default 'FREE'), and an
+    // explicit null overrides that default and crashes the insert. A draft is not a
+    // paid plan, so default to the chosen plan if any, otherwise FREE. Draft rows stay
+    // hidden via business_status='draft' + is_published=0, so FREE here never publishes.
+    const subscriptionTier = selectedPlan || "FREE";
     const insertResult = await run(
       `INSERT INTO barbers
-       (owner_user_id, business_name, normalized_business_name, location, latitude, longitude, price_from, pricing_mode, requires_quote, image, accepts_wallet, accepts_cash, stand_type, business_type, map_icon_type, home_service_enabled, intro_text, portfolio_json, verified_status, verification_document_name, verification_submitted_at, subscription_tier, selected_plan, subscription_status, subscription_expires_at, business_status, is_published, trial_plan, trial_started_at, trial_ends_at, trial_status, used_trials, review_status, is_verified, is_suspended, is_banned)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (owner_user_id, business_name, normalized_business_name, location, latitude, longitude, price_from, pricing_mode, requires_quote, image, accepts_wallet, accepts_cash, stand_type, business_type, marketplace_mode, map_icon_type, home_service_enabled, intro_text, portfolio_json, cover_image_url, business_hours_json, delivery_available, pickup_available, delivery_areas_json, delivery_fee, delivery_notes, verified_status, verification_document_name, verification_submitted_at, subscription_tier, selected_plan, subscription_status, subscription_expires_at, business_status, is_published, trial_plan, trial_started_at, trial_ends_at, trial_status, used_trials, review_status, is_verified, is_suspended, is_banned)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         safeBusinessName,
@@ -878,15 +1055,23 @@ export async function registerBarber(req, res, next) {
         1,
         normalizedStandType,
         normalizedBusinessType,
+        normalizedMarketplaceMode,
         normalizedMapIconType,
         home_service_enabled ? 1 : 0,
         String(requestedIntroText || "").trim(),
         JSON.stringify(storedImages.portfolio),
+        storedCoverImage,
+        JSON.stringify(normalizedBusinessHours),
+        (req.body.deliveryAvailable ?? delivery_available) ? 1 : 0,
+        (req.body.pickupAvailable ?? pickup_available) ? 1 : 0,
+        JSON.stringify(normalizedDeliveryAreas),
+        normalizedDeliveryFee,
+        normalizedDeliveryNotes,
         verificationStatus,
         normalizedVerificationDocumentName,
         verificationSubmittedAt,
-        selectedPlan || null,
-        selectedPlan || null,
+        subscriptionTier,
+        selectedPlan,
         subscriptionStatus,
         null,
         draftStatus,
@@ -929,9 +1114,20 @@ export async function registerBarber(req, res, next) {
     }
     await replaceTeamMembers(barberId, storedImages.teamMembers);
 
-    await seedDefaultWeeklySchedule(barberId, safeScheduleStart, safeScheduleEnd);
+    if (supportsServices(normalizedMarketplaceMode)) {
+      await seedDefaultWeeklySchedule(barberId, safeScheduleStart, safeScheduleEnd);
+    }
     await updateUserRole(req.user.id, "provider");
     await logAudit(req.user.id, `Registered provider profile #${barberId}`);
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.STAND_CREATED,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      targetType: "stand",
+      targetId: barberId,
+      metadata: { submit_intent: String(submit_intent || "draft") },
+      req,
+    });
 
     const barber = await getBarberByOwnerUserId(req.user.id);
     const barberServices = await getServicesForBarber(barber.id);
@@ -943,6 +1139,8 @@ export async function registerBarber(req, res, next) {
       success: true,
       message: freeActivation
         ? "Business active. Your stand is now live and visible to customers on the Free plan."
+        : !wantsPayment
+        ? "Draft saved. You can come back and continue anytime."
         : getDraftSavedMessage({
           verificationRequired: false,
           planRequired: !freeActivation && !wantsPayment,
@@ -1057,10 +1255,18 @@ export async function getAllBarbers(req, res, next) {
         b.accepts_cash,
         b.stand_type,
         b.business_type,
+        b.marketplace_mode,
         b.map_icon_type,
         b.home_service_enabled,
         b.intro_text,
         b.portfolio_json,
+        b.cover_image_url,
+        b.business_hours_json,
+        b.delivery_available,
+        b.pickup_available,
+        b.delivery_areas_json,
+        b.delivery_fee,
+        b.delivery_notes,
         b.subscription_tier,
         b.subscription_status,
         b.subscription_expires_at,
@@ -1100,10 +1306,18 @@ export async function getAllBarbers(req, res, next) {
         b.accepts_cash,
         b.stand_type,
         b.business_type,
+        b.marketplace_mode,
         b.map_icon_type,
         b.home_service_enabled,
         b.intro_text,
         b.portfolio_json,
+        b.cover_image_url,
+        b.business_hours_json,
+        b.delivery_available,
+        b.pickup_available,
+        b.delivery_areas_json,
+        b.delivery_fee,
+        b.delivery_notes,
         b.subscription_tier,
         b.subscription_status,
         b.subscription_expires_at,
@@ -1314,6 +1528,15 @@ export async function updateMyBarberProfile(req, res, next) {
       clearFields,
       clearKey: "stand_type",
     }));
+    const marketplaceModeWasProvided = hasAnyOwn(body, ["marketplace_mode", "marketplaceMode"]);
+    const nextMarketplaceMode = getMarketplaceMode(mergeDraftText({
+      body,
+      keys: ["marketplace_mode", "marketplaceMode"],
+      existing: barber.marketplace_mode || "service",
+      clearFields,
+      clearKey: "marketplace_mode",
+    }));
+    if (marketplaceModeWasProvided) requireMarketplaceFeatureForMode(nextMarketplaceMode);
     const nextBusinessType = normalizeBusinessType(mergeDraftText({
       body,
       keys: ["category", "business_type", "businessType"],
@@ -1374,6 +1597,53 @@ export async function updateMyBarberProfile(req, res, next) {
       : imageWasProvided && clearFields.has("image")
       ? ""
       : barber.image || "";
+    const coverImageWasProvided = hasAnyOwn(body, ["cover_image_url", "coverImageUrl"]);
+    const incomingCoverImage = coverImageWasProvided
+      ? firstOwnValue(body, ["cover_image_url", "coverImageUrl"])
+      : undefined;
+    const finalCoverImage = coverImageWasProvided && String(incomingCoverImage || "").trim()
+      ? validateImageReference(incomingCoverImage, "Cover image")
+      : coverImageWasProvided && clearFields.has("cover_image_url")
+      ? ""
+      : barber.cover_image_url || "";
+    if (getImageReferenceBytes(finalCoverImage) > 10 * 1024 * 1024) {
+      throw validationError("Cover image must be 10MB or smaller.");
+    }
+    const businessHoursWereProvided = hasAnyOwn(body, ["business_hours_json", "business_hours", "businessHours"]);
+    const nextBusinessHours = businessHoursWereProvided
+      ? normalizeBusinessHours(firstOwnValue(body, ["business_hours_json", "business_hours", "businessHours"]), {})
+      : normalizeBusinessHours(barber.business_hours_json, {});
+    const nextDeliveryAvailable = mergeDraftBoolean({
+      body,
+      keys: ["delivery_available", "deliveryAvailable"],
+      existing: barber.delivery_available,
+    });
+    const nextPickupAvailable = mergeDraftBoolean({
+      body,
+      keys: ["pickup_available", "pickupAvailable"],
+      existing: barber.pickup_available ?? 1,
+    });
+    const existingDeliveryAreas = parseJsonArray(barber.delivery_areas_json, []);
+    const nextDeliveryAreasInput = mergeDraftArray({
+      body,
+      keys: ["delivery_areas_json", "delivery_areas", "deliveryAreas"],
+      existing: existingDeliveryAreas,
+      clearFields,
+      clearKey: "delivery_areas",
+    });
+    const nextDeliveryAreas = normalizeDeliveryAreas(nextDeliveryAreasInput, existingDeliveryAreas);
+    const deliveryFeeWasProvided = hasAnyOwn(body, ["delivery_fee", "deliveryFee"]);
+    const nextDeliveryFee = deliveryFeeWasProvided
+      ? normalizeDeliveryFee(firstOwnValue(body, ["delivery_fee", "deliveryFee"]), barber.delivery_fee ?? null)
+      : barber.delivery_fee ?? null;
+    const nextDeliveryNotes = normalizeDeliveryNotes(mergeDraftText({
+      body,
+      keys: ["delivery_notes", "deliveryNotes"],
+      existing: barber.delivery_notes || "",
+      clearFields,
+      clearKey: "delivery_notes",
+      trim: false,
+    }), barber.delivery_notes || "");
     const nextAcceptsWallet = mergeDraftBoolean({
       body,
       keys: ["accepts_wallet", "acceptsWallet"],
@@ -1389,13 +1659,35 @@ export async function updateMyBarberProfile(req, res, next) {
       keys: ["home_service_enabled", "homeServiceEnabled"],
       existing: barber.home_service_enabled,
     });
-    const nextPhone = mergeDraftText({
+    const phoneWasProvided = hasAnyOwn(body, ["phone", "business_phone", "businessPhone"]);
+    const mergedPhone = mergeDraftText({
       body,
       keys: ["phone", "business_phone", "businessPhone"],
       existing: barber.phone || "",
       clearFields,
       clearKey: "phone",
     });
+    const nextPhone = phoneWasProvided && mergedPhone
+      ? normalizeUgandaStandPhone(mergedPhone)
+      : mergedPhone;
+    if (phoneWasProvided && mergedPhone && !nextPhone) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_UGANDA_PHONE",
+        message: "Enter a valid Uganda mobile number using the +256 country code.",
+      });
+    }
+    const selectedPlanWasProvided = hasAnyOwn(body, ["selected_plan", "selectedPlan", "plan"]);
+    const requestedPlan = selectedPlanWasProvided
+      ? normalizeProviderPlan(firstOwnValue(body, ["selected_plan", "selectedPlan", "plan"]))
+      : normalizeProviderPlan(barber.selected_plan || "FREE");
+    if (selectedPlanWasProvided && !isValidProviderPlan(requestedPlan)) {
+      return res.status(400).json({
+        success: false,
+        message: "Choose Free, Premium, or Platinum for this stand.",
+      });
+    }
+    const nextSelectedPlan = requestedPlan || "FREE";
     const nextScheduleStart = normalizeScheduleTime(mergeDraftText({
       body,
       keys: ["schedule_start", "scheduleStart", "availability_start"],
@@ -1410,7 +1702,7 @@ export async function updateMyBarberProfile(req, res, next) {
       clearFields,
       clearKey: "schedule_end",
     }), "20:00");
-    if (nextScheduleStart >= nextScheduleEnd) {
+    if (supportsServices(nextMarketplaceMode) && nextScheduleStart >= nextScheduleEnd) {
       return res.status(400).json({ success: false, message: "Closing time must be later than opening time." });
     }
 
@@ -1464,7 +1756,7 @@ export async function updateMyBarberProfile(req, res, next) {
 
     const latestSubscriptionForLimit = await getLatestSubscription(barber.id);
     const tierForLimit =
-      normalizeProviderPlan(latestSubscriptionForLimit?.tier || barber.subscription_tier || barber.selected_plan) ||
+      normalizeProviderPlan(latestSubscriptionForLimit?.tier || nextSelectedPlan || barber.subscription_tier) ||
       "FREE";
     const planConfig = getSubscriptionTierConfig(tierForLimit);
     assertProviderImageLimits({
@@ -1475,13 +1767,19 @@ export async function updateMyBarberProfile(req, res, next) {
       teamMembers: nextTeamMembers,
     });
 
-    const storedImages = await materializeProviderImages({
+    const storedImages = await materializeProviderImagesSafe({
       ownerId: req.user.id,
       businessImage: finalImage || "",
       services: nextServicesInput,
       portfolio: nextPortfolio,
       teamMembers: nextTeamMembers,
     });
+    const storedCoverImage = coverImageWasProvided
+      ? await materializeImageReference(finalCoverImage, {
+          ownerId: req.user.id,
+          kind: "business-cover",
+        })
+      : barber.cover_image_url || "";
 
     await runInTransaction(async (tx) => {
       await tx.run(
@@ -1499,10 +1797,18 @@ export async function updateMyBarberProfile(req, res, next) {
              accepts_cash = ?,
              stand_type = ?,
              business_type = ?,
+             marketplace_mode = ?,
              map_icon_type = ?,
              home_service_enabled = ?,
              intro_text = ?,
              portfolio_json = ?,
+             cover_image_url = ?,
+             business_hours_json = ?,
+             delivery_available = ?,
+             pickup_available = ?,
+             delivery_areas_json = ?,
+             delivery_fee = ?,
+             delivery_notes = ?,
              availability_start = ?,
              availability_end = ?,
              verification_document_name = ?,
@@ -1510,7 +1816,8 @@ export async function updateMyBarberProfile(req, res, next) {
              verification_submitted_at = ?,
              verification_reviewed_at = ?,
              verification_reviewed_by = ?,
-             verification_notes = ?
+             verification_notes = ?,
+             selected_plan = ?
          WHERE owner_user_id = ?`,
         [
           nextBusinessName,
@@ -1526,10 +1833,18 @@ export async function updateMyBarberProfile(req, res, next) {
           nextAcceptsCash ? 1 : 0,
           nextStandType,
           nextBusinessType,
+          nextMarketplaceMode,
           nextMapIconType,
           nextHomeServiceEnabled ? 1 : 0,
           nextIntroText,
           JSON.stringify(portfolioWasProvided ? storedImages.portfolio : existingPortfolio),
+          storedCoverImage,
+          JSON.stringify(nextBusinessHours),
+          nextDeliveryAvailable ? 1 : 0,
+          nextPickupAvailable ? 1 : 0,
+          JSON.stringify(nextDeliveryAreas),
+          nextDeliveryFee,
+          nextDeliveryNotes,
           nextScheduleStart,
           nextScheduleEnd,
           nextVerificationDocumentName,
@@ -1538,9 +1853,23 @@ export async function updateMyBarberProfile(req, res, next) {
           nextVerificationReviewedAt,
           nextVerificationReviewedBy,
           nextVerificationNotes,
+          nextSelectedPlan,
           req.user.id
         ]
       );
+      if (
+        marketplaceModeWasProvided &&
+        nextMarketplaceMode !== getMarketplaceMode(barber) &&
+        Number(barber.is_published || 0) === 1
+      ) {
+        await tx.run(
+          `UPDATE barbers
+           SET is_published = 0,
+               business_status = 'draft'
+           WHERE owner_user_id = ?`,
+          [req.user.id]
+        );
+      }
       if (servicesWereProvided || clearFields.has("services")) {
         await replaceBarberServices(barber.id, storedImages.services, planConfig.serviceLimit, { strict: false, executor: tx });
       }
@@ -1548,6 +1877,7 @@ export async function updateMyBarberProfile(req, res, next) {
         await replaceTeamMembers(barber.id, storedImages.teamMembers, { executor: tx });
       }
       if (
+        supportsServices(nextMarketplaceMode) &&
         hasAnyOwn(body, ["schedule_start", "scheduleStart", "availability_start", "schedule_end", "scheduleEnd", "availability_end"])
       ) {
         const scheduleToSave = existingSchedule.length
@@ -1582,15 +1912,26 @@ export async function updateMyBarberProfile(req, res, next) {
           );
         }
       }
-      if (hasAnyOwn(body, ["phone", "business_phone", "businessPhone"]) || clearFields.has("phone")) {
+      if (phoneWasProvided || clearFields.has("phone")) {
         await tx.run(
           `UPDATE profiles SET phone = ?, normalized_phone = ? WHERE user_id = ?`,
           [nextPhone, normalizeIdentityPhone(nextPhone), req.user.id]
         );
       }
+      if (selectedPlanWasProvided) {
+        await tx.run(`UPDATE profiles SET selected_plan = ? WHERE user_id = ?`, [nextSelectedPlan, req.user.id]);
+      }
     });
 
     await logAudit(req.user.id, `Saved provider stand draft #${barber.id}`);
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.STAND_DRAFT_SAVED,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      targetType: "stand",
+      targetId: barber.id,
+      req,
+    });
 
     const updatedBarber = await getBarberByOwnerUserId(req.user.id);
     const updatedServices = await getServicesForBarber(updatedBarber.id);
@@ -1646,7 +1987,16 @@ export async function publishMyBarberStand(req, res, next) {
     }
     const services = await getServicesForBarber(barber.id);
     const schedule = await getScheduleForBarber(barber.id);
-    const missing = getStandPublishMissingDetails({ stand: barber, services, schedule });
+    const marketplaceMode = getMarketplaceMode(barber);
+    requireMarketplaceFeatureForMode(marketplaceMode);
+    const products = await all(
+      `SELECT id, is_active, is_deleted, stock_status
+       FROM products
+       WHERE stand_id = ?`,
+      [barber.id]
+    );
+    const publishRequirements = getPublishRequirements({ stand: barber, services, products, schedule });
+    const missing = publishRequirements.missing;
     if (missing.length) {
       return res.status(400).json({
         success: false,
@@ -1673,11 +2023,30 @@ export async function publishMyBarberStand(req, res, next) {
            business_status = ?,
            deleted_at = NULL,
            subscription_tier = CASE WHEN (subscription_tier IS NULL OR TRIM(subscription_tier) = '' OR UPPER(subscription_tier) = 'UNKNOWN') THEN 'FREE' ELSE subscription_tier END,
-           subscription_status = CASE WHEN (subscription_status IS NULL OR TRIM(subscription_status) = '' OR UPPER(subscription_status) = 'UNKNOWN' OR LOWER(subscription_status) IN ('pending_subscription', 'draft', 'almost_ready')) THEN 'active' ELSE subscription_status END
+           subscription_status = CASE
+             -- Free plan activates on publish: a FREE (or unset) tier with a
+             -- non-active draft status ('none', 'draft', etc.) becomes 'active'
+             -- so it satisfies the public-visibility trigger. Paid tiers are not
+             -- auto-activated here — they stay pending until payment confirms.
+             WHEN (
+               (subscription_tier IS NULL OR TRIM(subscription_tier) = '' OR UPPER(subscription_tier) IN ('UNKNOWN', 'FREE'))
+               AND LOWER(COALESCE(subscription_status, '')) IN ('', 'none', 'unknown', 'pending_subscription', 'draft', 'almost_ready', 'inactive')
+             ) THEN 'active'
+             WHEN (subscription_status IS NULL OR TRIM(subscription_status) = '' OR UPPER(subscription_status) = 'UNKNOWN' OR LOWER(subscription_status) IN ('pending_subscription', 'draft', 'almost_ready')) THEN 'active'
+             ELSE subscription_status
+           END
        WHERE owner_user_id = ?`,
       [nextStatus, req.user.id]
     );
     await logAudit(req.user.id, `Published provider stand #${barber.id}`);
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.STAND_PUBLISHED,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      targetType: "stand",
+      targetId: barber.id,
+      req,
+    });
     const updatedBarber = await getBarberByOwnerUserId(req.user.id);
     const updatedServices = await getServicesForBarber(updatedBarber.id);
     const updatedSchedule = await getScheduleForBarber(updatedBarber.id);
@@ -1688,6 +2057,10 @@ export async function publishMyBarberStand(req, res, next) {
       message: "Your stand is now published and visible to customers.",
       barber: {
         ...updatedBarber,
+        ...withCanonicalProviderFields(updatedBarber, {
+          services: updatedServices,
+          portfolio: parseJsonArray(updatedBarber.portfolio_json, []),
+        }),
         image: updatedBarber.image || null,
         document_name: updatedBarber.verification_document_name || "",
         business_type: updatedBarber.business_type || barber.business_type || "",
@@ -1733,6 +2106,14 @@ export async function deleteMyBarberProfile(req, res, next) {
     ).catch(() => {});
     await updateUserRole(req.user.id, "customer");
     await logAudit(req.user.id, `Deleted provider profile #${barber.id}`);
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.STAND_DELETED,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      targetType: "stand",
+      targetId: barber.id,
+      req,
+    });
 
     return res.status(200).json({
       success: true,
