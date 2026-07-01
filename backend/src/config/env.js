@@ -53,6 +53,11 @@ export const env = {
   host: (process.env.HOST || "127.0.0.1").trim(),
   logLevel: (process.env.LOG_LEVEL || (process.env.NODE_ENV === "production" ? "info" : "debug")).trim().toLowerCase(),
   jwtSecret: process.env.JWT_SECRET,
+  // Server-side salt for hashing IP / user-agent in the security audit trail so
+  // raw values are never stored. Production should set AUDIT_LOG_SALT; we fall
+  // back to a deployment-stable secret (JWT_SECRET) so hashes still differ per
+  // deployment, and finally to an empty salt in local/dev.
+  auditLogSalt: process.env.AUDIT_LOG_SALT || process.env.JWT_SECRET || "",
   jwtExpiresIn: (process.env.JWT_EXPIRES_IN || "15m").trim(),
   refreshTokenDays: Math.max(1, Number(process.env.REFRESH_TOKEN_DAYS || 30)),
   clientUrls: configuredClientUrls,

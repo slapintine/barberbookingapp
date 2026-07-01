@@ -5,6 +5,11 @@ import {
   getLoginLock,
   recordLoginFailure,
 } from "../services/loginAttemptGuard.js";
+import {
+  AUDIT_EVENTS,
+  hashAuditEmail,
+  recordAuditEvent,
+} from "../services/auditLogService.js";
 import db from "../config/db.js";
 import { run, get } from "../db/query.js";
 import { otpEmail, passwordResetEmail, sendEmail } from "../services/emailService.js";
@@ -360,6 +365,12 @@ export async function loginUser(req, res, next) {
     const existingLock = getLoginLock(username);
     if (existingLock.locked) {
       res.setHeader("Retry-After", String(existingLock.retryAfterSeconds));
+      await recordAuditEvent({
+        eventType: AUDIT_EVENTS.ACCOUNT_LOCKOUT,
+        targetType: "account",
+        metadata: { emailHash: hashAuditEmail(username), reason: "already_locked" },
+        req,
+      });
       return authError(res, 429, "TOO_MANY_ATTEMPTS", "Too many failed attempts. Please try again in a few minutes.");
     }
 
@@ -370,8 +381,23 @@ export async function loginUser(req, res, next) {
       // Same message and code path whether the account is missing or the password
       // is wrong, so the response never reveals which accounts exist.
       const lock = recordLoginFailure(username);
+      // Failed login: store only a hashed email, never the plain address.
+      await recordAuditEvent({
+        eventType: AUDIT_EVENTS.LOGIN_FAILURE,
+        actorUserId: user?.id ?? null,
+        targetType: "account",
+        metadata: { emailHash: hashAuditEmail(username) },
+        req,
+      });
       if (lock.locked) {
         res.setHeader("Retry-After", String(lock.retryAfterSeconds));
+        await recordAuditEvent({
+          eventType: AUDIT_EVENTS.ACCOUNT_LOCKOUT,
+          actorUserId: user?.id ?? null,
+          targetType: "account",
+          metadata: { emailHash: hashAuditEmail(username), reason: "failed_attempt_threshold" },
+          req,
+        });
         return authError(res, 429, "TOO_MANY_ATTEMPTS", "Too many failed attempts. Please try again in a few minutes.");
       }
       return authError(res, 401, "INVALID_CREDENTIALS", "Invalid email or password.");
@@ -385,6 +411,14 @@ export async function loginUser(req, res, next) {
     // Successful login clears the account's failure counter.
     clearLoginFailures(username);
     const session = await createAuthSession(user, sessionRequest(req));
+    await recordAuditEvent({
+      eventType: AUDIT_EVENTS.LOGIN_SUCCESS,
+      actorUserId: user.id,
+      actorRole: user.role,
+      targetType: "account",
+      targetId: user.id,
+      req,
+    });
 
     return res.status(200).json({
       success: true,

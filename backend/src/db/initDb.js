@@ -1654,6 +1654,29 @@ export async function initDb() {
       )
     `);
 
+    // Security/business audit trail. Stores only hashed IP/user-agent and
+    // sanitized, redacted metadata — never raw tokens, passwords, OTPs, payment
+    // credentials, or message contents. Mirrors Postgres migration 040.
+    await run(`
+      CREATE TABLE IF NOT EXISTS security_audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        actor_user_id INTEGER,
+        actor_role TEXT,
+        target_type TEXT,
+        target_id TEXT,
+        ip_hash TEXT,
+        user_agent_hash TEXT,
+        metadata TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+    await run(`CREATE INDEX IF NOT EXISTS idx_security_audit_created_at ON security_audit_logs (created_at)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_security_audit_event_type ON security_audit_logs (event_type)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_security_audit_actor ON security_audit_logs (actor_user_id)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_security_audit_target ON security_audit_logs (target_type, target_id)`);
+
     await migrateExistingSchema();
     await createIndexes();
 

@@ -32,6 +32,7 @@ import { protect } from "../middleware/authMiddleware.js";
 import { requireRole } from "../middleware/roleMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { schemas } from "../validation/schemas.js";
+import { getSecurityAuditLogs } from "../controllers/auditLogController.js";
 
 const router = express.Router();
 
@@ -60,6 +61,7 @@ router.post("/deployment-readiness/remediate", remediateAdminDeploymentReadiness
 router.post("/test-feature-access", runAdminFeatureAccessTest);
 router.post("/access-test", runAdminAccessTest);
 router.get("/audit-log", getAdminAuditLog);
+router.get("/security-audit-logs", validateRequest(schemas.adminAuditLogQuery), getSecurityAuditLogs);
 router.get("/reviews", getAdminReviews);
 router.get("/support-requests", getAdminSupportRequests);
 router.patch("/support-requests/:id", validateRequest(schemas.adminSupportRequestUpdate), updateAdminSupportRequest);
