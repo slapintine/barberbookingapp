@@ -1,5 +1,10 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import {
+  clearLoginFailures,
+  getLoginLock,
+  recordLoginFailure,
+} from "../services/loginAttemptGuard.js";
 import db from "../config/db.js";
 import { run, get } from "../db/query.js";
 import { otpEmail, passwordResetEmail, sendEmail } from "../services/emailService.js";
@@ -50,7 +55,12 @@ function validatePasswordLength(password) {
 
 function findUserByUsernameOrEmail(identifier) {
   const value = String(identifier || "").trim();
-  const email = normalizeEmail(value);
+  // Match usernames AND emails case-insensitively and whitespace-trimmed so a
+  // user who signed up as "Timothy" can still log in typing "timothy" (this was
+  // the live bug: the email path was already case-insensitive, the username path
+  // was not, so a case/whitespace mismatch looked like a wrong password). An
+  // exact-case username still wins when legacy rows differ only by case.
+  const normalized = value.toLowerCase();
 
   return new Promise((resolve, reject) => {
     db.get(
@@ -59,9 +69,10 @@ function findUserByUsernameOrEmail(identifier) {
               p.email
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
-       WHERE u.username = ? OR LOWER(p.email) = ?
+       WHERE LOWER(TRIM(u.username)) = ? OR LOWER(TRIM(p.email)) = ?
+       ORDER BY CASE WHEN u.username = ? THEN 0 ELSE 1 END, u.id ASC
        LIMIT 1`,
-      [value, email],
+      [normalized, normalized, value],
       (err, row) => {
         if (err) reject(err);
         else resolve(row || null);
@@ -71,12 +82,19 @@ function findUserByUsernameOrEmail(identifier) {
 }
 
 function findUserByUsername(username) {
+  const value = String(username || "").trim();
+  const normalized = value.toLowerCase();
+  // Case-insensitive + trimmed so uniqueness checks and self-lookups can't be
+  // bypassed (or missed) by case/whitespace. Exact case is preferred when two
+  // legacy rows differ only by case, so a self-lookup resolves deterministically.
   return new Promise((resolve, reject) => {
     db.get(
       `SELECT id, username, password_hash, role, account_status, created_at
        FROM users
-       WHERE username = ?`,
-      [username],
+       WHERE LOWER(TRIM(username)) = ?
+       ORDER BY CASE WHEN username = ? THEN 0 ELSE 1 END, id ASC
+       LIMIT 1`,
+      [normalized, value],
       (err, row) => {
         if (err) reject(err);
         else resolve(row || null);
@@ -335,13 +353,28 @@ export async function loginUser(req, res, next) {
       return authError(res, 400, "VALIDATION_ERROR", "Please enter your password.");
     }
 
+    // Per-account temporary lockout (layered on top of the per-IP authRateLimiter)
+    // so a distributed/IP-rotating attacker still can't brute-force one account.
+    // Checked before the password comparison and keyed by the submitted identifier
+    // so it behaves identically for real and non-existent accounts (anti-enumeration).
+    const existingLock = getLoginLock(username);
+    if (existingLock.locked) {
+      res.setHeader("Retry-After", String(existingLock.retryAfterSeconds));
+      return authError(res, 429, "TOO_MANY_ATTEMPTS", "Too many failed attempts. Please try again in a few minutes.");
+    }
+
     const user = await findUserByUsernameOrEmail(username);
 
     const passwordMatches = user ? await bcrypt.compare(password, user.password_hash) : false;
     if (!user || !passwordMatches) {
-      // Same message whether the account is missing or the password is wrong, so
-      // the response never reveals which accounts exist (anti-enumeration).
-      return authError(res, 401, "INVALID_CREDENTIALS", "We couldn't find an account with those details. Check your email/phone and password, or create an account.");
+      // Same message and code path whether the account is missing or the password
+      // is wrong, so the response never reveals which accounts exist.
+      const lock = recordLoginFailure(username);
+      if (lock.locked) {
+        res.setHeader("Retry-After", String(lock.retryAfterSeconds));
+        return authError(res, 429, "TOO_MANY_ATTEMPTS", "Too many failed attempts. Please try again in a few minutes.");
+      }
+      return authError(res, 401, "INVALID_CREDENTIALS", "Invalid email or password.");
     }
 
     const inactiveCode = getInactiveAccountCode(user);
@@ -349,6 +382,8 @@ export async function loginUser(req, res, next) {
       return authError(res, 403, inactiveCode, "This account is not active. Please contact support or verify your account.");
     }
 
+    // Successful login clears the account's failure counter.
+    clearLoginFailures(username);
     const session = await createAuthSession(user, sessionRequest(req));
 
     return res.status(200).json({
@@ -430,18 +465,27 @@ export async function updateAccount(req, res, next) {
       : currentUser.password_hash;
     const finalUsername = wantsUsernameChange ? nextUsername : currentUser.username;
 
-    await new Promise((resolve, reject) => {
+    const updateResult = await new Promise((resolve, reject) => {
       db.run(
         `UPDATE users
          SET username = ?, password_hash = ?
          WHERE id = ?`,
         [finalUsername, passwordHash, currentUser.id],
-        (err) => {
+        function (err) {
           if (err) reject(err);
-          else resolve();
+          else resolve({ changes: this?.changes ?? 0 });
         }
       );
     });
+
+    // Never report success when the write did not land on the user's row —
+    // otherwise the UI shows "Account updated" while the password never changed.
+    if (!updateResult.changes) {
+      return res.status(500).json({
+        success: false,
+        message: "We couldn't update your account. Please try again.",
+      });
+    }
 
     const user = {
       id: currentUser.id,

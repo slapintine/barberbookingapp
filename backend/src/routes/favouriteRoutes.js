@@ -1,6 +1,8 @@
 import express from "express";
 import { all, get, run } from "../db/query.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { validateRequest } from "../middleware/validateRequest.js";
+import { schemas } from "../validation/schemas.js";
 
 const router = express.Router();
 
@@ -22,7 +24,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", validateRequest(schemas.favouriteCreate), async (req, res, next) => {
   try {
     const barberId = Number(req.body.barber_id ?? req.body.barberId);
 
@@ -64,7 +66,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-router.delete("/:barberId", async (req, res, next) => {
+router.delete("/:barberId", validateRequest(schemas.favouriteDelete), async (req, res, next) => {
   try {
     const { barberId } = req.params;
     const result = await run(

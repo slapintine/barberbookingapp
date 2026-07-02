@@ -9,12 +9,14 @@ import {
   sendTestNotification,
   unregisterToken,
 } from "../controllers/firebaseNotificationController.js";
+import { validateRequest } from "../middleware/validateRequest.js";
+import { schemas } from "../validation/schemas.js";
 
 const router = express.Router();
 
 router.get("/me", protect, getMyNotifications);
-router.post("/register-token", protect, registerToken);
-router.post("/unregister-token", protect, unregisterToken);
+router.post("/register-token", protect, validateRequest(schemas.notificationRegister), registerToken);
+router.post("/unregister-token", protect, validateRequest(schemas.notificationUnregister), unregisterToken);
 router.post("/test", protect, sendTestNotification);
 router.patch("/:id/read", protect, markNotificationRead);
 
