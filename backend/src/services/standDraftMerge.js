@@ -91,6 +91,6 @@ export function normalizeUgandaStandPhone(value) {
   return `+256${digits}`;
 }
 
-export function getStandPublishMissingDetails({ stand = {}, services = [], products = [], schedule = [] } = {}) {
-  return getPublishRequirements({ stand, services, products, schedule }).missing;
+export function getStandPublishMissingDetails({ stand = {}, services = [], schedule = [] } = {}) {
+  return getPublishRequirements({ stand, services, schedule }).missing;
 }

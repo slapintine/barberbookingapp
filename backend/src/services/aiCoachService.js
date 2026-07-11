@@ -422,7 +422,7 @@ function getRecommendedNextAction(question, stats) {
 
 export function getWeeklyGrowthFocusFromStats(stats) {
   if (!stats.hasBusinessPhoto) return "Add a clear main photo so customers can quickly see that your stand is real and active.";
-  if (stats.photosCount < 3) return "Upload at least 3 real photos of your work, shop, team, or tools to build customer trust.";
+  if (stats.photosCount < 3) return "Upload at least 3 real photos of your work, team, tools, or finished service results to build customer trust.";
   if (!stats.servicesCount) return "Add your main services so customers know exactly what they can book.";
   if (stats.pricedServicesCount < stats.servicesCount) return "Add clear service prices so customers can decide without guessing the cost.";
   if (!stats.hasLocation) return "Add your location or service area so nearby customers can find and trust your stand.";

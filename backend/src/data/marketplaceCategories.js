@@ -108,7 +108,7 @@ const SERVICE_MARKETPLACE_CATEGORIES = [
   { id: "consulting-services", icon: "briefcase", name: "Consulting Services", description: "Business, operations, strategy, career, and specialist advisory services.", image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "accounting-tax", icon: "briefcase", name: "Accounting & Tax", description: "Bookkeeping, tax filing, payroll, audit prep, and financial records.", image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "legal-services", icon: "briefcase", name: "Legal Services", description: "Contracts, company registration, compliance, and legal consultations.", image: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=900&q=80", active: true },
-  { id: "design-branding", icon: "sparkles", name: "Design & Branding", description: "Logos, brand identity, graphics, product design, and visual assets.", image: "https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=900&q=80", active: true },
+  { id: "design-branding", icon: "sparkles", name: "Design & Branding", description: "Logos, brand identity, graphics, packaging design, and visual assets.", image: "https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "writing-translation", icon: "book", name: "Writing & Translation", description: "Copywriting, editing, documents, translation, and transcription.", image: "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "catering-food-services", icon: "sparkles", name: "Catering & Food Services", description: "Catering, meal prep, cakes, private chefs, and food vendors.", image: "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "laundry-services", icon: "droplet", name: "Laundry Services", description: "Wash, dry cleaning, ironing, pickup, delivery, and fabric care.", image: "https://images.unsplash.com/photo-1517677208171-0bc6724a3e60?auto=format&fit=crop&w=900&q=80", active: true },
@@ -125,60 +125,7 @@ const SERVICE_MARKETPLACE_CATEGORIES = [
   { id: "security-services", icon: "briefcase", name: "Security Services", description: "Guards, CCTV, access control, alarms, and property security.", image: "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=80", active: true },
 ];
 
-const PRODUCT_MARKETPLACE_CATEGORIES = [
-  {
-    id: "boutique-fashion",
-    icon: "shopping-bag",
-    name: "Boutique & Fashion",
-    description: "Clothing, shoes, bags, jewellery, and local fashion.",
-    image: "",
-    active: true,
-    kinds: ["product"],
-  },
-  {
-    id: "cosmetics",
-    icon: "sparkles",
-    name: "Cosmetics",
-    description: "Beauty products, skin care, hair care, fragrances, and makeup.",
-    image: "",
-    active: true,
-    kinds: ["product"],
-  },
-  {
-    id: "food-groceries",
-    icon: "shopping-bag",
-    name: "Food & Groceries",
-    description: "Prepared food, groceries, produce, baked goods, and pantry items.",
-    image: "",
-    active: true,
-    kinds: ["product"],
-  },
-  {
-    id: "electronics",
-    icon: "briefcase",
-    name: "Electronics",
-    description: "Phones, accessories, appliances, computers, and electronics.",
-    image: "",
-    active: true,
-    kinds: ["product"],
-  },
-  {
-    id: "hardware",
-    icon: "tool",
-    name: "Hardware",
-    description: "Tools, building materials, fittings, electrical supplies, and hardware.",
-    image: "",
-    active: true,
-    kinds: ["product"],
-  },
-];
-
-export const MARKETPLACE_CATEGORIES = [
-  ...SERVICE_MARKETPLACE_CATEGORIES.map((category) => ({
-    ...category,
-    kinds: ["events-photography", "catering-food-services", "printing-stationery"].includes(category.id)
-      ? ["service", "product"]
-      : ["service"],
-  })),
-  ...PRODUCT_MARKETPLACE_CATEGORIES,
-];
+export const MARKETPLACE_CATEGORIES = SERVICE_MARKETPLACE_CATEGORIES.map((category) => ({
+  ...category,
+  kinds: ["service"],
+}));

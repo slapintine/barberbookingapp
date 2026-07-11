@@ -58,7 +58,7 @@ const SERVICE_ALIASES = {
   "consulting-services": ["consulting", "consultant", "business strategy", "operations", "career advisory", "specialist advisory"],
   "accounting-tax": ["accounting", "tax", "bookkeeping", "payroll", "audit", "financial records"],
   "legal-services": ["legal", "lawyer", "contract", "company registration", "compliance", "legal consultation"],
-  "design-branding": ["design", "branding", "logo", "brand identity", "graphics", "product design"],
+  "design-branding": ["design", "branding", "logo", "brand identity", "graphics", "packaging design"],
   "writing-translation": ["writing", "translation", "copywriting", "editing", "transcription", "documents"],
   "printing-stationery": ["printing", "stationery", "photocopying", "business documents"],
   "it-support": ["it support", "computer setup", "troubleshooting", "networking", "cybersecurity", "computer repair"],
@@ -453,7 +453,6 @@ export async function findSmartMatches(criteria = {}) {
      JOIN barber_services s ON s.barber_id = b.id AND COALESCE(s.is_available, 1) = 1
      LEFT JOIN barber_schedule sch ON sch.barber_id = b.id AND sch.day_of_week = ?
      WHERE ${publicBusinessWhere("b")}
-       AND b.marketplace_mode IN ('service', 'hybrid')
      ORDER BY b.id DESC, s.id ASC`,
     [dayOfWeek ?? -1, ...publicBusinessParams(now)]
   );

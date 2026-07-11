@@ -64,18 +64,6 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_quote_requests_customer_id ON quote_requests(customer_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_quote_requests_provider_id ON quote_requests(provider_id)`);
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_quote_requests_customer_idempotency ON quote_requests(customer_id, idempotency_key) WHERE idempotency_key <> ''`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_products_stand_active ON products(stand_id, is_deleted, is_active, created_at)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_products_category_stock ON products(category, stock_status, is_deleted, is_active)`);
-  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_products_stand_slug ON products(stand_id, slug) WHERE slug <> '' AND is_deleted = 0`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images(product_id, sort_order, id)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_product_orders_seller ON product_orders(seller_user_id, status, created_at)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_product_orders_customer ON product_orders(customer_id, status, created_at)`);
-  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_product_orders_customer_idempotency ON product_orders(customer_id, idempotency_key) WHERE idempotency_key <> ''`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_product_order_items_order ON product_order_items(order_id)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_product_order_events_order ON product_order_events(order_id, created_at)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_product_inquiries_seller ON product_inquiries(seller_user_id, status, created_at)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_product_inquiries_customer ON product_inquiries(customer_id, status, created_at)`);
-  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_product_inquiries_customer_idempotency ON product_inquiries(customer_id, idempotency_key) WHERE idempotency_key <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_support_requests_user_id ON support_requests(user_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_support_requests_status ON support_requests(status, created_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_messages_barber_id ON messages(barber_id)`);
@@ -990,7 +978,7 @@ export async function initDb() {
         accepts_cash INTEGER NOT NULL DEFAULT 1,
         stand_type TEXT NOT NULL DEFAULT 'individual',
         business_type TEXT NOT NULL DEFAULT 'barber',
-        marketplace_mode TEXT NOT NULL DEFAULT 'service' CHECK (marketplace_mode IN ('service', 'product', 'hybrid')),
+        marketplace_mode TEXT NOT NULL DEFAULT 'service' CHECK (marketplace_mode IN ('service')),
         map_icon_type TEXT DEFAULT '',
         home_service_enabled INTEGER NOT NULL DEFAULT 0,
         intro_text TEXT DEFAULT '',
@@ -1041,7 +1029,7 @@ export async function initDb() {
 
     await addColumnIfMissing("barbers", "selected_plan", `selected_plan TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "deleted_at", `deleted_at TEXT DEFAULT NULL`);
-    await addColumnIfMissing("barbers", "marketplace_mode", `marketplace_mode TEXT NOT NULL DEFAULT 'service' CHECK (marketplace_mode IN ('service', 'product', 'hybrid'))`);
+    await addColumnIfMissing("barbers", "marketplace_mode", `marketplace_mode TEXT NOT NULL DEFAULT 'service' CHECK (marketplace_mode IN ('service'))`);
     await addColumnIfMissing("barbers", "cover_image_url", `cover_image_url TEXT DEFAULT ''`);
     await addColumnIfMissing("barbers", "business_hours_json", `business_hours_json TEXT NOT NULL DEFAULT '{}'`);
     await addColumnIfMissing("barbers", "delivery_available", `delivery_available INTEGER NOT NULL DEFAULT 0`);
@@ -1051,11 +1039,13 @@ export async function initDb() {
     await addColumnIfMissing("barbers", "delivery_notes", `delivery_notes TEXT DEFAULT ''`);
     await run(`
       UPDATE barbers
-      SET marketplace_mode = CASE
-        WHEN LOWER(TRIM(COALESCE(marketplace_mode, ''))) IN ('service', 'product', 'hybrid')
-          THEN LOWER(TRIM(marketplace_mode))
-        ELSE 'service'
-      END
+      SET marketplace_mode = 'service'
+      WHERE LOWER(TRIM(COALESCE(marketplace_mode, ''))) <> 'service'
+    `);
+    await run(`
+      UPDATE barbers
+      SET stand_type = 'individual'
+      WHERE LOWER(TRIM(COALESCE(stand_type, ''))) NOT IN ('individual', 'service')
     `);
     await addColumnIfMissing("barbers", "map_icon_type", `map_icon_type TEXT DEFAULT ''`);
     await addColumnIfMissing("barbers", "pricing_mode", `pricing_mode TEXT NOT NULL DEFAULT 'fixed'`);
@@ -1297,120 +1287,6 @@ export async function initDb() {
         FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
         FOREIGN KEY (customer_user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (sender_user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-
-    await run(`
-      CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        stand_id INTEGER NOT NULL,
-        owner_user_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        slug TEXT NOT NULL DEFAULT '',
-        description TEXT DEFAULT '',
-        category TEXT NOT NULL DEFAULT '',
-        subcategory TEXT DEFAULT '',
-        price REAL NOT NULL DEFAULT 0 CHECK (price >= 0),
-        sale_price REAL DEFAULT NULL CHECK (sale_price IS NULL OR sale_price >= 0),
-        currency TEXT NOT NULL DEFAULT 'UGX',
-        stock_status TEXT NOT NULL DEFAULT 'in_stock' CHECK (stock_status IN ('in_stock', 'out_of_stock', 'limited', 'hidden')),
-        quantity_available INTEGER DEFAULT NULL CHECK (quantity_available IS NULL OR quantity_available >= 0),
-        options_json TEXT NOT NULL DEFAULT '[]',
-        is_active INTEGER NOT NULL DEFAULT 1,
-        is_deleted INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (stand_id) REFERENCES barbers(id) ON DELETE CASCADE,
-        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-
-    await run(`
-      CREATE TABLE IF NOT EXISTS product_images (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id INTEGER NOT NULL,
-        image_url TEXT NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-      )
-    `);
-
-    await run(`
-      CREATE TABLE IF NOT EXISTS product_orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customer_id INTEGER NOT NULL,
-        stand_id INTEGER NOT NULL,
-        seller_user_id INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'confirmed', 'ready_for_pickup', 'out_for_delivery', 'completed', 'cancelled')),
-        fulfilment_method TEXT NOT NULL CHECK (fulfilment_method IN ('pickup', 'delivery')),
-        customer_name TEXT DEFAULT '',
-        customer_phone TEXT NOT NULL,
-        delivery_area TEXT DEFAULT '',
-        delivery_address TEXT DEFAULT '',
-        customer_note TEXT DEFAULT '',
-        seller_note TEXT DEFAULT '',
-        subtotal REAL NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
-        delivery_fee REAL NOT NULL DEFAULT 0 CHECK (delivery_fee >= 0),
-        total REAL NOT NULL DEFAULT 0 CHECK (total >= 0),
-        currency TEXT NOT NULL DEFAULT 'UGX',
-        idempotency_key TEXT DEFAULT '',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE RESTRICT,
-        FOREIGN KEY (stand_id) REFERENCES barbers(id) ON DELETE RESTRICT,
-        FOREIGN KEY (seller_user_id) REFERENCES users(id) ON DELETE RESTRICT
-      )
-    `);
-
-    await run(`
-      CREATE TABLE IF NOT EXISTS product_order_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        order_id INTEGER NOT NULL,
-        product_id INTEGER,
-        product_name_snapshot TEXT NOT NULL,
-        product_price_snapshot REAL NOT NULL DEFAULT 0,
-        product_image_snapshot TEXT DEFAULT '',
-        selected_options_json TEXT NOT NULL DEFAULT '{}',
-        quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
-        line_total REAL NOT NULL DEFAULT 0 CHECK (line_total >= 0),
-        FOREIGN KEY (order_id) REFERENCES product_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
-      )
-    `);
-
-    await run(`
-      CREATE TABLE IF NOT EXISTS product_order_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        order_id INTEGER NOT NULL,
-        actor_id INTEGER,
-        old_status TEXT DEFAULT '',
-        new_status TEXT NOT NULL,
-        note TEXT DEFAULT '',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (order_id) REFERENCES product_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
-      )
-    `);
-
-    await run(`
-      CREATE TABLE IF NOT EXISTS product_inquiries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id INTEGER,
-        stand_id INTEGER NOT NULL,
-        customer_id INTEGER NOT NULL,
-        seller_user_id INTEGER NOT NULL,
-        message TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'responded', 'closed')),
-        idempotency_key TEXT DEFAULT '',
-        conversation_message_id INTEGER,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
-        FOREIGN KEY (stand_id) REFERENCES barbers(id) ON DELETE CASCADE,
-        FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (seller_user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (conversation_message_id) REFERENCES messages(id) ON DELETE SET NULL
       )
     `);
 

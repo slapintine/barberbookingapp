@@ -1,6 +1,5 @@
 import { all, get, run, transaction } from "../db/query.js";
 import { AUDIT_EVENTS, recordAuditEvent } from "../services/auditLogService.js";
-import { supportsServices } from "../services/marketplaceCapabilities.js";
 import {
   sendBookingNotification,
   sendNotificationToBusiness,
@@ -59,8 +58,6 @@ function getBarberById(barberId, client = { get }) {
        accepts_wallet,
        accepts_cash,
        home_service_enabled,
-       stand_type,
-       marketplace_mode,
        subscription_tier,
        subscription_status,
        subscription_expires_at,
@@ -117,15 +114,6 @@ function getTeamMemberById(teamMemberId, barberId, client = { get }) {
      FROM barber_team_members
      WHERE id = ? AND barber_id = ? AND is_active = 1`,
     [teamMemberId, barberId]
-  );
-}
-
-function getActiveTeamMemberCount(barberId, client = { get }) {
-  return client.get(
-    `SELECT COUNT(*) AS count
-     FROM barber_team_members
-     WHERE barber_id = ? AND is_active = 1`,
-    [barberId]
   );
 }
 
@@ -851,9 +839,6 @@ export async function createBooking(req, res, next) {
       if (!barber) {
         throw httpError(404, "Barber not found.");
       }
-      if (!supportsServices(barber)) {
-        throw httpError(400, "This stand sells products and does not accept service bookings.");
-      }
       // Prevent self-booking: a provider cannot book their own stand
       if (barber.owner_user_id && Number(barber.owner_user_id) === Number(req.user.id)) {
         throw httpError(400, "You cannot book your own stand.");
@@ -868,10 +853,7 @@ export async function createBooking(req, res, next) {
       if (paymentMethod === "wallet" && !barber.owner_user_id) {
         throw httpError(400, "This barber cannot receive wallet payments yet.");
       }
-      const teamCountRow = await getActiveTeamMemberCount(barberId, client);
-      const requiresTeamMember =
-        String(barber.stand_type || "individual").toLowerCase() === "shop" &&
-        Number(teamCountRow?.count || 0) > 0;
+      const requiresTeamMember = false;
       const teamMember = rawTeamMemberId
         ? await getTeamMemberById(rawTeamMemberId, barberId, client)
         : null;

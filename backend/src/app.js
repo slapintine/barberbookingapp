@@ -36,9 +36,6 @@ import marketplaceRoutes from "./routes/marketplaceRoutes.js";
 import aiCoachRoutes from "./routes/aiCoachRoutes.js";
 import providerCoachChatRoutes from "./routes/providerCoachChatRoutes.js";
 import smsRoutes from "./routes/smsRoutes.js";
-import productRoutes from "./routes/productRoutes.js";
-import productOrderRoutes from "./routes/productOrderRoutes.js";
-import productInquiryRoutes from "./routes/productInquiryRoutes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorMiddleware.js";
 import { createRequestLogger, logger } from "./config/logger.js";
 import db from "./config/db.js";
@@ -83,7 +80,7 @@ app.use("/api", apiRateLimiter);
 // limit is applied exclusively to those path prefixes.
 const STANDARD_JSON_LIMIT = "1mb";
 const IMAGE_JSON_LIMIT = "150mb";
-const IMAGE_BODY_PREFIXES = ["/api/barbers", "/api/profiles", "/api/products"];
+const IMAGE_BODY_PREFIXES = ["/api/barbers", "/api/profiles"];
 const standardJsonParser = express.json({ limit: STANDARD_JSON_LIMIT });
 const imageJsonParser = express.json({ limit: IMAGE_JSON_LIMIT });
 app.use((req, res, next) => {
@@ -163,9 +160,6 @@ app.use("/api/payments", paymentRateLimiter, paymentRoutes);
 app.use("/api/sms", smsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/marketplace", marketplaceRoutes);
-app.use("/api/products", productRoutes);
-app.use("/api/product-orders", productOrderRoutes);
-app.use("/api/product-inquiries", productInquiryRoutes);
 app.use("/api", marketplaceRoutes);
 
 app.get("/api", (req, res) => {

@@ -71,7 +71,6 @@ export const env = {
   androidForceUpdate: String(process.env.ANDROID_FORCE_UPDATE || "false").trim().toLowerCase() === "true",
   androidReleaseDate: (process.env.ANDROID_RELEASE_DATE || "").trim(),
   androidApkSize: (process.env.ANDROID_APK_SIZE || "").trim(),
-  productMarketplaceEnabled: String(process.env.PRODUCT_MARKETPLACE_ENABLED || "false").trim().toLowerCase() === "true",
   dbClient: (process.env.DB_CLIENT || "sqlite").trim().toLowerCase(),
   dbPath: process.env.DB_PATH || "./src/db/barber_app.sqlite",
   databaseUrl: (process.env.DATABASE_URL || "").trim(),
