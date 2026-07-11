@@ -1,5 +1,4 @@
-import { FiBarChart2, FiCalendar, FiGrid, FiHome, FiMessageCircle, FiPackage, FiShoppingBag, FiUser } from "react-icons/fi";
-import { supportsProducts, supportsServices } from "../../utils/marketplaceMode.js";
+import { FiBarChart2, FiCalendar, FiGrid, FiHome, FiMessageCircle, FiUser } from "react-icons/fi";
 
 const CUSTOMER_ROLES = new Set(["customer", "user", "client"]);
 const PROVIDER_ROLES = new Set(["barber", "provider", "business", "salon", "spa"]);
@@ -28,15 +27,11 @@ export default function BottomNav({
   isBarber = false,
   isAdmin = false,
   currentUser = null,
-  marketplaceMode = "service",
-  providerDashboardSection = "products",
-  onOpenProviderDashboardSection,
 }) {
   const isCategoriesActive = activeTab === "categories" || activeTab === "categoryServices";
   const messageBadge = Number(unreadMessages || 0);
   const navMode = resolveNavMode({ currentUser, isBarber, isAdmin });
   const isProviderStyle = navMode === "provider" || navMode === "admin";
-  const isProductOnlyProvider = navMode === "provider" && supportsProducts(marketplaceMode) && !supportsServices(marketplaceMode);
   const dashboardTab = navMode === "admin" ? "admin" : "dashboard";
   const reportsTab = navMode === "admin" ? "adminReports" : "reports";
   const isDashboardActive = navMode === "admin" ? activeTab === "admin" : activeTab === "dashboard";
@@ -54,32 +49,19 @@ export default function BottomNav({
           <span>Categories</span>
         </button>
       ) : null}
-      {isProductOnlyProvider ? (
-        <button
-          type="button"
-          className={activeTab === "dashboard" && providerDashboardSection === "orders" ? "nav-v4 active" : "nav-v4"}
-          onClick={() => onOpenProviderDashboardSection?.("orders")}
-        >
-          <FiShoppingBag />
-          <span>Orders</span>
-        </button>
-      ) : (
-        <button type="button" className={activeTab === "bookings" ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("bookings")}>
-          <FiCalendar />
-          <span>Bookings</span>
-        </button>
-      )}
+      <button type="button" className={activeTab === "bookings" ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab("bookings")}>
+        <FiCalendar />
+        <span>Bookings</span>
+      </button>
       {isProviderStyle ? (
         <>
           <button
             type="button"
-            className={isProductOnlyProvider
-              ? activeTab === "dashboard" && providerDashboardSection !== "orders" ? "nav-v4 active" : "nav-v4"
-              : isDashboardActive ? "nav-v4 active" : "nav-v4"}
-            onClick={() => isProductOnlyProvider ? onOpenProviderDashboardSection?.("products") : setActiveTab(dashboardTab)}
+            className={isDashboardActive ? "nav-v4 active" : "nav-v4"}
+            onClick={() => setActiveTab(dashboardTab)}
           >
-            {isProductOnlyProvider ? <FiPackage /> : <FiGrid />}
-            <span>{isProductOnlyProvider ? "Products" : "Dashboard"}</span>
+            <FiGrid />
+            <span>Dashboard</span>
           </button>
           <button type="button" className={isReportsActive ? "nav-v4 active" : "nav-v4"} onClick={() => setActiveTab(reportsTab)}>
             <FiBarChart2 />

@@ -30,10 +30,8 @@ import {
   verifyCustomerSubscriptionUpgrade,
 } from "./api/customerSubscriptionsApi.js";
 import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
-import { createProduct, removeProduct, updateProduct } from "./api/productsApi.js";
 import { normalizeProviderData } from "./utils/providerData.js";
 import { buildStandDraftUpdatePayload } from "./utils/standDraftPayload.js";
-import { getMarketplaceMode, supportsProducts, supportsServices } from "./utils/marketplaceMode.js";
 import { getCustomerWallet, getMyWallet, requestWalletWithdrawal } from "./api/walletApi.js";
 import AppHeader from "./components/ui/AppHeader.jsx";
 import AccountMenu from "./components/ui/AccountMenu.jsx";
@@ -123,32 +121,6 @@ function upsertById(list = [], item) {
   const next = [...list];
   next[index] = { ...next[index], ...item };
   return next;
-}
-
-function isPersistedProductId(value) {
-  return Number.isInteger(Number(value)) && Number(value) > 0 && !String(value).startsWith("local-product-");
-}
-
-async function syncStagedStandProducts(payload = {}) {
-  if (!supportsProducts(getMarketplaceMode(payload.marketplaceMode || payload.marketplace_mode))) return [];
-  const deletedIds = [...new Set(Array.isArray(payload.deletedProductIds) ? payload.deletedProductIds : [])]
-    .filter(isPersistedProductId);
-  for (const productId of deletedIds) {
-    await removeProduct(productId);
-  }
-
-  const savedProducts = [];
-  for (const product of Array.isArray(payload.products) ? payload.products : []) {
-    const id = product?.id;
-    const body = { ...(product || {}) };
-    delete body.id;
-    delete body.localOnly;
-    const response = isPersistedProductId(id)
-      ? await updateProduct(id, body)
-      : await createProduct(body);
-    if (response?.product) savedProducts.push(response.product);
-  }
-  return savedProducts;
 }
 
 function uniqueById(list = []) {
@@ -816,7 +788,7 @@ function normalizeBarber(barber, index) {
     price_from: Number(barber.price_from ?? fallback.price_from),
     accepts_wallet: Number(barber.accepts_wallet ?? barber.acceptsWallet ?? fallback.accepts_wallet ?? 0),
     accepts_cash: Number(barber.accepts_cash ?? barber.acceptsCash ?? fallback.accepts_cash ?? 1),
-    stand_type: String(barber.stand_type || barber.standType || fallback.stand_type || "individual").toLowerCase() === "shop" ? "shop" : "individual",
+    stand_type: "individual",
     business_type: String(barber.business_type || barber.businessType || getAvailableServices(barber.services || [])[0]?.category || "Services"),
     map_icon_type: String(barber.map_icon_type || barber.mapIconType || barber.iconCategory || ""),
     home_service_enabled: Number(
@@ -1047,7 +1019,6 @@ function App() {
   const [sessionChecked, setSessionChecked] = useState(() => !getAuthToken());
 
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname, readAuthUser()));
-  const [providerDashboardSection, setProviderDashboardSection] = useState("products");
   const initialSearchRoute = readSearchRouteParams();
   const [query, setQuery] = useState(initialSearchRoute.query || "");
   const [searchResultsQuery, setSearchResultsQuery] = useState(initialSearchRoute.query || "");
@@ -1904,11 +1875,7 @@ function App() {
     }
     const teamMembers = normalizeTeamMembers(selectedBarber.team_members || selectedBarber.teamMembers || []);
     const activeTeamMembers = teamMembers.filter((item) => Number(item.is_active ?? 1) === 1);
-    setSelectedTeamMemberId(
-      String(selectedBarber.stand_type || selectedBarber.standType || "individual") === "shop" && activeTeamMembers.length
-        ? String(activeTeamMembers[0].id)
-        : ""
-    );
+    setSelectedTeamMemberId(activeTeamMembers.length ? String(activeTeamMembers[0].id) : "");
   }, [selectedBarber]);
 
   useEffect(() => {
@@ -2982,8 +2949,6 @@ const registerBarber = async (payload) => {
     if (!currentUser?.username) return { success: false, message: "Please log in to save your stand draft." };
     const wantsPublish = payload.submitIntent === "publish";
     const quietSave = Boolean(payload.autoSave || payload.silent);
-    const marketplaceMode = getMarketplaceMode(payload.marketplaceMode || payload.marketplace_mode);
-    const serviceMode = supportsServices(marketplaceMode);
     const selectedServices = Array.isArray(payload.services)
       ? payload.services.map((service, index) => normalizeServiceForBooking(service, index, { preserveEmptyTitle: true }))
       : String(payload.services || "")
@@ -3017,7 +2982,6 @@ const registerBarber = async (payload) => {
     }
 
     let data;
-    let productSyncError = "";
     try {
       data = await registerBarberStand({
         business_name: payload.businessName,
@@ -3030,27 +2994,20 @@ const registerBarber = async (payload) => {
         services: selectedServices,
         categories: Array.isArray(payload.categories) ? payload.categories : [],
         primary_category: payload.primaryCategory || null,
-        stand_type: payload.standType || "individual",
-        marketplace_mode: marketplaceMode,
+        stand_type: "individual",
+        marketplace_mode: "service",
         business_type: payload.businessType || "Services",
         map_icon_type: payload.mapIconType || payload.iconCategory || "",
         cover_image_url: payload.coverImage || "",
         business_hours: payload.businessHours || {},
-        pickup_available: Boolean(payload.pickupAvailable),
-        delivery_available: Boolean(payload.deliveryAvailable),
-        delivery_areas: Array.isArray(payload.deliveryAreas) ? payload.deliveryAreas : [],
-        delivery_fee: payload.deliveryFee === "" ? null : Number(payload.deliveryFee),
-        delivery_notes: payload.deliveryNotes || "",
-        ...(serviceMode ? { home_service_enabled: Boolean(payload.homeServiceEnabled) } : {}),
+        home_service_enabled: Boolean(payload.homeServiceEnabled),
         intro_text: payload.introText || "",
         verification_document_name: payload.documentName || "",
         document_name: payload.documentName || "",
         portfolio: Array.isArray(payload.portfolio) ? payload.portfolio : [],
-        team_members: serviceMode && payload.standType === "shop" ? parseTeamMembers(payload.teamMembers) : [],
-        ...(serviceMode ? {
-          schedule_start: payload.scheduleStart || "08:00",
-          schedule_end: payload.scheduleEnd || "20:00",
-        } : {}),
+        team_members: parseTeamMembers(payload.teamMembers),
+        schedule_start: payload.scheduleStart || "08:00",
+        schedule_end: payload.scheduleEnd || "20:00",
         accepts_wallet: Boolean(payload.acceptsWallet),
         accepts_cash: true,
         selected_plan: String(payload.selectedPlan || "FREE").toUpperCase(),
@@ -3059,15 +3016,7 @@ const registerBarber = async (payload) => {
         start_free_trial: false,
       });
 
-      if (supportsProducts(marketplaceMode)) {
-        try {
-          await syncStagedStandProducts(payload);
-        } catch (syncError) {
-          productSyncError = syncError?.message || "Your stand draft was saved, but the product catalogue could not be saved.";
-        }
-      }
-
-      if (wantsPublish && !productSyncError) {
+      if (wantsPublish) {
         const publishData = await publishMyBarberStand();
         data = { ...data, ...publishData, next_step: "active" };
       }
@@ -3130,14 +3079,13 @@ const registerBarber = async (payload) => {
     };
     appendStored("notifications", upgradedUser.username, uploadNotification);
     fetchNotifications();
-    setGlobalError(productSyncError);
-    const didPublish = wantsPublish && !productSyncError && data?.next_step === "active";
+    const didPublish = wantsPublish && data?.next_step === "active";
     showSystemToast(
-      productSyncError ? "Draft saved, products need attention" : didPublish ? "Stand published" : "Draft saved",
-      productSyncError || (didPublish ? "Your stand is now live and visible to customers." : "Draft saved. You can come back and continue anytime."),
-      productSyncError ? "system" : "success"
+      didPublish ? "Stand published" : "Draft saved",
+      didPublish ? "Your stand is now live and visible to customers." : "Draft saved. You can come back and continue anytime.",
+      "success"
     );
-    return { success: true, published: didPublish, draftSaved: true, message: productSyncError || data?.message };
+    return { success: true, published: didPublish, draftSaved: true, message: data?.message };
   };
 
   const publishBarberStand = async () => {
@@ -3161,13 +3109,12 @@ const registerBarber = async (payload) => {
     }
   };
 
-const updateBarberStand = async (payload) => {
+  const updateBarberStand = async (payload) => {
     if (!currentUser?.username || !myBarberProfile) {
       return { success: false, message: "We couldn’t load your saved stand. Refresh and try again." };
     }
     const wantsPublish = payload.submitIntent === "publish";
     const quietSave = Boolean(payload.autoSave || payload.silent);
-    const marketplaceMode = getMarketplaceMode(payload.marketplaceMode || payload.marketplace_mode || myBarberProfile);
     const selectedServices = Array.isArray(payload.services)
       ? payload.services.map((service, index) => normalizeServiceForBooking(service, index, { preserveEmptyTitle: true }))
       : String(payload.services || "")
@@ -3185,14 +3132,14 @@ const updateBarberStand = async (payload) => {
       .filter(Boolean)
       .join(", ");
     const submittedTeamNames = String(payload.teamMembers || "").trim();
-    const nextTeamMembers = payload.standType !== "shop"
-      ? []
-      : submittedTeamNames === existingTeamNames
+    const nextTeamMembers = submittedTeamNames === existingTeamNames
       ? existingTeamMembers
       : parseTeamMembers(payload.teamMembers);
     const draftPayload = buildStandDraftUpdatePayload(
       {
         ...payload,
+        standType: "individual",
+        marketplaceMode: "service",
         services: selectedServices,
         teamMembers: nextTeamMembers,
         acceptsWallet: PAYMENTS_ENABLED ? Boolean(payload.acceptsWallet) : false,
@@ -3200,13 +3147,8 @@ const updateBarberStand = async (payload) => {
       },
       myBarberProfile
     );
-    let syncedProducts = null;
-
     try {
       let data = await updateMyBarberStand(draftPayload);
-      if (!quietSave && supportsProducts(marketplaceMode)) {
-        syncedProducts = await syncStagedStandProducts(payload);
-      }
       if (wantsPublish) {
         data = await publishMyBarberStand();
       }
@@ -3249,7 +3191,7 @@ const updateBarberStand = async (payload) => {
       "success"
     );
     fetchNotifications();
-    return { success: true, published: wantsPublish, products: syncedProducts };
+    return { success: true, published: wantsPublish };
   };
 
   const deleteBarberStand = async () => {
@@ -3324,9 +3266,7 @@ const updateBarberStand = async (payload) => {
     const mobileMoneyPhone = PAYMENTS_ENABLED ? String(mtnPaymentPhone || "").trim() : "";
     const teamMembers = normalizeTeamMembers(selectedBarber.team_members || selectedBarber.teamMembers || []);
     const activeTeamMembers = teamMembers.filter((item) => Number(item.is_active ?? 1) === 1);
-    const requiresTeamMember =
-      String(selectedBarber.stand_type || selectedBarber.standType || "individual") === "shop" &&
-      activeTeamMembers.length > 0;
+    const requiresTeamMember = activeTeamMembers.length > 0;
     const selectedTeamMember = activeTeamMembers.find((item) => String(item.id) === String(selectedTeamMemberId));
     if (requiresTeamMember && !selectedTeamMember) {
       setGlobalError("Choose a service provider from this business before booking.");
@@ -5236,8 +5176,6 @@ const updateBarberStand = async (payload) => {
           formatMoney={formatMoney}
           getBadgeLabel={getBadgeLabel}
           formatTimeLabel={formatTimeLabel}
-          productWorkspaceTab={providerDashboardSection}
-          onProductWorkspaceTabChange={setProviderDashboardSection}
         />
         </div>
       )}
@@ -5358,12 +5296,6 @@ const updateBarberStand = async (payload) => {
         isBarber={effectiveIsBarber}
         isAdmin={isAdmin}
         currentUser={currentUser}
-        marketplaceMode={myBarberProfile}
-        providerDashboardSection={providerDashboardSection}
-        onOpenProviderDashboardSection={(section) => {
-          setProviderDashboardSection(section);
-          setActiveTab("dashboard");
-        }}
         unreadMessages={unreadMessages}
         unreadNotifications={unreadNotifications.length}
         onOpenMap={() => openMarketplaceMap("All")}

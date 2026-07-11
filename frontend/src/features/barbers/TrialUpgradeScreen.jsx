@@ -16,7 +16,6 @@ import {
 } from "react-icons/fi";
 import { formatMoney, formatPlanName, formatSubscriptionPrice, getPlanAmount, normalizePlanTier, PROVIDER_PLANS } from "../../utils/subscriptionPlans.js";
 import { PAYMENTS_COMING_SOON_MESSAGE, PAYMENTS_ENABLED } from "../../utils/launchFlags.js";
-import { getMarketplacePlanContent, supportsProducts, supportsServices } from "../../utils/marketplaceMode.js";
 
 const PLANS = PROVIDER_PLANS.map((plan) => ({
   ...plan,
@@ -90,15 +89,11 @@ export default function TrialUpgradeScreen({
   const [billingCycle, setBillingCycle] = useState("monthly");
   const [promoCode, setPromoCode] = useState("");
 
-  const plans = useMemo(
-    () => PLANS.map((plan) => getMarketplacePlanContent(plan, barber)),
-    [barber]
-  );
+  const plans = useMemo(() => PLANS, []);
   const selectedPlan = useMemo(
     () => plans.find((plan) => plan.tier === selectedTier) || plans[0],
     [plans, selectedTier]
   );
-  const productOnly = supportsProducts(barber) && !supportsServices(barber);
   const selectedIsFree = selectedPlan?.tier === "FREE";
   const selectedPaidComingSoon = !selectedIsFree && !PAYMENTS_ENABLED;
   const selectedPaymentMethod = PAYMENT_METHODS.find((method) => method.id === selectedMethod);
@@ -326,13 +321,7 @@ export default function TrialUpgradeScreen({
               </button>
               {expandedPlan === plan.tier ? (
                 <div className="trial-plan-preview-v14">
-                  {(productOnly && plan.tier === "FREE"
-                    ? [
-                        { title: "Product catalogue", text: "List up to 5 active products with clear prices and photos.", icon: FiCheck },
-                        { title: "Order requests", text: "Receive pickup or delivery requests without online payment.", icon: FiDollarSign },
-                        { title: "Customer messages", text: "Answer product questions and agree fulfilment details directly.", icon: FiStar },
-                      ]
-                    : PLAN_PREVIEWS[plan.tier] || []).map(({ title, text, icon: Icon }) => (
+                  {(PLAN_PREVIEWS[plan.tier] || []).map(({ title, text, icon: Icon }) => (
                     <div className="trial-preview-card-v14" key={`${plan.tier}-${title}`}>
                       <span><Icon /></span>
                       <strong>{title}</strong>

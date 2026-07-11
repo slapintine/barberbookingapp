@@ -1,5 +1,4 @@
 import { buildAssetUrl } from "../config/api.js";
-import { normalizeMarketplaceFields } from "./marketplaceMode.js";
 
 const STOCK_IMAGE_HOSTS = [
   "images.unsplash.com",
@@ -76,14 +75,15 @@ export function normalizeProviderData(provider = {}, options = {}) {
   const latitude = Number(provider.latitude ?? provider.lat ?? options.defaultLatitude);
   const longitude = Number(provider.longitude ?? provider.lng ?? options.defaultLongitude);
   const pricingMode = provider.pricingMode || provider.pricing_mode || provider.pricingType || provider.pricing_type || (provider.requires_quote ? "quote" : "fixed");
-  const marketplaceFields = normalizeMarketplaceFields(provider);
   const coverImage = normalizeProviderImageReference(
     provider.cover_image_url || provider.coverImageUrl || provider.coverImage || provider.cover_image || image
   );
 
   return {
     ...provider,
-    ...marketplaceFields,
+    marketplaceMode: "service",
+    marketplace_mode: "service",
+    supportsServices: true,
     id: provider.id,
     userId: provider.userId || provider.user_id || provider.owner_user_id || null,
     owner_user_id: provider.owner_user_id || provider.user_id || provider.userId || null,

@@ -10,9 +10,7 @@ import {
   FiImage,
   FiMapPin,
   FiNavigation,
-  FiPackage,
   FiPlus,
-  FiShoppingBag,
   FiTrash2,
   FiUsers,
   FiX,
@@ -34,10 +32,6 @@ import {
 } from "../../utils/subscriptionPlans.js";
 import { PAYMENTS_ENABLED } from "../../utils/launchFlags.js";
 import { toUgLocalDigits } from "../../utils/ugandaPhone.js";
-import ProductCatalogueEditor from "../products/ProductCatalogueEditor.jsx";
-import useProductMarketplaceAvailability from "../../hooks/useProductMarketplaceAvailability.js";
-import { getMarketplaceMode, getMarketplacePlanContent, MARKETPLACE_MODES, supportsProducts, supportsServices } from "../../utils/marketplaceMode.js";
-import { getMyProducts } from "../../api/productsApi.js";
 import { buildAssetUrl } from "../../config/api.js";
 import {
   MAX_SERVICE_DURATION_MINUTES,
@@ -82,17 +76,10 @@ const DEFAULT_FORM = {
   startFreeTrial: false,
   durationUnit: "minutes",
   dirtyFields: [],
-  marketplaceMode: MARKETPLACE_MODES.SERVICE,
+  marketplaceMode: "service",
   subcategory: "",
   coverImage: "",
   businessHours: {},
-  pickupAvailable: true,
-  deliveryAvailable: false,
-  deliveryAreas: [],
-  deliveryFee: "",
-  deliveryNotes: "",
-  products: [],
-  deletedProductIds: [],
 };
 
 function getStandBackupKey(kind, value) {
@@ -132,11 +119,6 @@ function arrayFromMaybeJson(value) {
   }
 }
 
-function booleanFromApi(value, fallback = false) {
-  if (value === undefined || value === null || value === "") return fallback;
-  return [true, 1, "1", "true", "yes"].includes(value);
-}
-
 function createBlankService(category = SERVICE_CATEGORIES[0]) {
   return {
     id: `service-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -160,18 +142,6 @@ const PRICING_MODES = [
   { value: "range", label: "Range", hint: "Min and max price" },
   { value: "starting_from", label: "From", hint: "Starting price" },
   { value: "quote", label: "Quote", hint: "Customer requests quote" },
-];
-
-const PRODUCT_CATEGORIES = [
-  "Boutique & Fashion",
-  "Cosmetics & Beauty Products",
-  "Food & Groceries",
-  "Electronics",
-  "Home & Living",
-  "Hardware",
-  "Health Products",
-  "Gifts & Crafts",
-  "Other Products",
 ];
 
 function getServiceLocationLabel(service = {}) {
@@ -229,8 +199,6 @@ const FIELD_TO_STEP = {
   phone: 1,
   location: 2,
   services: 4,
-  fulfilment: 2,
-  products: 4,
 };
 
 // A business stand is created against the authenticated account id. We do NOT
@@ -240,29 +208,17 @@ const FIELD_TO_STEP = {
 export function validateBusinessStand(data = {}) {
   const form = data && typeof data === "object" ? data : {};
   const services = normalizeFormServices(form.services);
-  const marketplaceMode = getMarketplaceMode(form.marketplaceMode || form.marketplace_mode);
-  const serviceStand = supportsServices(marketplaceMode);
-  const shopStand = supportsProducts(marketplaceMode);
-  const products = Array.isArray(form.products) ? form.products : [];
   const missing = [];
 
   if (!String(form.businessName || "").trim()) missing.push({ key: "businessName", label: "Business name is required" });
   if (!String(form.businessType || "").trim()) missing.push({ key: "businessType", label: "Business category is required" });
   if (getUgandaStandPhoneError(form.phone)) missing.push({ key: "phone", label: "Valid Uganda phone number is required" });
   if (
-    serviceStand &&
     requiresFixedBusinessLocation(services) &&
     !String(form.location || "").trim()
   ) missing.push({ key: "location", label: "Business or service-area location is required" });
-  if (shopStand && !String(form.location || "").trim()) missing.push({ key: "location", label: "Shop location is required" });
-  if (serviceStand && !services.length) missing.push({ key: "services", label: "At least one service is required" });
-  if (serviceStand && services.some((service) => !String(service.service_name || "").trim())) missing.push({ key: "services", label: "Each service needs a clear listing title" });
-  if (shopStand && !form.pickupAvailable && !form.deliveryAvailable) {
-    missing.push({ key: "fulfilment", label: "Choose pickup or delivery" });
-  }
-  if (shopStand && !products.some((product) => (product.is_active ?? product.isActive ?? true) && !product.is_deleted)) {
-    missing.push({ key: "products", label: "At least one active product is required" });
-  }
+  if (!services.length) missing.push({ key: "services", label: "At least one service is required" });
+  if (services.some((service) => !String(service.service_name || "").trim())) missing.push({ key: "services", label: "Each service needs a clear listing title" });
 
   return missing;
 }
@@ -672,18 +628,12 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const [planBilling, setPlanBilling] = useState("monthly");
   const autoSaveTimerRef = useRef(null);
   const lastAutoSaveSnapshotRef = useRef("");
-  const marketplaceAvailability = useProductMarketplaceAvailability(show);
-  const marketplaceMode = getMarketplaceMode(form.marketplaceMode || form.marketplace_mode);
-  const serviceStand = supportsServices(marketplaceMode);
-  const shopStand = supportsProducts(marketplaceMode);
-  const productOnly = shopStand && !serviceStand;
-  const stepSequence = productOnly ? [1, 2, 4, 6] : [1, 2, 3, 4, 5, 6];
+  const marketplaceMode = "service";
+  const stepSequence = [1, 2, 3, 4, 5, 6];
   const stepPosition = Math.max(0, stepSequence.indexOf(currentStep));
   const totalSteps = stepSequence.length;
   const lastStep = stepSequence[stepSequence.length - 1];
   const services = normalizeFormServices(form.services);
-  const products = Array.isArray(form.products) ? form.products : [];
-  const activeProducts = products.filter((product) => (product.is_active ?? product.isActive ?? true) && !product.is_deleted);
   const normalizedSelectedPlan = String(form.selectedPlan || "FREE").toUpperCase();
   const selectedPlan = PROVIDER_PLANS.find((plan) => plan.tier === normalizedSelectedPlan) || PROVIDER_PLANS[0];
   const profilePlan = String(
@@ -706,19 +656,10 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const planFeatures = getPlanFeatures(selectedPlan.id);
   const maxServices = planFeatures.maxServices;
   const maxPhotos = planFeatures.maxPhotos;
-  const productLimits = selectedPlan.tier === "PLATINUM"
-    ? { products: -1, images: 10 }
-    : selectedPlan.tier === "PREMIUM"
-    ? { products: 50, images: 6 }
-    : { products: 5, images: 3 };
   const imageStats = useMemo(() => getFormImageStats({ ...form, services }), [form, services]);
   const businessCategoryOptions = useMemo(
-    () => [...new Set([
-      ...(serviceStand ? SERVICE_CATEGORIES : []),
-      ...(shopStand ? PRODUCT_CATEGORIES : []),
-      form.businessType,
-    ].filter(Boolean))],
-    [form.businessType, serviceStand, shopStand]
+    () => [...new Set([...SERVICE_CATEGORIES, form.businessType].filter(Boolean))],
+    [form.businessType]
   );
   const selectedCategories = useMemo(
     () => [...new Set(services.flatMap((service) => (service.category ? [service.category] : [])))],
@@ -740,21 +681,14 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const fieldClass = (key, base = "label-v4") => (missingFieldKeys.has(key) ? `${base} missing-v10` : base);
   const fieldError = (key) => missingFields.find((item) => item.key === key)?.message || "";
 
-  const stepTitles = productOnly
-    ? {
-        1: "Shop Info",
-        2: "Delivery & Pickup",
-        4: "Products",
-        6: "Review & Publish",
-      }
-    : {
-        1: "Business Basics",
-        2: "Location & Availability",
-        3: "Service Categories",
-        4: "Add Services",
-        5: shopStand ? "Products & Fulfilment" : "Payments & Booking",
-        6: "Review & Submit",
-      };
+  const stepTitles = {
+    1: "Business Basics",
+    2: "Location & Availability",
+    3: "Service Categories",
+    4: "Add Services",
+    5: "Images & Booking",
+    6: "Review & Submit",
+  };
 
   useEffect(() => {
     if (activeServiceIndex > services.length - 1) {
@@ -875,40 +809,23 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
       }
     }
     if (step === 2) {
-      if (shopStand && !form.location?.trim()) {
-        addIssue("location", "shop location", "Add your shop location or pickup area.");
-      } else if (
-        serviceStand &&
+      if (
         services.length > 0 &&
         requiresFixedBusinessLocation(services) &&
         !form.location?.trim()
       ) {
         addIssue("location", "location / service area", "Add a stand location or the area you serve.");
       }
-      if (serviceStand) {
-        if (!form.scheduleStart) addIssue("scheduleStart", "opening time", "Choose an opening time.");
-        if (!form.scheduleEnd) addIssue("scheduleEnd", "closing time", "Choose a closing time.");
-        if (form.scheduleStart && form.scheduleEnd && form.scheduleStart >= form.scheduleEnd) {
-          addIssue("scheduleEnd", "business hours", "Closing time must be later than opening time.");
-        }
-      }
-      if (shopStand && !form.pickupAvailable && !form.deliveryAvailable) {
-        addIssue("fulfilment", "pickup or delivery", "Choose at least one way customers can receive products.");
-      }
-      if (shopStand && form.deliveryAvailable && !String((form.deliveryAreas || []).join?.(",") || form.deliveryAreas || "").trim()) {
-        addIssue("deliveryAreas", "delivery areas", "Add at least one area you deliver to.");
+      if (!form.scheduleStart) addIssue("scheduleStart", "opening time", "Choose an opening time.");
+      if (!form.scheduleEnd) addIssue("scheduleEnd", "closing time", "Choose a closing time.");
+      if (form.scheduleStart && form.scheduleEnd && form.scheduleStart >= form.scheduleEnd) {
+        addIssue("scheduleEnd", "business hours", "Closing time must be later than opening time.");
       }
     }
-    if (step === 3 && serviceStand) {
+    if (step === 3) {
       if (!selectedCategories.length) addIssue("services", "service category", "Choose at least one service category.");
     }
-    if (step === 4 && productOnly) {
-      if (!activeProducts.length) addIssue("products", "at least one product", "Add at least one active product.");
-      if (productLimits.products >= 0 && activeProducts.length > productLimits.products) {
-        addIssue("products", "product limit", `${selectedPlan.name} allows ${productLimits.products} active products.`);
-      }
-    }
-    if (step === 4 && serviceStand) {
+    if (step === 4) {
       if (!services.length) addIssue("services", "at least one service", "Add at least one service.");
       if (Number.isFinite(maxServices) && services.length > maxServices) {
         addIssue("services", "service limit", `${selectedPlan.name} allows ${maxServices} services. Remove extras or choose another plan.`);
@@ -958,15 +875,6 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
       if (services.some((service) => getImageReferenceStats(service.image).bytes > limits.serviceTotalBytes)) {
         addIssue("images", "service image size", getPlanImageSizeMessage(selectedPlan.tier, "service"));
       }
-      if (shopStand) {
-        if (!form.pickupAvailable && !form.deliveryAvailable) {
-          addIssue("fulfilment", "pickup or delivery", "Choose at least one way customers can receive products.");
-        }
-        if (!activeProducts.length) addIssue("products", "at least one product", "Add at least one active product.");
-        if (productLimits.products >= 0 && activeProducts.length > productLimits.products) {
-          addIssue("products", "product limit", `${selectedPlan.name} allows ${productLimits.products} active products.`);
-        }
-      }
     }
     return issues;
   };
@@ -1014,15 +922,15 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
     submitIntent: intent,
     marketplaceMode,
     marketplace_mode: marketplaceMode,
-    categories: serviceStand ? selectedCategoryItems.map((category) => category.key) : [effectiveMapIconType].filter(Boolean),
-    selectedCategories: serviceStand ? selectedCategoryItems : [],
-    primaryCategory: serviceStand && selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : effectiveMapIconType || null,
-    businessType: serviceStand && selectedCategories.length ? selectedCategories[0] : form.businessType,
+    standType: "individual",
+    categories: selectedCategoryItems.map((category) => category.key),
+    selectedCategories: selectedCategoryItems,
+    primaryCategory: selectedCategories.length === 1 ? selectedCategoryItems[0]?.key || null : effectiveMapIconType || null,
+    businessType: selectedCategories.length ? selectedCategories[0] : form.businessType,
     mapIconType: effectiveMapIconType,
     services,
-    products,
     ...extras,
-  }), [effectiveMapIconType, form, marketplaceMode, normalizedSelectedPlan, products, selectedCategories, selectedCategoryItems, serviceStand, services]);
+  }), [effectiveMapIconType, form, marketplaceMode, normalizedSelectedPlan, selectedCategories, selectedCategoryItems, services]);
 
   const autoSaveSnapshot = useMemo(
     () => JSON.stringify(buildSubmitPayload("draft", { autoSave: true })),
@@ -1037,7 +945,6 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
       String(form.location || "").trim() ||
       String(form.image || "").trim() ||
       services.length ||
-      products.length ||
       (Array.isArray(form.portfolio) && form.portfolio.length)
     );
     if (!hasDraftContent || autoSaveSnapshot === lastAutoSaveSnapshotRef.current) return undefined;
@@ -1059,7 +966,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
     return () => {
       if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
     };
-  }, [autoSaveEnabled, autoSaveSnapshot, buildSubmitPayload, form, onSubmit, products.length, requirePlan, savingIntent, services.length, show]);
+  }, [autoSaveEnabled, autoSaveSnapshot, buildSubmitPayload, form, onSubmit, requirePlan, savingIntent, services.length, show]);
 
   const submitWizard = async (intent = "draft") => {
     if (savingIntent) return;
@@ -1081,7 +988,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
         publishIssues.push(...getStepIssues(step));
       }
       if (showIssues(publishIssues)) return;
-      const missing = validateBusinessStand({ ...form, marketplaceMode, products, services });
+      const missing = validateBusinessStand({ ...form, marketplaceMode, services });
       if (missing.length) {
         setCurrentStep(lastStep);
         setMissingFields(missing.map((item) => ({ ...item, message: item.label, step: FIELD_TO_STEP[item.key] || lastStep })));
@@ -1106,9 +1013,6 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
             : "Your draft is saved, but complete the missing details before publishing.")
         );
       } else {
-        if (Array.isArray(result?.products)) {
-          setForm((current) => ({ ...current, products: result.products, deletedProductIds: [] }));
-        }
         if (intent !== "draft") return;
         setSaveNotice("Draft saved. You can come back and continue anytime.");
         lastAutoSaveSnapshotRef.current = autoSaveSnapshot;
@@ -1195,59 +1099,6 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
             {currentStep === 1 ? (
               <section className="business-step-card-v10">
                 <WizardNotice>This helps customers understand who you are and what you offer.</WizardNotice>
-                <div className="marketplace-mode-picker-v21">
-                  <div className="marketplace-mode-heading-v21">
-                    <span>Stand type</span>
-                    <strong>What type of stand do you want to create?</strong>
-                  </div>
-                  <div className="marketplace-mode-grid-v21">
-                    {[
-                      {
-                        value: MARKETPLACE_MODES.SERVICE,
-                        title: "Service Stand",
-                        description: "For appointments, bookings, and service requests.",
-                        Icon: FiUsers,
-                      },
-                      {
-                        value: MARKETPLACE_MODES.PRODUCT,
-                        title: "Shop Stand",
-                        description: "For selling products with pickup or delivery.",
-                        Icon: FiShoppingBag,
-                      },
-                      {
-                        value: MARKETPLACE_MODES.HYBRID,
-                        title: "Both",
-                        description: "For businesses that offer services and sell products.",
-                        Icon: FiPackage,
-                      },
-                    ].map(({ value, title: modeTitle, description, Icon }) => {
-                      const productMode = value !== MARKETPLACE_MODES.SERVICE;
-                      const disabled = productMode && !marketplaceAvailability.enabled && marketplaceMode !== value;
-                      return (
-                        <label className={`${marketplaceMode === value ? "selected" : ""}${disabled ? " disabled" : ""}`} key={value}>
-                          <input
-                            type="radio"
-                            name="marketplaceMode"
-                            value={value}
-                            checked={marketplaceMode === value}
-                            disabled={disabled}
-                            onChange={() => {
-                              setForm((prev) => ({ ...prev, marketplaceMode: value }));
-                              setSaveNotice(value === MARKETPLACE_MODES.SERVICE
-                                ? ""
-                                : "Stand type changed. Complete the new requirements before republishing.");
-                            }}
-                          />
-                          <Icon />
-                          <span><strong>{modeTitle}</strong><small>{description}</small></span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                  {marketplaceAvailability.checked && !marketplaceAvailability.enabled ? (
-                    <small className="marketplace-coming-soon-v21">Shop stands are coming soon. Existing service stands continue to work normally.</small>
-                  ) : null}
-                </div>
                 <ImageUploadInput
                   image={form.image}
                   onChange={(image) => setForm((prev) => ({ ...prev, image }))}
@@ -1290,7 +1141,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     <input
                       className="field-input-v4 profile-input-v4"
                       value={form.subcategory || ""}
-                      placeholder={productOnly ? "Example: Women's clothing" : "Example: Bridal styling"}
+                      placeholder="Example: Bridal styling"
                       onChange={(e) => setForm((prev) => ({ ...prev, subcategory: e.target.value }))}
                     />
                   </label>
@@ -1338,7 +1189,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     })()}
                     <FieldMessage message={fieldError("mapIconType")} />
                   </div>
-                  {!productOnly ? <label className="label-v4">
+                  <label className="label-v4">
                     General price guide <span className="optional-label-v10">Optional</span>
                     <span className="currency-input-shell-v10">
                       <span className="currency-prefix-v10">UGX</span>
@@ -1351,7 +1202,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                       />
                     </span>
                     {Number(form.pricing || 0) > 0 ? <small className="currency-preview-v10">UGX {Number(form.pricing).toLocaleString("en-UG")}</small> : null}
-                  </label> : null}
+                  </label>
                   <label className="label-v4">
                     Short intro
                     <textarea
@@ -1378,25 +1229,23 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
             {currentStep === 2 ? (
               <section className="business-step-card-v10">
                 <WizardNotice>
-                  {productOnly
-                    ? "Add your shop location, then choose how customers can receive their orders."
-                    : "Add your stand location or the main area you serve. Online providers can describe their remote coverage here."}
+                  Add your stand location or the main area you serve. Online providers can describe their remote coverage here.
                 </WizardNotice>
                 <label className={fieldClass("location")} data-validation-key="location">
-                  <span className="field-label-row-v10">{productOnly ? "Shop location or pickup area" : "Location or service area"} <RequiredMark /></span>
+                  <span className="field-label-row-v10">Location or service area <RequiredMark /></span>
                   <input
                     className="field-input-v4 profile-input-v4"
                     value={form.location}
-                    placeholder={productOnly ? "Example: Gayaza Town, Kampala Road" : "Example: Gayaza Town, Kampala Road, or Online across Uganda"}
+                    placeholder="Example: Gayaza Town, Kampala Road, or Online across Uganda"
                     onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
                   />
-                  <small className="profile-sub-v4">{productOnly ? "Customers see this as your seller location or pickup area." : "This becomes a visit address only for services where customers come to you."}</small>
+                  <small className="profile-sub-v4">This becomes a visit address only for services where customers come to you.</small>
                   <FieldMessage message={fieldError("location")} />
                 </label>
                 <button type="button" className="location-action-btn-v10" onClick={fillCurrentLocation} disabled={locationDetecting}>
                   <FiNavigation /> {locationDetecting ? "Detecting location..." : form.location || "Use my current location"}
                 </button>
-                {serviceStand ? <><div className="business-field-grid-v10 two-v10">
+                <div className="business-field-grid-v10 two-v10">
                   <label className={fieldClass("scheduleStart")} data-validation-key="scheduleStart">
                     <span className="field-label-row-v10">Opening time <RequiredMark /></span>
                     <input
@@ -1426,106 +1275,16 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     <FieldMessage message={fieldError("scheduleEnd")} />
                   </label>
                 </div>
-                {requirePlan ? <div className="payment-config-v5 business-mini-card-v10">
-                  <div className="payment-config-title-v5"><FiUsers /> Service setup</div>
-                  <label className="payment-config-option-v5">
-                    <input
-                      type="radio"
-                      name="standType"
-                      checked={form.standType !== "shop"}
-                      onChange={() => setForm((prev) => ({ ...prev, standType: "individual", teamMembers: "" }))}
-                    />
-                    <span>
-                      <strong>Independent provider</strong>
-                      <small>This profile is operated by one service provider.</small>
-                    </span>
-                  </label>
-                  <label className="payment-config-option-v5">
-                    <input
-                      type="radio"
-                      name="standType"
-                      checked={form.standType === "shop"}
-                      onChange={() => setForm((prev) => ({ ...prev, standType: "shop" }))}
-                    />
-                    <span>
-                      <strong>Business with staff</strong>
-                      <small>Add service agents customers can choose from.</small>
-                    </span>
-                  </label>
-                </div> : null}
-                {form.standType === "shop" ? (
-                  <label className="label-v4">
-                    Staff / service agents
-                    <textarea
-                      className="textarea-v4"
-                      placeholder="Timothy, Alex, Brian"
-                      value={form.teamMembers}
-                      onChange={(e) => setForm((prev) => ({ ...prev, teamMembers: e.target.value }))}
-                    />
-                    <small className="profile-sub-v4">Separate names with commas. You can edit this later.</small>
-                  </label>
-                ) : null}</> : null}
-                {shopStand ? (
-                  <div className={fieldClass("fulfilment", "shop-fulfilment-card-v21")} data-validation-key="fulfilment">
-                    <div className="payment-config-title-v5"><FiShoppingBag /> Selling preferences</div>
-                    <label className="payment-config-option-v5">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(form.pickupAvailable)}
-                        onChange={(event) => setForm((prev) => ({ ...prev, pickupAvailable: event.target.checked }))}
-                      />
-                      <span><strong>Pickup available</strong><small>Customers can collect confirmed orders from your shop or pickup point.</small></span>
-                    </label>
-                    <label className="payment-config-option-v5">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(form.deliveryAvailable)}
-                        onChange={(event) => setForm((prev) => ({ ...prev, deliveryAvailable: event.target.checked }))}
-                      />
-                      <span><strong>Delivery available</strong><small>Customers can request delivery. No online payment is collected.</small></span>
-                    </label>
-                    {form.deliveryAvailable ? (
-                      <div className="business-field-grid-v10 two-v10">
-                        <label className={fieldClass("deliveryAreas")} data-validation-key="deliveryAreas">
-                          Delivery areas <RequiredMark />
-                          <textarea
-                            className="textarea-v4"
-                            value={Array.isArray(form.deliveryAreas) ? form.deliveryAreas.join(", ") : form.deliveryAreas || ""}
-                            placeholder="Kampala Central, Ntinda, Gayaza"
-                            onChange={(event) => setForm((prev) => ({
-                              ...prev,
-                              deliveryAreas: event.target.value.split(",").map((item) => item.trim()).filter(Boolean),
-                            }))}
-                          />
-                          <FieldMessage message={fieldError("deliveryAreas")} />
-                        </label>
-                        <label className="label-v4">
-                          Delivery fee <span className="optional-label-v10">Optional</span>
-                          <span className="currency-input-shell-v10">
-                            <span className="currency-prefix-v10">UGX</span>
-                            <input
-                              className="field-input-v4 profile-input-v4"
-                              inputMode="numeric"
-                              value={form.deliveryFee || ""}
-                              placeholder="5,000"
-                              onChange={(event) => setForm((prev) => ({ ...prev, deliveryFee: event.target.value.replace(/\D/g, "") }))}
-                            />
-                          </span>
-                        </label>
-                        <label className="label-v4">
-                          Delivery notes <span className="optional-label-v10">Optional</span>
-                          <textarea
-                            className="textarea-v4"
-                            value={form.deliveryNotes || ""}
-                            placeholder="Estimated delivery time, minimum order, or delivery instructions."
-                            onChange={(event) => setForm((prev) => ({ ...prev, deliveryNotes: event.target.value }))}
-                          />
-                        </label>
-                      </div>
-                    ) : null}
-                    <FieldMessage message={fieldError("fulfilment")} />
-                  </div>
-                ) : null}
+                <label className="label-v4">
+                  Team members <span className="optional-label-v10">Optional</span>
+                  <textarea
+                    className="textarea-v4"
+                    placeholder="Timothy, Alex, Brian"
+                    value={form.teamMembers}
+                    onChange={(e) => setForm((prev) => ({ ...prev, teamMembers: e.target.value }))}
+                  />
+                  <small className="profile-sub-v4">Separate names with commas. You can edit this later.</small>
+                </label>
                 <details className="advanced-location-v10">
                   <summary>Advanced map coordinates</summary>
                   <div className="business-field-grid-v10 two-v10">
@@ -1569,31 +1328,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
               </section>
             ) : null}
 
-            {currentStep === 4 && productOnly ? (
-              <section className={missingFieldKeys.has("products") ? "business-step-card-v10 missing-v10" : "business-step-card-v10"} data-validation-key="products">
-                <WizardNotice>Add products customers can request for pickup or delivery. Queless does not collect payment in this flow.</WizardNotice>
-                {!marketplaceAvailability.enabled ? (
-                  <div className="product-feature-off-v21">Shop stands are coming soon. Your saved shop details remain available, but product changes need the local feature flag enabled.</div>
-                ) : null}
-                <ProductCatalogueEditor
-                  products={products}
-                  productLimit={productLimits.products}
-                  imageLimit={productLimits.images}
-                  disabled={!marketplaceAvailability.enabled}
-                  onChange={(nextProducts) => setForm((prev) => ({ ...prev, products: nextProducts }))}
-                  onRemove={(product) => setForm((prev) => ({
-                    ...prev,
-                    products: (prev.products || []).filter((item) => String(item.id) !== String(product.id)),
-                    deletedProductIds: String(product.id || "").startsWith("local-product-")
-                      ? prev.deletedProductIds || []
-                      : [...new Set([...(prev.deletedProductIds || []), product.id])],
-                  }))}
-                />
-                <FieldMessage message={fieldError("products")} />
-              </section>
-            ) : null}
-
-            {currentStep === 4 && serviceStand ? (
+            {currentStep === 4 ? (
               <section className={missingFieldKeys.has("services") ? "business-step-card-v10 missing-v10" : "business-step-card-v10"}>
                 <WizardNotice>Add the actual services customers can book. Use quote-required only when the price depends on scope.</WizardNotice>
                 <div className="service-summary-list-v10">
@@ -1914,32 +1649,12 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   planTier={selectedPlan.tier}
                   currentImageStats={imageStats}
                 />
-                {shopStand ? (
-                  <div data-validation-key="products">
-                    <WizardNotice>Products use order requests and stay separate from service bookings.</WizardNotice>
-                    <ProductCatalogueEditor
-                      products={products}
-                      productLimit={productLimits.products}
-                      imageLimit={productLimits.images}
-                      disabled={!marketplaceAvailability.enabled}
-                      onChange={(nextProducts) => setForm((prev) => ({ ...prev, products: nextProducts }))}
-                      onRemove={(product) => setForm((prev) => ({
-                        ...prev,
-                        products: (prev.products || []).filter((item) => String(item.id) !== String(product.id)),
-                        deletedProductIds: String(product.id || "").startsWith("local-product-")
-                          ? prev.deletedProductIds || []
-                          : [...new Set([...(prev.deletedProductIds || []), product.id])],
-                      }))}
-                    />
-                    <FieldMessage message={fieldError("products")} />
-                  </div>
-                ) : null}
               </section>
             ) : null}
 
             {currentStep === 6 ? (
               <section className="business-step-card-v10">
-                <WizardNotice>Review your {productOnly ? "shop" : "stand"}, choose the plan that fits today, and publish when every required detail is ready.</WizardNotice>
+                <WizardNotice>Review your stand, choose the plan that fits today, and publish when every required detail is ready.</WizardNotice>
                 <div className="stand-plan-chooser-v10">
                   <div className="stand-plan-heading-v10">
                     <div>
@@ -1964,9 +1679,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     ))}
                   </div>
                   <div className="stand-plan-grid-v10">
-                  {PROVIDER_PLANS.map((basePlan) => {
-                    const plan = getMarketplacePlanContent(basePlan, marketplaceMode);
-                    return (
+                  {PROVIDER_PLANS.map((plan) => (
                     <article
                       key={plan.tier}
                       className={form.selectedPlan === plan.tier ? "stand-plan-card-v10 selected" : "stand-plan-card-v10"}
@@ -2009,8 +1722,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                         <div className="stand-plan-free-v10">No payment required</div>
                       )}
                     </article>
-                    );
-                  })}
+                  ))}
                   </div>
                   <div className="stand-plan-footer-v10">
                     <FiCheckCircle />
@@ -2025,7 +1737,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   </div>
                 </div>
                 <div className="wizard-note-v10">
-                  Verification pending: Queless may review your phone, location, profile image, documents, and {productOnly ? "product catalogue before customers can order from you" : "service list before customers can book you"} publicly.
+                  Verification pending: Queless may review your phone, location, profile image, documents, and service list before customers can book you publicly.
                 </div>
                 <div className="review-business-card-v10">
                   {form.image ? <img src={buildAssetUrl(form.image)} alt="Business preview" /> : <span><FiCamera /></span>}
@@ -2036,18 +1748,16 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                 </div>
                 <div className="review-grid-v10">
                   <div><FiMapPin /><span>Location</span><strong>{form.location || "Not added"}</strong></div>
-                  {serviceStand ? <div><FiClock /><span>Hours</span><strong>{form.scheduleStart} - {form.scheduleEnd}</strong></div> : null}
-                  {serviceStand ? <div><FiUsers /><span>Services</span><strong>{services.length}</strong></div> : null}
-                  {shopStand ? <div><FiPackage /><span>Products</span><strong>{activeProducts.length}</strong></div> : null}
-                  {shopStand ? <div><FiShoppingBag /><span>Fulfilment</span><strong>{[form.pickupAvailable ? "Pickup" : "", form.deliveryAvailable ? "Delivery" : ""].filter(Boolean).join(" & ") || "Not selected"}</strong></div> : null}
-                  <div><FiCreditCard /><span>Payments</span><strong>{shopStand ? "Agreed after order request" : "Direct payment for now"}</strong></div>
+                  <div><FiClock /><span>Hours</span><strong>{form.scheduleStart} - {form.scheduleEnd}</strong></div>
+                  <div><FiUsers /><span>Services</span><strong>{services.length}</strong></div>
+                  <div><FiCreditCard /><span>Payments</span><strong>Direct payment for now</strong></div>
                   <div><FiCheckCircle /><span>Verification</span><strong>{form.documentName || "Pending document review"}</strong></div>
                 </div>
-                {serviceStand ? <div className="review-list-v10">
+                <div className="review-list-v10">
                   <strong>Service categories</strong>
                   <p>{selectedCategories.join(", ") || "No categories selected"}</p>
-                </div> : null}
-                {serviceStand ? <div className="review-list-v10">
+                </div>
+                <div className="review-list-v10">
                   <strong>Services added</strong>
                   {services.length ? (
                     services.map((service, index) => (
@@ -2056,15 +1766,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   ) : (
                     <p>No services added</p>
                   )}
-                </div> : null}
-                {shopStand ? (
-                  <div className="review-list-v10">
-                    <strong>Products added</strong>
-                    {activeProducts.length
-                      ? activeProducts.map((product) => <p key={product.id || product.name}>{product.name} - UGX {Number(product.sale_price ?? product.salePrice ?? product.price ?? 0).toLocaleString("en-UG")}</p>)
-                      : <p>No active products added</p>}
-                  </div>
-                ) : null}
+                </div>
               </section>
             ) : null}
           </div>
@@ -2139,7 +1841,7 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
       acceptsCash: Number(barber.accepts_cash ?? barber.acceptsCash ?? 1) === 1,
       homeServiceEnabled: Number(barber.home_service_enabled ?? barber.homeServiceEnabled ?? 0) === 1,
       introText: barber.intro_text || barber.introText || "",
-      standType: barber.stand_type || barber.standType || "individual",
+      standType: "individual",
       teamMembers: Array.isArray(barber.team_members || barber.teamMembers)
         ? (barber.team_members || barber.teamMembers)
             .flatMap((member) => {
@@ -2149,15 +1851,8 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
             .join(", ")
         : "",
       portfolio: arrayFromMaybeJson(barber.portfolio ?? barber.portfolio_json ?? barber.galleryImages ?? barber.gallery_images),
-      marketplaceMode: getMarketplaceMode(barber),
+      marketplaceMode: "service",
       businessHours: barber.business_hours || barber.businessHours || {},
-      pickupAvailable: booleanFromApi(barber.pickup_available ?? barber.pickupAvailable, true),
-      deliveryAvailable: booleanFromApi(barber.delivery_available ?? barber.deliveryAvailable, false),
-      deliveryAreas: arrayFromMaybeJson(barber.delivery_areas ?? barber.deliveryAreas),
-      deliveryFee: barber.delivery_fee ?? barber.deliveryFee ?? "",
-      deliveryNotes: barber.delivery_notes || barber.deliveryNotes || "",
-      products: Array.isArray(barber.products) ? barber.products : [],
-      deletedProductIds: [],
       selectedPlan: String(barber.selected_plan || barber.subscription?.tier || barber.subscription_tier || "FREE").toUpperCase(),
       startFreeTrial: false,
       dirtyFields: [],
@@ -2166,25 +1861,6 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
     const backup = readStandFormBackup(backupKey, savedAt) || {};
     setForm({ ...baseForm, ...backup });
   }, [backupKey, show, barber, profile.phone, setForm]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!show || !barber || !supportsProducts(barber)) return undefined;
-    getMyProducts()
-      .then((data) => {
-        if (cancelled) return;
-        const standProducts = (data?.products || []).filter((product) => (
-          !product.stand_id && !product.standId
-        ) || String(product.stand_id || product.standId) === String(barber.id));
-        setForm((current) => current.products?.length ? current : { ...current, products: standProducts });
-      })
-      .catch(() => {
-        // The feature flag may be off. The saved stand and local backup remain intact.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [barber, setForm, show]);
 
   return (
     <BarberStandFormModal

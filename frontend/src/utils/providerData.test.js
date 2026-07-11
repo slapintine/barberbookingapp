@@ -55,7 +55,7 @@ test("numeric prices still render normally", () => {
   assert.equal(formatProviderPrice({ price_from: 15000 }), "UGX 15,000");
 });
 
-test("provider normalization exposes marketplace capabilities and fulfilment", () => {
+test("provider normalization ignores legacy product marketplace fields", () => {
   const normalized = normalizeProviderData({
     id: 11,
     marketplace_mode: "hybrid",
@@ -63,9 +63,11 @@ test("provider normalization exposes marketplace capabilities and fulfilment", (
     delivery_available: 0,
     delivery_areas_json: '["Kampala"]',
   });
+  assert.equal(normalized.marketplaceMode, "service");
+  assert.equal(normalized.marketplace_mode, "service");
   assert.equal(normalized.supportsServices, true);
-  assert.equal(normalized.supportsProducts, true);
-  assert.equal(normalized.pickupAvailable, true);
-  assert.equal(normalized.deliveryAvailable, false);
-  assert.deepEqual(normalized.deliveryAreas, ["Kampala"]);
+  assert.equal(Object.hasOwn(normalized, "supportsProducts"), false);
+  assert.equal(Object.hasOwn(normalized, "pickupAvailable"), false);
+  assert.equal(Object.hasOwn(normalized, "deliveryAvailable"), false);
+  assert.equal(Object.hasOwn(normalized, "deliveryAreas"), false);
 });

@@ -35,8 +35,6 @@ import {
 } from "react-icons/fi";
 import VerificationBadge from "../../components/ui/VerificationBadge.jsx";
 import { resolveProviderImage } from "../../utils/providerImage.js";
-import { supportsProducts, supportsServices } from "../../utils/marketplaceMode.js";
-import ProductMarketplacePanel from "../products/ProductMarketplacePanel.jsx";
 
 /* ── helpers ──────────────────────────────────────────── */
 
@@ -402,14 +400,11 @@ export default function BarberProfileSheet({
     accepts_mtn_mobile_money: barber.accepts_mtn_mobile_money || false,
     social_links: barber.social_links || barber.socialLinks || {},
   };
-  const serviceStand = supportsServices(barber);
-  const shopStand = supportsProducts(barber);
   const tabs = [
     { id: "overview", label: "Overview" },
-    ...(serviceStand ? [{ id: "services", label: "Services" }] : []),
-    ...(shopStand ? [{ id: "products", label: "Products" }] : []),
-    { id: "portfolio", label: shopStand && !serviceStand ? "Gallery" : "Portfolio" },
-    ...(serviceStand ? [{ id: "reviews", label: "Reviews" }] : []),
+    { id: "services", label: "Services" },
+    { id: "portfolio", label: "Portfolio" },
+    { id: "reviews", label: "Reviews" },
     { id: "about", label: "Location" },
   ];
 
@@ -696,9 +691,6 @@ export default function BarberProfileSheet({
                 {t.id === "services" && safeBarber.services.length > 0 && (
                   <span className="pps-tab-badge">{safeBarber.services.length}</span>
                 )}
-                {t.id === "products" && Number(barber.product_count || barber.productCount || 0) > 0 && (
-                  <span className="pps-tab-badge">{Number(barber.product_count || barber.productCount)}</span>
-                )}
                 {t.id === "reviews" && safeBarber.reviewCount > 0 && (
                   <span className="pps-tab-badge">{safeBarber.reviewCount}</span>
                 )}
@@ -767,7 +759,7 @@ export default function BarberProfileSheet({
                   /* visitor CTAs — Book only for customers, Message for everyone */
                   <div className="pps-cta-section">
                     <div className="pps-cta-row">
-                      {serviceStand && !currentUserIsBarber && safeBarber.services.length > 0 && (
+                      {!currentUserIsBarber && safeBarber.services.length > 0 && (
                         <button
                           type="button"
                           className="pps-btn-primary"
@@ -776,11 +768,6 @@ export default function BarberProfileSheet({
                           <FiCalendar size={17} /> Book service
                         </button>
                       )}
-                      {shopStand && !currentUserIsBarber ? (
-                        <button type="button" className="pps-btn-primary" onClick={() => setActiveTab("products")}>
-                          <FiPackage size={17} /> View products
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         className="pps-btn-secondary"
@@ -789,7 +776,7 @@ export default function BarberProfileSheet({
                         <FiMessageCircle size={17} /> Message
                       </button>
                     </div>
-                    {serviceStand && !currentUserIsBarber && quoteRelevant && (
+                    {!currentUserIsBarber && quoteRelevant && (
                       <button
                         type="button"
                         className="pps-btn-tertiary"
@@ -804,7 +791,7 @@ export default function BarberProfileSheet({
                 {/* availability + location + trust + payment info card */}
                 <div className="pps-info-card">
                   {/* next slot */}
-                  {serviceStand ? <><div className="pps-info-row">
+                  <div className="pps-info-row">
                     <div className="pps-info-icon-wrap">
                       <FiCalendar size={17} />
                     </div>
@@ -827,7 +814,7 @@ export default function BarberProfileSheet({
                     )}
                   </div>
 
-                  <div className="pps-info-sep" /></> : null}
+                  <div className="pps-info-sep" />
 
                   {/* service area */}
                   <div className="pps-info-row">
@@ -835,12 +822,10 @@ export default function BarberProfileSheet({
                       <FiMapPin size={17} />
                     </div>
                     <div className="pps-info-body">
-                      <span className="pps-info-label">{shopStand && !serviceStand ? "Shop location" : "Service area"}</span>
+                      <span className="pps-info-label">Service area</span>
                       <strong className="pps-info-val">{safeBarber.location}</strong>
                       <small className="pps-info-sub">
-                        {shopStand && !serviceStand
-                          ? [barber.pickup_available ?? barber.pickupAvailable ? "Pickup" : "", barber.delivery_available ?? barber.deliveryAvailable ? "Delivery" : ""].filter(Boolean).join(" & ") || "Contact seller for fulfilment"
-                          : safeBarber.home_service_enabled === 1
+                        {safeBarber.home_service_enabled === 1
                           ? "Provider location & home service available"
                           : "Provider location only"}
                       </small>
@@ -899,9 +884,7 @@ export default function BarberProfileSheet({
                   </div>
                 </div>
 
-                {/* team members if shop */}
-                {safeBarber.stand_type === "shop" &&
-                  safeBarber.team_members.length > 0 && (
+                {safeBarber.team_members.length > 0 && (
                     <div className="pps-team-card">
                       <div className="pps-section-head-sm">
                         <FiUsers size={14} />
@@ -915,7 +898,7 @@ export default function BarberProfileSheet({
                         ))}
                       </div>
                     </div>
-                  )}
+                )}
 
                 {/* report link */}
                 {!isOwnBarberProfile && (
@@ -981,17 +964,11 @@ export default function BarberProfileSheet({
               </div>
             )}
 
-            {activeTab === "products" && shopStand ? (
-              <div className="pps-panel-products">
-                <ProductMarketplacePanel currentUser={currentUser} standId={safeBarber.id} compact />
-              </div>
-            ) : null}
-
             {/* ─── PORTFOLIO ─────────────────────────── */}
             {activeTab === "portfolio" && (
               <div className="pps-panel-portfolio">
                 <div className="pps-section-head">
-                  <h2 className="pps-section-title">{shopStand && !serviceStand ? "Gallery" : "Portfolio"}</h2>
+                  <h2 className="pps-section-title">Portfolio</h2>
                   {safeBarber.portfolio.length > 0 && (
                     <span className="pps-view-all-label">
                       {safeBarber.portfolio.length} item

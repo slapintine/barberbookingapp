@@ -183,8 +183,7 @@ function getLocationChipLabel(service, barber) {
   if (type === "mobile_area") return "Mobile";
   if (type === "appointment_only") return "Appointment";
   if (type === "online") return "Online";
-  const standType = String(barber?.stand_type || barber?.standType || "").toLowerCase();
-  return standType === "shop" ? "At Studio" : "Provider";
+  return "Provider";
 }
 
 const miniPinIcon = new L.DivIcon({
@@ -333,8 +332,7 @@ export default function BookingModal({
   const teamMembers = Array.isArray(barber.team_members || barber.teamMembers)
     ? (barber.team_members || barber.teamMembers).filter((item) => Number(item?.is_active ?? item?.isActive ?? 1) === 1)
     : [];
-  const isShopStand = String(barber.stand_type || barber.standType || "individual") === "shop";
-  const requiresTeamMember = isShopStand && teamMembers.length > 0;
+  const requiresTeamMember = teamMembers.length > 0;
   const selectedTeamMember = teamMembers.find((item) => String(item.id) === String(selectedTeamMemberId));
   const paymentsComingSoon = !PAYMENTS_ENABLED;
   const locationOptions = getServiceLocationOptions(serviceObj, barber);
@@ -555,7 +553,7 @@ export default function BookingModal({
                     </div>
                     <div className="bk-summary-rows">
                       <div className="bk-summary-row"><span>Service</span><strong>{serviceObj?.service_name || "Service"}</strong></div>
-                      {isShopStand ? <div className="bk-summary-row"><span>Provider</span><strong>{selectedTeamMember?.name || "Any available"}</strong></div> : null}
+                      {selectedTeamMember?.name ? <div className="bk-summary-row"><span>Provider</span><strong>{selectedTeamMember.name}</strong></div> : null}
                       <div className="bk-summary-row"><span>When</span><strong>{selectedDateLabel} • {selectedTimeLabel}</strong></div>
                       <div className="bk-summary-row"><span>Location</span><strong>{isHomeService ? (bookingAddress || "Your location") : barber.location}</strong></div>
                       <div className="bk-summary-row"><span>Payment</span><strong>Pay provider directly</strong></div>

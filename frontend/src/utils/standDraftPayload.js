@@ -15,12 +15,6 @@ function equal(left, right) {
   return JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right));
 }
 
-function booleanValue(value, fallback = false) {
-  if (value === undefined || value === null || value === "") return fallback;
-  if (typeof value === "string") return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-  return value === true || value === 1;
-}
-
 function arrayValue(value) {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string") return [];
@@ -100,16 +94,11 @@ export function buildStandDraftUpdatePayload(form = {}, existing = {}) {
   addChanged(payload, clearFields, { apiKey: "price_from", value: Number(form.pricing || 0), existing: Number(existing.price_from || 0) });
   addChanged(payload, clearFields, { apiKey: "image", value: form.image ?? "", existing: existing.image ?? "", protectedEmpty: true });
   addChanged(payload, clearFields, { apiKey: "services", value: Array.isArray(form.services) ? form.services : [], existing: Array.isArray(existing.services) ? existing.services : [], protectedEmpty: true });
-  addChanged(payload, clearFields, { apiKey: "stand_type", value: form.standType || "individual", existing: existing.stand_type || existing.standType || "individual" });
-  if (hasFormField("marketplaceMode")) addChanged(payload, clearFields, { apiKey: "marketplace_mode", value: form.marketplaceMode || "service", existing: existing.marketplace_mode || existing.marketplaceMode || "service" });
+  addChanged(payload, clearFields, { apiKey: "stand_type", value: "individual", existing: existing.stand_type || existing.standType || "individual" });
+  addChanged(payload, clearFields, { apiKey: "marketplace_mode", value: "service", existing: existing.marketplace_mode || existing.marketplaceMode || "service" });
   addChanged(payload, clearFields, { apiKey: "business_type", value: form.businessType ?? "", existing: existing.business_type || existing.businessType || "", protectedEmpty: true });
   if (hasFormField("coverImage")) addChanged(payload, clearFields, { apiKey: "cover_image_url", value: form.coverImage ?? "", existing: existing.cover_image_url || existing.coverImageUrl || "", protectedEmpty: true });
   if (hasFormField("businessHours")) addChanged(payload, clearFields, { apiKey: "business_hours", value: form.businessHours || {}, existing: existing.business_hours || existing.businessHours || {} });
-  if (hasFormField("deliveryAvailable")) addChanged(payload, clearFields, { apiKey: "delivery_available", value: Boolean(form.deliveryAvailable), existing: booleanValue(existing.delivery_available ?? existing.deliveryAvailable) });
-  if (hasFormField("pickupAvailable")) addChanged(payload, clearFields, { apiKey: "pickup_available", value: Boolean(form.pickupAvailable), existing: booleanValue(existing.pickup_available ?? existing.pickupAvailable, true) });
-  if (hasFormField("deliveryAreas")) addChanged(payload, clearFields, { apiKey: "delivery_areas", value: Array.isArray(form.deliveryAreas) ? form.deliveryAreas : [], existing: arrayValue(existing.delivery_areas ?? existing.deliveryAreas ?? existing.delivery_areas_json), protectedEmpty: true });
-  if (hasFormField("deliveryFee")) addChanged(payload, clearFields, { apiKey: "delivery_fee", value: form.deliveryFee === "" ? null : Number(form.deliveryFee), existing: existing.delivery_fee ?? existing.deliveryFee ?? null, protectedEmpty: true });
-  if (hasFormField("deliveryNotes")) addChanged(payload, clearFields, { apiKey: "delivery_notes", value: form.deliveryNotes ?? "", existing: existing.delivery_notes || existing.deliveryNotes || "", protectedEmpty: true });
   addChanged(payload, clearFields, { apiKey: "map_icon_type", value: form.mapIconType ?? "", existing: existing.map_icon_type || existing.mapIconType || "", protectedEmpty: true });
   addChanged(payload, clearFields, { apiKey: "home_service_enabled", value: Boolean(form.homeServiceEnabled), existing: Boolean(Number(existing.home_service_enabled ?? existing.homeServiceEnabled ?? 0)) });
   addChanged(payload, clearFields, {

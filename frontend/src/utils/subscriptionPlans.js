@@ -17,7 +17,7 @@ export const PROVIDER_PLANS = [
     monthlyPrice: 0,
     annualPrice: 0,
     annualSavings: 0,
-    headline: "Start selling",
+    headline: "Start booking",
     summary: "Create your stand, take bookings, and chat with customers for free.",
     bestFor: "Create your stand, take bookings, and chat with customers for free.",
     trialAvailable: false,

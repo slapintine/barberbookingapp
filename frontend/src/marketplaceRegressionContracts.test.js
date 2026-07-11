@@ -6,17 +6,25 @@ function source(path) {
   return fs.readFileSync(new URL(path, import.meta.url), "utf8");
 }
 
-test("uploaded stand, service, portfolio, and product images use the shared asset URL builder", () => {
+test("uploaded stand, service, portfolio, and booking images use the shared asset URL builder", () => {
   const standWizard = source("./features/barbers/BarberStandModals.jsx");
   const profile = source("./features/barbers/BarberProfileSheet.jsx");
   const booking = source("./features/bookings/BookingModal.jsx");
-  const products = source("./features/products/ProductMarketplacePanel.jsx");
 
   assert.match(standWizard, /src=\{buildAssetUrl\(image\)\}/);
   assert.match(standWizard, /src=\{buildAssetUrl\(service\.image\)\}/);
   assert.match(profile, /buildAssetUrl\(getPortfolioImage\(item\)\)/);
   assert.match(booking, /\.map\(buildAssetUrl\)/);
-  assert.match(products, /src=\{buildAssetUrl\(image\)\}/);
+});
+
+test("product marketplace modules are not part of the active frontend surface", () => {
+  const app = source("./App.jsx");
+  const dashboard = source("./pages/DashboardPage.jsx");
+  const home = source("./pages/HomePage.jsx");
+
+  assert.doesNotMatch(app, /productsApi|ProductMarketplace|ProviderProduct/);
+  assert.doesNotMatch(dashboard, /ProductMarketplace|ProviderProduct|productWorkspace/);
+  assert.doesNotMatch(home, /ProductMarketplace|Shop from Sellers|Browse sellers/);
 });
 
 test("structured booking details remain supported without exposing the old raw validation message", () => {

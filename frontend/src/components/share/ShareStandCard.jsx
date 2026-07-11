@@ -127,7 +127,7 @@ export default function ShareStandCard({ barber }) {
           </div>
 
           <p className="share-stand-hint-v1">
-            Print the QR for your shop, add it to your WhatsApp status, or put it in your Instagram/TikTok bio.
+            Print the QR for your service business, add it to your WhatsApp status, or put it in your Instagram/TikTok bio.
           </p>
         </div>
       </div>

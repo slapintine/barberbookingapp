@@ -40,7 +40,7 @@ const CATEGORY_FILTER_TERMS = {
 };
 
 const QUERY_GROUPS = {
-  barber: ["barber", "barbers", "barber shop", "haircut", "men's grooming", "grooming", "salon", "hair"],
+  barber: ["barber", "barbers", "haircut", "men's grooming", "grooming", "salon", "hair"],
   clean: ["clean", "cleaning", "cleaner", "house cleaning", "deep cleaning", "office cleaning", "sofa cleaning", "carpet cleaning", "laundry"],
   plumb: ["plumb", "plumber", "plumbing", "pipe", "leakage", "bathroom plumbing", "emergency plumber"],
   electric: ["electric", "electrical", "electrician", "wiring", "power"],

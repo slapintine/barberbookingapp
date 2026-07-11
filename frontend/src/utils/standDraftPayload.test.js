@@ -68,8 +68,8 @@ test("team member text from the editor preserves saved team member objects", () 
   ];
   assert.deepEqual(
     buildStandDraftUpdatePayload(
-      editableForm({ standType: "shop", teamMembers: "Ada, Ben" }),
-      { ...existing, stand_type: "shop", team_members: savedTeam }
+      editableForm({ teamMembers: "Ada, Ben" }),
+      { ...existing, team_members: savedTeam }
     ),
     { submit_intent: "draft" }
   );
@@ -124,7 +124,7 @@ test("intentionally edited opening hours are sent even when local provider state
   );
 });
 
-test("marketplace fulfilment fields are explicit and do not disturb saved services or images", () => {
+test("legacy product fulfilment fields are ignored by service-only draft payloads", () => {
   assert.deepEqual(
     buildStandDraftUpdatePayload(
       editableForm({
@@ -137,13 +137,17 @@ test("marketplace fulfilment fields are explicit and do not disturb saved servic
       }),
       { ...existing, marketplace_mode: "service", pickup_available: 1, delivery_available: 0 }
     ),
+    { submit_intent: "draft" }
+  );
+});
+
+test("legacy product or hybrid modes are normalized to service on save", () => {
+  assert.deepEqual(
+    buildStandDraftUpdatePayload(editableForm(), { ...existing, marketplace_mode: "hybrid", stand_type: "shop" }),
     {
       submit_intent: "draft",
-      marketplace_mode: "product",
-      delivery_available: true,
-      delivery_areas: ["Kampala", "Wakiso"],
-      delivery_fee: 5000,
-      delivery_notes: "Same-day delivery",
+      stand_type: "individual",
+      marketplace_mode: "service",
     }
   );
 });

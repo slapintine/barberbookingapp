@@ -15,9 +15,14 @@ test("stand edit modal tolerates the no-stand state during login and refresh", (
 
 test("draft save is available before the final wizard step and publish stays separate", () => {
   assert.match(modalSource, /currentStep !== lastStep[\s\S]*submitWizard\("draft"\)/);
-  assert.match(modalSource, /productOnly \? \[1, 2, 4, 6\]/);
+  assert.match(modalSource, /const stepSequence = \[1, 2, 3, 4, 5, 6\]/);
   assert.match(modalSource, /submitWizard\(selectedPaidPlanComingSoon \? "draft" : "publish"\)/);
   assert.doesNotMatch(modalSource, /submitWizard\("payment"\)/);
+});
+
+test("stand wizard does not expose shop, hybrid, or product setup paths", () => {
+  assert.doesNotMatch(modalSource, /Shop Stand|MARKETPLACE_MODES\.PRODUCT|MARKETPLACE_MODES\.HYBRID|ProductCatalogueEditor/);
+  assert.match(modalSource, /const marketplaceMode = "service"/);
 });
 
 test("partially entered service titles stay empty when a draft is reopened", () => {
