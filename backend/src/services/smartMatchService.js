@@ -1,5 +1,5 @@
 import { publicBusinessParams, publicBusinessWhere } from "./businessVisibility.js";
-import { MARKETPLACE_CATEGORIES } from "../data/marketplaceCategories.js";
+import { SERVICE_CATEGORIES } from "../data/serviceCategories.js";
 
 export const SMART_MATCH_WEIGHTS = {
   serviceMatch: 35,
@@ -70,7 +70,7 @@ const SERVICE_ALIASES = {
   "delivery-errands": ["delivery", "errand", "courier", "pickup", "shopping", "runner"],
 };
 
-const CATEGORY_BY_ID = new Map(MARKETPLACE_CATEGORIES.map((category) => [category.id, category]));
+const CATEGORY_BY_ID = new Map(SERVICE_CATEGORIES.map((category) => [category.id, category]));
 
 function normalize(value = "") {
   return String(value || "")
@@ -88,7 +88,7 @@ function slugifyCategory(value = "") {
 function getCategoryByInput(value = "") {
   const clean = normalize(value);
   const slug = slugifyCategory(value);
-  return MARKETPLACE_CATEGORIES.find((category) =>
+  return SERVICE_CATEGORIES.find((category) =>
     category.id === slug ||
     normalize(category.name) === clean ||
     slugifyCategory(category.name) === slug

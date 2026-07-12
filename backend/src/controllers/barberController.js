@@ -16,7 +16,8 @@ import { materializeImageReference, materializeProviderImages } from "../service
 import { withCanonicalProviderFields } from "../services/providerResponse.js";
 import { createRequestLogger } from "../config/logger.js";
 import { AUDIT_EVENTS, recordAuditEvent } from "../services/auditLogService.js";
-import { getPublishRequirements } from "../services/marketplaceCapabilities.js";
+import { getPublishRequirements } from "../services/providerCapabilities.js";
+import { legacyProviderStorageFields } from "../services/legacyProviderCompatibility.js";
 import {
   firstOwnValue,
   getClearFields,
@@ -814,8 +815,9 @@ export async function registerBarber(req, res, next) {
     const requestedBusinessType = req.body.category || business_type;
     const requestedIntroText = req.body.description || intro_text;
     const requestedPortfolio = req.body.gallery_images || req.body.galleryImages || portfolio;
-    const normalizedStandType = normalizeStandType();
-    const normalizedMarketplaceMode = "service";
+    const legacyFields = legacyProviderStorageFields();
+    const normalizedStandType = legacyFields.standType;
+    const normalizedServiceMode = legacyFields.serviceModeForLegacyColumn;
     const normalizedBusinessType = normalizeBusinessType(requestedBusinessType);
     const normalizedMapIconType = normalizeMapIconType(map_icon_type);
     const normalizedPortfolio = normalizePortfolioItems(
@@ -983,7 +985,7 @@ export async function registerBarber(req, res, next) {
         1,
         normalizedStandType,
         normalizedBusinessType,
-        normalizedMarketplaceMode,
+        normalizedServiceMode,
         normalizedMapIconType,
         home_service_enabled ? 1 : 0,
         String(requestedIntroText || "").trim(),
@@ -1428,8 +1430,9 @@ export async function updateMyBarberProfile(req, res, next) {
       clearFields,
       clearKey: "price_from",
     });
-    const nextStandType = normalizeStandType();
-    const nextMarketplaceMode = "service";
+    const legacyFields = legacyProviderStorageFields();
+    const nextStandType = legacyFields.standType;
+    const nextServiceMode = legacyFields.serviceModeForLegacyColumn;
     const nextBusinessType = normalizeBusinessType(mergeDraftText({
       body,
       keys: ["category", "business_type", "businessType"],
@@ -1688,7 +1691,7 @@ export async function updateMyBarberProfile(req, res, next) {
           nextAcceptsCash ? 1 : 0,
           nextStandType,
           nextBusinessType,
-          nextMarketplaceMode,
+          nextServiceMode,
           nextMapIconType,
           nextHomeServiceEnabled ? 1 : 0,
           nextIntroText,

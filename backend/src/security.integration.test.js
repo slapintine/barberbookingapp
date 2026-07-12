@@ -129,7 +129,15 @@ test.after(async () => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("guest public marketplace route loads without auth", async () => {
+test("guest public service-discovery route loads without auth", async () => {
+  const response = await request("/api/discovery/categories");
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.success, true);
+  assert.ok(Array.isArray(body.categories));
+});
+
+test("deprecated marketplace alias loads public service discovery while retained", async () => {
   const response = await request("/api/marketplace/categories");
   assert.equal(response.status, 200);
   const body = await response.json();
@@ -138,7 +146,7 @@ test("guest public marketplace route loads without auth", async () => {
 });
 
 test("public provider discovery does not expose contact or owner ids", async () => {
-  const response = await request("/api/marketplace/providers");
+  const response = await request("/api/discovery/providers");
   assert.equal(response.status, 200);
   const body = await response.json();
   const provider = body.providers.find((item) => item.id === fixtures.businessOne.id);
@@ -146,6 +154,16 @@ test("public provider discovery does not expose contact or owner ids", async () 
   assert.equal(Object.hasOwn(provider, "phone"), false);
   assert.equal(Object.hasOwn(provider, "email"), false);
   assert.equal(Object.hasOwn(provider, "user_id"), false);
+  assert.equal(Object.hasOwn(provider, "marketplace_mode"), false);
+  assert.equal(Object.hasOwn(provider, "marketplaceMode"), false);
+});
+
+test("canonical service listings route loads without auth", async () => {
+  const response = await request("/api/discovery/service-listings");
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.success, true);
+  assert.ok(Array.isArray(body.service_listings));
 });
 
 test("unauthenticated private route returns 401", async () => {

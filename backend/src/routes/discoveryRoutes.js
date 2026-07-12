@@ -8,7 +8,7 @@ import {
   getMySupportRequests,
   getProviders,
   getServiceListings,
-} from "../controllers/marketplaceController.js";
+} from "../controllers/discoveryController.js";
 import { smartMatch } from "../controllers/smartMatchController.js";
 import { requireRole } from "../middleware/roleMiddleware.js";
 import { requireCustomerPremium } from "../middleware/customerPremiumMiddleware.js";

@@ -1,4 +1,4 @@
-import { getPublishRequirements } from "./marketplaceCapabilities.js";
+import { getPublishRequirements } from "./providerCapabilities.js";
 
 function owns(object, key) {
   return Object.prototype.hasOwnProperty.call(object || {}, key);

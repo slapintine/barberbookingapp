@@ -1,6 +1,6 @@
 import { all, get, run, transaction } from "../db/query.js";
 import { AUDIT_EVENTS, recordAuditEvent } from "../services/auditLogService.js";
-import { MARKETPLACE_CATEGORIES } from "../data/marketplaceCategories.js";
+import { SERVICE_CATEGORIES } from "../data/serviceCategories.js";
 import { publicBusinessParams, publicBusinessWhere } from "../services/businessVisibility.js";
 import { withCanonicalProviderFields } from "../services/providerResponse.js";
 
@@ -107,7 +107,7 @@ export async function getCategories(req, res, next) {
   try {
     res.json({
       success: true,
-      categories: MARKETPLACE_CATEGORIES,
+      categories: SERVICE_CATEGORIES,
     });
   } catch (error) {
     next(error);

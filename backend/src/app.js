@@ -32,7 +32,7 @@ import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import customerSubscriptionRoutes from "./routes/customerSubscriptionRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
-import marketplaceRoutes from "./routes/marketplaceRoutes.js";
+import discoveryRoutes from "./routes/discoveryRoutes.js";
 import aiCoachRoutes from "./routes/aiCoachRoutes.js";
 import providerCoachChatRoutes from "./routes/providerCoachChatRoutes.js";
 import smsRoutes from "./routes/smsRoutes.js";
@@ -159,13 +159,16 @@ app.use("/api/provider-coach", providerCoachChatRoutes);
 app.use("/api/payments", paymentRateLimiter, paymentRoutes);
 app.use("/api/sms", smsRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api/marketplace", marketplaceRoutes);
-app.use("/api", marketplaceRoutes);
+app.use("/api/discovery", discoveryRoutes);
+// Deprecated compatibility aliases for older web/Android clients. Remove after
+// released clients are verified against /api/discovery.
+app.use("/api/marketplace", discoveryRoutes);
+app.use("/api", discoveryRoutes);
 
 app.get("/api", (req, res) => {
   res.json({
     success: true,
-    message: "Service marketplace API is live",
+    message: "Service discovery API is live",
   });
 });
 

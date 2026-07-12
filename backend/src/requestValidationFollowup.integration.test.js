@@ -121,7 +121,7 @@ test("admin subscription route rejects a non-numeric id param", async () => {
 });
 
 test("support request rejects HTML/script in the message", async () => {
-  const res = await req("/api/marketplace/support-requests", {
+  const res = await req("/api/discovery/support-requests", {
     token: customerToken,
     body: { contact: "help@example.test", message: "<script>steal()</script> please help me with this" },
   });
@@ -132,7 +132,7 @@ test("support request rejects HTML/script in the message", async () => {
 });
 
 test("support request rejects a too-short message", async () => {
-  const res = await req("/api/marketplace/support-requests", {
+  const res = await req("/api/discovery/support-requests", {
     token: customerToken,
     body: { contact: "help@example.test", message: "hi" },
   });

@@ -1,4 +1,4 @@
-const SERVICE_MARKETPLACE_CATEGORIES = [
+const SERVICE_CATEGORY_DEFINITIONS = [
   {
     id: "barber",
     icon: "scissors",
@@ -125,7 +125,7 @@ const SERVICE_MARKETPLACE_CATEGORIES = [
   { id: "security-services", icon: "briefcase", name: "Security Services", description: "Guards, CCTV, access control, alarms, and property security.", image: "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=80", active: true },
 ];
 
-export const MARKETPLACE_CATEGORIES = SERVICE_MARKETPLACE_CATEGORIES.map((category) => ({
+export const SERVICE_CATEGORIES = SERVICE_CATEGORY_DEFINITIONS.map((category) => ({
   ...category,
   kinds: ["service"],
 }));

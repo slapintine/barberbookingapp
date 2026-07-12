@@ -1,4 +1,4 @@
-import { normalizeStandForClient } from "./marketplaceCapabilities.js";
+import { normalizeProviderForClient } from "./providerCapabilities.js";
 
 function uniqueImages(values = []) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
@@ -33,5 +33,5 @@ export function canonicalProviderImages(provider = {}, { services = [], portfoli
 }
 
 export function withCanonicalProviderFields(provider = {}, options = {}) {
-  return normalizeStandForClient({ ...provider, ...canonicalProviderImages(provider, options) });
+  return normalizeProviderForClient({ ...provider, ...canonicalProviderImages(provider, options) });
 }

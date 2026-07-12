@@ -5,9 +5,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const controllerPath = path.resolve(here, "../controllers/marketplaceController.js");
+const controllerPath = path.resolve(here, "../controllers/discoveryController.js");
 
-test("marketplace providers include stored portfolio and service images", () => {
+test("service-discovery providers include stored portfolio and service images", () => {
   const source = fs.readFileSync(controllerPath, "utf8");
 
   assert.match(source, /const portfolio = parseJsonArray\(row\.portfolio_json, \[\]\)/);

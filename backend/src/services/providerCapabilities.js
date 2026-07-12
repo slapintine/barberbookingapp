@@ -1,4 +1,12 @@
-export const MARKETPLACE_MODES = Object.freeze(["service"]);
+export const PROVIDER_CAPABILITIES = Object.freeze({
+  canCreateServices: true,
+  canPublishProfile: true,
+  canAcceptBookings: true,
+  canManageSchedules: true,
+  canManageTeamMembers: true,
+  canUploadImages: true,
+  canReceiveReviews: true,
+});
 
 function parseJson(value, fallback) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -50,11 +58,7 @@ function serviceMissingDetails(services = [], schedule = []) {
   return missing;
 }
 
-export function getMarketplaceMode() {
-  return "service";
-}
-
-export function supportsServices() {
+export function supportsServiceBookings() {
   return true;
 }
 
@@ -88,12 +92,15 @@ export function getPublishRequirements({ stand = {}, services = [], schedule = [
   };
 }
 
-export function normalizeStandForClient(stand = {}) {
+export function normalizeProviderForClient(stand = {}) {
+  const {
+    marketplace_mode: _legacyMarketplaceMode,
+    marketplaceMode: _legacyMarketplaceModeCamel,
+    ...publicStand
+  } = stand;
   const businessHours = parseJson(stand.business_hours_json ?? stand.business_hours ?? stand.businessHours, {});
   return {
-    ...stand,
-    marketplace_mode: "service",
-    marketplaceMode: "service",
+    ...publicStand,
     supports_services: true,
     supportsServices: true,
     stand_type: "individual",

@@ -64,7 +64,7 @@ test.after(async () => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("product marketplace endpoints are not mounted", async () => {
+test("product service-commerce endpoints are not mounted", async () => {
   for (const pathname of ["/api/products", "/api/product-orders", "/api/product-inquiries"]) {
     const response = await req(pathname, { auth: false });
     assert.equal(response.status, 404, `${pathname} should return 404`);
@@ -102,7 +102,8 @@ test("provider registration creates service-only providers without product requi
   });
   assert.equal(response.status, 201);
   const body = await response.json();
-  assert.equal(body.barber.marketplace_mode, "service");
+  assert.equal(Object.hasOwn(body.barber, "marketplace_mode"), false);
+  assert.equal(Object.hasOwn(body.barber, "marketplaceMode"), false);
   assert.equal(body.barber.stand_type, "individual");
 
   const saved = await get(`SELECT marketplace_mode, stand_type FROM barbers WHERE owner_user_id = ?`, [userId]);
