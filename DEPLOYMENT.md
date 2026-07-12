@@ -141,7 +141,7 @@ Production setup path:
 1. Provider signs up and creates a real business profile with services, location, and business details.
 2. Provider starts a real trial or completes a real subscription payment, or an admin manually approves the provider in the admin provider/subscription tools.
 3. Admin verifies the business is published and not demo/test data.
-4. Confirm `GET https://queless.org/api/barbers` and `GET https://queless.org/api/marketplace/providers` return at least one real provider.
+4. Confirm `GET https://queless.org/api/barbers` and `GET https://queless.org/api/discovery/providers` return at least one real provider.
 5. Run `npm --prefix backend run check:deployment`; `public_businesses` must pass before launch.
 
 This repo is prepared for a same-origin production setup on one domain:

@@ -1,6 +1,6 @@
 # Queless Frontend
 
-Vite React frontend for the Queless mobile-first service marketplace.
+Vite React frontend for the Queless mobile-first service-booking platform.
 
 Currently, two official plugins are available:
 
