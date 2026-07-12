@@ -76,7 +76,6 @@ const DEFAULT_FORM = {
   startFreeTrial: false,
   durationUnit: "minutes",
   dirtyFields: [],
-  marketplaceMode: "service",
   subcategory: "",
   coverImage: "",
   businessHours: {},
@@ -628,7 +627,6 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const [planBilling, setPlanBilling] = useState("monthly");
   const autoSaveTimerRef = useRef(null);
   const lastAutoSaveSnapshotRef = useRef("");
-  const marketplaceMode = "service";
   const stepSequence = [1, 2, 3, 4, 5, 6];
   const stepPosition = Math.max(0, stepSequence.indexOf(currentStep));
   const totalSteps = stepSequence.length;
@@ -920,8 +918,6 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
     acceptsWallet: PAYMENTS_ENABLED ? Boolean(form.acceptsWallet) : false,
     acceptsCash: true,
     submitIntent: intent,
-    marketplaceMode,
-    marketplace_mode: marketplaceMode,
     standType: "individual",
     categories: selectedCategoryItems.map((category) => category.key),
     selectedCategories: selectedCategoryItems,
@@ -930,7 +926,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
     mapIconType: effectiveMapIconType,
     services,
     ...extras,
-  }), [effectiveMapIconType, form, marketplaceMode, normalizedSelectedPlan, selectedCategories, selectedCategoryItems, services]);
+  }), [effectiveMapIconType, form, normalizedSelectedPlan, selectedCategories, selectedCategoryItems, services]);
 
   const autoSaveSnapshot = useMemo(
     () => JSON.stringify(buildSubmitPayload("draft", { autoSave: true })),
@@ -988,7 +984,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
         publishIssues.push(...getStepIssues(step));
       }
       if (showIssues(publishIssues)) return;
-      const missing = validateBusinessStand({ ...form, marketplaceMode, services });
+      const missing = validateBusinessStand({ ...form, services });
       if (missing.length) {
         setCurrentStep(lastStep);
         setMissingFields(missing.map((item) => ({ ...item, message: item.label, step: FIELD_TO_STEP[item.key] || lastStep })));
@@ -1851,7 +1847,6 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
             .join(", ")
         : "",
       portfolio: arrayFromMaybeJson(barber.portfolio ?? barber.portfolio_json ?? barber.galleryImages ?? barber.gallery_images),
-      marketplaceMode: "service",
       businessHours: barber.business_hours || barber.businessHours || {},
       selectedPlan: String(barber.selected_plan || barber.subscription?.tier || barber.subscription_tier || "FREE").toUpperCase(),
       startFreeTrial: false,

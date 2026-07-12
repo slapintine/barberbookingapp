@@ -24,7 +24,7 @@ import {
 } from "react-icons/fi";
 import quelessLogoFull from "../../assets/queless-logo-full.png";
 import { getCategoryDef } from "../../utils/categoryRegistry.jsx";
-import { MARKETPLACE_CATEGORIES } from "../../utils/serviceCatalog.js";
+import { SERVICE_CATEGORY_DEFINITIONS } from "../../utils/serviceCatalog.js";
 import { resolveProviderMapIconType } from "../../utils/mapIconCategories.js";
 import {
   getProviderClosingTime,
@@ -32,7 +32,7 @@ import {
   isOwnProvider,
   isProviderOpenNow,
   isProviderVerified,
-} from "../../utils/marketplaceServices.js";
+} from "../../utils/providerDiscovery.js";
 import { resolveProviderImage, handleProviderImageError } from "../../utils/providerImage.js";
 import {
   ClusteredProviderMarkers,
@@ -51,14 +51,14 @@ const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_ATTRIBUTION =
   '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>';
 
-// Built from the same MARKETPLACE_CATEGORIES used on the Categories page and throughout the app.
+// Built from the same service categories used on the Categories page and throughout the app.
 // "All" is always first; remaining chips follow the catalogue order.
 // Adding a new active category to serviceCatalog.js automatically adds it here.
 const ALL_CHIP = { label: "All", icon: "", IconComp: FiGrid, primaryColor: "#522B5B", softBg: "#f5edf8" };
 
 const CATEGORY_CHIPS = [
   ALL_CHIP,
-  ...MARKETPLACE_CATEGORIES
+  ...SERVICE_CATEGORY_DEFINITIONS
     .filter((cat) => cat.active !== false)
     .map((cat) => {
       const def = getCategoryDef(cat.id);

@@ -1,6 +1,6 @@
 import { FiArrowLeft, FiCompass, FiMap, FiSearch, FiStar, FiZap } from "react-icons/fi";
 import { buildInitialsAvatar, NEUTRAL_PLACEHOLDER } from "../utils/providerImage.js";
-import { buildCategoryServices } from "../utils/marketplaceServices.js";
+import { buildCategoryServices } from "../utils/providerDiscovery.js";
 
 export default function CategoryServicesPage({
   category,

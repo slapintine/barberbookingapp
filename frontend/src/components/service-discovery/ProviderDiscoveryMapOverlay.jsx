@@ -20,7 +20,7 @@ function useDesktopMapLayout() {
   return isDesktop;
 }
 
-export default function MarketplaceMapOverlay({ show, ...props }) {
+export default function ProviderDiscoveryMapOverlay({ show, ...props }) {
   const isDesktop = useDesktopMapLayout();
   if (!show) return null;
   return (

@@ -1,4 +1,4 @@
-export const MARKETPLACE_CATEGORIES = [
+export const SERVICE_CATEGORY_DEFINITIONS = [
   {
     id: "barber",
     icon: "scissors",
@@ -125,7 +125,7 @@ export const MARKETPLACE_CATEGORIES = [
   { id: "security-services", icon: "briefcase", name: "Security Services", description: "Guards, CCTV, access control, alarms, and property security.", image: "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=80", active: true },
 ];
 
-export const SERVICE_CATEGORIES = MARKETPLACE_CATEGORIES.map((category) => category.name);
+export const SERVICE_CATEGORIES = SERVICE_CATEGORY_DEFINITIONS.map((category) => category.name);
 
 export const DEFAULT_SERVICE_TYPES = [
   {
@@ -216,7 +216,7 @@ export function normalizeCategoryKey(value) {
 
 export function getCategoryByName(value) {
   const key = normalizeCategoryKey(value);
-  return MARKETPLACE_CATEGORIES.find((category) => category.id === key || normalizeCategoryKey(category.name) === key);
+  return SERVICE_CATEGORY_DEFINITIONS.find((category) => category.id === key || normalizeCategoryKey(category.name) === key);
 }
 
 export function inferCategoryNameFromText(value, fallback = "Services") {
@@ -228,7 +228,7 @@ export function inferCategoryNameFromText(value, fallback = "Services") {
     aliases.some((term) => haystack.includes(String(term).toLowerCase()))
   );
   if (matchingAlias) {
-    return MARKETPLACE_CATEGORIES.find((category) => category.id === matchingAlias[0])?.name || fallback;
+    return SERVICE_CATEGORY_DEFINITIONS.find((category) => category.id === matchingAlias[0])?.name || fallback;
   }
 
   return fallback;

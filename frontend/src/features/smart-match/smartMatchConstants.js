@@ -6,7 +6,7 @@ import {
   FiNavigation,
   FiZap,
 } from "react-icons/fi";
-import { MARKETPLACE_CATEGORIES } from "../../utils/serviceCatalog.js";
+import { SERVICE_CATEGORY_DEFINITIONS } from "../../utils/serviceCatalog.js";
 import { getCategoryDef } from "../../utils/categoryRegistry.jsx";
 
 export const SMART_MATCH_STEPS = [
@@ -16,7 +16,7 @@ export const SMART_MATCH_STEPS = [
   { key: "matches", label: "Matches" },
 ];
 
-export const SERVICE_CATEGORIES = MARKETPLACE_CATEGORIES
+export const SERVICE_CATEGORIES = SERVICE_CATEGORY_DEFINITIONS
   .filter((category) => category.active !== false)
   .map((category) => {
     const def = getCategoryDef(category.id);

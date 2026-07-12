@@ -28,7 +28,7 @@ import {
   isOwnProvider,
   isProviderOpenNow,
   isProviderVerified,
-} from "../../utils/marketplaceServices.js";
+} from "../../utils/providerDiscovery.js";
 import { resolveProviderImage, handleProviderImageError } from "../../utils/providerImage.js";
 import { formatProviderPrice } from "../../utils/providerData.js";
 import {

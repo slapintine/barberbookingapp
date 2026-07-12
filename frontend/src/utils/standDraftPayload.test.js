@@ -141,13 +141,12 @@ test("legacy product fulfilment fields are ignored by service-only draft payload
   );
 });
 
-test("legacy product or hybrid modes are normalized to service on save", () => {
+test("legacy product or hybrid mode fields are not submitted on save", () => {
   assert.deepEqual(
     buildStandDraftUpdatePayload(editableForm(), { ...existing, marketplace_mode: "hybrid", stand_type: "shop" }),
     {
       submit_intent: "draft",
       stand_type: "individual",
-      marketplace_mode: "service",
     }
   );
 });

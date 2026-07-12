@@ -17,7 +17,7 @@ test("uploaded stand, service, portfolio, and booking images use the shared asse
   assert.match(booking, /\.map\(buildAssetUrl\)/);
 });
 
-test("product marketplace modules are not part of the active frontend surface", () => {
+test("product commerce modules are not part of the active frontend surface", () => {
   const app = source("./App.jsx");
   const dashboard = source("./pages/DashboardPage.jsx");
   const home = source("./pages/HomePage.jsx");
@@ -25,6 +25,18 @@ test("product marketplace modules are not part of the active frontend surface", 
   assert.doesNotMatch(app, /productsApi|ProductMarketplace|ProviderProduct/);
   assert.doesNotMatch(dashboard, /ProductMarketplace|ProviderProduct|productWorkspace/);
   assert.doesNotMatch(home, /ProductMarketplace|Shop from Sellers|Browse sellers/);
+});
+
+test("current frontend discovery clients use canonical service-discovery routes", () => {
+  const quoteApi = source("./api/quoteRequestsApi.js");
+  const supportApi = source("./api/supportApi.js");
+  const smartMatchApi = source("./api/smartMatchApi.js");
+  const combined = [quoteApi, supportApi, smartMatchApi].join("\n");
+
+  assert.match(quoteApi, /\/api\/discovery\/quote-requests/);
+  assert.match(supportApi, /\/api\/discovery\/support-requests/);
+  assert.match(smartMatchApi, /\/api\/discovery\/smart-match\/search/);
+  assert.doesNotMatch(combined, /\/api\/marketplace/);
 });
 
 test("structured booking details remain supported without exposing the old raw validation message", () => {

@@ -95,7 +95,6 @@ export function buildStandDraftUpdatePayload(form = {}, existing = {}) {
   addChanged(payload, clearFields, { apiKey: "image", value: form.image ?? "", existing: existing.image ?? "", protectedEmpty: true });
   addChanged(payload, clearFields, { apiKey: "services", value: Array.isArray(form.services) ? form.services : [], existing: Array.isArray(existing.services) ? existing.services : [], protectedEmpty: true });
   addChanged(payload, clearFields, { apiKey: "stand_type", value: "individual", existing: existing.stand_type || existing.standType || "individual" });
-  addChanged(payload, clearFields, { apiKey: "marketplace_mode", value: "service", existing: existing.marketplace_mode || existing.marketplaceMode || "service" });
   addChanged(payload, clearFields, { apiKey: "business_type", value: form.businessType ?? "", existing: existing.business_type || existing.businessType || "", protectedEmpty: true });
   if (hasFormField("coverImage")) addChanged(payload, clearFields, { apiKey: "cover_image_url", value: form.coverImage ?? "", existing: existing.cover_image_url || existing.coverImageUrl || "", protectedEmpty: true });
   if (hasFormField("businessHours")) addChanged(payload, clearFields, { apiKey: "business_hours", value: form.businessHours || {}, existing: existing.business_hours || existing.businessHours || {} });

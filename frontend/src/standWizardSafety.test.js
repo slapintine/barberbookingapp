@@ -22,7 +22,7 @@ test("draft save is available before the final wizard step and publish stays sep
 
 test("stand wizard does not expose shop, hybrid, or product setup paths", () => {
   assert.doesNotMatch(modalSource, /Shop Stand|MARKETPLACE_MODES\.PRODUCT|MARKETPLACE_MODES\.HYBRID|ProductCatalogueEditor/);
-  assert.match(modalSource, /const marketplaceMode = "service"/);
+  assert.doesNotMatch(modalSource, /marketplaceMode|marketplace_mode/);
 });
 
 test("partially entered service titles stay empty when a draft is reopened", () => {

@@ -28,15 +28,15 @@ test("map navigation opens Smart Match instead of only closing the map", () => {
 });
 
 test("map overlay uses purpose-built desktop and mobile layouts", () => {
-  const overlay = fs.readFileSync(new URL("./components/marketplace/MarketplaceMapOverlay.jsx", import.meta.url), "utf8");
+  const overlay = fs.readFileSync(new URL("./components/service-discovery/ProviderDiscoveryMapOverlay.jsx", import.meta.url), "utf8");
   assert.match(overlay, /min-width: 900px/);
   assert.match(overlay, /isDesktop \? <MapDashboard/);
   assert.match(overlay, /: <MobileMapView/);
 });
 
 test("map and Smart Match controls have real handlers", () => {
-  const desktopMap = fs.readFileSync(new URL("./components/marketplace/MapDashboard.jsx", import.meta.url), "utf8");
-  const mobileMap = fs.readFileSync(new URL("./components/marketplace/MobileMapView.jsx", import.meta.url), "utf8");
+  const desktopMap = fs.readFileSync(new URL("./components/service-discovery/MapDashboard.jsx", import.meta.url), "utf8");
+  const mobileMap = fs.readFileSync(new URL("./components/service-discovery/MobileMapView.jsx", import.meta.url), "utf8");
   const smartMatch = fs.readFileSync(new URL("./features/smart-match/SmartMatchPage.jsx", import.meta.url), "utf8");
   assert.doesNotMatch(desktopMap, /window\.prompt/);
   assert.match(desktopMap, /onSubmit=\{submitLocation\}/);
