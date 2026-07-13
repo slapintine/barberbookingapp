@@ -179,7 +179,7 @@ export default function ScheduleWorkspace({
             </div>
           </div>
           <button type="button" className="primary-btn-v4 schedule-open-btn-v6" onClick={() => setShowSchedule(true)}>
-            <FiCalendar /> Open schedule
+            <FiCalendar aria-hidden="true" /> Open Schedule
           </button>
         </div>
       </div>

@@ -61,5 +61,29 @@ test("provider dashboard wires schedule workspace without a missing lazy boundar
   assert.match(dashboard, /import ScheduleWorkspace from "\.\.\/features\/barbers\/ScheduleWorkspace\.jsx"/);
   assert.doesNotMatch(dashboard, /lazy\(\(\) => import\("\.\.\/features\/barbers\/ScheduleWorkspace\.jsx"\)\)/);
   assert.match(dashboard, /<ScheduleWorkspace/);
-  assert.match(schedule, /Open schedule/);
+  assert.match(schedule, /Open Schedule/);
+});
+
+test("Open Schedule action keeps visible icon and interaction states", () => {
+  const schedule = fs.readFileSync(new URL("./features/barbers/ScheduleWorkspace.jsx", import.meta.url), "utf8");
+  const css = fs.readFileSync(new URL("./styles/schedule.css", import.meta.url), "utf8");
+  const polish = fs.readFileSync(new URL("./styles/structure-polish.css", import.meta.url), "utf8");
+  assert.match(schedule, /className="primary-btn-v4 schedule-open-btn-v6"/);
+  assert.match(schedule, /<FiCalendar aria-hidden="true" \/> Open Schedule/);
+  assert.match(css, /\.schedule-open-btn-v6 svg\s*\{[\s\S]*color: currentColor;[\s\S]*stroke: currentColor;/);
+  assert.match(css, /\.light \.schedule-open-btn-v6\s*\{[\s\S]*color: #ffffff;/);
+  assert.match(css, /\.schedule-open-btn-v6:focus-visible\s*\{/);
+  assert.match(css, /\.schedule-open-btn-v6:disabled\s*\{/);
+  assert.match(polish, /\.dark \.schedule-open-btn-v6\s*\{[\s\S]*color: #230038 !important;/);
+  assert.match(polish, /\.schedule-open-btn-v6 svg\s*\{[\s\S]*stroke: currentColor !important;/);
+});
+
+test("light mode icons use semantic visible tokens instead of inherited pale text", () => {
+  const theme = fs.readFileSync(new URL("./styles/queless-theme.css", import.meta.url), "utf8");
+  const base = fs.readFileSync(new URL("./styles/base.css", import.meta.url), "utf8");
+  assert.match(theme, /--icon-primary: #4B146F;/);
+  assert.match(theme, /--icon-navigation: #4B235F;/);
+  assert.match(theme, /--icon-disabled: rgba\(75, 35, 95, 0\.46\);/);
+  assert.match(base, /\.light \.secondary-btn-v4 svg,[\s\S]*color: var\(--icon-secondary\);/);
+  assert.match(base, /\.light \.nav-v4\s*\{[\s\S]*color: var\(--icon-navigation\);/);
 });

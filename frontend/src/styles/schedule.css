@@ -39,7 +39,56 @@
 }
 
 .schedule-open-btn-v6 {
+  width: 100%;
   min-height: 48px;
+  color: #fffaf7;
+  text-shadow: 0 1px 0 rgba(25, 0, 25, 0.18);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+  isolation: isolate;
+  transition: transform 0.16s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.schedule-open-btn-v6 svg {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+  stroke: currentColor;
+  stroke-width: 2.35;
+}
+
+.light .schedule-open-btn-v6 {
+  background: linear-gradient(135deg, #4b146f 0%, #6f237f 62%, #2b124c 100%);
+  color: #ffffff;
+  box-shadow:
+    0 14px 28px rgba(75, 20, 111, 0.24),
+    0 4px 10px rgba(43, 18, 76, 0.16);
+}
+
+.dark .schedule-open-btn-v6 {
+  background: linear-gradient(135deg, #fbe4d8 0%, #dfb6b2 55%, #8b4f8c 100%);
+  color: #230038;
+  text-shadow: none;
+}
+
+.schedule-open-btn-v6:hover {
+  transform: translateY(-1px);
+}
+
+.schedule-open-btn-v6:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.schedule-open-btn-v6:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--icon-primary) 72%, white 28%);
+  outline-offset: 3px;
+}
+
+.schedule-open-btn-v6:disabled {
+  opacity: 0.72;
+  transform: none;
+  box-shadow: none;
 }
 
 .barber-schedule-sheet-v6 {
@@ -346,6 +395,12 @@
 .light .schedule-nav-btn-v7 {
   background: rgba(12, 79, 147, 0.08);
   color: #10243f;
+}
+
+.schedule-nav-btn-v7 svg {
+  color: currentColor;
+  stroke: currentColor;
+  stroke-width: 2.35;
 }
 
 .schedule-next-icon-v7 {
@@ -699,6 +754,19 @@
   color: var(--accent-4);
 }
 
+.schedule-nav-btn-v7:hover {
+  transform: translateY(-1px);
+}
+
+.schedule-nav-btn-v7:active {
+  transform: translateY(1px);
+}
+
+.schedule-nav-btn-v7:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--icon-primary) 70%, white 30%);
+  outline-offset: 2px;
+}
+
 .schedule-weekdays-v7 {
   gap: 4px;
 }
@@ -976,6 +1044,12 @@
   .schedule-sheet-title-v6 {
     font-size: 20px;
   }
+
+  .schedule-open-btn-v6 {
+    min-height: 52px;
+    padding-inline: 14px;
+    font-size: 14px;
+  }
 }
 
 /* =========================================
@@ -1099,6 +1173,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.schedule-record-meta-v9 svg {
+  color: var(--icon-muted);
+  stroke: currentColor;
+  stroke-width: 2.25;
 }
 
 .schedule-record-meta-v9 span {

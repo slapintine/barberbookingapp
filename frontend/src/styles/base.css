@@ -531,6 +531,70 @@ img {
   box-shadow: 0 4px 14px rgba(43,0,56,0.2);
 }
 
+.primary-btn-v4 svg,
+.confirm-btn-v4 svg,
+.secondary-btn-v4 svg,
+.mini-action-btn-v4 svg,
+.profile-back-btn-v4 svg,
+.header-icon-btn svg,
+.fav-btn-v4 svg,
+.star-hit-v4 svg,
+.field-action-btn-v4 svg,
+.icon-btn svg,
+.nav-v4 svg {
+  flex: 0 0 auto;
+  color: currentColor;
+  stroke: currentColor;
+}
+
+.light .secondary-btn-v4 svg,
+.light .mini-action-btn-v4 svg,
+.light .profile-back-btn-v4 svg,
+.light .header-icon-btn svg,
+.light .fav-btn-v4 svg,
+.light .star-hit-v4 svg,
+.light .field-action-btn-v4 svg,
+.light .icon-btn svg {
+  color: var(--icon-secondary);
+  stroke: currentColor;
+}
+
+.dark .secondary-btn-v4 svg,
+.dark .mini-action-btn-v4 svg,
+.dark .profile-back-btn-v4 svg,
+.dark .header-icon-btn svg,
+.dark .fav-btn-v4 svg,
+.dark .star-hit-v4 svg,
+.dark .field-action-btn-v4 svg,
+.dark .icon-btn svg {
+  color: var(--icon-muted);
+  stroke: currentColor;
+}
+
+.primary-btn-v4:disabled,
+.confirm-btn-v4:disabled,
+.secondary-btn-v4:disabled,
+.mini-action-btn-v4:disabled,
+.profile-back-btn-v4:disabled,
+.header-icon-btn:disabled {
+  cursor: not-allowed;
+}
+
+.light .primary-btn-v4:disabled,
+.light .confirm-btn-v4:disabled,
+.light .secondary-btn-v4:disabled,
+.light .mini-action-btn-v4:disabled,
+.light .profile-back-btn-v4:disabled,
+.light .header-icon-btn:disabled,
+.dark .primary-btn-v4:disabled,
+.dark .confirm-btn-v4:disabled,
+.dark .secondary-btn-v4:disabled,
+.dark .mini-action-btn-v4:disabled,
+.dark .profile-back-btn-v4:disabled,
+.dark .header-icon-btn:disabled {
+  color: var(--icon-disabled);
+}
+
 .secondary-btn-v4,
 .mini-action-btn-v4 {
   display: inline-flex;
@@ -1428,10 +1492,12 @@ img {
 
 .nav-v4 svg {
   font-size: 18px;
+  color: currentColor;
+  stroke: currentColor;
 }
 
 .dark .nav-v4 {
-  color: rgba(248, 240, 235, 0.54);
+  color: var(--icon-navigation);
 }
 
 .dark .nav-v4.active {
@@ -1439,7 +1505,7 @@ img {
 }
 
 .light .nav-v4 {
-  color: rgba(44, 22, 58, 0.50);
+  color: var(--icon-navigation);
 }
 
 .light .nav-v4.active {

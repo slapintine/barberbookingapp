@@ -41,6 +41,16 @@ body[data-theme="dark"] {
   --icon-card-bg: var(--queless-card-bg);
   --icon-card-border: var(--queless-border);
   --icon-card-shadow: var(--queless-card-shadow);
+  --icon-primary: var(--highlight);
+  --icon-secondary: var(--text-secondary);
+  --icon-navigation: rgb(var(--text-secondary-rgb) / 0.82);
+  --icon-muted: rgb(var(--text-secondary-rgb) / 0.72);
+  --icon-disabled: rgb(var(--text-secondary-rgb) / 0.42);
+  --icon-success: #34d399;
+  --icon-warning: #fbbf24;
+  --icon-error: #fb7185;
+  --icon-premium: var(--text-secondary);
+  --icon-platinum: var(--highlight);
   --map-popup-bg: #160024;
   --map-popup-surface: #230038;
   --map-popup-text: #ffffff;
@@ -98,6 +108,16 @@ body[data-theme="light"] {
   --icon-card-bg: rgba(255, 255, 255, 0.92);
   --icon-card-border: rgba(91, 31, 132, 0.16);
   --icon-card-shadow: 0 10px 24px rgba(75, 20, 111, 0.10);
+  --icon-primary: #4B146F;
+  --icon-secondary: #5A2B6A;
+  --icon-navigation: #4B235F;
+  --icon-muted: #72506E;
+  --icon-disabled: rgba(75, 35, 95, 0.46);
+  --icon-success: #047857;
+  --icon-warning: #92400E;
+  --icon-error: #B4234E;
+  --icon-premium: #7B1B78;
+  --icon-platinum: #4B146F;
   --map-popup-bg: #ffffff;
   --map-popup-surface: #f7f0ff;
   --map-popup-text: #22003f;
@@ -2668,6 +2688,16 @@ body[data-theme="dark"] .trial-upgrade-sheet-v14 .trial-footer-note-v12,
 .dashboard-page-v9 .simple-card-v4 {
   border-radius: 16px !important;
   border: 1px solid rgba(43,0,56,0.07) !important;
+}
+.light :is(.dashboard-page-v9, .reports-page-v9, .trial-upgrade-sheet-v14, .customer-plan-upgrade-card, .empty-state-v7) :is(h1, h2, h3, strong, .panel-title-v4, .stat-value-v4) {
+  color: #190019 !important;
+}
+.light :is(.dashboard-page-v9, .reports-page-v9, .trial-upgrade-sheet-v14, .customer-plan-upgrade-card, .empty-state-v7) :is(p, span, small, .profile-sub-v4, .stat-label-v4) {
+  color: #514359 !important;
+}
+.light :is(.dashboard-plan-feature-v15, .reports-section-v11, .reports-locked-card-v11, .reports-upgrade-wall-v11, .reports-empty-card-v16, .trial-plan-card-v12) {
+  color: #190019 !important;
+  background-color: rgba(255, 255, 255, 0.86) !important;
 }
 .dark .dashboard-page-v9 .simple-card-v4 {
   border-color: rgba(255,255,255,0.07) !important;
