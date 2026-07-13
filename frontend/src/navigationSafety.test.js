@@ -87,3 +87,11 @@ test("light mode icons use semantic visible tokens instead of inherited pale tex
   assert.match(base, /\.light \.secondary-btn-v4 svg,[\s\S]*color: var\(--icon-secondary\);/);
   assert.match(base, /\.light \.nav-v4\s*\{[\s\S]*color: var\(--icon-navigation\);/);
 });
+
+test("bottom nav only hides for overlays that can actually render", () => {
+  const app = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  assert.match(app, /const isEditStandOverlayOpen = showEditBarber && Boolean\(myBarberProfile\)/);
+  assert.match(app, /const isBookingOverlayOpen = showBookingModal && Boolean\(selectedBarber\)/);
+  assert.match(app, /isOverlayOpen=\{isAppOverlayOpen\}/);
+  assert.doesNotMatch(app, /isOverlayOpen=\{activeTab === "upgrade" \|\| showTrialUpgradeScreen/);
+});

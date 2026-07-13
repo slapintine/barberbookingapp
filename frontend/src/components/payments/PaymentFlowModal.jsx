@@ -182,7 +182,7 @@ export default function PaymentFlowModal({
     if (pendingPayment?.reference) {
       return statusKind === "failed" ? "Try Again" : "Check payment status";
     }
-    if (promoOnlyAttempt) return "Unlock Premium";
+    if (promoOnlyAttempt) return "Apply promo code";
     return submitLabel;
   })();
 

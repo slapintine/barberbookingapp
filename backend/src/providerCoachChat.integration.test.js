@@ -52,6 +52,15 @@ async function createToken(user) {
   return session.token;
 }
 
+async function activatePlatinumSubscription(barberId) {
+  await run(
+    `INSERT INTO barber_subscriptions
+     (barber_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, is_active, provider, started_at, expires_at, activated_at)
+     VALUES (?, 'PLATINUM', 30000, 'active', 'monthly', 30000, 'UGX', 'paid', 1, 'test', CURRENT_TIMESTAMP, datetime('now', '+30 days'), CURRENT_TIMESTAMP)`,
+    [barberId]
+  );
+}
+
 async function request(token, body = {}, headers = {}) {
   return fetch(`${baseUrl}/api/provider-coach/chat`, {
     method: "POST",
@@ -91,6 +100,7 @@ test.before(async () => {
       [user.id, `${user.username} Studio`, `${user.username} studio`]
     );
     if (user.id === dailyLimitUser.id) dailyLimitBusinessId = businessResult.lastID;
+    await activatePlatinumSubscription(businessResult.lastID);
     await run(
       `INSERT INTO barber_services
        (barber_id, service_name, category, price_extra, pricing_type, duration_minutes, description, image)

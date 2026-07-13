@@ -528,10 +528,10 @@ function isVerificationApprovedStatus(value) {
 function getDraftSavedMessage({ verificationRequired = false, planRequired = false, paymentPending = false } = {}) {
   if (paymentPending) return "Your business stand draft has been saved. Your paid plan will activate after payment confirmation.";
   if (verificationRequired && planRequired) {
-    return "Your business stand draft has been saved. Verification and plan activation are still required before it becomes visible to customers.";
+    return "Your business stand draft has been saved. Choose a plan to make it visible to customers; verification only controls the verified badge.";
   }
   if (verificationRequired) {
-    return "Your business stand draft has been saved. Verification is still required before it becomes visible to customers.";
+    return "Your business stand draft has been saved. You can publish when the required stand details are complete; verification only controls the verified badge.";
   }
   if (planRequired) {
     return "Your business stand draft has been saved. Choose a plan to make it visible to customers.";

@@ -70,8 +70,41 @@ async function createProvider() {
   return { token: session.token, userId: userResult.lastID };
 }
 
+async function createCustomer() {
+  userIndex += 1;
+  const username = `promo_customer_${userIndex}`;
+  const userResult = await run(
+    `INSERT INTO users (username, password_hash, role, account_status)
+     VALUES (?, 'not-used', 'customer', 'active')`,
+    [username]
+  );
+  await run(
+    `INSERT INTO profiles (user_id, full_name, phone, email, address, profile_photo)
+     VALUES (?, '', '+256700123456', ?, '', '')`,
+    [userResult.lastID, `${username}@example.test`]
+  );
+  const session = await createAuthSession(
+    { id: userResult.lastID, username, role: "customer" },
+    { userAgent: "subscription promo integration test", ipAddress: "127.0.0.1" }
+  );
+  return { token: session.token, userId: userResult.lastID };
+}
+
 async function upgrade(token, payload) {
   return request("/api/subscriptions/upgrade", {
+    token,
+    method: "POST",
+    body: JSON.stringify({
+      billingCycle: "monthly",
+      provider: "promo",
+      method: "promo",
+      ...payload,
+    }),
+  });
+}
+
+async function upgradeCustomerPremium(token, payload) {
+  return request("/api/customer-subscriptions/upgrade", {
     token,
     method: "POST",
     body: JSON.stringify({
@@ -90,6 +123,17 @@ async function latestSubscription(userId) {
      JOIN barbers b ON b.id = bs.barber_id
      WHERE b.owner_user_id = ?
      ORDER BY bs.id DESC
+     LIMIT 1`,
+    [userId]
+  );
+}
+
+async function latestCustomerSubscription(userId) {
+  return get(
+    `SELECT *
+     FROM customer_subscriptions
+     WHERE user_id = ?
+     ORDER BY id DESC
      LIMIT 1`,
     [userId]
   );
@@ -128,6 +172,51 @@ test("invalid provider promo code returns a clear validation failure", async () 
   assert.equal(body.code, "INVALID_PROMO_CODE");
   assert.match(body.message, /invalid promo code/i);
   assert.equal(await latestSubscription(provider.userId), null);
+});
+
+test("invalid customer promo code returns a clear validation failure", async () => {
+  const customer = await createCustomer();
+  const response = await upgradeCustomerPremium(customer.token, {
+    promoCode: "NOPE",
+  });
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.equal(body.success, false);
+  assert.equal(body.code, "INVALID_PROMO_CODE");
+  assert.match(body.message, /invalid promo code/i);
+  assert.equal(await latestCustomerSubscription(customer.userId), null);
+});
+
+test("provider promo code cannot unlock customer premium", async () => {
+  const customer = await createCustomer();
+  const response = await upgradeCustomerPremium(customer.token, {
+    promoCode: "FREE100",
+  });
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.equal(body.success, false);
+  assert.equal(body.code, "PROMO_PLAN_MISMATCH");
+  assert.match(body.message, /not valid for this plan/i);
+  assert.equal(await latestCustomerSubscription(customer.userId), null);
+});
+
+test("100 percent customer promo activates Customer Premium immediately", async () => {
+  const customer = await createCustomer();
+  const response = await upgradeCustomerPremium(customer.token, {
+    promoCode: "CUSTOMER100",
+  });
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.success, true);
+  assert.equal(body.subscription.tier, "PREMIUM");
+  assert.equal(body.subscription.status, "active");
+  assert.equal(body.subscription.paymentStatus, "paid");
+  assert.equal(body.payment, null);
+
+  const subscription = await latestCustomerSubscription(customer.userId);
+  assert.equal(subscription.tier, "PREMIUM");
+  assert.equal(subscription.status, "active");
+  assert.equal(subscription.payment_status, "paid");
 });
 
 test("partial provider promo reports remaining balance and does not activate", async () => {

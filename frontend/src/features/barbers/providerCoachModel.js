@@ -185,24 +185,20 @@ export function getCoachPlanState({ subscription, barber, questionsData } = {}) 
   const status = String(subscription?.status || barber?.subscription_status || "").toLowerCase();
   const explicitlyInactive = ["expired", "cancelled", "inactive", "suspended", "failed"].includes(status);
   const apiAllowed = questionsData?.access?.allowed;
-  const paidTier = tier === "PREMIUM" || tier === "PLATINUM";
-  const enabled = typeof apiAllowed === "boolean" ? apiAllowed : paidTier && !explicitlyInactive;
+  const enabled = typeof apiAllowed === "boolean" ? apiAllowed : tier === "PLATINUM" && !explicitlyInactive;
   const unlimited = Boolean(questionsData?.usage?.unlimited) || tier === "PLATINUM";
   return {
     tier,
     plan: tier.toLowerCase(),
     enabled,
     unlimited,
-    label: unlimited ? "Platinum unlocked" : tier === "PREMIUM" ? "Premium Coach" : "Premium feature",
+    label: unlimited ? "Platinum active" : "Platinum feature",
   };
 }
 
 export function getCoachUsageText(usage) {
   if (!usage) return "";
   if (usage.unlimited) return "Unlimited coaching";
-  if (usage.plan === "premium") {
-    return `${Math.max(Number(usage.remainingThisMonth || 0), 0)} of ${Number(usage.limit || 5)} tips remaining`;
-  }
   return "Upgrade to unlock coach advice";
 }
 

@@ -36,7 +36,10 @@ export default function DashboardPage({
         <div className="simple-card-v4 empty-state-v7">
           <FiScissors />
           <strong>Create your business profile to start receiving bookings on Queless.</strong>
-          <span>Open Account in your profile to list your business, add services, and choose a plan.</span>
+          <span>List your business, add services, choose a plan, and publish when your stand is ready.</span>
+          <button type="button" className="primary-btn-v4 compact-btn-v4" onClick={onOpenManageStand}>
+            <FiEdit2 /> Create Stand
+          </button>
         </div>
       </div>
     );
@@ -233,7 +236,7 @@ export default function DashboardPage({
           <div className="profile-sub-v4"><FiMapPin /> {barber.location}</div>
           <div className="profile-sub-v4"><FiClock /> {barber.availability?.start} - {barber.availability?.end}</div>
           {hasValidPlan ? (
-            <div className="profile-sub-v4">{currentPlanLabel} plan · {planVisibilityLabel}</div>
+            <div className="profile-sub-v4">{currentPlanLabel} plan - {planVisibilityLabel}</div>
           ) : (
             <div className="plan-warning-card">
               <h3>No plan selected</h3>
@@ -243,13 +246,13 @@ export default function DashboardPage({
           )}
           {!isVerified && (
             <div className="profile-sub-v4" style={{ marginTop: 4 }}>
-              Not verified yet — get a verified badge to build more trust with customers.
+              Not verified yet. Customers can still book your published stand; verification only adds the verified badge.
             </div>
           )}
         </div>
         <div className="dashboard-hero-actions-v4">
           <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={onViewPublicStand}>
-            <FiEye /> View Public Stand
+            <FiEye /> View Stand
           </button>
           <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={onViewOnMap}>
             <FiMap /> View on Map
@@ -261,11 +264,13 @@ export default function DashboardPage({
             <FiStar /> Reports
           </button>
           <button type="button" className={isPlatinum ? "primary-btn-v4 compact-btn-v4" : "secondary-btn-v4 compact-btn-v4"} onClick={isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PLATINUM")}>
-            <FiZap /> {isPlatinum ? "Open Coach" : "Unlock with Platinum"}
+            <FiZap /> {isPlatinum ? "Open Coach" : "Upgrade to Platinum"}
           </button>
-          <button type="button" className="primary-btn-v4 compact-btn-v4" onClick={() => onOpenUpgradePlan?.(currentPlan)}>
-            <FiTrendingUp /> Upgrade Plan
-          </button>
+          {!isPlatinum ? (
+            <button type="button" className="primary-btn-v4 compact-btn-v4" onClick={() => onOpenUpgradePlan?.(currentPlan)}>
+              <FiTrendingUp /> Upgrade Plan
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -294,7 +299,7 @@ export default function DashboardPage({
         <div>
           <div className="panel-title-v4">Plan & features</div>
           <div className="profile-sub-v4">
-            {thisWeekCount} bookings this week · {completedPayments.length} completed payments
+            {thisWeekCount} bookings this week - {completedPayments.length} completed payments
           </div>
         </div>
         <span className="booking-badge-v4 status-confirmed">{hasValidPlan ? currentPlan : "No plan"}</span>
@@ -309,7 +314,7 @@ export default function DashboardPage({
         <div className="simple-card-v4 dashboard-plan-feature-v15">
           {isPlatinum ? <FiShield /> : isPremium ? <FiAward /> : <FiStar />}
           <strong>{isPlatinum ? "Verified Top Provider" : isPremium ? "Recommended growth plan" : "Basic visibility"}</strong>
-          <span>{isPlatinum ? "Eligible for homepage, map, category, and top search placement." : isPremium ? "Better ranking than Free with promotions and home service." : "Upgrade for promotions, badges, and stronger ranking."}</span>
+          <span>{isPlatinum ? "Platinum active. Eligible for homepage, map, category, and top search placement." : isPremium ? "Premium active. Better ranking than Free with promotions and insights." : "Upgrade for promotions, badges, and stronger ranking."}</span>
         </div>
         <div className="simple-card-v4 dashboard-plan-feature-v15 dashboard-coach-card-v15">
           <div className="dashboard-coach-head-v15">
@@ -317,7 +322,7 @@ export default function DashboardPage({
             <div>
               <strong>Queless Provider Coach</strong>
               <span className={`dashboard-coach-badge-v15 ${isPlatinum ? "platinum" : isPremium ? "premium" : "locked"}`}>
-                {isPlatinum ? "Platinum" : isPremium ? "Premium" : "Platinum feature"}
+                {isPlatinum ? "Platinum active" : isPremium ? "Platinum feature" : "Platinum feature"}
               </span>
             </div>
           </div>
@@ -325,24 +330,24 @@ export default function DashboardPage({
             Get practical recommendations based on your stand, bookings, reviews, and customer activity.
           </p>
           <div className="dashboard-coach-status-v15">
-            {isPlatinum || isPremium ? (
+            {isPlatinum ? (
               <>
                 <span className="dashboard-coach-ready-dot-v15" />
-                <span>Your coach is ready</span>
+                <span>Coach ready. Included in your plan</span>
               </>
             ) : (
               <>
                 <span className="dashboard-coach-locked-dot-v15" />
-                <span>Unlock with Premium or Platinum</span>
+                <span>Upgrade to Platinum for Provider Coach</span>
               </>
             )}
           </div>
           <button
             type="button"
             className="dashboard-coach-btn-v15"
-            onClick={isPremium || isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PREMIUM")}
+            onClick={isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PLATINUM")}
           >
-            {isPlatinum || isPremium ? "Open Coach" : "Upgrade to unlock"}
+            {isPlatinum ? "Open Coach" : "Upgrade to Platinum"}
           </button>
         </div>
       </div>

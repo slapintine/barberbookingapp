@@ -86,6 +86,7 @@ function getFriendlyCoachError(error) {
     return "Provider Coach is taking a short break. Your stand is safe—please try again shortly.";
   }
   if (error?.status === 401) return "Please log in again to continue with Provider Coach.";
+  if (error?.status === 403 || error?.code === "PLATINUM_PROVIDER_REQUIRED") return "Provider Coach is included with Platinum Provider.";
   return error?.userMessage || error?.message || "Coach couldn’t answer that question. Please try again.";
 }
 

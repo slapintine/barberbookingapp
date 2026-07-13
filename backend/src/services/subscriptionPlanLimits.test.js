@@ -13,24 +13,24 @@ test("provider plan limits make Free basic, Premium growth-focused, and Platinum
   const platinum = getSubscriptionTierConfig("platinum");
 
   assert.equal(free.serviceLimit, 5);
-  assert.equal(free.photoLimit, 2);
-  assert.equal(free.imageUploadLimitMb, 20);
+  assert.equal(free.photoLimit, 8);
+  assert.equal(free.imageUploadLimitMb, 80);
   assert.equal(free.promotionsEnabled, false);
   assert.equal(free.aiBusinessCoach, false);
   assert.equal(free.advancedAnalytics, false);
 
   assert.equal(premium.serviceLimit, 20);
-  assert.equal(premium.photoLimit, 5);
-  assert.equal(premium.imageUploadLimitMb, 50);
+  assert.equal(premium.photoLimit, 30);
+  assert.equal(premium.imageUploadLimitMb, 300);
   assert.equal(premium.promotionsEnabled, true);
   assert.equal(premium.advancedAnalytics, true);
   assert.equal(premium.reviewInsights, true);
-  assert.equal(premium.aiBusinessCoach, true);
+  assert.equal(premium.aiBusinessCoach, false);
   assert.equal(premium.verifiedBadge, false);
 
   assert.equal(platinum.serviceLimit, -1);
-  assert.equal(platinum.photoLimit, 10);
-  assert.equal(platinum.imageUploadLimitMb, 100);
+  assert.equal(platinum.photoLimit, -1);
+  assert.equal(platinum.imageUploadLimitMb, 1000);
   assert.equal(platinum.aiBusinessCoach, true);
   assert.equal(platinum.verifiedBadge, true);
   assert.equal(platinum.homepageFeature, true);

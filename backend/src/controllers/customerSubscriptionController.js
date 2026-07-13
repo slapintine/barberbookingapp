@@ -73,10 +73,10 @@ async function resolveCustomerPremiumPromo({ client, userId, rawCode, price }) {
 
   const expiresAt = env.customerPremiumPromoExpiresAt ? new Date(env.customerPremiumPromoExpiresAt) : null;
   if (env.customerPremiumPromoExpiresAt && (!expiresAt || !Number.isFinite(expiresAt.getTime()))) {
-    throw httpError(400, "This promo code has expired.");
+    throw httpError(400, "This promo code has expired.", "PROMO_CODE_EXPIRED");
   }
   if (expiresAt && expiresAt.getTime() <= Date.now()) {
-    throw httpError(400, "This promo code has expired.");
+    throw httpError(400, "This promo code has expired.", "PROMO_CODE_EXPIRED");
   }
 
   const options = [
@@ -90,7 +90,11 @@ async function resolveCustomerPremiumPromo({ client, userId, rawCode, price }) {
       normalizePromoCode(env.providerPromoFreeCode),
       normalizePromoCode(env.providerPromoPercentCode),
     ].filter(Boolean);
-    throw httpError(400, providerCodes.includes(code) ? "This promo code is not valid for this plan." : "Invalid promo code.");
+    throw httpError(
+      400,
+      providerCodes.includes(code) ? "This promo code is not valid for this plan." : "Invalid promo code.",
+      providerCodes.includes(code) ? "PROMO_PLAN_MISMATCH" : "INVALID_PROMO_CODE"
+    );
   }
 
   const promoHash = hashPromoCode(code);
@@ -101,7 +105,7 @@ async function resolveCustomerPremiumPromo({ client, userId, rawCode, price }) {
      LIMIT 1`,
     [userId, `%"promoHash":"${promoHash}"%`]
   ).catch(() => null);
-  if (priorUse) throw httpError(409, "This promo code has already been used.");
+  if (priorUse) throw httpError(409, "This promo code has already been used.", "PROMO_ALREADY_USED");
 
   const discountAmount = Math.min(price, Math.round((price * matched.discountPercent) / 100));
   return {

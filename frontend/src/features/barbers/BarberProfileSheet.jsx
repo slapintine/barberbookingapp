@@ -6,6 +6,7 @@ import {
   FiCamera,
   FiCheckCircle,
   FiChevronRight,
+  FiChevronLeft,
   FiClock,
   FiCreditCard,
   FiEdit2,
@@ -26,6 +27,7 @@ import {
   FiTag,
   FiUsers,
   FiVideo,
+  FiX,
   FiZap,
   FiSliders,
   FiBookOpen,
@@ -198,7 +200,7 @@ function StarRow({ rating, size = 14 }) {
   );
 }
 
-function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenChat, currentUserIsBarber }) {
+function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenChat, onOpenDetails, currentUserIsBarber }) {
   const isQuote =
     String(service.pricing_type || service.pricingType || "").toLowerCase() ===
       "quote" || formatServicePrice(service) === "Request quote";
@@ -218,7 +220,18 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
   }
 
   return (
-    <article className="pps-svc-card">
+    <article
+      className="pps-svc-card pps-svc-card--clickable"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenDetails?.(service)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpenDetails?.(service);
+        }
+      }}
+    >
       <div className="pps-svc-img-wrap">
         {imgSrc ? (
           <img src={imgSrc} alt={service.service_name || "Service"} loading="lazy" />
@@ -258,7 +271,7 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
           <FiClock size={11} /> {duration}
         </span>}
         {!isOwner && !currentUserIsBarber && (
-          <button type="button" className="pps-svc-action-btn" onClick={handleAction}>
+          <button type="button" className="pps-svc-action-btn" onClick={(event) => { event.stopPropagation(); handleAction(); }}>
             {isQuote ? "Quote" : "Select"}
           </button>
         )}
@@ -361,6 +374,8 @@ export default function BarberProfileSheet({
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [selectedService, setSelectedService] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
 
   if (!barber || !show) return null;
 
@@ -444,6 +459,26 @@ export default function BarberProfileSheet({
   );
 
   const serviceCategories = groupServiceCategories(safeBarber.services);
+  const portfolioLightboxItems = safeBarber.portfolio
+    .map((item, index) => ({
+      item,
+      index,
+      src: buildAssetUrl(getPortfolioImage(item)),
+      title: item?.title || `Portfolio image ${index + 1}`,
+    }))
+    .filter((item) => item.src);
+  const activeLightbox = lightboxIndex >= 0 ? portfolioLightboxItems[lightboxIndex] : null;
+  const selectedServiceImages = selectedService
+    ? [selectedService.image, selectedService.image_url, selectedService.photo, selectedService.photo_url]
+        .map((value) => buildAssetUrl(value || ""))
+        .filter(Boolean)
+    : [];
+  const selectedServiceReviews = selectedService
+    ? safeBarber.reviews.filter((review) => {
+        const serviceName = String(selectedService.service_name || selectedService.name || "").toLowerCase();
+        return serviceName && String(review.service || review.serviceName || review.bookingService || "").toLowerCase() === serviceName;
+      })
+    : [];
 
   /* rating distribution (simulated from reviews array if per-star breakdown not available) */
   const ratingDist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
@@ -580,7 +615,7 @@ export default function BarberProfileSheet({
           {/* ══════════════════════════════════════════
               STATS ROW
           ══════════════════════════════════════════ */}
-          <div className="pps-stats-card">
+          <button type="button" className="pps-stats-card pps-stats-card--button" onClick={() => setActiveTab("reviews")}>
             <div className="pps-stat">
               <FiStar className="pps-stat-icon pps-stat-gold" size={15} />
               <strong className="pps-stat-value">
@@ -632,7 +667,7 @@ export default function BarberProfileSheet({
                 </div>
               </>
             ) : null}
-          </div>
+          </button>
 
           {/* ══════════════════════════════════════════
               SPECIALTY CHIPS
@@ -937,6 +972,7 @@ export default function BarberProfileSheet({
                         onBook={onBook}
                         onRequestQuote={onRequestQuote}
                         onOpenChat={onOpenChat}
+                        onOpenDetails={setSelectedService}
                         currentUserIsBarber={currentUserIsBarber}
                       />
                     ))}
@@ -983,7 +1019,12 @@ export default function BarberProfileSheet({
                       const imgSrc = buildAssetUrl(getPortfolioImage(item));
                       const hasVideo = !!(item.video_url || item.videoUrl);
                       return (
-                        <div key={item.id || i} className="pps-portfolio-item">
+                        <button
+                          type="button"
+                          key={item.id || i}
+                          className="pps-portfolio-item pps-portfolio-item--button"
+                          onClick={() => setLightboxIndex(portfolioLightboxItems.findIndex((entry) => entry.index === i))}
+                        >
                           {imgSrc ? (
                             <img
                               src={imgSrc}
@@ -1006,7 +1047,7 @@ export default function BarberProfileSheet({
                           {item.title && (
                             <div className="pps-portfolio-caption">{item.title}</div>
                           )}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -1101,7 +1142,7 @@ export default function BarberProfileSheet({
                   <div className="pps-empty-state">
                     <FiStar className="pps-empty-icon" size={36} />
                     <strong>No reviews yet</strong>
-                    <p>Be the first to leave a review after booking.</p>
+                    <p>Customer reviews will appear here after completed bookings.</p>
                   </div>
                 )}
               </div>
@@ -1254,6 +1295,59 @@ export default function BarberProfileSheet({
 
         </div>
       </div>
+
+      {selectedService ? (
+        <div className="pps-dialog-shell" role="presentation" onClick={() => setSelectedService(null)}>
+          <section className="pps-service-detail" role="dialog" aria-modal="true" aria-labelledby="pps-service-detail-title" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="pps-dialog-close" onClick={() => setSelectedService(null)} aria-label="Close service details">
+              <FiX />
+            </button>
+            {selectedServiceImages[0] ? <img className="pps-service-detail-image" src={selectedServiceImages[0]} alt="" /> : null}
+            <div className="pps-service-detail-body">
+              <span className="pps-service-detail-provider">{safeBarber.business_name}</span>
+              <h2 id="pps-service-detail-title">{selectedService.service_name || selectedService.name || "Service"}</h2>
+              {selectedService.description ? <p>{selectedService.description}</p> : null}
+              <div className="pps-service-detail-facts">
+                <span><strong>{formatServicePrice(selectedService)}</strong><small>Price</small></span>
+                {fmtDuration(selectedService.duration_minutes) ? <span><strong>{fmtDuration(selectedService.duration_minutes)}</strong><small>Duration</small></span> : null}
+                <span><strong>{safeBarber.rating ? safeBarber.rating.toFixed(1) : "New"}</strong><small>{safeBarber.reviewCount} reviews</small></span>
+                <span><strong>{isOpen ? "Open today" : "Next opening"}</strong><small>{safeBarber.availability.start} - {safeBarber.availability.end}</small></span>
+              </div>
+              {selectedServiceReviews.length ? (
+                <div className="pps-service-detail-reviews">
+                  <strong>Reviews for this service</strong>
+                  {selectedServiceReviews.slice(0, 3).map((review) => <ReviewCard key={review.id} review={review} canManage={false} blockUsage={blockUsage} />)}
+                </div>
+              ) : safeBarber.reviews.length ? (
+                <div className="pps-service-detail-reviews">
+                  <strong>Provider reviews</strong>
+                  {safeBarber.reviews.slice(0, 2).map((review) => <ReviewCard key={review.id} review={review} canManage={false} blockUsage={blockUsage} />)}
+                </div>
+              ) : (
+                <div className="pps-service-detail-empty">
+                  <strong>No reviews yet</strong>
+                  <span>Customer reviews will appear here after completed bookings.</span>
+                </div>
+              )}
+              {!isOwnBarberProfile && !currentUserIsBarber ? (
+                <button type="button" className="pps-btn-primary pps-service-book-btn" onClick={() => { setSelectedService(null); onBook?.(selectedService); }}>
+                  <FiCalendar /> Book Service
+                </button>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {activeLightbox ? (
+        <div className="pps-lightbox" role="dialog" aria-modal="true" aria-label="Portfolio image viewer">
+          <button type="button" className="pps-lightbox-close" onClick={() => setLightboxIndex(-1)} aria-label="Close image viewer"><FiX /></button>
+          <button type="button" className="pps-lightbox-nav prev" onClick={() => setLightboxIndex((index) => (index <= 0 ? portfolioLightboxItems.length - 1 : index - 1))} aria-label="Previous image"><FiChevronLeft /></button>
+          <img src={activeLightbox.src} alt={activeLightbox.title} />
+          <button type="button" className="pps-lightbox-nav next" onClick={() => setLightboxIndex((index) => (index + 1) % portfolioLightboxItems.length)} aria-label="Next image"><FiChevronRight /></button>
+          <div className="pps-lightbox-count">{lightboxIndex + 1} / {portfolioLightboxItems.length}</div>
+        </div>
+      ) : null}
     </>
   );
 }

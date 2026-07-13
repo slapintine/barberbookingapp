@@ -134,7 +134,10 @@ export async function buildSubscriptionSummary(userId) {
 
   const customerSummary = {
     planCode: customerActive ? "customer_premium" : "customer_free",
-    tier: customerTier,
+    tier: customerActive ? "PREMIUM" : "FREE",
+    plan: customerActive ? "PREMIUM" : "FREE",
+    active: customerActive,
+    subscription: customerMapped,
     displayName: resolveCustomerDisplayName(activeCustomerSub || latestCustomerSub),
     status: customerActive
       ? "active"
@@ -181,6 +184,8 @@ export async function buildSubscriptionSummary(userId) {
           ? `provider_${(providerTier || "free").toLowerCase()}`
           : "provider_none",
         tier: providerTier || "NONE",
+        plan: providerTier || "FREE",
+        active: providerActive,
         displayName: resolveProviderDisplayName(
           latestProviderSub?.tier,
           latestProviderSub?.status
@@ -265,6 +270,17 @@ export async function buildSubscriptionSummary(userId) {
   return {
     customer: customerSummary,
     provider: providerSummary,
+    customerPlan: customerActive ? "PREMIUM" : "FREE",
+    providerPlan: providerActive && providerTier ? providerTier : "FREE",
+    customerPremiumActive: customerActive,
+    providerPlanActive: providerActive,
+    entitlements: {
+      smartMatch: Boolean(customerEntitlements.smartMatch),
+      providerCoach: Boolean(providerEntitlements.providerCoach || providerEntitlements.aiBusinessCoach),
+      advancedReports: Boolean(providerEntitlements.advancedReports),
+      featuredPlacement: Boolean(providerEntitlements.featuredPlacement || providerEntitlements.homepageFeatured),
+      providerAnalytics: Boolean(providerEntitlements.providerAnalytics || providerEntitlements.advancedAnalytics),
+    },
     badges,
     hasProviderProfile: Boolean(providerBarber),
   };

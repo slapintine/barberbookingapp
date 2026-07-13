@@ -66,7 +66,7 @@ export default function CustomerPremiumExperience({
               Use Smart Match <FiArrowRight />
             </button>
             <button type="button" className="customer-premium-secondary" onClick={showBenefits}>
-              View Premium benefits
+              View included benefits
             </button>
             <button type="button" className="customer-premium-text-action" onClick={() => setDetailsOpen((value) => !value)} aria-expanded={detailsOpen}>
               <FiSettings /> Manage subscription
@@ -119,4 +119,3 @@ export default function CustomerPremiumExperience({
     </section>
   );
 }
-

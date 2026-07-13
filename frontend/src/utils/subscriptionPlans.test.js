@@ -20,15 +20,15 @@ test("frontend provider plan features gate Free, Premium, and Platinum correctly
   const platinum = getPlanFeatures("platinum");
 
   assert.equal(free.maxServices, 5);
-  assert.equal(free.maxPhotos, 2);
-  assert.equal(free.imageUploadLimitMb, 20);
+  assert.equal(free.maxPhotos, 8);
+  assert.equal(free.imageUploadLimitMb, 80);
   assert.equal(free.promotions, false);
   assert.equal(free.aiBusinessCoach, false);
   assert.equal(free.reviewInsights, false);
 
   assert.equal(premium.maxServices, 20);
-  assert.equal(premium.maxPhotos, 5);
-  assert.equal(premium.imageUploadLimitMb, 50);
+  assert.equal(premium.maxPhotos, 30);
+  assert.equal(premium.imageUploadLimitMb, 300);
   assert.equal(premium.promotions, true);
   assert.equal(premium.advancedAnalytics, true);
   assert.equal(premium.reviewInsights, true);
@@ -36,8 +36,8 @@ test("frontend provider plan features gate Free, Premium, and Platinum correctly
   assert.equal(premium.aiBusinessCoach, false);
 
   assert.equal(platinum.maxServices, Infinity);
-  assert.equal(platinum.maxPhotos, 10);
-  assert.equal(platinum.imageUploadLimitMb, 100);
+  assert.equal(platinum.maxPhotos, Infinity);
+  assert.equal(platinum.imageUploadLimitMb, 1000);
   assert.equal(platinum.aiBusinessCoach, true);
   assert.equal(platinum.verifiedBadge, true);
   assert.equal(platinum.homepageFeature, true);
@@ -135,8 +135,8 @@ test("free plan image limits keep logo, service, and portfolio counts separate",
   const limits = getPlanImageLimits("FREE");
   assert.equal(limits.logoImages, 1);
   assert.equal(limits.serviceImages, 1);
-  assert.equal(limits.portfolioImages, 2);
+  assert.equal(limits.portfolioImages, 8);
   assert.equal(limits.maxImages, limits.portfolioImages);
-  assert.match(getPlanImageCountMessage("FREE", "portfolio"), /2 portfolio photos/i);
+  assert.match(getPlanImageCountMessage("FREE", "portfolio"), /8 portfolio photos/i);
   assert.match(getPlanImageCountMessage("FREE", "service"), /each service can have one image/i);
 });

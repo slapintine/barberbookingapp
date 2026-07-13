@@ -182,7 +182,7 @@ function UpgradeInsightPrompt({ plan, onUpgradePlan }) {
         <span>{promptText}</span>
       </div>
       <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={() => onUpgradePlan?.(targetTier)}>
-        View {targetTier === "PREMIUM" ? "Premium" : "Platinum"}
+        Compare plans
       </button>
     </section>
   );
@@ -190,7 +190,7 @@ function UpgradeInsightPrompt({ plan, onUpgradePlan }) {
 
 function ReportSection({ title, icon, children, locked, lockText, onUpgradePlan }) {
   if (locked) {
-    return null;
+    return <LockedCard title={title} text={lockText || "Upgrade to view this report."} onUpgradePlan={onUpgradePlan} />;
   }
 
   return (
@@ -395,9 +395,9 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
         return customer ? [customer] : [];
       })
   );
-  const promotionSuggestion = bestEarningService
+  const promotionSuggestion = bestEarningService && completedBookings.length
     ? `Feature ${bestEarningService.service} with a small discount this week.`
-    : "Create a starter offer for your most bookable service.";
+    : "Not enough booking data yet.";
   const coachUsage = coachPreviewState.questions?.usage;
   const coachInsights = coachPreviewState.insights?.insights || {};
   const coachPlanState = getCoachPlanState({ subscription, barber, questionsData: coachPreviewState.questions });
@@ -407,7 +407,8 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
     insights: coachInsights,
     barber,
   });
-  const coachLocked = !coachPlanState.enabled || plan.rank < 2;
+  const hasAnyReportActivity = Boolean(filteredBookings.length || reviews.length || profileViews || serviceRows.length);
+  const coachLocked = !coachPlanState.enabled || plan.rank < 3;
   const coachLimitReached = coachUsage?.plan === "premium" && Number(coachUsage.remainingThisMonth || 0) <= 0;
 
   return (
@@ -420,8 +421,8 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
           <div className="reports-plan-badge-v15">{plan.paidTier || plan.tier} plan</div>
         </div>
         {plan.rank >= 3 ? (
-          <button type="button" className="secondary-btn-v4 compact-btn-v4">
-            <FiDownload /> Export
+          <button type="button" className="secondary-btn-v4 compact-btn-v4" disabled title="Report export is coming soon.">
+            <FiDownload /> Export coming soon
           </button>
         ) : (
           <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={onUpgradePlan}>
@@ -437,6 +438,16 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
           </button>
         ))}
       </div>
+
+      {!hasAnyReportActivity ? (
+        <section className="simple-card-v4 reports-empty-card-v16">
+          <FiBarChart2 />
+          <div>
+            <strong>No reports yet</strong>
+            <span>Your reports will appear here once enough booking, review, and profile activity is available.</span>
+          </div>
+        </section>
+      ) : null}
 
       <ReportSection title="Performance Summary" icon={<FiTrendingUp />}>
         <div className="dashboard-stats-v4 reports-summary-grid-v11">
@@ -510,7 +521,7 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
 
       <ReportSection title="Customer Feedback Insights" icon={<FiStar />} locked={!planFeatures.reviewInsights} lockText="Unlock Review Insights with Premium." onUpgradePlan={onUpgradePlan}>
         <div className="reports-info-grid-v11">
-          <div><strong>Most common positives</strong><span>{positives.length ? positives.map((item) => item.label).join(", ") : "Friendly service, Clean environment, Good results"}</span></div>
+          <div><strong>Most common positives</strong><span>{positives.length ? positives.map((item) => item.label).join(", ") : "Not enough review data yet"}</span></div>
           <div><strong>Most common complaints</strong><span>{complaints.length ? complaints.map((item) => item.label).join(", ") : "No strong complaint pattern yet"}</span></div>
           <div><strong>Suggested improvement</strong><span>{complaints[0]?.label || "Ask happy customers to mention what they liked most."}</span></div>
           <div><strong>Rating trend</strong><span>{averageRating >= 4 ? "Positive" : averageRating ? "Needs attention" : "Waiting for reviews"}</span></div>

@@ -86,21 +86,28 @@ function getStandBackupKey(kind, value) {
   return `queless_stand_setup_backup_${kind}_${suffix}`;
 }
 
-function readStandFormBackup(key, savedAt = 0) {
+function readStandSetupBackup(key, savedAt = 0) {
   if (typeof window === "undefined" || !key) return null;
   try {
     const parsed = JSON.parse(window.localStorage.getItem(key) || "null");
     if (!parsed?.form || Number(parsed.updatedAt || 0) <= Number(savedAt || 0)) return null;
-    return parsed.form;
+    return parsed;
   } catch {
     return null;
   }
 }
 
-function writeStandFormBackup(key, form) {
+function writeStandFormBackup(key, form, resume = {}) {
   if (typeof window === "undefined" || !key) return false;
   try {
-    window.localStorage.setItem(key, JSON.stringify({ form, updatedAt: Date.now() }));
+    window.localStorage.setItem(key, JSON.stringify({
+      form,
+      resume: {
+        currentStep: Number(resume.currentStep || 1),
+        activeServiceIndex: Number(resume.activeServiceIndex || 0),
+      },
+      updatedAt: Date.now(),
+    }));
     return true;
   } catch {
     return false;
@@ -614,7 +621,7 @@ function FieldMessage({ message }) {
   return message ? <small className="field-error-v10">{message}</small> : null;
 }
 
-function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, requirePlan = false, profile = {}, backupKey = "", autoSaveEnabled = false }) {
+function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, requirePlan = false, profile = {}, backupKey = "", autoSaveEnabled = false, resumeState = null }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
   const [missingFields, setMissingFields] = useState([]);
@@ -645,6 +652,9 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
   const selectedPlanAlreadyActive =
     selectedPlan.tier !== "FREE" &&
     isProviderPlanActive({ tier: profilePlan, status: profilePlanStatus }, selectedPlan.tier);
+  const isPlanAlreadyActive = (tier) =>
+    String(tier || "").toUpperCase() !== "FREE" &&
+    isProviderPlanActive({ tier: profilePlan, status: profilePlanStatus }, tier);
   const finalAction = getStandFinalAction({
     selectedTier: selectedPlan.tier,
     subscription: { tier: profilePlan, status: profilePlanStatus },
@@ -694,16 +704,24 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
     }
   }, [activeServiceIndex, services.length]);
 
-  useEffect(() => {
-    if (!show) return;
-    setAutoSaveStatus("");
-    lastAutoSaveSnapshotRef.current = "";
-  }, [show]);
+  const persistLocalBackup = useCallback(() => {
+    if (!show || !backupKey) return false;
+    return writeStandFormBackup(backupKey, form, { currentStep, activeServiceIndex });
+  }, [activeServiceIndex, backupKey, currentStep, form, show]);
 
   useEffect(() => {
-    if (!show || !backupKey) return;
-    writeStandFormBackup(backupKey, form);
-  }, [backupKey, form, show]);
+    if (!show) return;
+    const resumedStep = Number(resumeState?.currentStep || 1);
+    const resumedServiceIndex = Number(resumeState?.activeServiceIndex || 0);
+    setCurrentStep(stepSequence.includes(resumedStep) ? resumedStep : 1);
+    setActiveServiceIndex(Number.isFinite(resumedServiceIndex) ? Math.max(0, resumedServiceIndex) : 0);
+    setAutoSaveStatus("");
+    lastAutoSaveSnapshotRef.current = "";
+  }, [resumeState, show]);
+
+  useEffect(() => {
+    persistLocalBackup();
+  }, [persistLocalBackup]);
 
   const updateService = (index, updates) => {
     setForm((prev) => {
@@ -911,6 +929,11 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
     setCurrentStep(stepSequence[Math.max(0, stepPosition - 1)]);
   };
 
+  const closeWizard = () => {
+    persistLocalBackup();
+    onClose?.();
+  };
+
   const buildSubmitPayload = useCallback((intent = "draft", extras = {}) => ({
     ...form,
     phone: normalizeUgandaStandPhone(form.phone),
@@ -1029,15 +1052,15 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
 
   return (
     <>
-      <button type="button" className="booking-overlay-v4 open" onClick={onClose} aria-label="Close business wizard" />
+      <button type="button" className="booking-overlay-v4 open" onClick={closeWizard} aria-label="Close business wizard" />
       <div className="booking-modal-v4 open business-wizard-modal-v10">
         <div className="booking-modal-card-v4 business-wizard-card-v10">
           <div className="barber-profile-topbar-v4 business-wizard-topbar-v10">
-            <button type="button" className="profile-back-btn-v4" onClick={currentStep === 1 ? onClose : goBack} disabled={Boolean(savingIntent)}>
+            <button type="button" className="profile-back-btn-v4" onClick={currentStep === 1 ? closeWizard : goBack} disabled={Boolean(savingIntent)}>
               <FiArrowLeft />
             </button>
             <div className="profile-top-title-v4">{title}</div>
-            <button type="button" className="profile-back-btn-v4" onClick={onClose} disabled={Boolean(savingIntent)}>
+            <button type="button" className="profile-back-btn-v4" onClick={closeWizard} disabled={Boolean(savingIntent)}>
               <FiX />
             </button>
           </div>
@@ -1656,7 +1679,11 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     <div>
                       <span>Provider plan</span>
                       <strong>Upgrade your stand</strong>
-                      <small>Start free, unlock more visibility with a promo code while payments are Coming Soon.</small>
+                      <small>
+                        {selectedPlanAlreadyActive
+                          ? `${selectedPlan.name} is already active. You can publish without entering another promo code.`
+                          : "Start free, or use a valid promo code for paid plans while payments are Coming Soon."}
+                      </small>
                     </div>
                     <FiCreditCard />
                   </div>
@@ -1675,7 +1702,9 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     ))}
                   </div>
                   <div className="stand-plan-grid-v10">
-                  {PROVIDER_PLANS.map((plan) => (
+                  {PROVIDER_PLANS.map((plan) => {
+                    const planAlreadyActive = isPlanAlreadyActive(plan.tier);
+                    return (
                     <article
                       key={plan.tier}
                       className={form.selectedPlan === plan.tier ? "stand-plan-card-v10 selected" : "stand-plan-card-v10"}
@@ -1712,28 +1741,30 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                           {form.selectedPlan === plan.tier ? "Selected" : "Select plan"}
                         </button>
                       </div>
-                      {plan.tier !== "FREE" && !PAYMENTS_ENABLED ? (
+                      {planAlreadyActive ? (
+                        <div className="stand-plan-free-v10">{plan.name} active</div>
+                      ) : plan.tier !== "FREE" && !PAYMENTS_ENABLED ? (
                         <div className="stand-plan-coming-soon-v10">Promo code unlock</div>
                       ) : (
                         <div className="stand-plan-free-v10">No payment required</div>
                       )}
                     </article>
-                  ))}
+                  );
+                  })}
                   </div>
                   <div className="stand-plan-footer-v10">
                     <FiCheckCircle />
                     <span>
-                      <strong>{selectedPlan.name} selected</strong>
+                      <strong>{selectedPlanAlreadyActive ? `${selectedPlan.name} active` : `${selectedPlan.name} selected`}</strong>
                       <small>
-                        {selectedPaidPlanComingSoon
+                        {selectedPlanAlreadyActive
+                          ? "Included in your plan. You can publish this stand without entering another promo code."
+                          : selectedPaidPlanComingSoon
                           ? "Save this draft now, then use Upgrade Plan to activate this paid plan with a 100% promo code."
                           : "You can publish this stand without entering payment details."}
                       </small>
                     </span>
                   </div>
-                </div>
-                <div className="wizard-note-v10">
-                  Verification pending: Queless may review your phone, location, profile image, documents, and service list before customers can book you publicly.
                 </div>
                 <div className="review-business-card-v10">
                   {form.image ? <img src={buildAssetUrl(form.image)} alt="Business preview" /> : <span><FiCamera /></span>}
@@ -1747,7 +1778,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   <div><FiClock /><span>Hours</span><strong>{form.scheduleStart} - {form.scheduleEnd}</strong></div>
                   <div><FiUsers /><span>Services</span><strong>{services.length}</strong></div>
                   <div><FiCreditCard /><span>Payments</span><strong>Direct payment for now</strong></div>
-                  <div><FiCheckCircle /><span>Verification</span><strong>{form.documentName || "Pending document review"}</strong></div>
+                  <div><FiCheckCircle /><span>Verified badge</span><strong>{form.documentName ? "Submitted for review" : "Not verified yet"}</strong></div>
                 </div>
                 <div className="review-list-v10">
                   <strong>Service categories</strong>
@@ -1811,6 +1842,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
 
 export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit }) {
   const [form, setForm] = useState(DEFAULT_FORM);
+  const [resumeState, setResumeState] = useState(null);
   const backupKey = barber ? getStandBackupKey("edit", barber.id || barber.business_name || profile.username) : "";
 
   useEffect(() => {
@@ -1853,8 +1885,9 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
       dirtyFields: [],
     };
     const savedAt = new Date(barber.updated_at || barber.updatedAt || 0).getTime();
-    const backup = readStandFormBackup(backupKey, savedAt) || {};
-    setForm({ ...baseForm, ...backup });
+    const backup = readStandSetupBackup(backupKey, savedAt);
+    setForm({ ...baseForm, ...(backup?.form || {}) });
+    setResumeState(backup?.resume || null);
   }, [backupKey, show, barber, profile.phone, setForm]);
 
   return (
@@ -1870,12 +1903,14 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
       profile={{ ...profile, ...(barber || {}), subscription: barber?.subscription || profile?.subscription }}
       backupKey={backupKey}
       autoSaveEnabled
+      resumeState={resumeState}
     />
   );
 }
 
 export function RegisterBarberModal({ show, profile, onClose, onSubmit }) {
   const [form, setForm] = useState(DEFAULT_FORM);
+  const [resumeState, setResumeState] = useState(null);
   const backupKey = getStandBackupKey("new", profile?.username || profile?.id || "guest");
 
   useEffect(() => {
@@ -1886,7 +1921,9 @@ export function RegisterBarberModal({ show, profile, onClose, onSubmit }) {
       location: profile?.address || "",
       image: profile?.profilePhoto || "",
     };
-    setForm({ ...seedForm, ...(readStandFormBackup(backupKey, 0) || {}) });
+    const backup = readStandSetupBackup(backupKey, 0);
+    setForm({ ...seedForm, ...(backup?.form || {}) });
+    setResumeState(backup?.resume || null);
   }, [backupKey, show, profile?.address, profile?.phone, profile?.profilePhoto, setForm]);
 
   return (
@@ -1902,6 +1939,7 @@ export function RegisterBarberModal({ show, profile, onClose, onSubmit }) {
       requirePlan
       profile={profile}
       backupKey={backupKey}
+      resumeState={resumeState}
     />
   );
 }

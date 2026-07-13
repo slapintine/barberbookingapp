@@ -73,6 +73,7 @@ import {
   serviceMatchesCategory,
 } from "./utils/serviceCatalog.js";
 import { DEFAULT_CUSTOMER_SUBSCRIPTION_STATE, isCustomerPremiumActive } from "./utils/customerPremium.js";
+import { resolveEntitlements } from "./utils/entitlements.js";
 import { isPublicServiceProvider } from "./utils/providerDiscovery.js";
 import { CUSTOMER_PREMIUM_PLAN } from "./utils/subscriptionPlans.js";
 import {
@@ -318,6 +319,7 @@ const SERVICE_TYPES = DEFAULT_SERVICE_TYPES;
 const DEFAULT_CENTER = [0.3136, 32.5811];
 const LOCATION_STORAGE_KEY = "queless-location";
 const APP_BASE_PATH = normalizeAppBasePath(import.meta.env.VITE_BASE_PATH || import.meta.env.BASE_URL);
+const APP_ASSET_BASE = import.meta.env.BASE_URL || "/";
 const APP_PATH = "/";
 const HOME_PATH = "/home";
 const CATEGORIES_PATH = "/categories";
@@ -1960,7 +1962,7 @@ function App() {
   const playNotificationSound = () => {
     try {
       if (!notificationAudioRef.current) {
-        notificationAudioRef.current = new Audio("/notification.mp3");
+        notificationAudioRef.current = new Audio(`${APP_ASSET_BASE}notification.mp3`);
         notificationAudioRef.current.volume = 0.6;
       }
       notificationAudioRef.current.currentTime = 0;
@@ -2069,7 +2071,11 @@ function App() {
     // Never surface raw auth/session errors as a global toast on public pages.
     // Login prompts are handled at the point of the intentional protected action.
     if (/not authorized|no token|please log in|session expired/i.test(globalError)) return;
-    showSystemToast("Something needs attention", globalError, "system");
+    const rateLimited = /too many requests|rate limited|pause for a moment|try again shortly/i.test(globalError);
+    const friendlyMessage = rateLimited
+      ? "Your work is still here. Please wait a moment, then try again."
+      : globalError;
+    showSystemToast(rateLimited ? "Please pause a moment" : "We need one small fix", friendlyMessage, "system");
   }, [globalError]);
 
   useEffect(() => {
@@ -2384,7 +2390,19 @@ const fetchBarbers = async () => {
     if (!currentUser?.username) { setSubscriptionSummary(null); return; }
     try {
       const data = await getSubscriptionSummary();
-      if (data?.success) setSubscriptionSummary(data);
+      if (data?.success) {
+        setSubscriptionSummary(data);
+        if (data.customer?.subscription) {
+          setCustomerSubscriptionState({
+            ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE,
+            ...data.customer.subscription,
+            features: {
+              ...DEFAULT_CUSTOMER_SUBSCRIPTION_STATE.features,
+              ...(data.customer.subscription.features || {}),
+            },
+          });
+        }
+      }
     } catch { /* non-fatal — existing per-role fetches remain source of truth */ }
   };
 
@@ -2959,14 +2977,33 @@ const registerBarber = async (payload) => {
           })
           .map(normalizeServiceForBooking);
 
-    const alreadyHasBarberStand =
+    const cachedExistingStand =
       effectiveIsBarber ||
       barbers.some((item) => String(item.ownerUsername || "") === String(currentUser.username || ""));
 
-    if (alreadyHasBarberStand) {
-      const message = "This account already has a business profile. Open Edit Stand to continue.";
-      if (!quietSave) setGlobalError(message);
-      return { success: false, message };
+    if (cachedExistingStand) {
+      try {
+        const mineData = await getMyBarberStand();
+        if (mineData?.barber) {
+          const existingStand = normalizeBarber(mineData.barber, 0);
+          setBarbers((prev) => mergeBarberListsPreservingLocal([existingStand], prev));
+          setSelectedBarber(existingStand);
+          setShowEditBarber(true);
+          const message = "I found your existing stand. Continue from Edit Stand.";
+          if (!quietSave) showSystemToast("Edit Stand opened", message, "system");
+          return { success: false, message };
+        }
+      } catch (error) {
+        if (![404, 401, 403].includes(Number(error?.status))) {
+          const message = error?.message || "We couldn't check your existing stand. Please try again.";
+          if (!quietSave) setGlobalError(message);
+          return { success: false, message };
+        }
+      }
+
+      const nextBarbers = barbers.filter((item) => String(item.ownerUsername || "") !== String(currentUser.username || ""));
+      setBarbers(nextBarbers);
+      saveStoredBarbers(nextBarbers.filter(isPublicProvider));
     }
 
     const startsTrial = false;
@@ -3696,6 +3733,7 @@ const registerBarber = async (payload) => {
         setCustomerSubscriptionMessage("Your premium booking experience is active. Smart Match is ready.");
         showSystemToast("Customer Premium active", data?.message || "Smart Match is unlocked.", "system");
         await fetchCustomerSubscription();
+        await fetchSubscriptionSummary();
       } else {
         setCustomerSubscriptionMessage(data?.message || "Approve the Mobile Money prompt to activate Customer Premium.");
       }
@@ -3734,6 +3772,7 @@ const registerBarber = async (payload) => {
       setCustomerSubscriptionMessage(data?.message || "Your premium booking experience is active. Smart Match is ready.");
       showSystemToast("Customer Premium active", data?.message || "Smart Match is unlocked.", "system");
       await fetchCustomerSubscription();
+      await fetchSubscriptionSummary();
       return true;
     } catch (error) {
       if (!silent) {
@@ -4540,6 +4579,11 @@ const registerBarber = async (payload) => {
       return;
     }
 
+    if (target === "aiCoach" && !entitlementState.canUseProviderCoach) {
+      openUpgradePlan("PLATINUM");
+      return;
+    }
+
     if (target === "admin" && isAdmin) {
       setPreviousMobileView(activeTab === "admin" ? "home" : activeTab || "home");
     }
@@ -4596,10 +4640,14 @@ const registerBarber = async (payload) => {
   };
 
   const subscriptionTier = String(subscriptionState?.tier || "").toUpperCase();
-  const customerPremiumActive = isCustomerPremiumActive(customerSubscriptionState);
-  const isCustomerAccount = String(currentUser?.role || "").toLowerCase() === "customer";
-  const canUseSmartMatch = isCustomerAccount && customerPremiumActive;
-  const smartMatchUpsellVisible = isCustomerAccount && !customerPremiumActive;
+  const entitlementState = resolveEntitlements({
+    summary: subscriptionSummary,
+    customerSubscription: customerSubscriptionState,
+    providerSubscription: subscriptionState,
+  });
+  const customerPremiumActive = entitlementState.hasCustomerPremium;
+  const canUseSmartMatch = entitlementState.canUseSmartMatch;
+  const smartMatchUpsellVisible = Boolean(currentUser?.username) && !canUseSmartMatch;
   useEffect(() => {
     if (customerPremiumActive && customerPremiumPaymentOpen) {
       setCustomerPremiumPaymentOpen(false);
@@ -4805,6 +4853,23 @@ const registerBarber = async (payload) => {
   };
 
   const isAdminActive = isAdmin && (activeTab === "admin" || activeTab === "adminReports" || activeTab === "adminSms");
+  const isProviderProfileOverlayOpen = showBarberProfile && Boolean(selectedBarber);
+  const isBookingOverlayOpen = showBookingModal && Boolean(selectedBarber);
+  const isQuoteOverlayOpen = showQuoteModal && Boolean(selectedBarber);
+  const isChatOverlayOpen = showChat && Boolean(selectedBarber);
+  const isEditStandOverlayOpen = showEditBarber && Boolean(myBarberProfile);
+  const isAppOverlayOpen =
+    activeTab === "upgrade" ||
+    showTrialUpgradeScreen ||
+    mapState.show ||
+    isProviderProfileOverlayOpen ||
+    isBookingOverlayOpen ||
+    isQuoteOverlayOpen ||
+    isChatOverlayOpen ||
+    showRegisterBarber ||
+    isEditStandOverlayOpen ||
+    showNotifications ||
+    showAccountMenu;
 
   const content = (
     <>
@@ -5153,8 +5218,13 @@ const registerBarber = async (payload) => {
             targetName: booking.customerName || booking.customerUsername,
           })}
           onOpenManageStand={() => {
-            setSelectedBarber(myBarberProfile);
-            setShowEditBarber(true);
+            if (myBarberProfile) {
+              setSelectedBarber(myBarberProfile);
+              setShowEditBarber(true);
+            } else {
+              setSelectedBarber(null);
+              setShowRegisterBarber(true);
+            }
           }}
           onOpenReports={() => setActiveTab("reports")}
           onOpenAiCoach={() => setActiveTab("aiCoach")}
@@ -5191,7 +5261,19 @@ const registerBarber = async (payload) => {
       </div>
       )}
 
-      {effectiveIsBarber && activeTab === "aiCoach" && (
+      {effectiveIsBarber && activeTab === "aiCoach" && !entitlementState.canUseProviderCoach && (
+        <div className="tab-scene-v5 provider-coach-chat-scene">
+          <section className="provider-status-notice-v1 changes">
+            <strong>Provider Coach is included with Platinum Provider.</strong>
+            <p>Upgrade to Platinum to open Coach and get guidance based on your stand, bookings, reviews, and customer activity.</p>
+            <button type="button" className="btn-primary-v4" onClick={() => openUpgradePlan("PLATINUM")}>
+              Upgrade to Platinum
+            </button>
+          </section>
+        </div>
+      )}
+
+      {effectiveIsBarber && activeTab === "aiCoach" && entitlementState.canUseProviderCoach && (
         <div className="tab-scene-v5 provider-coach-chat-scene">
           <ProviderCoachChatScreen
             barber={myBarberProfile}
@@ -5213,6 +5295,7 @@ const registerBarber = async (payload) => {
             providers={enrichedBarbers.filter(isPublicProvider)}
             locationLabel={locationLabel}
             customerSubscription={customerSubscriptionState}
+            premiumActive={canUseSmartMatch}
             customerSubscriptionLoading={customerSubscriptionLoading}
             customerSubscriptionMessage={customerSubscriptionMessage}
             pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
@@ -5302,7 +5385,7 @@ const registerBarber = async (payload) => {
           setShowAccountMenu(false);
           fetchNotifications();
         }}
-        isOverlayOpen={activeTab === "upgrade" || showTrialUpgradeScreen || mapState.show || showBarberProfile || showBookingModal || showQuoteModal || showChat || showRegisterBarber || showEditBarber || showNotifications || showAccountMenu}
+        isOverlayOpen={isAppOverlayOpen}
       />
       )}
 

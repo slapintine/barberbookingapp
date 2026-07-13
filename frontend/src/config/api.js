@@ -203,6 +203,8 @@ export async function apiFetch(url, options = {}) {
     const friendlyServerMessage =
       response.status === 413
         ? "The uploaded data is too large. Please reduce the image size or upgrade your plan."
+        : response.status === 429
+        ? "Please pause for a moment before trying again."
         : isServerUnavailable
         ? SERVER_UNAVAILABLE_MESSAGE
         : !isJsonResponse

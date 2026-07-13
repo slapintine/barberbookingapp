@@ -292,7 +292,6 @@ export default function HomeScreen({
     <main className="content-v4 customer-home" aria-label="Queless customer home">
       <section className="customer-home-hero">
         <div className="customer-home-hero-copy">
-          <span className="customer-home-eyebrow">Your local service-booking platform</span>
           <h1>Find trusted services near you</h1>
           <p>New around here? Discover nearby providers, compare trust signals, and book services without guessing where to go.</p>
           <button type="button" className="customer-home-primary-btn" onClick={submitSearch}>
@@ -332,7 +331,12 @@ export default function HomeScreen({
           <FiSearch aria-hidden="true" />
           <span>Search</span>
         </button>
-        <button type="button" className="customer-home-search-btn smart" onClick={() => onOpenSmartMatch?.({ category: serviceQuery })}>
+        <button
+          type="button"
+          className="customer-home-search-btn smart"
+          onClick={() => onOpenSmartMatch?.({ category: serviceQuery })}
+          aria-label="Smart Match"
+        >
           <FiZap aria-hidden="true" />
           <span>Smart Match</span>
         </button>

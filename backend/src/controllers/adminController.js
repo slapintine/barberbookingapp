@@ -141,7 +141,7 @@ function getFeatureRules() {
     { key: "provider_listing", label: "Provider listing", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "booking_management", label: "Booking management", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "business_wallet", label: "Business wallet/earnings", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
-    { key: "ai_coach", label: "Provider Coach", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: true, platinumProvider: true },
+    { key: "ai_coach", label: "Provider Coach", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: false, platinumProvider: true },
     { key: "subscription_upgrade", label: "Subscription upgrade", freeCustomer: true, premiumCustomer: true, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "subscription_expiry_lock", label: "Subscription expiry lock", freeCustomer: false, premiumCustomer: true, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "analytics", label: "Analytics", freeCustomer: false, premiumCustomer: false, proProvider: false, premiumProvider: true, platinumProvider: true },
@@ -221,7 +221,7 @@ function mapProviderSubscriptionRow(row = {}) {
     expires_at: row.expires_at || row.subscription_expires_at,
   };
   const coachPlan = getProviderCoachPlan(row, subscription);
-  const aiCoachAccess = coachPlan.active && ["premium", "platinum"].includes(coachPlan.plan);
+  const aiCoachAccess = coachPlan.active && coachPlan.plan === "platinum";
   return {
     businessId: row.business_id,
     userId: row.owner_user_id,
@@ -731,7 +731,7 @@ export async function runAdminAccessTest(req, res, next) {
       if (!business) throw httpError(404, "Business not found.");
       const subscription = await getLatestProviderSubscription(businessId);
       const coachPlan = getProviderCoachPlan(business, subscription);
-      const allowed = coachPlan.active && ["premium", "platinum"].includes(coachPlan.plan);
+      const allowed = coachPlan.active && coachPlan.plan === "platinum";
       return res.json({
         success: true,
         result: {
@@ -882,7 +882,7 @@ export async function getAdminBusinesses(req, res, next) {
             trial_status: row.latest_subscription_trial_status,
             expires_at: row.latest_subscription_expires_at || row.subscription_expires_at,
             });
-            return coachPlan.active && ["premium", "platinum"].includes(coachPlan.plan);
+            return coachPlan.active && coachPlan.plan === "platinum";
           })(),
           profileCompleteness: [
             mapped.business_name,
@@ -934,7 +934,7 @@ export async function getAdminSystemHealth(req, res, next) {
         },
         payments: { status: "configured", note: "Payment provider secrets are intentionally not exposed." },
         mtn: { status: "check_available", endpoint: "/api/payments/mtn/check-auth" },
-        subscriptionLogic: { status: "active", rules: ["Premium customer unlocks Smart Match", "Premium provider unlocks limited Provider Coach", "Platinum provider unlocks unlimited Provider Coach"] },
+        subscriptionLogic: { status: "active", rules: ["Premium customer unlocks Smart Match", "Premium provider unlocks provider analytics", "Platinum provider unlocks Provider Coach and advanced reports"] },
         lastSuccessfulPaymentCallback: lastSuccess ? { id: lastSuccess.id, reference: lastSuccess.internal_reference, updatedAt: lastSuccess.updated_at } : null,
         lastFailedPaymentCallback: lastFailure ? { id: lastFailure.id, reference: lastFailure.internal_reference, updatedAt: lastFailure.updated_at } : null,
       },
@@ -1207,15 +1207,13 @@ export async function runAdminFeatureAccessTest(req, res, next) {
       const tier = String(subscription?.tier || business.subscription_tier || "").toUpperCase();
       const active = ["active", "trialing"].includes(String(subscription?.status || business.subscription_status || "").toLowerCase());
       const coachPlan = getProviderCoachPlan(business, subscription);
-      allowed = feature === "ai_coach" ? coachPlan.active && ["premium", "platinum"].includes(coachPlan.plan) : active && ["FREE", "PREMIUM", "PLATINUM"].includes(tier);
+      allowed = feature === "ai_coach" ? coachPlan.active && coachPlan.plan === "platinum" : active && ["FREE", "PREMIUM", "PLATINUM"].includes(tier);
       reason = allowed
         ? feature === "ai_coach"
-          ? coachPlan.unlimited
-            ? "Active Platinum provider entitlement allows unlimited Provider Coach."
-            : "Active Premium provider entitlement allows limited Provider Coach."
+          ? "Active Platinum provider entitlement allows Provider Coach."
           : "Active provider plan allows this provider workflow."
         : feature === "ai_coach"
-          ? "Provider Coach advice is locked unless the provider has active Premium or Platinum."
+          ? "Provider Coach advice is locked unless the provider has active Platinum."
           : "Provider plan is inactive, expired, or missing.";
       subject = { id: business.id, name: business.business_name, role: "provider", tier: tier || "NONE", status: subscription?.status || business.subscription_status };
     }

@@ -1123,7 +1123,7 @@ export default function ProfilePage({
                     type="button"
                     onClick={() => onUpgradeCustomerPremium?.()}
                   >
-                    Have a promo code? Unlock Premium
+                    Have a promo code? Apply promo code
                   </button>
                   {pendingCustomerSubscriptionPayment?.reference ? (
                     <button

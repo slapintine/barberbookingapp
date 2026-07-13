@@ -110,7 +110,7 @@ export async function canAccessProviderAnalytics(userId) {
 
 export async function canAccessBusinessCoach(userId) {
   const tier = await getProviderTier(userId);
-  return tier === "PREMIUM" || tier === "PLATINUM";
+  return tier === "PLATINUM";
 }
 
 export async function canUsePlatinumProviderFeatures(userId) {
@@ -166,7 +166,11 @@ export async function getProviderEntitlements(userId) {
   return {
     tier: tier || "NONE",
     advancedAnalytics: isPremium,
-    aiBusinessCoach: isPremium,
+    aiBusinessCoach: isPlatinum,
+    providerCoach: isPlatinum,
+    advancedReports: isPlatinum,
+    providerAnalytics: isPremium,
+    featuredPlacement: isPlatinum,
     reviewInsights: isPremium,
     promotionsEnabled: isPremium,
     homeServiceEnabled: isPremium,

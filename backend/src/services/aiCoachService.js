@@ -1,8 +1,6 @@
-import { all, get, transaction } from "../db/query.js";
+import { all, get } from "../db/query.js";
 import { buildRuleBasedInsights } from "./insightRules.js";
 import { getProviderCoachPlan, getLatestProviderSubscription } from "./providerSubscriptionAccess.js";
-
-export const PREMIUM_MONTHLY_COACH_LIMIT = 5;
 
 export const PROVIDER_COACH_CATEGORIES = [
   {
@@ -59,19 +57,6 @@ export const PROVIDER_COACH_QUESTIONS = PROVIDER_COACH_CATEGORIES.flatMap((categ
   category.questions.map((question) => ({ ...question, category: category.id, categoryLabel: category.label }))
 );
 
-function dateKey(date = new Date()) {
-  return date.toISOString().slice(0, 10);
-}
-
-function monthRange(date = new Date()) {
-  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-  };
-}
-
 function getQuestion(questionId) {
   const id = String(questionId || "").trim();
   return PROVIDER_COACH_QUESTIONS.find((item) => item.id === id) || null;
@@ -85,17 +70,6 @@ function formatUsage(access, usedThisMonth = 0) {
       usedThisMonth: 0,
       remainingThisMonth: null,
       unlimited: true,
-    };
-  }
-
-  if (access.plan === "premium") {
-    const used = Number(usedThisMonth || 0);
-    return {
-      plan: "premium",
-      limit: PREMIUM_MONTHLY_COACH_LIMIT,
-      usedThisMonth: used,
-      remainingThisMonth: Math.max(PREMIUM_MONTHLY_COACH_LIMIT - used, 0),
-      unlimited: false,
     };
   }
 
@@ -357,22 +331,15 @@ export async function getProviderCoachAccess(business) {
 
 export async function getProviderCoachQuestions({ business }) {
   const { access } = await getProviderCoachAccess(business);
-  const range = monthRange();
-  const usedThisMonth = access.plan === "premium"
-    ? Number((await get(
-        `SELECT COUNT(*) AS count FROM provider_coach_usage WHERE barber_id = ? AND usage_date >= ? AND usage_date < ?`,
-        [business.id, range.start, range.end]
-      ))?.count || 0)
-    : 0;
 
   return {
     questions: PROVIDER_COACH_QUESTIONS,
     categories: PROVIDER_COACH_CATEGORIES,
     access: {
-      allowed: access.plan !== "free" && access.active,
-      upgradeRequired: access.plan === "free" || !access.active,
+      allowed: access.plan === "platinum" && access.active,
+      upgradeRequired: access.plan !== "platinum" || !access.active,
     },
-    usage: formatUsage(access, usedThisMonth),
+    usage: formatUsage(access, 0),
   };
 }
 
@@ -573,14 +540,6 @@ function buildQuestionAdvice(question, data, access) {
   };
 }
 
-async function getPremiumUsedThisMonth(businessId, range) {
-  const row = await get(
-    `SELECT COUNT(*) AS count FROM provider_coach_usage WHERE barber_id = ? AND usage_date >= ? AND usage_date < ?`,
-    [businessId, range.start, range.end]
-  );
-  return Number(row?.count || 0);
-}
-
 export async function createProviderCoachAdvice({ business, questionId }) {
   const question = getQuestion(questionId);
   if (!question) {
@@ -590,52 +549,18 @@ export async function createProviderCoachAdvice({ business, questionId }) {
   }
 
   const { access } = await getProviderCoachAccess(business);
-  if (access.plan === "free" || !access.active) {
-    const error = new Error("Upgrade to Premium or Platinum to use Provider Coach advice.");
+  if (access.plan !== "platinum" || !access.active) {
+    const error = new Error("Upgrade to Platinum to use Provider Coach advice.");
     error.statusCode = 403;
     error.code = "UPGRADE_REQUIRED";
     error.usage = formatUsage(access);
     throw error;
   }
 
-  const usageDate = dateKey();
-  const range = monthRange();
-  let usedThisMonth = 0;
-
-  if (access.plan === "premium") {
-    await transaction(async (client) => {
-      usedThisMonth = Number((await client.get(
-        `SELECT COUNT(*) AS count FROM provider_coach_usage WHERE barber_id = ? AND usage_date >= ? AND usage_date < ?`,
-        [business.id, range.start, range.end]
-      ))?.count || 0);
-
-      if (usedThisMonth >= PREMIUM_MONTHLY_COACH_LIMIT) {
-        const error = new Error("You've used your monthly coach tips. Upgrade to Platinum for unlimited Provider Coach guidance.");
-        error.statusCode = 403;
-        error.code = "MONTHLY_LIMIT_REACHED";
-        error.usage = formatUsage(access, usedThisMonth);
-        throw error;
-      }
-
-      await client.run(
-        `INSERT INTO provider_coach_usage (barber_id, user_id, question_id, usage_date, created_at)
-         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-        [business.id, business.owner_user_id, question.id, usageDate]
-      );
-      usedThisMonth += 1;
-    });
-  }
-
-  if (access.plan === "platinum") {
-    usedThisMonth = 0;
-  } else if (access.plan === "premium" && usedThisMonth === 0) {
-    usedThisMonth = await getPremiumUsedThisMonth(business.id, range);
-  }
-
   const data = await getCoachData(business);
   return {
     ...buildQuestionAdvice(question, data, access),
     weeklyGrowthFocus: getWeeklyGrowthFocusFromStats(data.stats),
-    usage: formatUsage(access, usedThisMonth),
+    usage: formatUsage(access, 0),
   };
 }

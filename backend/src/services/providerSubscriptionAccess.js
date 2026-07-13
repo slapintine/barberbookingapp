@@ -83,7 +83,7 @@ export function getProviderCoachPlan(business, subscription, now = new Date()) {
   }
 
   if (tier === "PREMIUM") {
-    return { plan: "premium", active: paidActive || trialActive || adminActive, unlimited: false };
+    return { plan: "premium", active: false, unlimited: false };
   }
 
   return { plan: "free", active: true, unlimited: false };

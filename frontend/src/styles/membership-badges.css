@@ -34,6 +34,30 @@
   min-width: 0;
 }
 
+.profile-page-v15 .profile-hero-v4 {
+  grid-template-columns: 68px minmax(0, 1fr) 42px;
+  gap: 12px;
+}
+
+.profile-page-v15 .profile-title-v4 {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  letter-spacing: 0;
+}
+
+.profile-page-v15 .profile-main-copy-v4 {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 360px) {
+  .profile-page-v15 .profile-hero-v4 {
+    grid-template-columns: 58px minmax(0, 1fr) 38px;
+    gap: 9px;
+  }
+}
+
 .membership-badge-row--loading {
   pointer-events: none;
 }
@@ -48,7 +72,7 @@
   border-radius: 20px;
   font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   line-height: 1.4;
   white-space: nowrap;
   border: 1px solid transparent;
@@ -160,4 +184,92 @@ body[data-theme="light"] .membership-badge--provider-free {
 html[data-theme="light"] .membership-manage-link,
 body[data-theme="light"] .membership-manage-link {
   color: #7c3aed;
+}
+
+/* Profile header density: long account names, plan badges, avatar, and edit
+   controls all share one small mobile row. Keep this override page-scoped so
+   generic dashboard/profile-summary rows keep their existing spacing. */
+.profile-page-v15 .simple-card-v4 > .profile-hero-v4 {
+  display: grid !important;
+  grid-template-columns: 64px minmax(0, 1fr) 38px !important;
+  align-items: start !important;
+  gap: 12px !important;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.profile-page-v15 .profile-hero-v4 > .avatar-v4 {
+  width: 64px !important;
+  height: 64px !important;
+  min-width: 64px !important;
+  border-radius: 20px !important;
+  position: relative;
+  z-index: 0;
+}
+
+.profile-page-v15 .profile-main-copy-v4 {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.profile-page-v15 .profile-title-v4 {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.08;
+  font-size: clamp(1rem, 4.5vw, 1.26rem);
+  letter-spacing: 0;
+}
+
+.profile-page-v15 .profile-membership-badges {
+  max-width: 100%;
+  min-width: 0;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+  row-gap: 5px !important;
+  align-items: center;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.profile-page-v15 .profile-membership-badges .membership-badge {
+  max-width: 100%;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.profile-page-v15 .profile-hero-v4 > .fav-btn-v4.small {
+  align-self: start;
+  justify-self: end;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  margin-top: 2px;
+}
+
+@media (max-width: 380px) {
+  .profile-page-v15 .simple-card-v4 > .profile-hero-v4 {
+    grid-template-columns: 58px minmax(0, 1fr) 34px !important;
+    gap: 10px !important;
+  }
+
+  .profile-page-v15 .profile-hero-v4 > .avatar-v4 {
+    width: 58px !important;
+    height: 58px !important;
+    min-width: 58px !important;
+    border-radius: 18px !important;
+  }
+
+  .profile-page-v15 .profile-membership-badges .membership-badge {
+    padding-inline: 7px;
+    font-size: 0.65rem;
+  }
 }

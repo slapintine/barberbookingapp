@@ -348,6 +348,8 @@ export default function SmartMatchPage({
   providers = [],
   locationLabel = "",
   customerSubscription,
+  premiumActive: premiumActiveProp,
+  smartMatchAvailable = true,
   customerSubscriptionLoading = false,
   customerSubscriptionMessage = "",
   pendingCustomerSubscriptionPayment,
@@ -365,7 +367,8 @@ export default function SmartMatchPage({
   const [showHelp, setShowHelp] = useState(false);
   const [sortMode, setSortMode] = useState("best");
   const cacheRef = useRef(new Map());
-  const premiumActive = isCustomerPremiumActive(customerSubscription);
+  const premiumActive = typeof premiumActiveProp === "boolean" ? premiumActiveProp : isCustomerPremiumActive(customerSubscription);
+  const includedButUnavailable = premiumActive && !smartMatchAvailable;
   const state = stateEntry.key === draftKey ? stateEntry.value : readStoredDraft(initial, locationLabel);
   const locationMessage = locationMessageEntry.key === draftKey ? locationMessageEntry.value : "";
   const setState = (updater) => {
@@ -550,7 +553,7 @@ export default function SmartMatchPage({
         </button>
       </header>
 
-      {premiumActive ? <SmartMatchStepper currentStep={state.step} /> : null}
+      {premiumActive && !includedButUnavailable ? <SmartMatchStepper currentStep={state.step} /> : null}
 
       <main className="smart-match-content">
         {showHelp ? (
@@ -561,7 +564,14 @@ export default function SmartMatchPage({
           </aside>
         ) : null}
 
-        {!premiumActive ? (
+        {includedButUnavailable ? (
+          <section className="smart-match-lock-panel">
+            <div className="smart-match-lock-icon"><FiShield /></div>
+            <h1>Smart Match</h1>
+            <p>Smart Match is included in your plan, but it is temporarily unavailable.</p>
+            <button type="button" className="smart-match-secondary-button" onClick={onContinueManualSearch || onBack}>Continue with Manual Search</button>
+          </section>
+        ) : !premiumActive ? (
           <section className="smart-match-lock-panel">
             <div className="smart-match-lock-icon"><FiLock /></div>
             <h1>Smart Match</h1>
@@ -583,7 +593,7 @@ export default function SmartMatchPage({
           </section>
         ) : null}
 
-        {premiumActive && state.error ? (
+        {premiumActive && !includedButUnavailable && state.error ? (
           <section className="smart-match-error smart-match-error-card" role="alert">
             <strong>We couldn't finish the match</strong>
             <span>{state.error}</span>
@@ -596,7 +606,7 @@ export default function SmartMatchPage({
           </section>
         ) : null}
 
-        {premiumActive && state.step === "need" ? (
+        {premiumActive && !includedButUnavailable && state.step === "need" ? (
           <section className="smart-match-step">
             <div className="smart-match-title">
               <h1>What do you need?</h1>
@@ -618,7 +628,7 @@ export default function SmartMatchPage({
           </section>
         ) : null}
 
-        {premiumActive && state.step === "when" ? (
+        {premiumActive && !includedButUnavailable && state.step === "when" ? (
           <section className="smart-match-step">
             <div className="smart-match-title">
               <h1>How soon?</h1>
@@ -640,7 +650,7 @@ export default function SmartMatchPage({
           </section>
         ) : null}
 
-        {premiumActive && state.step === "where" ? (
+        {premiumActive && !includedButUnavailable && state.step === "where" ? (
           <section className="smart-match-step">
             <SummaryCard state={state} />
             <div className="smart-match-title">
@@ -680,7 +690,7 @@ export default function SmartMatchPage({
           </section>
         ) : null}
 
-        {premiumActive && state.step === "matches" ? (
+        {premiumActive && !includedButUnavailable && state.step === "matches" ? (
           <section className="smart-match-step">
             <div className="smart-match-title">
               <h1>Best matches for you</h1>
@@ -737,10 +747,10 @@ export default function SmartMatchPage({
       </main>
 
       <footer className="smart-match-footer">
-        {!premiumActive ? (
+        {includedButUnavailable ? null : !premiumActive ? (
           <>
             <button type="button" className="smart-match-primary-button" onClick={onUpgradePremium}>
-              Have a promo code? Unlock Premium
+              Have a promo code? Apply promo code
             </button>
             <button type="button" className="smart-match-secondary-button" onClick={onContinueManualSearch || onBack}>Continue with Manual Search</button>
           </>

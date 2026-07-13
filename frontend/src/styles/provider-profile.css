@@ -929,6 +929,236 @@ body[data-theme="light"] .pps-owner-action-btn:active {
   border-radius: 20px;
 }
 
+.pps-svc-card--clickable {
+  cursor: pointer;
+}
+
+.pps-svc-card--clickable:focus-visible,
+.pps-portfolio-item--button:focus-visible {
+  outline: 3px solid rgba(82, 43, 91, 0.28);
+  outline-offset: 3px;
+}
+
+.pps-stats-card--button,
+.pps-portfolio-item--button {
+  width: 100%;
+  border: 0;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.pps-dialog-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: end center;
+  padding: 18px;
+  background: rgba(18, 7, 24, 0.62);
+}
+
+.pps-service-detail {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: min(86vh, 760px);
+  overflow: auto;
+  border-radius: 22px;
+  background: #fffaf7;
+  color: #190019;
+  box-shadow: 0 28px 70px rgba(18, 7, 24, 0.34);
+}
+
+.dark .pps-service-detail {
+  background: #211526;
+  color: #fff7f2;
+}
+
+.pps-dialog-close,
+.pps-lightbox-close,
+.pps-lightbox-nav {
+  border: 0;
+  display: grid;
+  place-items: center;
+  color: #fffaf7;
+  background: rgba(43, 18, 76, 0.82);
+  cursor: pointer;
+}
+
+.pps-dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+}
+
+.pps-service-detail-image {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+}
+
+.pps-service-detail-body {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.pps-service-detail-provider,
+.pps-service-detail-empty span,
+.pps-service-detail-reviews > strong {
+  color: #6b5a71;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.dark .pps-service-detail-provider,
+.dark .pps-service-detail-empty span,
+.dark .pps-service-detail-reviews > strong {
+  color: rgba(255, 244, 237, 0.72);
+}
+
+.pps-service-detail h2 {
+  margin: 0;
+  color: inherit;
+  font-size: 1.45rem;
+  line-height: 1.12;
+}
+
+.pps-service-detail p {
+  margin: 0;
+  color: #4f4155;
+  line-height: 1.5;
+}
+
+.dark .pps-service-detail p {
+  color: rgba(255, 244, 237, 0.78);
+}
+
+.pps-service-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pps-service-detail-facts span,
+.pps-service-detail-empty {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(82, 43, 91, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(82, 43, 91, 0.045);
+}
+
+.pps-service-detail-facts strong,
+.pps-service-detail-empty strong {
+  color: #190019;
+  font-size: 0.92rem;
+}
+
+.pps-service-detail-facts small {
+  color: #6b5a71;
+  font-weight: 800;
+}
+
+.dark .pps-service-detail-facts span,
+.dark .pps-service-detail-empty {
+  border-color: rgba(255, 244, 237, 0.1);
+  background: rgba(255, 244, 237, 0.06);
+}
+
+.dark .pps-service-detail-facts strong,
+.dark .pps-service-detail-empty strong {
+  color: #fff7f2;
+}
+
+.dark .pps-service-detail-facts small {
+  color: rgba(255, 244, 237, 0.7);
+}
+
+.pps-service-detail-reviews {
+  display: grid;
+  gap: 10px;
+}
+
+.pps-service-book-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.pps-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 58px 18px;
+  background: rgba(10, 5, 14, 0.9);
+}
+
+.pps-lightbox img {
+  max-width: min(920px, 100%);
+  max-height: calc(100vh - 140px);
+  object-fit: contain;
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+
+.pps-lightbox-close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+}
+
+.pps-lightbox-nav {
+  position: fixed;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+}
+
+.pps-lightbox-nav.prev { left: 18px; }
+.pps-lightbox-nav.next { right: 18px; }
+
+.pps-lightbox-count {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #fffaf7;
+  background: rgba(43, 18, 76, 0.82);
+  font-weight: 900;
+}
+
+@media (max-width: 560px) {
+  .pps-dialog-shell {
+    padding: 0;
+    place-items: end center;
+  }
+  .pps-service-detail {
+    max-height: 90vh;
+    border-radius: 22px 22px 0 0;
+  }
+  .pps-service-detail-facts {
+    grid-template-columns: 1fr;
+  }
+  .pps-lightbox-nav {
+    top: auto;
+    bottom: 72px;
+  }
+}
+
 .light .pps-svc-card,
 body[data-theme="light"] .pps-svc-card {
   background: #fff;

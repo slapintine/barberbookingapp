@@ -75,7 +75,7 @@ export function CoachBusinessSection({
         </div>
         <div className="qpc-business-actions">
           <button type="button" className="qpc-business-primary" onClick={locked ? onUpgrade : onOpen}>
-            {locked ? "Unlock Provider Coach" : "Open Coach"} <FiArrowRight />
+            {locked ? "Upgrade to Platinum" : "Open Coach"} <FiArrowRight />
           </button>
           {onRefresh ? (
             <button type="button" className="qpc-business-secondary" onClick={onRefresh} disabled={loading}>
@@ -84,11 +84,11 @@ export function CoachBusinessSection({
           ) : null}
         </div>
         <div className="qpc-business-plan">
-          <span className="qpc-business-chip">
-            <FiCheck /> {planState?.label || "Premium feature"}
+        <span className="qpc-business-chip">
+            <FiCheck /> {planState?.label || "Platinum feature"}
           </span>
           <strong>{planState?.unlimited ? "Unlimited guidance" : usageText || "Personalized growth guidance"}</strong>
-          <small>{planState?.unlimited ? "Ask the coach whenever you need a next step." : "Advice is based on your available Queless business signals."}</small>
+          <small>{planState?.unlimited ? "Ask the coach whenever you need a next step." : "Provider Coach is included with Platinum Provider."}</small>
         </div>
       </article>
 
@@ -105,7 +105,7 @@ export function CoachBusinessSection({
               ? "Reading your stand signals…"
               : focus || "Keep your profile, availability, and services fresh this week."}
           </h2>
-          <p>{locked ? "Premium and Platinum providers get prioritized coaching based on real business data." : "One focused improvement is easier to complete—and easier to measure."}</p>
+          <p>{locked ? "Provider Coach is included with Platinum Provider." : "One focused improvement is easier to complete—and easier to measure."}</p>
         </div>
         {!locked && !loading && action ? (
           <button type="button" className="qpc-business-review" onClick={() => onAction?.(action.target)}>
@@ -225,17 +225,17 @@ export function LockedFeatureCard({ limitReached, onUpgrade }) {
     <section className="provider-coach-locked">
       <span className="provider-coach-locked-icon"><FiLock /></span>
       <div>
-        <span className="provider-coach-kicker">{limitReached ? "Monthly tips used" : "Premium growth tools"}</span>
+        <span className="provider-coach-kicker">{limitReached ? "Coach limit reached" : "Platinum growth tool"}</span>
         <h2>{limitReached ? "Keep coaching without limits" : "Turn business signals into clear next steps"}</h2>
-        <p>{limitReached ? "Upgrade to Platinum for unlimited Provider Coach guidance." : "Premium includes five coach tips each month. Platinum gives you unlimited guidance."}</p>
+        <p>{limitReached ? "Platinum keeps Provider Coach guidance available." : "Provider Coach is included with Platinum Provider."}</p>
       </div>
       <div className="provider-coach-locked-perks">
         <span><FiBarChart2 /> Booking opportunities</span>
         <span><FiStar /> Review strategy</span>
         <span><FiUserCheck /> Profile trust</span>
       </div>
-      <button type="button" className="provider-coach-primary" onClick={() => onUpgrade?.(limitReached ? "PLATINUM" : "PREMIUM")}>
-        {limitReached ? "View Platinum" : "View Premium"} <FiArrowRight />
+      <button type="button" className="provider-coach-primary" onClick={() => onUpgrade?.("PLATINUM")}>
+        Upgrade to Platinum <FiArrowRight />
       </button>
     </section>
   );
@@ -387,7 +387,7 @@ export function ProviderCoachPreviewCard({ loading, focus, planState, usage, loc
         <span className={`provider-coach-plan-chip provider-coach-plan-chip--${planState?.plan || "free"}`}>{planState?.label}</span>
       </div>
       <div className="provider-coach-preview-focus">
-        <span>{locked ? "Premium coaching" : "Recommended next step"}</span>
+        <span>{locked ? "Platinum coaching" : "Recommended next step"}</span>
         <h3>{locked ? "Turn your business signals into clear growth actions." : loading ? "Reading your stand signals…" : focus}</h3>
       </div>
       {!locked && !limitReached && questionModel?.recommended?.length ? (
@@ -400,8 +400,8 @@ export function ProviderCoachPreviewCard({ loading, focus, planState, usage, loc
         </div>
       ) : null}
       <div className="provider-coach-preview-actions">
-        <button type="button" className="provider-coach-primary" onClick={locked || limitReached ? () => onUpgrade?.(limitReached ? "PLATINUM" : "PREMIUM") : onOpen}>
-          {limitReached ? "View Platinum" : locked ? "View Premium" : "Open Coach"} <FiArrowRight />
+        <button type="button" className="provider-coach-primary" onClick={locked || limitReached ? () => onUpgrade?.("PLATINUM") : onOpen}>
+          {limitReached ? "Upgrade to Platinum" : locked ? "Upgrade to Platinum" : "Open Coach"} <FiArrowRight />
         </button>
         {!locked && usage?.plan === "premium" ? <span>{getCoachUsageText(usage)}</span> : null}
       </div>

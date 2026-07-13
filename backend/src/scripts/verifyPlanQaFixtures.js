@@ -34,6 +34,16 @@ const ACCOUNTS = [
     verifiedBadge: true,
     homepageFeature: true,
   },
+  {
+    username: "qa_dual_platinum",
+    tier: "PLATINUM",
+    serviceCount: 12,
+    photoCount: 12,
+    aiBusinessCoach: true,
+    verifiedBadge: true,
+    homepageFeature: true,
+    customerPremium: true,
+  },
 ];
 
 async function request(path, options = {}) {
@@ -60,9 +70,10 @@ async function verifyAccount(account) {
   });
   const headers = { Authorization: `Bearer ${login.token}` };
 
-  const [barberData, subscriptionData, bookingsData] = await Promise.all([
+  const [barberData, subscriptionData, summaryData, bookingsData] = await Promise.all([
     request("/api/barbers/me", { headers }),
     request("/api/subscriptions/me", { headers }),
+    request("/api/subscriptions/summary", { headers }),
     request("/api/bookings/me", { headers }),
   ]);
 
@@ -77,10 +88,17 @@ async function verifyAccount(account) {
   assertEqual(Boolean(features.aiBusinessCoach), account.aiBusinessCoach, `${account.username} Provider Coach`);
   assertEqual(Boolean(features.verifiedBadge), account.verifiedBadge, `${account.username} verified badge`);
   assertEqual(Boolean(features.homepageFeature), account.homepageFeature, `${account.username} homepage feature`);
+  if (account.customerPremium) {
+    assertEqual(summaryData.customerPlan, "PREMIUM", `${account.username} customer plan`);
+    assertEqual(Boolean(summaryData.entitlements?.smartMatch), true, `${account.username} Smart Match`);
+    assertEqual(summaryData.providerPlan, "PLATINUM", `${account.username} provider plan`);
+  }
 
   return {
     username: account.username,
     tier: subscription.tier,
+    customerPlan: summaryData.customerPlan,
+    providerPlan: summaryData.providerPlan,
     services: (barber.services || []).length,
     photos: (barber.portfolio || []).length,
     bookings: (bookingsData.bookings || []).length,

@@ -92,7 +92,8 @@ export function rateLimit({ name, windowMs, max }) {
       res.setHeader("Retry-After", String(retryAfterSeconds));
       return res.status(429).json({
         success: false,
-        message: "Too many requests. Please wait and try again.",
+        code: "RATE_LIMITED",
+        message: "Please pause for a moment before trying again.",
       });
     }
 

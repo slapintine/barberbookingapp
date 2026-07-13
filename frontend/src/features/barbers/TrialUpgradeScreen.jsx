@@ -30,12 +30,12 @@ const PAYMENT_METHODS = [
 const COMPARISON_ROWS = [
   ["Business profile", "Included", "Included", "Included"],
   ["Number of services", "5", "20", "Unlimited"],
-  ["Images", "2 images / 20MB total", "5 images / 50MB total", "10 images / 100MB total"],
+  ["Images", "8 images / 80MB total", "30 images / 300MB total", "Unlimited / 1000MB total"],
   ["Search visibility", "Basic", "Priority visibility", "Top search, map, and category ranking"],
   ["Promotions", "Not included", "Promotional display tools", "Advanced promotional tools"],
   ["Analytics", "Basic reports", "Basic analytics", "Advanced analytics dashboard"],
   ["Smart Match eligibility", "Not included", "Included", "Included"],
-  ["Provider Coach", "Platinum preview", "5 tips/month", "Unlimited"],
+  ["Provider Coach", "Not included", "Not included", "Unlimited"],
   ["Review blocking", "Not included", "Not included", "Up to 10 reviews"],
   ["Support level", "Normal support", "Faster support", "Priority support"],
 ];

@@ -73,6 +73,23 @@ const PROVIDERS = [
   },
 ];
 
+const DUAL_ROLE_PROVIDER = {
+  username: "qa_dual_platinum",
+  tier: "PLATINUM",
+  businessName: "QA Dual Platinum Services",
+  fullName: "QA Dual Role Owner",
+  email: "qa.dual@queless.test",
+  phone: "+256700100404",
+  serviceCount: 12,
+  photoCount: 12,
+  completed: 6,
+  cancelled: 1,
+  profileViews: 96,
+  averagePrice: 22000,
+  ratingSeed: [5, 4, 5, 5],
+  customerPremium: true,
+};
+
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -114,8 +131,8 @@ function serviceRows(count, basePrice) {
 }
 
 async function upsertUser({ username, role, fullName, email, phone }) {
-  const passwordHash = await bcrypt.hash(PASSWORD, 10);
-  const existing = await get(`SELECT id FROM users WHERE username = ?`, [username]);
+  const existing = await get(`SELECT id, password_hash FROM users WHERE username = ?`, [username]);
+  const passwordHash = existing?.password_hash || await bcrypt.hash(PASSWORD, 10);
 
   let userId = existing?.id;
   if (userId) {
@@ -256,6 +273,17 @@ async function seedSubscription(barberId, provider) {
   );
 }
 
+async function seedCustomerPremium(userId) {
+  const expiresAt = getSubscriptionEndDate(now, "monthly");
+  await run(`DELETE FROM customer_subscriptions WHERE user_id = ?`, [userId]);
+  await run(
+    `INSERT INTO customer_subscriptions
+     (user_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, payment_reference, provider, metadata, started_at, expires_at, activated_at)
+     VALUES (?, 'PREMIUM', 10000, 'active', 'monthly', 10000, 'UGX', 'paid', ?, 'qa_seed', ?, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP)`,
+    [userId, `qa-customer-premium-${userId}`, JSON.stringify({ source: "qa_seed" }), expiresAt]
+  );
+}
+
 async function seedBookingsAndReviews(barberId, customerUserIds, provider) {
   await run(`DELETE FROM reviews WHERE barber_id = ?`, [barberId]);
   await run(`DELETE FROM bookings WHERE barber_id = ?`, [barberId]);
@@ -366,6 +394,11 @@ async function seedProvider(provider, customerUserIds) {
 
   const barberId = await upsertProviderBusiness(provider, ownerUserId);
   await run(`UPDATE profiles SET trial_business_id = ? WHERE user_id = ?`, [barberId, ownerUserId]);
+  if (provider.customerPremium) {
+    await seedCustomerPremium(ownerUserId);
+  } else {
+    await run(`DELETE FROM customer_subscriptions WHERE user_id = ?`, [ownerUserId]);
+  }
   await seedServices(barberId, provider);
   await seedSchedule(barberId);
   await seedSubscription(barberId, provider);
@@ -389,6 +422,7 @@ async function main() {
     email: FIXTURE_CUSTOMER.email,
     phone: FIXTURE_CUSTOMER.phone,
   });
+  await run(`DELETE FROM customer_subscriptions WHERE user_id = ?`, [primaryCustomerUserId]);
   const customerUserIds = [primaryCustomerUserId];
   for (let index = 1; index <= EXTRA_CUSTOMER_COUNT; index += 1) {
     customerUserIds.push(await upsertUser({
@@ -404,11 +438,12 @@ async function main() {
   for (const provider of PROVIDERS) {
     seeded.push(await seedProvider(provider, customerUserIds));
   }
+  seeded.push(await seedProvider(DUAL_ROLE_PROVIDER, customerUserIds));
 
   console.log("Seeded Queless plan QA fixtures:");
   console.table([
     { username: FIXTURE_CUSTOMER.username, password: PASSWORD, role: "customer", tier: "" },
-    ...seeded.map((item) => ({ username: item.username, password: item.password, role: "provider", tier: item.tier, barberId: item.barberId })),
+    ...seeded.map((item) => ({ username: item.username, password: item.password, role: item.username === DUAL_ROLE_PROVIDER.username ? "provider+customer-premium" : "provider", tier: item.tier, barberId: item.barberId })),
   ]);
 }
 

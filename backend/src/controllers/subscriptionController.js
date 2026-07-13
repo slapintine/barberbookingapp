@@ -375,8 +375,8 @@ function getPublishFields(barber) {
   const verificationApproved = isVerificationApprovedStatus(barber?.verified_status || barber?.verification_status);
   return {
     verificationApproved,
-    businessStatus: verificationApproved ? "active" : "draft",
-    isPublished: verificationApproved ? 1 : 0,
+    businessStatus: "active",
+    isPublished: 1,
   };
 }
 
@@ -384,8 +384,8 @@ function getActivationMessage({ planName = "plan", verificationApproved = false,
   if (paymentPending) return "Payment pending. Your paid plan will activate after payment confirmation.";
   if (!verificationApproved) {
     return free
-      ? "Free plan activated. Verification is still required before your business becomes visible to customers."
-      : `${planName} activated. Verification is still required before your business becomes visible to customers.`;
+      ? "Free plan activated. Your stand can be published now; verification only controls the verified badge."
+      : `${planName} activated. Your stand can be published now; verification only controls the verified badge.`;
   }
   return free
     ? "Business active. Your business is visible to customers on the Free plan."
