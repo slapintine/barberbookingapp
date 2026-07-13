@@ -4929,6 +4929,10 @@ body[data-lineup-theme="dark"] .screen-v4 {
   z-index: 1901 !important;
 }
 
+.barber-schedule-sheet-v6.open {
+  z-index: 1902 !important;
+}
+
 /* Admin control center glow-up */
 .admin-page-v17 {
   padding: 0 !important;

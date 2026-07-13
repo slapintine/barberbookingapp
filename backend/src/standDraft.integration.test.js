@@ -216,6 +216,42 @@ test("stand draft create, reopen, partial edit, explicit removal, and publish fl
   assert.equal(publishResponse.status, 200);
   const published = (await publishResponse.json()).barber;
   assert.equal(Number(published.is_published), 1);
+  assert.equal(published.image, savedLogo);
+  assert.equal(published.portfolio[0].afterImage, "https://queless.org/uploads/work-two.webp");
+  assert.equal(published.services[0].image, savedServiceImage);
+
+  const publicProvidersResponse = await request("/api/barbers");
+  assert.equal(publicProvidersResponse.status, 200);
+  const publicProvidersBody = await publicProvidersResponse.json();
+  const publicProvider = (publicProvidersBody.barbers || publicProvidersBody.providers || []).find(
+    (item) => item.business_name === "Kampala Draft Cuts" || item.businessName === "Kampala Draft Cuts"
+  );
+  assert.ok(publicProvider, "published provider appears in the public provider list");
+  assert.equal(publicProvider.image || publicProvider.image_url, savedLogo);
+  assert.equal((publicProvider.portfolio || [])[0]?.afterImage || (publicProvider.portfolio || [])[0]?.after_image, "https://queless.org/uploads/work-two.webp");
+
+  const discoveryProvidersResponse = await request("/api/discovery/providers");
+  assert.equal(discoveryProvidersResponse.status, 200);
+  const discoveryProvider = (await discoveryProvidersResponse.json()).providers.find(
+    (item) => item.business_name === "Kampala Draft Cuts" || item.businessName === "Kampala Draft Cuts"
+  );
+  assert.ok(discoveryProvider, "published provider appears in discovery");
+  assert.equal(discoveryProvider.image || discoveryProvider.image_url, savedLogo);
+  assert.ok(
+    [
+      ...(discoveryProvider.galleryImages || discoveryProvider.gallery_images || []),
+      ...(discoveryProvider.portfolioImages || discoveryProvider.portfolio_images || []),
+    ].includes("https://queless.org/uploads/work-two.webp"),
+    "published portfolio image appears in discovery gallery fields"
+  );
+
+  const listingsResponse = await request("/api/discovery/service-listings");
+  assert.equal(listingsResponse.status, 200);
+  const listing = (await listingsResponse.json()).service_listings.find(
+    (item) => item.service_name === "Classic haircut" || item.name === "Classic haircut" || item.title === "Classic haircut"
+  );
+  assert.ok(listing, "published service appears in discovery listings");
+  assert.ok((listing.images || []).includes(savedServiceImage), "published service image appears in discovery listings");
 
   const countRow = await new Promise((resolve, reject) => {
     db.get(`SELECT COUNT(*) AS count FROM barbers`, [], (error, row) => error ? reject(error) : resolve(row));

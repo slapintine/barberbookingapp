@@ -58,7 +58,14 @@ body[data-theme="dark"] {
   min-height: 58px;
   padding: calc(8px + var(--device-safe-top, 0px)) 14px 8px;
   gap: 7px;
-  background: color-mix(in srgb, var(--customer-home-surface) 94%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      #2b063a 0,
+      #2b063a var(--device-safe-top, 0px),
+      color-mix(in srgb, var(--customer-home-surface) 94%, transparent) var(--device-safe-top, 0px),
+      color-mix(in srgb, var(--customer-home-surface) 94%, transparent) 100%
+    );
   border-bottom: 1px solid var(--customer-home-line);
   color: var(--customer-home-text);
   backdrop-filter: blur(16px);

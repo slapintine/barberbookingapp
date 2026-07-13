@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FiArrowLeft,
   FiCalendar,
@@ -161,6 +161,50 @@ export default function ScheduleWorkspace({
     setScheduleMonthDate((current) => new Date(current.getFullYear(), current.getMonth() + direction, 1));
   };
 
+  useEffect(() => {
+    if (!showSchedule || typeof window === "undefined") return undefined;
+
+    if (typeof document !== "undefined" && document.body?.dataset) {
+      document.body.dataset.quelessScheduleOpen = "true";
+    }
+
+    const state = {
+      ...(window.history.state && typeof window.history.state === "object" ? window.history.state : {}),
+      quelessScheduleOpen: true,
+    };
+    window.history.pushState(state, "");
+
+    const handlePopState = () => {
+      setShowSchedule(false);
+    };
+    const handleNativeBack = () => {
+      if (window.history.state?.quelessScheduleOpen) {
+        const nextState = { ...(window.history.state || {}) };
+        delete nextState.quelessScheduleOpen;
+        window.history.replaceState(nextState, "");
+      }
+      setShowSchedule(false);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("queless:native-back", handleNativeBack);
+    return () => {
+      if (typeof document !== "undefined" && document.body?.dataset?.quelessScheduleOpen === "true") {
+        delete document.body.dataset.quelessScheduleOpen;
+      }
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("queless:native-back", handleNativeBack);
+    };
+  }, [showSchedule]);
+
+  const closeSchedule = () => {
+    if (typeof window !== "undefined" && window.history.state?.quelessScheduleOpen) {
+      window.history.back();
+      return;
+    }
+    setShowSchedule(false);
+  };
+
   return (
     <>
       <div className="simple-card-v4 schedule-calendar-v5">
@@ -189,17 +233,17 @@ export default function ScheduleWorkspace({
           <button
             type="button"
             className="booking-overlay-v4 open"
-            onClick={() => setShowSchedule(false)}
+            onClick={closeSchedule}
             aria-label="Close schedule"
           />
           <div className="barber-schedule-sheet-v6 open">
             <div className="barber-schedule-card-v6">
               <div className="barber-profile-topbar-v4">
-                <button type="button" className="profile-back-btn-v4" onClick={() => setShowSchedule(false)}>
+                <button type="button" className="profile-back-btn-v4" onClick={closeSchedule} aria-label="Back from schedule">
                   <FiArrowLeft />
                 </button>
                 <div className="profile-top-title-v4">Schedule</div>
-                <button type="button" className="profile-back-btn-v4" onClick={() => setShowSchedule(false)}>
+                <button type="button" className="profile-back-btn-v4" onClick={closeSchedule} aria-label="Close schedule">
                   <FiX />
                 </button>
               </div>

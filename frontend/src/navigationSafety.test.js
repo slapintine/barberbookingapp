@@ -70,12 +70,33 @@ test("Open Schedule action keeps visible icon and interaction states", () => {
   const polish = fs.readFileSync(new URL("./styles/structure-polish.css", import.meta.url), "utf8");
   assert.match(schedule, /className="primary-btn-v4 schedule-open-btn-v6"/);
   assert.match(schedule, /<FiCalendar aria-hidden="true" \/> Open Schedule/);
+  assert.match(schedule, /aria-label="Back from schedule"/);
+  assert.match(schedule, /aria-label="Close schedule"/);
+  assert.match(schedule, /quelessScheduleOpen/);
+  assert.match(schedule, /document\.body\.dataset\.quelessScheduleOpen = "true"/);
+  assert.match(schedule, /window\.addEventListener\("queless:native-back"/);
+  assert.match(schedule, /window\.history\.back\(\)/);
   assert.match(css, /\.schedule-open-btn-v6 svg\s*\{[\s\S]*color: currentColor;[\s\S]*stroke: currentColor;/);
   assert.match(css, /\.light \.schedule-open-btn-v6\s*\{[\s\S]*color: #ffffff;/);
   assert.match(css, /\.schedule-open-btn-v6:focus-visible\s*\{/);
   assert.match(css, /\.schedule-open-btn-v6:disabled\s*\{/);
+  assert.match(css, /\.barber-schedule-sheet-v6\s*\{[\s\S]*height: 100dvh;/);
+  assert.match(css, /\.barber-schedule-sheet-v6\s*\{[\s\S]*--schedule-sheet-safe-top: max\(10px, env\(safe-area-inset-top, 0px\)\);/);
+  assert.match(css, /\.barber-schedule-card-v6\s*\{[\s\S]*max-height: calc\(100dvh - var\(--schedule-sheet-safe-top\) - var\(--schedule-sheet-safe-bottom\)\);/);
+  assert.match(css, /\.barber-schedule-card-v6 \.barber-profile-topbar-v4\s*\{[\s\S]*position: sticky;/);
+  assert.match(css, /\.schedule-workspace-shell-v7\s*\{[\s\S]*overflow-y: auto;/);
   assert.match(polish, /\.dark \.schedule-open-btn-v6\s*\{[\s\S]*color: #230038 !important;/);
   assert.match(polish, /\.schedule-open-btn-v6 svg\s*\{[\s\S]*stroke: currentColor !important;/);
+  assert.match(polish, /\.barber-schedule-sheet-v6\.open\s*\{[\s\S]*z-index: 1902 !important;/);
+});
+
+test("Android hardware back closes the schedule sheet before leaving the app", () => {
+  const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
+  assert.match(mainActivity, /installScheduleBackHandler\(\)/);
+  assert.match(mainActivity, /OnBackPressedCallback\(true\)/);
+  assert.match(mainActivity, /dataset\.quelessScheduleOpen/);
+  assert.match(mainActivity, /queless:native-back/);
+  assert.match(mainActivity, /return 'handled'/);
 });
 
 test("light mode icons use semantic visible tokens instead of inherited pale text", () => {

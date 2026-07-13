@@ -102,6 +102,18 @@ body {
   font-family: Inter, Arial, sans-serif;
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--device-safe-top, 0px);
+  background: #2b063a;
+  pointer-events: none;
+  z-index: 1000;
+}
+
 button,
 input,
 textarea,

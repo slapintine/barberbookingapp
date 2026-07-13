@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildAssetUrl, ASSET_ORIGIN } from "./api.js";
+import { buildAssetUrl, buildPublicUrl, ASSET_ORIGIN } from "./api.js";
 
 test("absolute, data, and blob image refs pass through unchanged", () => {
   assert.equal(buildAssetUrl("https://queless.org/api/uploads/p/x.jpg"), "https://queless.org/api/uploads/p/x.jpg");
@@ -24,4 +24,8 @@ test("server-relative upload paths are made absolute against the asset origin", 
     buildAssetUrl("/api/uploads/providers/7/cover-abc.jpg"),
     `${ASSET_ORIGIN}/api/uploads/providers/7/cover-abc.jpg`
   );
+});
+
+test("public links use the API origin instead of the WebView origin", () => {
+  assert.equal(buildPublicUrl("/providers/demo-stand"), `${ASSET_ORIGIN || "https://queless.org"}/providers/demo-stand`);
 });

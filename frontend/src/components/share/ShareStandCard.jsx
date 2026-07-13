@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { FiCheck, FiCopy, FiDownload, FiShare2 } from "react-icons/fi";
+import { buildPublicUrl } from "../../config/api.js";
 import "./ShareStandCard.css";
 
 /**
@@ -26,11 +27,7 @@ export default function ShareStandCard({ barber }) {
   const standUrl = useMemo(() => {
     const slug = slugifyBusinessName(barber?.business_name || "");
     if (!slug) return "";
-    const origin =
-      typeof window !== "undefined" && window.location?.origin
-        ? window.location.origin
-        : "https://queless.org";
-    return `${origin}/providers/${slug}`;
+    return buildPublicUrl(`/providers/${slug}`);
   }, [barber?.business_name]);
 
   const shareText = `Book ${businessName} on Queless — skip the queue: ${standUrl}`;

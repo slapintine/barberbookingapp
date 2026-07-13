@@ -47,6 +47,18 @@ export const SOCKET_URL = deriveSocketUrl();
 // asset paths resolve against the same origin there.
 export const ASSET_ORIGIN = API_URL && API_URL.startsWith("http") ? stripApiSuffix(API_URL) : "";
 
+export function getPublicOrigin() {
+  if (ASSET_ORIGIN) return ASSET_ORIGIN;
+  if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+  return "https://queless.org";
+}
+
+export function buildPublicUrl(path = "") {
+  const origin = getPublicOrigin().replace(/\/+$/, "");
+  const normalizedPath = String(path || "").startsWith("/") ? String(path || "") : `/${path || ""}`;
+  return `${origin}${normalizedPath}`;
+}
+
 // Single source of truth for turning a stored image reference into a usable URL.
 // data:/blob:/absolute-http(s) values pass through unchanged; server-relative
 // upload/static paths (e.g. "/api/uploads/...") are made absolute against
