@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { FiCalendar, FiCheckCircle, FiInbox, FiMapPin, FiScissors, FiXCircle } from "react-icons/fi";
 import { FaStar } from "react-icons/fa";
 import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
+import BookingStatusChip from "../components/ui/BookingStatusChip.jsx";
 import RequestCard from "../components/ui/RequestCard.jsx";
 
 const ACTIVE_STATUSES = new Set(["pending", "confirmed"]);
@@ -156,7 +157,7 @@ export default function BookingsPage({
         Payment: {getPaymentMethodLabel(booking.paymentMethod)} · {booking.paymentStatus || "unpaid"}
       </div>
       <div className="inline-actions-v4">
-        <span className={`booking-badge-v4 status-${booking.status || "pending"}`}>{booking.status}</span>
+        <BookingStatusChip status={booking.status} className="booking-badge-v4" />
         {isBarberView && booking.status === "pending" && (
           <>
             <button type="button" className="mini-action-btn-v4 success" onClick={() => approveBooking(booking.id)}>Approve</button>

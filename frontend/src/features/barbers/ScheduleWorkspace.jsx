@@ -7,6 +7,7 @@ import {
   FiScissors,
   FiX,
 } from "react-icons/fi";
+import BookingStatusChip from "../../components/ui/BookingStatusChip.jsx";
 
 function formatTo24Hour(timeStr) {
   const raw = String(timeStr || "").trim();
@@ -358,7 +359,7 @@ export default function ScheduleWorkspace({
                             </div>
                           </div>
                           <div className="schedule-record-side-v9">
-                            <span className={`schedule-status-pill-v9 tone-${getBookingStatusTone(item.status)}`}>{item.status}</span>
+                            <BookingStatusChip status={item.status} className="schedule-status-pill-v9" />
                             <button type="button" className="mini-action-btn-v4" onClick={() => onOpenConversation(item)}>
                               Message
                             </button>

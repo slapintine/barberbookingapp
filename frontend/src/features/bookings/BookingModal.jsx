@@ -321,7 +321,8 @@ export default function BookingModal({
     );
   }
 
-  const total = Number(barber.price_from || 0) + getServiceBookingAmount(serviceObj);
+  const serviceAmount = getServiceBookingAmount(serviceObj);
+  const total = serviceAmount > 0 ? serviceAmount : Number(barber.price_from || 0);
   const isTutorService = [serviceObj?.category, barber?.business_type, barber?.category_name]
     .filter(Boolean)
     .some((value) => /tutor|lesson|education|academic/i.test(String(value)));
@@ -359,8 +360,10 @@ export default function BookingModal({
   const rating = Number(barber.rating || 0);
   const ratingLabel = rating > 0 ? rating.toFixed(1) : "New";
   const reviewCount = Number(barber.reviewCount || 0);
+  const verificationStatus = String(barber.verified_status || barber.verification_status || barber.verified || "").toLowerCase();
   const isVerified = Boolean(
-    barber.is_verified === 1 || barber.is_verified === true || barber.isVerified || String(barber.verified || "").toLowerCase() === "verified"
+    barber.is_verified === 1 || barber.is_verified === true || barber.isVerified ||
+    ["approved", "verified", "complete", "completed"].includes(verificationStatus)
   );
 
   const bookReady =
@@ -700,7 +703,7 @@ export default function BookingModal({
                         <label><span>Lesson mode</span>
                           <select value={tutorDetails.lessonMode} onChange={(event) => setTutorDetails((prev) => ({ ...prev, lessonMode: event.target.value }))}>
                             <option value="">Choose mode</option>
-                            {["In-person", "Online", "Home visit", "Student comes to tutor", "Hybrid"].map((item) => <option key={item} value={item}>{item}</option>)}
+                            {["In-person", "Online", "Home visit", "Student comes to tutor", "Flexible"].map((item) => <option key={item} value={item}>{item}</option>)}
                           </select>
                         </label>
                         <label><span>Duration</span><input value={tutorDetails.duration} onChange={(event) => setTutorDetails((prev) => ({ ...prev, duration: event.target.value }))} placeholder="1 hour" /></label>

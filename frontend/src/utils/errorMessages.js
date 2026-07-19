@@ -89,5 +89,17 @@ export function sanitizeErrorMessage(message, fallback = SERVER_UNAVAILABLE_FALL
   const value = getErrorMessage(message, "").trim();
   if (!value) return fallback;
   if (looksLikeServerHtml(value)) return fallback;
+  if (/\b(barber|provider|booking|service|review|quote|stand)?-?_?id\b[^.]*\b(integer|uuid|number|positive)\b/i.test(value)) {
+    if (/conversation|message|barber|provider/i.test(value)) {
+      return "We could not open this conversation. Please return to the provider profile and try again.";
+    }
+    if (/booking/i.test(value)) {
+      return "This booking is no longer available. Refresh the page and try again.";
+    }
+    return "That request could not be completed. Refresh the page and try again.";
+  }
+  if (/\binvalid uuid\b/i.test(value)) {
+    return "That request could not be completed. Refresh the page and try again.";
+  }
   return value;
 }

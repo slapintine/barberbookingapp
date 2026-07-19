@@ -79,7 +79,7 @@ const FEATURE_TEST_OPTIONS = [
   ["browse_services", "Business search"],
   ["book_service", "Booking creation"],
   ["customer_wallet_topup", "Wallet top-up"],
-  ["checkout_payment", "Checkout/payment"],
+  ["booking_payment", "Booking payment"],
   ["booking_management", "Provider booking management"],
   ["ai_coach", "Provider Coach"],
   ["subscription_upgrade", "Subscription upgrade"],

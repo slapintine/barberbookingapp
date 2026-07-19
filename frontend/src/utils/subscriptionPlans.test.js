@@ -116,6 +116,7 @@ test("provider plan labels and upgrade CTAs are plan-aware", () => {
   assert.equal(formatProviderPlanName("PREMIUM"), "Premium Provider");
   assert.equal(formatProviderPlanName("PLATINUM"), "Platinum Provider");
   assert.equal(formatProviderPlanName("FREE"), "Free Provider");
+  assert.equal(formatProviderPlanName(null), "Free Provider");
   assert.equal(getPlanUpgradeCta("PLATINUM"), "Upgrade to Platinum");
   assert.equal(getPlanUpgradeCta("PREMIUM"), "Upgrade to Premium");
 });

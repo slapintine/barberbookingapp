@@ -50,6 +50,8 @@ const TOTAL_STEPS = 6;
 const BYTES_PER_MB = 1024 * 1024;
 const IMAGE_OPTIMIZE_THRESHOLD_BYTES = 3 * BYTES_PER_MB;
 const IMAGE_MAX_DIMENSION = 1800;
+const SUPPORTED_UPLOAD_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const SUPPORTED_UPLOAD_ACCEPT = "image/png,image/jpeg,image/webp";
 
 const DEFAULT_FORM = {
   businessName: "",
@@ -233,7 +235,7 @@ function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error("We could not read that image. Choose another PNG, JPG, or WebP file."));
     reader.readAsDataURL(file);
   });
 }
@@ -334,7 +336,7 @@ function loadImageFromFile(file) {
 }
 
 async function optimizeImageFile(file, { onStatus } = {}) {
-  if (!file?.type?.startsWith("image/")) {
+  if (!SUPPORTED_UPLOAD_IMAGE_TYPES.has(String(file?.type || "").toLowerCase())) {
     throw new Error("Please choose a PNG, JPG, or WebP image.");
   }
   if (file.size <= IMAGE_OPTIMIZE_THRESHOLD_BYTES) {
@@ -456,7 +458,7 @@ function ImageUploadInput({
       <input
         ref={imageInputRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_UPLOAD_ACCEPT}
         style={{ display: "none" }}
         onChange={handleImageChange}
       />
@@ -555,7 +557,7 @@ function PortfolioImageInput({ portfolio = [], onChange, maxPhotos = Infinity, p
       <input
         ref={portfolioInputRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_UPLOAD_ACCEPT}
         multiple
         style={{ display: "none" }}
         onChange={handlePortfolioChange}
@@ -1122,7 +1124,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                   image={form.image}
                   onChange={(image) => setForm((prev) => ({ ...prev, image }))}
                   title="Business logo / cover image"
-                  description="Used as your main image in search, profile, and Top Providers."
+                  description="Used as your main image in search, profile, and featured provider areas."
                   emptyLabel="Upload business image"
                   uploadLabel="Upload business image"
                   changeLabel="Change business image"

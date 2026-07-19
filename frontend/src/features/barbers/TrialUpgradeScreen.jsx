@@ -97,8 +97,8 @@ export default function TrialUpgradeScreen({
   const selectedIsFree = selectedPlan?.tier === "FREE";
   const selectedPaidComingSoon = !selectedIsFree && !PAYMENTS_ENABLED;
   const selectedPaymentMethod = PAYMENT_METHODS.find((method) => method.id === selectedMethod);
-  const currentTier = String(subscription?.tier || "LOCKED").toUpperCase();
-  const currentTierLabel = formatPlanName(currentTier, "Plan required");
+  const currentTier = normalizePlanTier(subscription?.tier, "FREE");
+  const currentTierLabel = formatPlanName(currentTier, "Free Provider");
   const visibleMessage = localMessage || message || "";
   const planAmount = getPlanAmount(selectedPlan, billingCycle);
 
@@ -269,7 +269,7 @@ export default function TrialUpgradeScreen({
         <section className="trial-upgrade-hero-v12 trial-plan-helper-v16">
           <div className="trial-hero-badge-v12">
             {isAdmin ? <FiEye /> : <FiLock />}
-            {isAdmin ? "Admin preview mode" : currentTier === "LOCKED" ? "Plan setup" : `Current plan: ${currentTierLabel}`}
+            {isAdmin ? "Admin preview mode" : `Current plan: ${currentTierLabel}`}
           </div>
           <p>Start free, unlock more visibility when ready.</p>
         </section>

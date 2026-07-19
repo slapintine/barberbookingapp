@@ -13,7 +13,7 @@ import {
 } from "react-icons/fi";
 import { resolveProviderImage, getProviderInitials, buildInitialsAvatar } from "../utils/providerImage.js";
 import { getCategoryDef, HOME_CATEGORY_IDS } from "../utils/categoryRegistry.jsx";
-import heroProfessional from "../assets/queless-hero-service-professional.png";
+import heroProfessional from "../assets/queless-hero-service-professional.webp";
 import { buildAssetUrl } from "../config/api.js";
 
 // Homepage category chips — registry-driven so icons/colors stay in sync with the rest of the app
@@ -29,23 +29,23 @@ const CATEGORY_CHIPS = HOME_CATEGORY_IDS.map(({ id, category, labelOverride }) =
 
 const TRUST_BADGES = [
   {
-    title: "Verified Professionals",
-    text: "Trust signals help you choose providers when you are new to an area.",
+    title: "Clear provider details",
+    text: "Compare services, prices, location and public profile information before you book.",
     icon: FiShield,
   },
   {
-    title: "Secure Booking",
-    text: "Your bookings and payments stay safe.",
+    title: "Managed bookings",
+    text: "Choose a service and keep your booking details in one place.",
     icon: FiCheckCircle,
   },
   {
-    title: "Fast Response",
-    text: "Get quick replies and service updates.",
+    title: "Direct conversation",
+    text: "Contact providers about service details and next steps when a booking or quote needs clarity.",
     icon: FiZap,
   },
   {
-    title: "Trusted Providers",
-    text: "Top-rated by real customers like you.",
+    title: "Customer reviews",
+    text: "Reviews appear after completed bookings, so empty profiles stay honest.",
     icon: FiStar,
   },
 ];
@@ -189,6 +189,7 @@ export default function HomeScreen({
   topBarbers = [],
   filteredBarbers = [],
   currentUser,
+  barbersLoading = false,
 }) {
   const carouselRef = useRef(null);
   const frameRef = useRef(0);
@@ -303,6 +304,9 @@ export default function HomeScreen({
           <img
             src={heroProfessional}
             alt="Professional service provider ready for work"
+            width="405"
+            height="720"
+            decoding="async"
             onError={(event) => {
               event.currentTarget.style.display = "none";
             }}
@@ -364,7 +368,7 @@ export default function HomeScreen({
 
       <section className="customer-home-section customer-home-providers-section">
         <SectionHeader
-          title="Top Providers"
+          title="Featured service providers"
           onViewAll={() => {
             setSelectedCategory?.("All");
             onOpenCategory?.("All");
@@ -375,7 +379,7 @@ export default function HomeScreen({
           <>
             <div
               className="customer-home-provider-carousel"
-              aria-label="Top providers near you"
+              aria-label="Featured service providers near you"
               ref={carouselRef}
               onScroll={scheduleActiveSlideUpdate}
             >
@@ -428,7 +432,7 @@ export default function HomeScreen({
               ))}
             </div>
             {popularItems.length > 1 ? (
-              <div className="customer-home-provider-dots" aria-label="Top provider carousel controls">
+              <div className="customer-home-provider-dots" aria-label="Featured provider carousel controls">
                 {popularItems.map((item, index) => (
                   <button
                     type="button"
@@ -441,6 +445,22 @@ export default function HomeScreen({
               </div>
             ) : null}
           </>
+        ) : barbersLoading ? (
+          <div className="customer-home-provider-loading" aria-label="Loading service providers">
+            {Array.from({ length: 3 }, (_, index) => (
+              <div className="customer-home-provider-card customer-home-provider-card--skeleton" key={index} aria-hidden="true">
+                <span className="customer-home-provider-media" />
+                <span className="customer-home-provider-body">
+                  <strong />
+                  <small />
+                  <span className="customer-home-provider-meta">
+                    <span />
+                    <span />
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="customer-home-empty-state">
             <span className="customer-home-empty-icon"><FiSearch /></span>
@@ -462,7 +482,7 @@ export default function HomeScreen({
           </span>
           <div>
             <strong>View Map</strong>
-            <small>New around here? See trusted providers around your current or selected area.</small>
+            <small>New around here? See service providers around your current or selected area.</small>
           </div>
           <FiArrowRight aria-hidden="true" />
         </button>

@@ -1,9 +1,10 @@
 export function getPaymentMethodLabel(method) {
   const normalized = String(method || "").toLowerCase();
+  if (normalized === "cash" || normalized === "pay_provider_directly") return "Pay provider directly";
   if (normalized === "wallet" || normalized === "wallet_balance") return "Wallet Balance";
   if (normalized === "mtn_mobile_money") return "MTN Mobile Money";
   if (normalized === "airtel_money") return "Airtel Money";
-  return "Mobile Money";
+  return "Pay provider directly";
 }
 
 export function isOnlinePaymentMethod(method) {
@@ -12,6 +13,7 @@ export function isOnlinePaymentMethod(method) {
 
 export function isBookingPaymentMethodEnabled(method, { onlinePaymentsEnabled = false, walletPaymentsEnabled = false } = {}) {
   const normalized = String(method || "").toLowerCase();
+  if (normalized === "cash" || normalized === "pay_provider_directly") return true;
   if (normalized === "wallet" || normalized === "wallet_balance") return Boolean(walletPaymentsEnabled);
   if (isOnlinePaymentMethod(normalized)) return Boolean(onlinePaymentsEnabled);
   return false;

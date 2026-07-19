@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { buildAssetUrl } from "../../config/api.js";
 import {
   FiArrowLeft,
@@ -32,7 +32,7 @@ import {
   FiSliders,
   FiBookOpen,
   FiGlobe,
-  FiPackage,
+  FiBriefcase,
   FiInfo,
 } from "react-icons/fi";
 import VerificationBadge from "../../components/ui/VerificationBadge.jsx";
@@ -101,7 +101,7 @@ function getServiceIcon(service = {}, businessType = "") {
   if (name.includes("consult") || name.includes("dental") || name.includes("lab"))
     return FiInfo;
   if (name.includes("massage") || name.includes("spa")) return FiZap;
-  return FiPackage;
+  return FiBriefcase;
 }
 
 function getCategoryIcon(category = "") {
@@ -137,6 +137,34 @@ function arrayValue(value) {
 function getPortfolioImage(item) {
   if (typeof item === "string") return item.trim();
   return String(item?.afterImage || item?.after_image || item?.image || item?.beforeImage || item?.before_image || "").trim();
+}
+
+function getVerificationState(barber = {}) {
+  const status = String(barber.verified_status || barber.verification_status || barber.verified || "").trim().toLowerCase();
+  const approved = barber.is_verified === true || barber.is_verified === 1 || ["approved", "verified", "complete", "completed"].includes(status);
+  const pending = ["pending", "pending verification", "under review", "submitted", "review"].some((value) => status.includes(value));
+  if (approved) {
+    return {
+      status: "verified",
+      label: "Verified provider",
+      detail: "Verification has been completed by Queless.",
+      body: "This provider has completed Queless verification. Check prices, hours, and reviews before booking. Never share PINs or verification codes.",
+    };
+  }
+  if (pending) {
+    return {
+      status: "pending",
+      label: "Verification under review",
+      detail: "Queless is reviewing the submitted verification details.",
+      body: "This provider's verification is under review. You can still check their services, prices, portfolio, and reviews before booking.",
+    };
+  }
+  return {
+    status: "unverified",
+    label: "Verification not completed",
+    detail: "This provider has not completed verification.",
+    body: "This provider has not completed verification. Check prices, hours, portfolio, and reviews before booking.",
+  };
 }
 
 function getProviderPortfolio(barber = {}) {
@@ -213,7 +241,7 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
   function handleAction() {
     if (isOwner) return;
     if (isQuote) {
-      onRequestQuote?.(service) || onOpenChat?.();
+      onRequestQuote?.(service);
     } else {
       onBook?.(service);
     }
@@ -234,7 +262,7 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
     >
       <div className="pps-svc-img-wrap">
         {imgSrc ? (
-          <img src={imgSrc} alt={service.service_name || "Service"} loading="lazy" />
+          <img src={imgSrc} alt={service.service_name || "Service"} loading="lazy" decoding="async" />
         ) : (
           <div className="pps-svc-img-placeholder">
             <SvcIcon size={28} />
@@ -265,7 +293,7 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
         )}
       </div>
       <div className="pps-svc-price-col">
-        <span className="pps-svc-from">Starting from</span>
+        <span className="pps-svc-from">{isQuote ? "Pricing" : "Starting from"}</span>
         <strong className="pps-svc-price">{priceLabel}</strong>
         {duration && <span className="pps-svc-duration">
           <FiClock size={11} /> {duration}
@@ -372,49 +400,67 @@ export default function BarberProfileSheet({
   onOpenDashboard,
   onViewOnMap,
 }) {
+  const sourceBarber = barber || {};
   const [activeTab, setActiveTab] = useState("overview");
   const [bioExpanded, setBioExpanded] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
-
-  if (!barber || !show) return null;
+  const closeServiceButtonRef = useRef(null);
+  const closeLightboxButtonRef = useRef(null);
 
   /* ── safe data ── */
+  const profileImage = buildAssetUrl(
+    sourceBarber.image ||
+      sourceBarber.image_url ||
+      sourceBarber.cover_image_url ||
+      sourceBarber.coverImageUrl ||
+      sourceBarber.coverImage ||
+      sourceBarber.cover_image ||
+      sourceBarber.profileImage ||
+      sourceBarber.profile_image ||
+      fallbackImage ||
+      resolveProviderImage(sourceBarber)
+  );
+
   const safeBarber = {
-    id: barber.id ?? "",
-    business_name: barber.business_name || "Unnamed Business",
-    location: barber.location || "Location unavailable",
-    ownerUsername: barber.ownerUsername || "",
-    availability: barber.availability || { start: "08:00", end: "20:00" },
-    verified: barber.verified || "Business",
-    rating: Number(barber.rating || 0),
-    reviewCount: Number(barber.reviewCount || 0),
-    reviews: Array.isArray(barber.reviews) ? barber.reviews : [],
-    services: Array.isArray(barber.services) ? barber.services : [],
-    phone: barber.phone || "",
-    image: barber.image || fallbackImage || resolveProviderImage(barber),
-    intro_text: barber.intro_text || barber.introText || "",
-    business_type: barber.business_type || barber.businessType || "Services",
+    id: sourceBarber.id ?? "",
+    business_name: sourceBarber.business_name || "Unnamed Business",
+    location: sourceBarber.location || "Location unavailable",
+    ownerUsername: sourceBarber.ownerUsername || "",
+    ownerUserId: sourceBarber.ownerUserId || sourceBarber.owner_user_id || sourceBarber.userId || sourceBarber.user_id || null,
+    isOwnedByCurrentUser: sourceBarber.isOwnedByCurrentUser === true || sourceBarber.is_owned_by_current_user === true,
+    is_owned_by_current_user: sourceBarber.is_owned_by_current_user === true || sourceBarber.isOwnedByCurrentUser === true,
+    availability: sourceBarber.availability || { start: "08:00", end: "20:00" },
+    verified: sourceBarber.verified || "Business",
+    rating: Number(sourceBarber.rating || 0),
+    reviewCount: Number(sourceBarber.reviewCount || 0),
+    reviews: Array.isArray(sourceBarber.reviews) ? sourceBarber.reviews : [],
+    services: Array.isArray(sourceBarber.services) ? sourceBarber.services : [],
+    phone: sourceBarber.phone || "",
+    image: profileImage,
+    intro_text: sourceBarber.intro_text || sourceBarber.introText || "",
+    business_type: sourceBarber.business_type || sourceBarber.businessType || "Services",
     home_service_enabled: Number(
-      barber.home_service_enabled || barber.homeServiceEnabled || 0
+      sourceBarber.home_service_enabled || sourceBarber.homeServiceEnabled || 0
     ),
-    portfolio: getProviderPortfolio(barber),
-    stand_type: barber.stand_type || barber.standType || "individual",
-    team_members: Array.isArray(barber.team_members || barber.teamMembers)
-      ? barber.team_members || barber.teamMembers
+    portfolio: getProviderPortfolio(sourceBarber),
+    stand_type: sourceBarber.stand_type || sourceBarber.standType || "individual",
+    team_members: Array.isArray(sourceBarber.team_members || sourceBarber.teamMembers)
+      ? sourceBarber.team_members || sourceBarber.teamMembers
       : [],
-    isFavorite: !!barber.isFavorite,
-    subscription: barber.subscription || {},
+    isFavorite: !!sourceBarber.isFavorite,
+    subscription: sourceBarber.subscription || {},
     completedJobs: Number(
-      barber.completed_bookings || barber.jobs_completed || barber.completedJobs || 0
+      sourceBarber.completed_bookings || sourceBarber.jobs_completed || sourceBarber.completedJobs || 0
     ),
-    responseTime: barber.avg_response_time || barber.responseTime || "",
-    ontimeRate: Number(barber.ontime_rate || barber.ontimeRate || 0),
-    payment_methods: barber.payment_methods || barber.paymentMethods || [],
-    date_joined: barber.date_joined || barber.created_at || "",
-    accepts_mtn_mobile_money: barber.accepts_mtn_mobile_money || false,
-    social_links: barber.social_links || barber.socialLinks || {},
+    responseTime: sourceBarber.avg_response_time || sourceBarber.responseTime || "",
+    ontimeRate: Number(sourceBarber.ontime_rate || sourceBarber.ontimeRate || 0),
+    payment_methods: sourceBarber.payment_methods || sourceBarber.paymentMethods || [],
+    date_joined: sourceBarber.date_joined || sourceBarber.created_at || "",
+    accepts_mtn_mobile_money: sourceBarber.accepts_mtn_mobile_money || false,
+    social_links: sourceBarber.social_links || sourceBarber.socialLinks || {},
   };
+  const verificationState = getVerificationState(sourceBarber);
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "services", label: "Services" },
@@ -424,7 +470,7 @@ export default function BarberProfileSheet({
   ];
 
   const planTier = String(
-    safeBarber.subscription?.tier || barber.subscription_tier || ""
+    safeBarber.subscription?.tier || sourceBarber.subscription_tier || ""
   ).toUpperCase();
   const isPlatinum = planTier === "PLATINUM";
   const isPremium = planTier === "PREMIUM";
@@ -443,8 +489,10 @@ export default function BarberProfileSheet({
   })();
 
   const isOwnBarberProfile =
-    currentUser?.username &&
-    safeBarber.ownerUsername === currentUser.username;
+    safeBarber.isOwnedByCurrentUser === true ||
+    safeBarber.is_owned_by_current_user === true ||
+    Boolean(currentUser?.id && safeBarber.ownerUserId && Number(currentUser.id) === Number(safeBarber.ownerUserId)) ||
+    Boolean(currentUser?.username && safeBarber.ownerUsername && safeBarber.ownerUsername === currentUser.username);
 
   const canManageReviewBlocks = isOwnBarberProfile && isPlatinum;
   const blockUsage = {
@@ -468,6 +516,10 @@ export default function BarberProfileSheet({
     }))
     .filter((item) => item.src);
   const activeLightbox = lightboxIndex >= 0 ? portfolioLightboxItems[lightboxIndex] : null;
+  const selectedServiceIsQuote = selectedService
+    ? String(selectedService.pricing_type || selectedService.pricingType || "").toLowerCase() === "quote" ||
+      formatServicePrice(selectedService) === "Request quote"
+    : false;
   const selectedServiceImages = selectedService
     ? [selectedService.image, selectedService.image_url, selectedService.photo, selectedService.photo_url]
         .map((value) => buildAssetUrl(value || ""))
@@ -508,6 +560,37 @@ export default function BarberProfileSheet({
   ]
     .filter(Boolean)
     .join(", ") || "Cash";
+
+  useEffect(() => {
+    if (!selectedService && !activeLightbox) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSelectedService(null);
+        setLightboxIndex(-1);
+      }
+      if (activeLightbox && portfolioLightboxItems.length > 1 && event.key === "ArrowLeft") {
+        setLightboxIndex((index) => (index <= 0 ? portfolioLightboxItems.length - 1 : index - 1));
+      }
+      if (activeLightbox && portfolioLightboxItems.length > 1 && event.key === "ArrowRight") {
+        setLightboxIndex((index) => (index + 1) % portfolioLightboxItems.length);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.setTimeout(() => {
+      if (activeLightbox) closeLightboxButtonRef.current?.focus();
+      else closeServiceButtonRef.current?.focus();
+    }, 0);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeLightbox, portfolioLightboxItems.length, selectedService]);
 
   /* ── render ── */
   return (
@@ -552,14 +635,16 @@ export default function BarberProfileSheet({
                 <FiArrowLeft size={18} />
               </button>
               <div className="pps-hero-actions">
-                <button
-                  type="button"
-                  className={`pps-circle-btn${safeBarber.isFavorite ? " pps-fav-active" : ""}`}
-                  onClick={() => onToggleFavorite(safeBarber.id)}
-                  aria-label={safeBarber.isFavorite ? "Remove from favorites" : "Save to favorites"}
-                >
-                  <FiHeart size={17} />
-                </button>
+                {!isOwnBarberProfile && (
+                  <button
+                    type="button"
+                    className={`pps-circle-btn${safeBarber.isFavorite ? " pps-fav-active" : ""}`}
+                    onClick={() => onToggleFavorite(safeBarber.id)}
+                    aria-label={safeBarber.isFavorite ? "Remove from favorites" : "Save to favorites"}
+                  >
+                    <FiHeart size={17} />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="pps-circle-btn"
@@ -601,7 +686,7 @@ export default function BarberProfileSheet({
           <div className="pps-identity">
             {isOwnBarberProfile && (
               <span className="pps-owner-badge">
-                <FiCheckCircle size={12} /> Owner view
+                <FiCheckCircle size={12} /> Your stand
               </span>
             )}
             <h1 className="pps-name">{safeBarber.business_name}</h1>
@@ -631,7 +716,7 @@ export default function BarberProfileSheet({
               <>
                 <div className="pps-stat-sep" />
                 <div className="pps-stat">
-                  <FiPackage className="pps-stat-icon" size={15} />
+                  <FiBriefcase className="pps-stat-icon" size={15} />
                   <strong className="pps-stat-value">
                     {safeBarber.completedJobs}
                   </strong>
@@ -838,13 +923,22 @@ export default function BarberProfileSheet({
                       </strong>
                       <small className="pps-info-sub">Booking lead time: 1–24 hrs</small>
                     </div>
-                    {!isOwnBarberProfile && (
+                    {!isOwnBarberProfile && !currentUserIsBarber && (
                       <button
                         type="button"
                         className="pps-info-action-btn"
                         onClick={onBook}
                       >
                         Check availability
+                      </button>
+                    )}
+                    {isOwnBarberProfile && (
+                      <button
+                        type="button"
+                        className="pps-info-action-btn"
+                        onClick={onOpenDashboard}
+                      >
+                        Manage stand
                       </button>
                     )}
                   </div>
@@ -893,12 +987,8 @@ export default function BarberProfileSheet({
                     </div>
                     <div className="pps-info-body">
                       <span className="pps-info-label">Trust & Safety</span>
-                      <strong className="pps-info-val">
-                        ID verified · Background checked
-                      </strong>
-                      <small className="pps-info-sub">
-                        Committed to Queless's community standards
-                      </small>
+                      <strong className="pps-info-val">{verificationState.label}</strong>
+                      <small className="pps-info-sub">{verificationState.detail}</small>
                     </div>
                     <FiChevronRight size={16} className="pps-info-arrow" />
                   </div>
@@ -913,7 +1003,7 @@ export default function BarberProfileSheet({
                     <div className="pps-info-body">
                       <span className="pps-info-label">Payment</span>
                       <strong className="pps-info-val">{paymentLabel}</strong>
-                      <small className="pps-info-sub">Pay securely through Queless</small>
+                      <small className="pps-info-sub">Pay provider directly for now</small>
                     </div>
                     <FiChevronRight size={16} className="pps-info-arrow" />
                   </div>
@@ -1030,6 +1120,7 @@ export default function BarberProfileSheet({
                               src={imgSrc}
                               alt={item.title || "Portfolio"}
                               loading="lazy"
+                              decoding="async"
                               onError={(event) => {
                                 event.currentTarget.style.display = "none";
                               }}
@@ -1272,11 +1363,7 @@ export default function BarberProfileSheet({
                     <FiShield size={18} />
                     <strong>Trust & Safety</strong>
                   </div>
-                  <p className="pps-trust-full-body">
-                    ID verified, background checked, and committed to Queless
-                    community standards. Check the price, hours, and reviews before
-                    booking. Never share PINs or verification codes.
-                  </p>
+                  <p className="pps-trust-full-body">{verificationState.body}</p>
                   {!isOwnBarberProfile && (
                     <button
                       type="button"
@@ -1299,7 +1386,7 @@ export default function BarberProfileSheet({
       {selectedService ? (
         <div className="pps-dialog-shell" role="presentation" onClick={() => setSelectedService(null)}>
           <section className="pps-service-detail" role="dialog" aria-modal="true" aria-labelledby="pps-service-detail-title" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="pps-dialog-close" onClick={() => setSelectedService(null)} aria-label="Close service details">
+            <button ref={closeServiceButtonRef} type="button" className="pps-dialog-close" onClick={() => setSelectedService(null)} aria-label="Close service details">
               <FiX />
             </button>
             {selectedServiceImages[0] ? <img className="pps-service-detail-image" src={selectedServiceImages[0]} alt="" /> : null}
@@ -1329,9 +1416,17 @@ export default function BarberProfileSheet({
                   <span>Customer reviews will appear here after completed bookings.</span>
                 </div>
               )}
-              {!isOwnBarberProfile && !currentUserIsBarber ? (
+              {isOwnBarberProfile ? (
+                <button type="button" className="pps-btn-primary pps-service-book-btn" onClick={onEditStand}>
+                  <FiEdit2 /> Manage stand
+                </button>
+              ) : selectedServiceIsQuote ? (
+                <button type="button" className="pps-btn-primary pps-service-book-btn" onClick={() => { setSelectedService(null); onRequestQuote?.(selectedService); }}>
+                  <FiTag /> Request quote
+                </button>
+              ) : !currentUserIsBarber ? (
                 <button type="button" className="pps-btn-primary pps-service-book-btn" onClick={() => { setSelectedService(null); onBook?.(selectedService); }}>
-                  <FiCalendar /> Book Service
+                  <FiCalendar /> Book appointment
                 </button>
               ) : null}
             </div>
@@ -1340,11 +1435,11 @@ export default function BarberProfileSheet({
       ) : null}
 
       {activeLightbox ? (
-        <div className="pps-lightbox" role="dialog" aria-modal="true" aria-label="Portfolio image viewer">
-          <button type="button" className="pps-lightbox-close" onClick={() => setLightboxIndex(-1)} aria-label="Close image viewer"><FiX /></button>
-          <button type="button" className="pps-lightbox-nav prev" onClick={() => setLightboxIndex((index) => (index <= 0 ? portfolioLightboxItems.length - 1 : index - 1))} aria-label="Previous image"><FiChevronLeft /></button>
-          <img src={activeLightbox.src} alt={activeLightbox.title} />
-          <button type="button" className="pps-lightbox-nav next" onClick={() => setLightboxIndex((index) => (index + 1) % portfolioLightboxItems.length)} aria-label="Next image"><FiChevronRight /></button>
+        <div className="pps-lightbox" role="dialog" aria-modal="true" aria-label="Portfolio image viewer" onClick={() => setLightboxIndex(-1)}>
+          <button ref={closeLightboxButtonRef} type="button" className="pps-lightbox-close" onClick={() => setLightboxIndex(-1)} aria-label="Close image viewer"><FiX /></button>
+          <button type="button" className="pps-lightbox-nav prev" onClick={(event) => { event.stopPropagation(); setLightboxIndex((index) => (index <= 0 ? portfolioLightboxItems.length - 1 : index - 1)); }} aria-label="Previous image"><FiChevronLeft /></button>
+          <img src={activeLightbox.src} alt={activeLightbox.title} decoding="async" onClick={(event) => event.stopPropagation()} />
+          <button type="button" className="pps-lightbox-nav next" onClick={(event) => { event.stopPropagation(); setLightboxIndex((index) => (index + 1) % portfolioLightboxItems.length); }} aria-label="Next image"><FiChevronRight /></button>
           <div className="pps-lightbox-count">{lightboxIndex + 1} / {portfolioLightboxItems.length}</div>
         </div>
       ) : null}

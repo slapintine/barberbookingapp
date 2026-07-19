@@ -118,7 +118,7 @@ export function isProviderVerified(provider = {}) {
   return (
     isVerificationApproved(provider?.verified) ||
     isVerificationApproved(provider?.verified_status) ||
-    ["verified", "certified", "top rated", "top-rated"].includes(normalizeText(provider?.verified))
+    ["verified", "certified"].includes(normalizeText(provider?.verified))
   );
 }
 
@@ -155,9 +155,12 @@ export function getServiceCategory(service = {}) {
 
 export function getServicePrice(service = {}, provider = {}) {
   const base = Number(provider.price_from || 0);
-  if (base > 0 && String(service.pricing_type || "fixed") === "fixed") {
-    const total = base + getServiceBookingAmount(service);
-    return total > 0 ? `From UGX ${total.toLocaleString()}` : "Request quote";
+  const amount = getServiceBookingAmount(service);
+  if (amount > 0) {
+    return formatServicePrice(service);
+  }
+  if (base > 0 && String(service.pricing_type || "fixed") !== "quote") {
+    return `From UGX ${base.toLocaleString()}`;
   }
   return formatServicePrice(service);
 }

@@ -1,9 +1,8 @@
 import { useRef, useState } from "react";
-import { FiArrowDownLeft, FiArrowLeft, FiArrowUpRight, FiBriefcase, FiCamera, FiCheckCircle, FiCreditCard, FiEdit2, FiHeart, FiLogOut, FiMail, FiMapPin, FiMoon, FiShield, FiSmartphone, FiSun, FiUser, FiX } from "react-icons/fi";
+import { FiArrowDownLeft, FiArrowLeft, FiArrowUpRight, FiBriefcase, FiCamera, FiCheckCircle, FiCreditCard, FiEdit2, FiHeart, FiLogOut, FiMail, FiMapPin, FiMoon, FiSettings, FiShield, FiSmartphone, FiSun, FiUser, FiX } from "react-icons/fi";
 import { sendEmailVerification, sendPhoneOtp, verifyOtp } from "../api/authApi.js";
 import TopUpWalletModal from "../components/wallet/TopUpWalletModal.jsx";
 import UserAvatar from "../components/ui/UserAvatar.jsx";
-import PushNotificationSettings from "../features/notifications/PushNotificationSettings.jsx";
 import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
 import { formatPlanName, formatSubscriptionPrice, PROVIDER_PLANS } from "../utils/subscriptionPlans.js";
 import { formatCustomerPremiumPrice, isCustomerPremiumActive } from "../utils/customerPremium.js";
@@ -86,7 +85,7 @@ export default function ProfilePage({
   buildPhoneNumber,
   isValidPhoneNumber,
   fileToDataUrl,
-  onNotificationToast,
+  onOpenSettings,
 }) {
   const [editing, setEditing] = useState(false);
   const emailProfileKey = profile.email || "";
@@ -357,7 +356,7 @@ export default function ProfilePage({
   const subscriptionFeatures = subscriptionState?.features || {};
   const subscriptionPlans = PROVIDER_PLANS;
   const currentPlan = String(subscriptionState?.tier || "").toUpperCase();
-  const currentPlanLabel = formatPlanName(currentPlan, "No active plan");
+  const currentPlanLabel = formatPlanName(currentPlan, "Free Provider");
   const hasActivePlan = ["FREE", "PREMIUM", "PLATINUM"].includes(currentPlan);
   const pendingProviderTier = formatPlanName(pendingSubscriptionPayment?.tier, pendingSubscriptionPayment?.tier || "Selected plan");
   const businessStatus = String(myBarberProfile?.business_status || myBarberProfile?.active_status || "").toLowerCase();
@@ -649,7 +648,18 @@ export default function ProfilePage({
         </button>
       </div>
 
-      <PushNotificationSettings currentUser={currentUser} onToast={onNotificationToast} />
+      <div className="simple-card-v4 settings-card-v6">
+        <div className="settings-section-head-v6">
+          <FiSmartphone />
+          <div>
+            <strong>Phone notifications</strong>
+            <span>Manage booking alerts and phone notification access in Settings.</span>
+          </div>
+        </div>
+        <button type="button" className="secondary-btn-v4" onClick={onOpenSettings}>
+          <FiSettings /> Open Settings
+        </button>
+      </div>
 
       {!isProviderAccount ? (
         <div className="simple-card-v4">
@@ -1493,14 +1503,14 @@ export default function ProfilePage({
           </div>
         </div>
       )}
-      <button type="button" className="secondary-btn-v4 danger-outline profile-account-logout-v17" onClick={logout}>
+      <button type="button" className="secondary-btn-v4 danger-outline profile-account-logout-v17" onClick={() => logout()}>
         <FiLogOut /> Log out
       </button>
       </>
       ) : null}
 
       {activeProfileTab === "security" ? (
-      <button type="button" className="secondary-btn-v4" onClick={logout}>
+      <button type="button" className="secondary-btn-v4" onClick={() => logout()}>
         <FiLogOut /> Log out
       </button>
       ) : null}

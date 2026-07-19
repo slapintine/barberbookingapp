@@ -1,4 +1,4 @@
-import { FiAward, FiBell, FiCalendar, FiClock, FiEdit2, FiEye, FiMap, FiMapPin, FiScissors, FiShield, FiStar, FiTrendingUp, FiUpload, FiZap } from "react-icons/fi";
+import { FiAward, FiBell, FiCalendar, FiClock, FiEdit2, FiEye, FiMap, FiMapPin, FiRefreshCw, FiScissors, FiShield, FiStar, FiTrendingUp, FiUpload, FiZap } from "react-icons/fi";
 import { PAYMENTS_ENABLED } from "../utils/launchFlags.js";
 import { getPaymentMethodLabel, isOnlinePaymentMethod } from "../utils/paymentLabels.js";
 import { formatProviderPlanName } from "../utils/subscriptionPlans.js";
@@ -8,6 +8,8 @@ import ShareStandCard from "../components/share/ShareStandCard.jsx";
 
 export default function DashboardPage({
   barber,
+  providersLoading = false,
+  providersError = "",
   bookings,
   notifications,
   subscription,
@@ -19,6 +21,7 @@ export default function DashboardPage({
   currentUser,
   onOpenManageStand,
   onOpenReports,
+  onRetryProviders,
   onOpenAiCoach,
   onOpenUpgradePlan,
   onPublishStand,
@@ -31,6 +34,26 @@ export default function DashboardPage({
   formatTimeLabel,
 }) {
   if (!barber) {
+    if (providersLoading || providersError) {
+      return (
+        <div className="content-v4 app-page-v4">
+          <div className="simple-card-v4 empty-state-v7">
+            <FiRefreshCw />
+            <strong>{providersLoading ? "Loading your stand" : "We could not load your stand."}</strong>
+            <span>
+              {providersLoading
+                ? "We are checking your provider profile and bookings."
+                : "Refresh the page and try again. Your stand has not been removed."}
+            </span>
+            {!providersLoading && (
+              <button type="button" className="primary-btn-v4 compact-btn-v4" onClick={onRetryProviders}>
+                <FiRefreshCw /> Retry
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="content-v4 app-page-v4">
         <div className="simple-card-v4 empty-state-v7">
@@ -88,9 +111,9 @@ export default function DashboardPage({
     const dayDiff = diff / (24 * 60 * 60 * 1000);
     return dayDiff >= 0 && dayDiff < 7;
   }).length;
-  const currentPlan = String(subscription?.tier || barber.subscription?.tier || barber.subscription_tier || barber.selected_plan || "").toUpperCase();
+  const rawCurrentPlan = String(subscription?.tier || barber.subscription?.tier || barber.subscription_tier || barber.selected_plan || "").toUpperCase();
+  const currentPlan = ["FREE", "PREMIUM", "PLATINUM"].includes(rawCurrentPlan) ? rawCurrentPlan : "FREE";
   const currentPlanLabel = formatProviderPlanName(currentPlan, "Free Provider");
-  const hasValidPlan = ["FREE", "PREMIUM", "PLATINUM"].includes(currentPlan);
   const subscriptionStatus = String(subscription?.status || barber.subscription?.status || barber.subscription_status || "").toLowerCase();
   const publishedValue = barber.is_published ?? barber.isPublished ?? barber.published;
   const isPublished = [true, 1, "1", "true", "yes"].includes(publishedValue);
@@ -197,20 +220,15 @@ export default function DashboardPage({
                 <FiEdit2 /> Complete Stand
               </button>
             )}
-            {!hasValidPlan && (
-              <button type="button" className="secondary-btn-v4" onClick={() => onOpenUpgradePlan?.("FREE")}>
-                Choose Plan
-              </button>
-            )}
           </div>
         </div>
 
         <div className="simple-card-v4 dashboard-plan-card-v9">
           <div>
             <div className="panel-title-v4">Plan & features</div>
-            <div className="profile-sub-v4">{hasValidPlan ? currentPlanLabel : "No plan selected yet"}</div>
+            <div className="profile-sub-v4">{currentPlanLabel}</div>
           </div>
-          <span className="booking-badge-v4 status-pending">{hasValidPlan ? currentPlan : "No plan"}</span>
+          <span className="booking-badge-v4 status-pending">{currentPlan}</span>
         </div>
 
       </div>
@@ -235,15 +253,7 @@ export default function DashboardPage({
           </div>
           <div className="profile-sub-v4"><FiMapPin /> {barber.location}</div>
           <div className="profile-sub-v4"><FiClock /> {barber.availability?.start} - {barber.availability?.end}</div>
-          {hasValidPlan ? (
-            <div className="profile-sub-v4">{currentPlanLabel} plan - {planVisibilityLabel}</div>
-          ) : (
-            <div className="plan-warning-card">
-              <h3>No plan selected</h3>
-              <p>Choose a provider plan to unlock visibility features.</p>
-              <button type="button" className="mini-action-btn-v4 success" onClick={() => onOpenUpgradePlan?.("FREE")}>Choose Plan</button>
-            </div>
-          )}
+          <div className="profile-sub-v4">{currentPlanLabel} plan - {planVisibilityLabel}</div>
           {!isVerified && (
             <div className="profile-sub-v4" style={{ marginTop: 4 }}>
               Not verified yet. Customers can still book your published stand; verification only adds the verified badge.
@@ -302,7 +312,7 @@ export default function DashboardPage({
             {thisWeekCount} bookings this week - {completedPayments.length} completed payments
           </div>
         </div>
-        <span className="booking-badge-v4 status-confirmed">{hasValidPlan ? currentPlan : "No plan"}</span>
+        <span className="booking-badge-v4 status-confirmed">{currentPlan}</span>
       </div>
 
       <div className={`dashboard-plan-experience-v15 ${isPlatinum ? "platinum" : isPremium ? "premium" : "free"}`}>

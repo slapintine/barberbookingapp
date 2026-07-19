@@ -1011,3 +1011,228 @@ body[data-theme="dark"] .app-wrap-v4.dark .queless-map-message small {
 .dark .provider-coach-topic-toggle > svg {
   color: var(--brand);
 }
+
+/* Final contrast pass for dark mode.
+   Several feature files still hardcode light-theme purple, pink, and beige
+   text. Keep the fix token-based and scoped to app surfaces instead of
+   globally recoloring every icon or brand asset. */
+html[data-theme="dark"],
+body[data-theme="dark"],
+.app-wrap-v4.dark {
+  --background: #121017;
+  --surface: #1d1824;
+  --surface-soft: #272130;
+  --surface-elevated: #31283b;
+  --text-primary: #fffaf5;
+  --text-secondary: #e2d8e5;
+  --text-muted: #bfaec5;
+  --border: rgba(255, 250, 245, 0.16);
+  --border-strong: rgba(255, 250, 245, 0.28);
+  --brand: #d7bdff;
+  --brand-strong: #eee3ff;
+  --brand-soft: rgba(215, 189, 255, 0.16);
+  --accent: #ff9ac2;
+  --input-bg: rgba(255, 250, 245, 0.09);
+  --queless-card-bg: linear-gradient(180deg, #211b29, #19141f);
+  --queless-card-soft-bg: linear-gradient(180deg, #2a2333, #211b29);
+  --queless-control-bg: rgba(255, 250, 245, 0.08);
+  --queless-control-hover-bg: rgba(255, 250, 245, 0.13);
+  --icon-primary: var(--text-primary);
+  --icon-secondary: var(--text-secondary);
+  --icon-navigation: var(--text-secondary);
+  --icon-muted: var(--text-muted);
+  --icon-disabled: rgba(255, 250, 245, 0.46);
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark :is(
+  .lineup-auth-card,
+  .auth-card-v4,
+  .search-panel-v4,
+  .simple-card-v4,
+  .top-barber-card-v4,
+  .barber-card-v4,
+  .booking-modal-card-v4,
+  .barber-profile-card-v4,
+  .notification-card-v4,
+  .chat-card-v4,
+  .dashboard-card-v15,
+  .reports-card-v11,
+  .settings-section-v6,
+  .profile-section-v6,
+  .trial-plan-card-v12,
+  .trial-action-panel-v12,
+  .trial-comparison-v13,
+  .trial-payment-panel-v13,
+  .queless-category-card,
+  .queless-featured-provider,
+  .queless-nearby-card,
+  .queless-provider-card,
+  .queless-service-card,
+  .queless-result-card,
+  .queless-empty-state,
+  .pps-service-detail,
+  .pps-lightbox-panel,
+  .notif-card
+) {
+  background: var(--queless-card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark :is(
+  h1, h2, h3, h4,
+  .lineup-auth-title,
+  .auth-title-v4,
+  .panel-title-v4,
+  .profile-section-title-v4,
+  .notif-page-title,
+  .notif-card-title,
+  .queless-view-toolbar h1,
+  .queless-section-head h2,
+  .settings-section-head-v6 strong,
+  .trial-plan-card-v12 strong,
+  .dashboard-card-v15 strong
+) {
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark :is(
+  p, small, label,
+  .lineup-auth-subtitle,
+  .lineup-auth-label,
+  .auth-sub-v4,
+  .profile-sub-v4,
+  .stat-label-v4,
+  .notif-card-preview,
+  .notif-empty p,
+  .queless-view-toolbar p,
+  .queless-section-head p,
+  .settings-section-head-v6 span,
+  .trial-plan-card-v12 small,
+  .dashboard-card-v15 p
+):not(:is([class*="error"], [class*="danger"], [class*="success"], [class*="warning"])) {
+  color: var(--text-secondary) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark :is(
+  input,
+  textarea,
+  select,
+  .field-input-v4,
+  .search-input-v4,
+  .profile-input-v4,
+  .country-code-select-v4,
+  .textarea-v4,
+  .lineup-auth-input
+) {
+  background: var(--input-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  caret-color: var(--text-primary);
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark :is(input, textarea, .lineup-auth-input)::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark :is(
+  .header-icon-btn,
+  .profile-back-btn-v4,
+  .mini-action-btn-v4,
+  .secondary-btn-v4,
+  .notif-back-btn,
+  .notif-mark-all-btn,
+  .notification-toast-close-v5,
+  .lineup-auth-password-toggle,
+  .queless-theme-icon-btn,
+  .pps-lightbox-close,
+  .pps-service-detail-close
+) {
+  background: var(--queless-control-bg) !important;
+  color: var(--icon-primary) !important;
+  border-color: var(--border) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark :is(
+  .header-icon-btn,
+  .profile-back-btn-v4,
+  .mini-action-btn-v4,
+  .secondary-btn-v4,
+  .notif-back-btn,
+  .notif-mark-all-btn,
+  .notification-toast-close-v5,
+  .lineup-auth-password-toggle,
+  .queless-theme-icon-btn,
+  .pps-lightbox-close,
+  .pps-service-detail-close
+):hover {
+  background: var(--queless-control-hover-bg) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark :is(
+  .header-icon-btn,
+  .profile-back-btn-v4,
+  .mini-action-btn-v4,
+  .secondary-btn-v4,
+  .notif-back-btn,
+  .notif-mark-all-btn,
+  .notification-toast-close-v5,
+  .lineup-auth-password-toggle,
+  .queless-theme-icon-btn,
+  .pps-lightbox-close,
+  .pps-service-detail-close,
+  .bottom-nav-v4 .nav-v4,
+  .notif-icon-tile,
+  .notif-chevron
+) svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .bottom-nav-v4.queless-bottom-nav {
+  background: rgba(29, 24, 36, 0.94) !important;
+  border-color: var(--border) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .bottom-nav-v4.queless-bottom-nav .nav-v4 {
+  color: var(--text-secondary) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .bottom-nav-v4.queless-bottom-nav .nav-v4.active {
+  color: var(--text-primary) !important;
+  background: rgba(215, 189, 255, 0.16) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .notif-screen,
+body[data-theme="dark"] .app-wrap-v4.dark .notif-header {
+  background: var(--background) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .notif-icon-tile {
+  background: var(--brand-soft) !important;
+  color: var(--brand-strong) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .notif-card-time,
+body[data-theme="dark"] .app-wrap-v4.dark .notif-chevron,
+body[data-theme="dark"] .app-wrap-v4.dark .notif-empty p {
+  color: var(--text-muted) !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark .notif-mark-all-btn:disabled,
+body[data-theme="dark"] .app-wrap-v4.dark button:disabled {
+  color: var(--disabled-text) !important;
+  background: var(--disabled-bg) !important;
+  opacity: 1 !important;
+}
+
+body[data-theme="dark"] .app-wrap-v4.dark input:-webkit-autofill,
+body[data-theme="dark"] .app-wrap-v4.dark textarea:-webkit-autofill,
+body[data-theme="dark"] .app-wrap-v4.dark select:-webkit-autofill {
+  -webkit-text-fill-color: var(--text-primary) !important;
+  box-shadow: 0 0 0 1000px #272130 inset !important;
+  border-color: var(--border) !important;
+}

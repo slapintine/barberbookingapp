@@ -61,12 +61,12 @@ export function buildInitialsAvatar(seed = "", initials = "") {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-/** Neutral grey placeholder (storefront glyph) — used when there is no name either. */
+/** Neutral grey service placeholder used when there is no name either. */
 export const NEUTRAL_PLACEHOLDER = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
     <rect width="160" height="160" rx="24" fill="#F1F5F9"/>
     <g fill="none" stroke="#94A3B8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M48 70h64v46H48z"/><path d="M44 70l8-22h56l8 22"/><path d="M70 116V90h20v26"/>
+      <circle cx="80" cy="80" r="30"/><path d="M80 50v60"/><path d="M50 80h60"/>
     </g>
   </svg>`
 )}`;

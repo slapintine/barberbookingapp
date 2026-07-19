@@ -9,8 +9,14 @@ import { FiCheckCircle, FiClock, FiAlertCircle } from "react-icons/fi";
  */
 export default function VerificationBadge({ barber, size = "sm", className = "" }) {
   const reviewStatus = String(barber?.review_status || "").toLowerCase();
-  const isVerified = Boolean(barber?.is_verified) || reviewStatus === "verified";
-  const isPending = ["pending_review", "pending"].includes(reviewStatus) && !isVerified;
+  const verificationStatus = String(barber?.verified_status || barber?.verification_status || barber?.verified || "").toLowerCase();
+  const isVerified =
+    Boolean(barber?.is_verified) ||
+    reviewStatus === "verified" ||
+    ["approved", "verified", "complete", "completed"].includes(verificationStatus);
+  const isPending =
+    ["pending_review", "pending"].includes(reviewStatus) ||
+    ["pending", "pending verification", "under review", "submitted"].some((value) => verificationStatus.includes(value));
   const changesRequested = reviewStatus === "changes_requested";
 
   if (isVerified) {
@@ -29,7 +35,15 @@ export default function VerificationBadge({ barber, size = "sm", className = "" 
     );
   }
 
-  // pending_review or anything else = unverified label
+  if (isPending && !isVerified) {
+    return (
+      <span className={`verification-badge-v1 pending ${size} ${className}`}>
+        <FiClock /> Under review
+      </span>
+    );
+  }
+
+  // Anything else = unverified label.
   return (
     <span className={`verification-badge-v1 unverified ${size} ${className}`}>
       <FiClock /> Unverified

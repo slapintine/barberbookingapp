@@ -1,11 +1,9 @@
-const env = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
-
-function flagEnabled(name) {
-  return String(env[name] || "").trim().toLowerCase() === "true";
+function flagEnabled(value) {
+  return String(value || "").trim().toLowerCase() === "true";
 }
 
-export const PAYMENTS_ENABLED = flagEnabled("VITE_ENABLE_PAYMENTS");
-export const SMS_ENABLED = flagEnabled("VITE_ENABLE_SMS");
+export const PAYMENTS_ENABLED = flagEnabled(import.meta.env.VITE_ENABLE_PAYMENTS);
+export const SMS_ENABLED = flagEnabled(import.meta.env.VITE_ENABLE_SMS);
 
 export const PAYMENTS_COMING_SOON = !PAYMENTS_ENABLED;
 export const SMS_COMING_SOON = !SMS_ENABLED;

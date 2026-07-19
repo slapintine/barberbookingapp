@@ -2564,10 +2564,10 @@
 }
 
 /* =========================================================
-   OWNER VIEW — BarberProfileSheet owner-mode styles
+   YOUR STAND — BarberProfileSheet owner-mode styles
    ========================================================= */
 
-/* Topbar "Owner view" badge */
+/* Topbar "Your stand" badge */
 .owner-view-badge {
   display: inline-flex;
   align-items: center;

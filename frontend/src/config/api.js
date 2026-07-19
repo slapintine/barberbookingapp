@@ -65,9 +65,17 @@ export function buildPublicUrl(path = "") {
 // ASSET_ORIGIN so they resolve to queless.org even inside the Android WebView,
 // whose page origin is https://localhost. Returns "" for empty input.
 export function buildAssetUrl(reference) {
-  const value = String(reference || "").trim();
+  let value = String(reference || "").trim().replace(/\\/g, "/");
   if (!value) return "";
   if (/^(data:|blob:|https?:\/\/)/i.test(value)) return value;
+  if (/^\/?api\/uploads\//i.test(value)) {
+    value = value.startsWith("/") ? value : `/${value}`;
+    return ASSET_ORIGIN ? `${ASSET_ORIGIN}${value}` : value;
+  }
+  if (/^\/?uploads\//i.test(value)) {
+    value = value.replace(/^\/?uploads\//i, "/api/uploads/");
+    return ASSET_ORIGIN ? `${ASSET_ORIGIN}${value}` : value;
+  }
   if (value.startsWith("/")) return ASSET_ORIGIN ? `${ASSET_ORIGIN}${value}` : value;
   return value;
 }

@@ -3,7 +3,6 @@ import { FiAlertTriangle } from "react-icons/fi";
 import { io } from "socket.io-client";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
-import logo from "./assets/queless-logo-icon.png";
 import { resolveProviderImage, NEUTRAL_PLACEHOLDER } from "./utils/providerImage.js";
 import { sanitizeErrorMessage } from "./utils/errorMessages.js";
 import { confirmPasswordReset, getMe, loginUser, logoutUser, registerUser, requestPasswordReset, updateAccount } from "./api/authApi.js";
@@ -19,7 +18,7 @@ import {
 import { createMessage, getMessages } from "./api/chatApi.js";
 import { createQuoteRequest, getMyQuoteRequests } from "./api/quoteRequestsApi.js";
 import { addFavorite, getFavorites as getFavoriteRows, removeFavorite } from "./api/favoritesApi.js";
-import { getNotifications, markNotificationReadRequest } from "./api/notificationsApi.js";
+import { getNotifications, markAllNotificationsReadRequest, markNotificationReadRequest } from "./api/notificationsApi.js";
 import { getProfile, saveProfileRequest } from "./api/profilesApi.js";
 import { createReview, deleteReview, getBarberReviews, getManagedBarberReviews, getMyReviews, setReviewPublicBlock, updateReview } from "./api/reviewsApi.js";
 import { getGeolocationErrorMessage, reverseGeocodeCoordinates } from "./utils/locationUtils.js";
@@ -44,7 +43,7 @@ import OverlayErrorBoundary from "./components/OverlayErrorBoundary.jsx";
 import PageErrorBoundary from "./components/PageErrorBoundary.jsx";
 import { NotificationSheet, NotificationToast } from "./features/notifications/Notifications.jsx";
 import { apiFetch, getAuthToken, getRefreshToken, SOCKET_URL } from "./config/api.js";
-import { listenForForegroundNotifications } from "./pushNotifications.js";
+import { disableFirebaseNotifications, listenForForegroundNotifications } from "./pushNotifications.js";
 import { getMtnReadiness, getMtnUnavailableMessage } from "./utils/paymentReadiness.js";
 import useAutoScrollToBottom from "./hooks/useAutoScrollToBottom.js";
 import useAvailableTimeSlots from "./hooks/useAvailableTimeSlots.js";
@@ -66,6 +65,7 @@ import {
 } from "./utils/profileUtils.js";
 import { appendStored, readStored, writeStored } from "./utils/storage.js";
 import { normalizeAppBasePath } from "./utils/appBasePath.js";
+import { createPendingBookingIntent, resolvePendingBookingIntent } from "./utils/bookingReturn.js";
 import {
   DEFAULT_SERVICE_TYPES,
   getAvailableServices,
@@ -251,39 +251,39 @@ const DEFAULT_WALLET_STATE = {
 };
 
 const DEFAULT_SUBSCRIPTION_STATE = {
-  tier: "LOCKED",
-  name: "No active plan",
+  tier: "FREE",
+  name: "Free",
   price: 0,
-  status: "none",
+  status: "free",
   is_trial: false,
   trial_days_total: 30,
   trial_days_left: 0,
   fallback_tier_after_trial: null,
   expires_at: null,
   features: {
-    rankingWeight: 0,
-    analyticsLevel: "none",
+    rankingWeight: 1,
+    analyticsLevel: "basic",
     homepageFeatured: false,
-    searchPriority: 0,
+    searchPriority: 1,
     topBarberBadge: false,
     verifiedBadge: false,
     adsPlacement: false,
     promotionsEnabled: false,
     marketingPushEnabled: false,
     homeServiceEnabled: false,
-    profileCustomizationLevel: "basic",
-    visibilityLabel: "Low visibility",
-    supportLevel: "self-serve",
-    serviceLimit: 0,
-    photoLimit: 0,
-    imageUploadLimitMb: 0,
+    profileCustomizationLevel: "enhanced",
+    visibilityLabel: "Basic visibility",
+    supportLevel: "Normal support",
+    serviceLimit: 5,
+    photoLimit: 8,
+    imageUploadLimitMb: 80,
     videoLimit: 0,
-    reviewsEnabled: false,
+    reviewsEnabled: true,
     earningsTracking: false,
     bookingAnalytics: false,
     customBrandingHighlight: false,
-    portfolioEnabled: false,
-    beforeAfterGalleryEnabled: false,
+    portfolioEnabled: true,
+    beforeAfterGalleryEnabled: true,
     advancedAnalytics: false,
     aiBusinessCoach: false,
     reviewInsights: false,
@@ -349,6 +349,7 @@ const BOOKING_REFRESH_MIN_INTERVAL_MS = 60 * 1000;
 const BOOKING_REFRESH_FALLBACK_INTERVAL_MS = 2 * 60 * 1000;
 const BOOKING_REFRESH_RATE_LIMIT_FALLBACK_MS = 5 * 60 * 1000;
 const BOOKING_REFRESH_MAX_BACKOFF_MS = 15 * 60 * 1000;
+const PENDING_BOOKING_STORAGE_KEY = "queless.pendingBookingIntent.v1";
 const BOOKING_ONLINE_PAYMENTS_ENABLED =
   PAYMENTS_ENABLED && String(import.meta.env.VITE_BOOKING_ONLINE_PAYMENTS_ENABLED || "").toLowerCase() === "true";
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin", "super-admin"]);
@@ -387,6 +388,30 @@ function userIsProvider(user = {}) {
 
 function getScreenFromPath(pathname, hasToken) {
   const normalized = stripAppBasePath(pathname);
+  const isPublicBrowsePath =
+    normalized === APP_PATH ||
+    normalized === HOME_PATH ||
+    normalized === CATEGORIES_PATH ||
+    normalized === SERVICES_PATH ||
+    normalized === MAP_PATH ||
+    normalized === HELP_PATH ||
+    normalized === POLICIES_PATH ||
+    normalized === SUPPORT_PATH;
+  const isPrivateAppPath =
+    normalized === ADMIN_PATH ||
+    normalized === ADMIN_SMS_PATH ||
+    normalized === LEGACY_ADMIN_PATH ||
+    normalized === UPGRADE_PATH ||
+    normalized === LEGACY_UPGRADE_PATH ||
+    normalized === SMART_MATCH_PATH ||
+    normalized === BOOKINGS_PATH ||
+    normalized === INBOX_PATH ||
+    normalized === DASHBOARD_PATH ||
+    normalized === REPORTS_PATH ||
+    normalized === AI_COACH_PATH ||
+    normalized === PROFILE_PATH ||
+    normalized === BOOKING_CONFIRMATION_PATH ||
+    normalized.startsWith(`${BOOKING_CONFIRMATION_PATH}/`);
   if (
     normalized === LOGIN_PATH ||
     normalized === SIGNUP_PATH ||
@@ -395,14 +420,10 @@ function getScreenFromPath(pathname, hasToken) {
   ) {
     return hasToken ? "app" : "login";
   }
-  if (
-    normalized === "/" ||
-    normalized === ADMIN_PATH ||
-    normalized === ADMIN_SMS_PATH ||
-    normalized === LEGACY_ADMIN_PATH ||
-    normalized === UPGRADE_PATH ||
-    normalized === LEGACY_UPGRADE_PATH
-  ) {
+  if (isPublicBrowsePath) {
+    return "app";
+  }
+  if (isPrivateAppPath) {
     return hasToken ? "app" : "login";
   }
   return hasToken ? "app" : "login";
@@ -641,6 +662,21 @@ function safeJsonParse(value, fallback) {
   }
 }
 
+function readPendingBookingIntent() {
+  if (typeof sessionStorage === "undefined") return null;
+  return safeJsonParse(sessionStorage.getItem(PENDING_BOOKING_STORAGE_KEY), null);
+}
+
+function writePendingBookingIntent(intent) {
+  if (!intent || typeof sessionStorage === "undefined") return;
+  sessionStorage.setItem(PENDING_BOOKING_STORAGE_KEY, JSON.stringify(intent));
+}
+
+function clearPendingBookingIntent() {
+  if (typeof sessionStorage === "undefined") return;
+  sessionStorage.removeItem(PENDING_BOOKING_STORAGE_KEY);
+}
+
 function getBarberServices(barber) {
   if (!barber?.services?.length) {
     return [];
@@ -733,7 +769,7 @@ function mapServerBooking(item) {
 function mapServerNotification(item) {
   return {
     id: item.id,
-    user: item.user || item.username || "",
+    user: item.user || item.username || item.userId || item.user_id || "",
     title: item.title || "Notification",
     type: item.type || "system",
     message: item.message || "",
@@ -741,9 +777,12 @@ function mapServerNotification(item) {
     read: Boolean(item.read),
     createdAt: item.created_at || item.createdAt || new Date().toISOString(),
     barberId: item.barber_id || item.barberId || "",
+    bookingId: item.booking_id || item.bookingId || "",
+    route: item.route || "",
     barberName: item.barber_name || item.barberName || "",
     barberOwnerUsername: item.barber_owner_username || item.barberOwnerUsername || item.barber_username || item.barberUsername || "",
     customerUsername: item.customer_username || item.customerUsername || "",
+    customerUserId: item.customer_user_id || item.customerUserId || "",
     customerName: item.customer_name || item.customerName || "",
     targetName: item.target_name || item.targetName || "",
   };
@@ -890,6 +929,12 @@ function getBookingCreationErrorMessage(error) {
     return "We couldn't submit the extra booking details. Please review them and try again.";
   }
   return message;
+}
+
+function isOwnedStand(stand = {}, user = {}) {
+  if (stand?.isOwnedByCurrentUser === true || stand?.is_owned_by_current_user === true) return true;
+  return Boolean(user?.id && (stand?.owner_user_id || stand?.ownerUserId || stand?.userId || stand?.user_id)) &&
+    Number(user.id) === Number(stand.owner_user_id || stand.ownerUserId || stand.userId || stand.user_id);
 }
 
 function readAuthUser() {
@@ -1039,7 +1084,7 @@ function App() {
 
   const [profile, setProfile] = useState(DEFAULT_USER_PROFILE);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [barbers, setBarbers] = useState([]);
+  const [barbers, setBarbers] = useState(() => getStoredBarbers());
   const [barbersLoading, setBarbersLoading] = useState(false);
   const [barbersError, setBarbersError] = useState("");
   const [favorites, setFavorites] = useState([]);
@@ -1139,7 +1184,7 @@ function App() {
   }, [currentUser?.username]);
 
   useEffect(() => {
-    if (String(subscriptionState?.tier || "").toUpperCase() !== "LOCKED" && subscriptionState?.status !== "trial_expired") {
+    if (subscriptionState?.status !== "trial_expired") {
       setTrialUpgradeDismissed(false);
     }
   }, [subscriptionState?.tier, subscriptionState?.status]);
@@ -1227,6 +1272,7 @@ function App() {
   const [bookingAddress, setBookingAddress] = useState("");
   const [bookingLocationDetecting, setBookingLocationDetecting] = useState(false);
   const [pendingBookingPayment, setPendingBookingPayment] = useState(null);
+  const [quoteInitialServiceId, setQuoteInitialServiceId] = useState("");
   const [creatingBooking, setCreatingBooking] = useState(false);
   const [typingState, setTypingState] = useState({ active: false, name: "" });
   const [reviewSuccess, setReviewSuccess] = useState("");
@@ -1244,12 +1290,14 @@ function App() {
   const typingTimeoutRef = useRef(null);
   const chatThreadRef = useRef(null);
   const notificationAudioRef = useRef(null);
+  const pendingBookingRestoreRef = useRef(false);
   const bookingFetchInFlightRef = useRef(null);
   const bookingRefreshStateRef = useRef({
     lastFetchedAt: 0,
     retryBlockedUntil: 0,
     consecutiveFailures: 0,
   });
+  const providerDashboardRecoveryRef = useRef({ key: "", attempts: 0 });
 
   const dateOptions = useMemo(() => generateDates(), []);
   const timeOptions = useMemo(() => generateTimeSlots(), []);
@@ -1477,6 +1525,30 @@ function App() {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [currentUser?.role, token]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.body?.dataset) return undefined;
+    if (mapState.show) {
+      document.body.dataset.quelessMapOpen = "true";
+    } else {
+      delete document.body.dataset.quelessMapOpen;
+    }
+
+    const handleNativeBack = () => {
+      if (!mapState.show) return;
+      setMapState((prev) => ({ ...prev, show: false }));
+      const returnTab = mapState.returnView && mapState.returnView !== "map" ? mapState.returnView : "home";
+      setActiveTab(returnTab);
+    };
+
+    window.addEventListener("queless:native-back", handleNativeBack);
+    return () => {
+      if (document.body?.dataset?.quelessMapOpen === "true") {
+        delete document.body.dataset.quelessMapOpen;
+      }
+      window.removeEventListener("queless:native-back", handleNativeBack);
+    };
+  }, [mapState.returnView, mapState.show]);
 
   useEffect(() => {
     if (screen !== "app") return;
@@ -2096,17 +2168,20 @@ const fetchBarbers = async () => {
     setGlobalError("");
 
     const canLoadMine = Boolean(currentUser?.username && getAuthToken() && sessionChecked);
-    const [res, mineResult] = await Promise.all([
-      getBarbers(),
-      canLoadMine ? getMyBarberStand().catch(() => null) : Promise.resolve(null),
+    const [providersResult, mineResult] = await Promise.allSettled([
+      getBarbers({ limit: 50, page: 1 }),
+      canLoadMine ? getMyBarberStand() : Promise.resolve(null),
     ]);
+
+    const res = providersResult.status === "fulfilled" ? providersResult.value : null;
+    const mineData = mineResult.status === "fulfilled" ? mineResult.value : null;
 
     const incoming = Array.isArray(res?.barbers)
       ? res.barbers.map(normalizeBarber)
       : Array.isArray(res)
       ? res.map(normalizeBarber)
       : [];
-    const mine = mineResult?.barber ? [normalizeBarber(mineResult.barber, incoming.length)] : [];
+    const mine = mineData?.barber ? [normalizeBarber(mineData.barber, incoming.length)] : [];
 
     const localBarbers = getStoredBarbers().filter(isPublicProvider);
     const mergedIncoming = [...mine, ...incoming];
@@ -2114,11 +2189,15 @@ const fetchBarbers = async () => {
       ? mergeBarberListsPreservingLocal(mergedIncoming, localBarbers)
       : [];
 
-    setBarbers(next);
-    saveStoredBarbers(next.filter(isPublicProvider));
+    if (next.length) {
+      setBarbers(next);
+      saveStoredBarbers(next.filter(isPublicProvider));
+    }
+    if (providersResult.status === "rejected" && !mine.length) {
+      throw providersResult.reason || new Error("Provider discovery failed.");
+    }
   } catch {
-    setBarbers([]);
-    saveStoredBarbers([]);
+    setBarbers((current) => (current.length ? current : getStoredBarbers()));
     setGlobalError("");
     setBarbersError("We could not load providers.");
   } finally {
@@ -2373,9 +2452,7 @@ const fetchBarbers = async () => {
           }
         : {
             ...DEFAULT_SUBSCRIPTION_STATE,
-            tier: "LOCKED",
-            name: "No active plan",
-            status: "pending_payment",
+            status: "free",
           });
       if (!isAdmin) {
         setSubscriptionMessage(error?.status === 403 ? "We could not load your subscription details. Please refresh or contact support." : "");
@@ -2521,11 +2598,7 @@ const fetchBarbers = async () => {
     persistNotificationUpdate(nextList);
 
     try {
-      await Promise.all(
-        unread.map((item) =>
-          markNotificationReadRequest(item.id)
-        )
-      );
+      await markAllNotificationsReadRequest();
     } catch {
       // keep local read state
     }
@@ -2535,9 +2608,10 @@ const fetchBarbers = async () => {
     if (!barber?.id || !customerUsername) return;
 
     const isSelfMessage =
-      currentUser?.username &&
-      barber.ownerUsername === currentUser.username &&
-      customerUsername === currentUser.username;
+      isOwnedStand(barber, currentUser) ||
+      (currentUser?.username &&
+        barber.ownerUsername === currentUser.username &&
+        customerUsername === currentUser.username);
 
     setSelectedBarber(barber);
     setChatCustomerUsername(customerUsername);
@@ -2826,7 +2900,7 @@ const fetchBarbers = async () => {
       }
 
       setAccountMessage(data?.message || "Account updated.");
-      showSystemToast("Settings saved", "Your account settings were updated.", "system");
+      showSystemToast("Changes saved", "Your account settings are up to date.", "system");
       return true;
     } catch (error) {
       setAccountMessage(error.message || "Could not update account.");
@@ -2942,6 +3016,11 @@ const fetchBarbers = async () => {
   const toggleFavorite = async (barberId) => {
     if (!currentUser?.username) return;
     const id = Number(barberId);
+    const targetStand = barbers.find((item) => Number(item.id) === id) || selectedBarber;
+    if (targetStand && Number(targetStand.id) === id && isOwnedStand(targetStand, currentUser)) {
+      setGlobalError("This is your stand. Open your dashboard to manage it.");
+      return;
+    }
     const isFav = favorites.includes(id);
 
     try {
@@ -3286,6 +3365,12 @@ const registerBarber = async (payload) => {
 
   const createBooking = async (options = {}) => {
     if (!selectedBarber || !currentUser?.username || !selectedDate || !selectedTime || creatingBooking) return;
+    if (isOwnedStand(selectedBarber, currentUser)) {
+      setGlobalError("This is your stand. Open your dashboard to manage bookings.");
+      setShowBookingModal(false);
+      setActiveTab("dashboard");
+      return;
+    }
     if (effectiveIsBarber) {
       setGlobalError("Business accounts cannot place bookings.");
       return;
@@ -3398,10 +3483,10 @@ const registerBarber = async (payload) => {
 
       vibrate([12, 30, 12]);
       showSystemToast(
-        PAYMENTS_ENABLED && data?.payment?.reference ? "Payment started" : "Booking confirmed",
+        PAYMENTS_ENABLED && data?.payment?.reference ? "Payment started" : "Booking sent",
         PAYMENTS_ENABLED && data?.payment?.reference
           ? "Approve the mobile money prompt to secure your booking."
-          : "Your booking was created successfully. Payment can be handled directly with the provider for now.",
+          : "The provider will review your request.",
         "booking"
       );
       if (!PAYMENTS_ENABLED || !data?.payment?.reference) {
@@ -3452,7 +3537,21 @@ const registerBarber = async (payload) => {
 
       notifyBookingUpdate(updatedBooking);
       vibrate([10, 20, 10]);
-      showSystemToast("Booking updated", `Status changed to ${status}.`, "booking");
+      const statusToastCopy = {
+        confirmed: ["Booking confirmed", "You're all set."],
+        completed: ["Booking completed", "This appointment is now marked done."],
+        cancelled: ["Booking cancelled", "This booking is no longer active."],
+        canceled: ["Booking cancelled", "This booking is no longer active."],
+        declined: ["Booking not accepted", "The customer can choose another time."],
+        rejected: ["Booking not accepted", "The customer can choose another time."],
+        rescheduled: ["Booking updated", "Your new time has been saved."],
+      };
+      const [toastTitle, toastMessage] =
+        statusToastCopy[String(status || "").toLowerCase()] || [
+          "Booking updated",
+          "The booking details are up to date.",
+        ];
+      showSystemToast(toastTitle, toastMessage, "booking");
       fetchNotifications();
     } catch (error) {
       setGlobalError(error.message || "Could not update booking.");
@@ -3488,7 +3587,7 @@ const registerBarber = async (payload) => {
         setFocusedBookingId(String(updatedBooking.id || bookingId));
         setActiveTab("bookingConfirmation");
       }
-      showSystemToast("Booking confirmed", data?.message || "Payment confirmed and booking secured.", "booking");
+      showSystemToast("Booking confirmed", data?.message || "You're all set.", "booking");
       if (updatedBooking) notifyBookingUpdate(updatedBooking);
       fetchNotifications();
       return true;
@@ -3839,7 +3938,7 @@ const registerBarber = async (payload) => {
       );
       notifyBookingUpdate(updatedBooking);
       fetchNotifications();
-      showSystemToast("Payment confirmed", "Cash payment marked as received.", "booking");
+      showSystemToast("Payment recorded", "Cash payment has been marked as received.", "booking");
     } catch (error) {
       setGlobalError(error.message || "Could not confirm cash payment.");
     }
@@ -4011,7 +4110,7 @@ const registerBarber = async (payload) => {
     }
 
     const isSelfMessage =
-      selectedBarber.ownerUsername === currentUser.username &&
+      isOwnedStand(selectedBarber, currentUser) &&
       chatCustomerUsername === currentUser.username;
 
     if (isSelfMessage) {
@@ -4136,7 +4235,9 @@ const registerBarber = async (payload) => {
   };
 
   const logout = (message = "") => {
+    const authMessage = typeof message === "string" ? message : "";
     const refreshToken = getRefreshToken();
+    disableFirebaseNotifications().catch(() => {});
     if (refreshToken) logoutUser(refreshToken).catch(() => {});
     if (socketRef.current) {
       socketRef.current.disconnect();
@@ -4167,8 +4268,8 @@ const registerBarber = async (payload) => {
     setShowAccountMenu(false);
     clearAuthMessages();
     window.history.replaceState({}, "", appPath(LOGIN_PATH));
-    if (message) {
-      setAuthError(message);
+    if (authMessage) {
+      setAuthError(authMessage);
     }
   };
 
@@ -4242,14 +4343,53 @@ const registerBarber = async (payload) => {
       });
   }, [barbers, reviewsByBarber, favorites, userLocation]);
 
+  useEffect(() => {
+    if (!currentUser?.username || screen !== "app" || barbersLoading || pendingBookingRestoreRef.current) return;
+    const intent = readPendingBookingIntent();
+    if (!intent) return;
+
+    if (userIsProvider(currentUser) || userIsAdmin(currentUser)) {
+      clearPendingBookingIntent();
+      setGlobalError("Sign in with a customer account to book a service.");
+      return;
+    }
+
+    const restored = resolvePendingBookingIntent(intent, enrichedBarbers);
+    if (!restored.ok) {
+      if (!barbers.length && restored.reason === "provider_missing") return;
+      clearPendingBookingIntent();
+      setGlobalError(
+        restored.reason === "service_missing"
+          ? "That service is no longer available. Choose another service."
+          : "That provider could not be found. Search again to book."
+      );
+      return;
+    }
+
+    pendingBookingRestoreRef.current = true;
+    clearPendingBookingIntent();
+    setSelectedBarber(restored.provider);
+    setSelectedService(restored.service.id);
+    if (restored.selectedDate) setSelectedDate(restored.selectedDate);
+    if (restored.selectedTime) setSelectedTime(restored.selectedTime);
+    const locationType = String(restored.service.location_type || "provider_location").toLowerCase();
+    setBookingLocationType(locationType === "customer_location" ? "customer_location" : "provider_location");
+    setBookingAddress("");
+    setShowBarberProfile(false);
+    setShowQuoteModal(false);
+    setShowChat(false);
+    setShowBookingModal(true);
+    setActiveTab("home");
+    showSystemToast("Continue booking", "Your selected service is ready to review.", "booking");
+  }, [barbers.length, barbersLoading, currentUser, enrichedBarbers, screen]);
+
   const filteredBarbers = useMemo(() => {
     let items = enrichedBarbers.filter((barber) => {
       // A provider must always see their own published stand in public discovery
       // so they can verify it's live and how customers see it.
       // The ownership check bypasses subscription-status transient issues.
       const isOwnPublishedStand =
-        currentUser?.username &&
-        String(barber.ownerUsername || "") === String(currentUser.username || "") &&
+        isOwnedStand(barber, currentUser) &&
         (barber.is_published === 1 ||
           barber.is_published === true ||
           String(barber.is_published) === "1");
@@ -4332,8 +4472,57 @@ const registerBarber = async (payload) => {
 
   const myBarberProfile = useMemo(() => {
     if (!currentUser?.username) return null;
-    return enrichedBarbers.find((item) => String(item.ownerUsername || "") === String(currentUser.username || "")) || null;
+    return (
+      enrichedBarbers.find((item) => item.isOwnedByCurrentUser === true || item.is_owned_by_current_user === true) ||
+      enrichedBarbers.find((item) => String(item.ownerUsername || "") === String(currentUser.username || "")) ||
+      null
+    );
   }, [enrichedBarbers, currentUser]);
+
+  useEffect(() => {
+    if (myBarberProfile?.id || !currentUser?.username) {
+      providerDashboardRecoveryRef.current = {
+        key: currentUser?.username || "",
+        attempts: 0,
+      };
+    }
+  }, [myBarberProfile?.id, currentUser?.username]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "dashboard" ||
+      !effectiveIsBarber ||
+      myBarberProfile ||
+      barbersLoading ||
+      !barbersError ||
+      !currentUser?.username ||
+      !sessionChecked ||
+      !getAuthToken()
+    ) {
+      return undefined;
+    }
+
+    const key = `${currentUser.username}:dashboard-stand`;
+    const recovery = providerDashboardRecoveryRef.current;
+    if (recovery.key !== key) {
+      providerDashboardRecoveryRef.current = { key, attempts: 0 };
+    }
+    if (providerDashboardRecoveryRef.current.attempts >= 1) return undefined;
+
+    providerDashboardRecoveryRef.current.attempts += 1;
+    const timer = window.setTimeout(() => {
+      fetchBarbers();
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [
+    activeTab,
+    effectiveIsBarber,
+    myBarberProfile,
+    barbersLoading,
+    barbersError,
+    currentUser?.username,
+    sessionChecked,
+  ]);
 
   const favoriteBarbers = useMemo(
     () => enrichedBarbers.filter((barber) => isPublicProvider(barber) && favorites.includes(Number(barber.id))),
@@ -4559,6 +4748,22 @@ const registerBarber = async (payload) => {
     setActiveTab("bookings");
   };
 
+  useEffect(() => {
+    if (!currentUser?.username) return undefined;
+    const handleNativePushOpen = (event) => {
+      const incoming = mapServerNotification({
+        ...(event?.detail || {}),
+        user: currentUser.username,
+        read: false,
+      });
+      appendNotificationSafely(incoming);
+      handleNotificationOpen(incoming);
+    };
+
+    window.addEventListener("queless:push-open", handleNativePushOpen);
+    return () => window.removeEventListener("queless:push-open", handleNativePushOpen);
+  }, [currentUser?.username, handleNotificationOpen]);
+
   const handleAccountMenuNavigate = (target) => {
     setMapState((prev) => ({ ...prev, show: false }));
     setShowBarberProfile(false);
@@ -4639,7 +4844,6 @@ const registerBarber = async (payload) => {
     window.history.replaceState({}, "", appPath(APP_PATH));
   };
 
-  const subscriptionTier = String(subscriptionState?.tier || "").toUpperCase();
   const entitlementState = resolveEntitlements({
     summary: subscriptionSummary,
     customerSubscription: customerSubscriptionState,
@@ -4659,7 +4863,7 @@ const registerBarber = async (payload) => {
     screen === "app" &&
     subscriptionReady &&
     !subscriptionLoading &&
-    (subscriptionTier === "LOCKED" || subscriptionState?.status === "expired");
+    subscriptionState?.status === "expired" || subscriptionState?.status === "trial_expired";
   const showTrialUpgradeScreen = trialAccessExpired && !trialUpgradeDismissed;
   const openUpgradePlan = (tier = "") => {
     const normalized = normalizeProviderPlan(tier);
@@ -4681,24 +4885,36 @@ const registerBarber = async (payload) => {
   };
 
   const submitQuoteRequest = async (payload) => {
-    if (!currentUser?.username || !selectedBarber) return;
+    if (!currentUser?.username) {
+      const message = "Sign in to request a quote.";
+      setQuoteError(message);
+      throw new Error(message);
+    }
+    const quoteProvider =
+      selectedBarber ||
+      enrichedBarbers.find((item) => String(item.id) === String(payload?.providerId || ""));
+    if (!quoteProvider?.id) {
+      const message = "This provider could not be found. Return to search and try again.";
+      setQuoteError(message);
+      throw new Error(message);
+    }
     if (!quoteIdempotencyRef.current) quoteIdempotencyRef.current = makeId("quote-request");
     setQuoteSubmitting(true);
     setQuoteError("");
     try {
       await createQuoteRequest({
         ...payload,
-        providerId: selectedBarber.id,
+        providerId: quoteProvider.id,
         idempotencyKey: quoteIdempotencyRef.current,
       });
-      showSystemToast("Quote request sent", `${selectedBarber.business_name} can respond in this conversation.`, "booking");
+      showSystemToast("Quote request sent", `${quoteProvider.business_name} can respond in this conversation.`, "booking");
       fetchQuoteRequests();
       setShowQuoteModal(false);
       setShowBarberProfile(false);
       openConversation({
-        barber: selectedBarber,
+        barber: quoteProvider,
         customerUsername: currentUser.username,
-        targetName: selectedBarber.business_name,
+        targetName: quoteProvider.business_name,
       });
       quoteIdempotencyRef.current = "";
     } catch (error) {
@@ -4729,7 +4945,7 @@ const registerBarber = async (payload) => {
         readStored("bookings", "global", []).map((item) => String(item.id) === String(bookingId) ? updatedBooking : item)
       );
       notifyBookingUpdate(updatedBooking);
-      showSystemToast("Booking rescheduled", "The new time is pending provider confirmation.", "booking");
+      showSystemToast("Booking updated", "Your new time has been saved.", "booking");
       fetchNotifications();
       return updatedBooking;
     } catch (error) {
@@ -4744,7 +4960,9 @@ const registerBarber = async (payload) => {
     const now = Date.now();
     if (providerId && providerOpenRef.current.id === providerId && now - providerOpenRef.current.at < 500) return;
     providerOpenRef.current = { id: providerId, at: now };
-    const isOwner = currentUser?.username && String(provider.ownerUsername || "") === String(currentUser.username);
+    const isOwner =
+      isOwnedStand(provider, currentUser) ||
+      (currentUser?.username && String(provider.ownerUsername || "") === String(currentUser.username));
     if (!isOwner && !isPublicProvider(provider)) {
       setGlobalError("This business is not available yet.");
       setShowBarberProfile(false);
@@ -5171,7 +5389,7 @@ const registerBarber = async (payload) => {
           fileToDataUrl={fileToDataUrl}
           theme={theme}
           setTheme={setTheme}
-          onNotificationToast={showSystemToast}
+          onOpenSettings={() => setActiveTab("settings")}
         />
         </div>
       )}
@@ -5204,6 +5422,8 @@ const registerBarber = async (payload) => {
         <div className="tab-scene-v5">
           <DashboardScreen
           barber={myBarberProfile}
+          providersLoading={barbersLoading}
+          providersError={barbersError}
           bookings={bookings}
           notifications={notifications.filter((item) => String(item.user).startsWith("barber-") || String(item.user) === String(currentUser?.username || ""))}
           subscription={subscriptionState}
@@ -5227,6 +5447,7 @@ const registerBarber = async (payload) => {
             }
           }}
           onOpenReports={() => setActiveTab("reports")}
+          onRetryProviders={fetchBarbers}
           onOpenAiCoach={() => setActiveTab("aiCoach")}
           onOpenUpgradePlan={openUpgradePlan}
           onPublishStand={publishBarberStand}
@@ -5464,6 +5685,12 @@ const registerBarber = async (payload) => {
         }}
         onToggleFavorite={toggleFavorite}
         onBook={(service) => {
+          if (isOwnedStand(selectedBarber, currentUser)) {
+            setGlobalError("This is your stand. Open your dashboard to manage bookings.");
+            setShowBarberProfile(false);
+            setActiveTab("dashboard");
+            return;
+          }
           const services = getBarberServices(selectedBarber);
           const targetService = service || services[0];
           if (targetService?.id) {
@@ -5475,22 +5702,72 @@ const registerBarber = async (payload) => {
             setBookingLocationType(locationType === "customer_location" && supportsHome ? "customer_location" : "provider_location");
             setBookingAddress("");
           }
+          if (!currentUser?.username) {
+            const intent = createPendingBookingIntent({
+              providerId: selectedBarber?.id,
+              serviceId: targetService?.id,
+              selectedDate,
+              selectedTime,
+              returnPath: window.location.pathname,
+            });
+            if (intent) {
+              writePendingBookingIntent(intent);
+              pendingBookingRestoreRef.current = false;
+            }
+            setShowBarberProfile(false);
+            setShowBookingModal(false);
+            setShowQuoteModal(false);
+            setShowChat(false);
+            setAuthMode("login");
+            setScreen("login");
+            clearAuthMessages();
+            setAuthError("Sign in to continue booking.");
+            window.history.replaceState({}, "", appPath(LOGIN_PATH));
+            return;
+          }
           setShowBookingModal(true);
           setShowChat(false);
           setShowQuoteModal(false);
         }}
-        onRequestQuote={() => {
+        onRequestQuote={(service) => {
+          if (isOwnedStand(selectedBarber, currentUser)) {
+            setGlobalError("This is your stand. Open your dashboard to manage requests.");
+            setShowBarberProfile(false);
+            setActiveTab("dashboard");
+            return;
+          }
+          if (!currentUser?.username) {
+            setShowBarberProfile(false);
+            setShowBookingModal(false);
+            setShowQuoteModal(false);
+            setShowChat(false);
+            setAuthMode("login");
+            setScreen("login");
+            clearAuthMessages();
+            setAuthError("Sign in to request a quote.");
+            window.history.replaceState({}, "", appPath(LOGIN_PATH));
+            return;
+          }
+          setQuoteInitialServiceId(service?.id || "");
           quoteIdempotencyRef.current = makeId("quote-request");
           setQuoteError("");
           setShowQuoteModal(true);
           setShowBookingModal(false);
           setShowChat(false);
         }}
-        onOpenChat={() => openConversation({
-          barber: selectedBarber,
-          customerUsername: currentUser?.username || "",
-          targetName: selectedBarber?.business_name || "Provider",
-        })}
+        onOpenChat={() => {
+          if (isOwnedStand(selectedBarber, currentUser)) {
+            setGlobalError("This is your stand. Open your dashboard to manage customer conversations.");
+            setShowBarberProfile(false);
+            setActiveTab("dashboard");
+            return;
+          }
+          openConversation({
+            barber: selectedBarber,
+            customerUsername: currentUser?.username || "",
+            targetName: selectedBarber?.business_name || "Provider",
+          });
+        }}
         onReportProvider={() => openSupportFlow("Report provider")}
         onToggleReviewBlock={toggleReviewPublicBlock}
         onEditStand={() => {
@@ -5541,6 +5818,7 @@ const registerBarber = async (payload) => {
         locationDetecting={bookingLocationDetecting}
         onUseCurrentLocation={useCurrentLocationForBooking}
         onRequestQuote={() => {
+          setQuoteInitialServiceId(selectedService || "");
           quoteIdempotencyRef.current = makeId("quote-request");
           setQuoteError("");
           setShowQuoteModal(true);
@@ -5570,6 +5848,7 @@ const registerBarber = async (payload) => {
       <QuoteRequestModal
         show={showQuoteModal}
         provider={selectedBarber}
+        initialServiceId={quoteInitialServiceId}
         onClose={() => setShowQuoteModal(false)}
         onSubmit={submitQuoteRequest}
         submitting={quoteSubmitting}

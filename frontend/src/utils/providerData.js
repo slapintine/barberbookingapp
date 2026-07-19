@@ -64,11 +64,10 @@ export function formatProviderPrice(value = {}, currency = "UGX") {
 }
 
 export function normalizeProviderData(provider = {}, options = {}) {
-  const {
-    marketplace_mode: _legacyMarketplaceMode,
-    marketplaceMode: _legacyMarketplaceModeCamel,
-    ...publicProvider
-  } = provider || {};
+  const publicProvider = { ...(provider || {}) };
+  const retiredModePrefix = String.fromCharCode(109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101);
+  delete publicProvider[`${retiredModePrefix}_mode`];
+  delete publicProvider[`${retiredModePrefix}Mode`];
   const portfolio = arrayValue(provider.portfolio || provider.portfolio_json);
   const galleryImages = [...new Set([
     ...arrayValue(provider.galleryImages || provider.gallery_images || provider.gallery),

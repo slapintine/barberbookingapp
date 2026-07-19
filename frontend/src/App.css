@@ -20,3 +20,274 @@
 @import "./styles/membership-badges.css";
 @import "./styles/navigation-safety.css";
 @import "./styles/bookings-tabs.css";
+
+/* Mobile safe-area and overlay contracts. Keep this loaded last so it can
+   normalize older polish layers without changing the visual system. */
+:root {
+  --queless-z-header: 300;
+  --queless-z-bottom-nav: 320;
+  --queless-z-dropdown: 900;
+  --queless-z-notifications: 1900;
+  --queless-z-modal: 2100;
+  --queless-z-toast: 2400;
+}
+
+.notification-toast-v5 {
+  top: max(12px, calc(var(--device-safe-top, env(safe-area-inset-top, 0px)) + 10px)) !important;
+  max-width: calc(100vw - 28px) !important;
+  z-index: var(--queless-z-toast) !important;
+}
+
+.notif-screen {
+  z-index: var(--queless-z-notifications) !important;
+  width: 100%;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  isolation: isolate;
+}
+
+.notif-page {
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+  padding-top: var(--device-safe-top, env(safe-area-inset-top, 0px)) !important;
+  padding-bottom: max(16px, var(--device-safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+}
+
+.notif-header {
+  z-index: 2;
+  min-width: 0;
+}
+
+.notif-list-wrap,
+.notif-card,
+.notif-body,
+.notif-card-title,
+.notif-card-preview {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.notif-card-title,
+.notif-card-preview {
+  overflow-wrap: anywhere;
+}
+
+.booking-list-v4 > .simple-card-v4 .inline-actions-v4 {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+}
+
+.booking-list-v4 > .simple-card-v4 .booking-badge-v4,
+.booking-list-v4 > .simple-card-v4 .mini-action-btn-v4 {
+  flex: 1 1 138px !important;
+  max-width: 190px;
+  min-width: 0;
+  min-height: 42px;
+  white-space: normal;
+  text-align: center;
+}
+
+.booking-list-v4 > .simple-card-v4 .booking-badge-v4 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.booking-status-chip-v1 {
+  --status-bg: rgba(82, 43, 91, 0.08);
+  --status-border: rgba(82, 43, 91, 0.14);
+  --status-text: #2b063a;
+  --status-icon: currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--status-border) !important;
+  border-radius: 999px;
+  background: var(--status-bg) !important;
+  color: var(--status-text) !important;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-transform: none;
+  box-shadow: none !important;
+  cursor: default;
+  pointer-events: none;
+  animation: bookingStatusSettleV1 260ms ease-out both;
+}
+
+.booking-status-chip-v1 svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--status-icon) !important;
+  stroke: currentColor !important;
+  stroke-width: 2.25;
+}
+
+.booking-status-chip-v1 span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.booking-status-chip-v1.pending {
+  --status-bg: rgba(180, 122, 28, 0.15);
+  --status-border: rgba(180, 122, 28, 0.26);
+  --status-text: #6f4a08;
+}
+
+.light .booking-status-chip-v1.pending,
+.app-wrap-v4.light .booking-status-chip-v1.pending {
+  background: rgba(180, 122, 28, 0.15) !important;
+  border-color: rgba(180, 122, 28, 0.26) !important;
+  color: #6f4a08 !important;
+}
+
+.booking-status-chip-v1.confirmed {
+  --status-bg: rgba(30, 126, 72, 0.14);
+  --status-border: rgba(30, 126, 72, 0.28);
+  --status-text: #17633b;
+}
+
+.light .booking-status-chip-v1.confirmed,
+.app-wrap-v4.light .booking-status-chip-v1.confirmed {
+  background: rgba(30, 126, 72, 0.14) !important;
+  border-color: rgba(30, 126, 72, 0.28) !important;
+  color: #17633b !important;
+}
+
+.booking-status-chip-v1.completed {
+  --status-bg: rgba(38, 111, 170, 0.14);
+  --status-border: rgba(38, 111, 170, 0.25);
+  --status-text: #1f5c91;
+}
+
+.light .booking-status-chip-v1.completed,
+.app-wrap-v4.light .booking-status-chip-v1.completed {
+  background: rgba(38, 111, 170, 0.14) !important;
+  border-color: rgba(38, 111, 170, 0.25) !important;
+  color: #1f5c91 !important;
+}
+
+.booking-status-chip-v1.cancelled,
+.booking-status-chip-v1.declined {
+  --status-bg: rgba(139, 79, 108, 0.14);
+  --status-border: rgba(139, 79, 108, 0.24);
+  --status-text: #71314f;
+}
+
+.light .booking-status-chip-v1.cancelled,
+.light .booking-status-chip-v1.declined,
+.app-wrap-v4.light .booking-status-chip-v1.cancelled,
+.app-wrap-v4.light .booking-status-chip-v1.declined {
+  background: rgba(139, 79, 108, 0.14) !important;
+  border-color: rgba(139, 79, 108, 0.24) !important;
+  color: #71314f !important;
+}
+
+.booking-status-chip-v1.rescheduled {
+  --status-bg: rgba(82, 43, 91, 0.12);
+  --status-border: rgba(82, 43, 91, 0.22);
+  --status-text: #502b6b;
+}
+
+.light .booking-status-chip-v1.rescheduled,
+.app-wrap-v4.light .booking-status-chip-v1.rescheduled {
+  background: rgba(82, 43, 91, 0.12) !important;
+  border-color: rgba(82, 43, 91, 0.22) !important;
+  color: #502b6b !important;
+}
+
+.dark .booking-status-chip-v1,
+.app-wrap-v4.dark .booking-status-chip-v1 {
+  --status-bg: rgba(251, 228, 216, 0.08);
+  --status-border: rgba(251, 228, 216, 0.16);
+  --status-text: #fff8f4;
+}
+
+.dark .booking-status-chip-v1.pending,
+.app-wrap-v4.dark .booking-status-chip-v1.pending {
+  --status-bg: rgba(245, 158, 11, 0.17);
+  --status-border: rgba(245, 158, 11, 0.28);
+  --status-text: #ffe3a3;
+  background: rgba(245, 158, 11, 0.17) !important;
+  border-color: rgba(245, 158, 11, 0.28) !important;
+  color: #ffe3a3 !important;
+}
+
+.dark .booking-status-chip-v1.confirmed,
+.app-wrap-v4.dark .booking-status-chip-v1.confirmed {
+  --status-bg: rgba(52, 211, 153, 0.16);
+  --status-border: rgba(52, 211, 153, 0.28);
+  --status-text: #b7f7d6;
+  background: rgba(52, 211, 153, 0.16) !important;
+  border-color: rgba(52, 211, 153, 0.28) !important;
+  color: #b7f7d6 !important;
+}
+
+.dark .booking-status-chip-v1.completed,
+.app-wrap-v4.dark .booking-status-chip-v1.completed {
+  --status-bg: rgba(96, 165, 250, 0.16);
+  --status-border: rgba(96, 165, 250, 0.28);
+  --status-text: #cfe6ff;
+  background: rgba(96, 165, 250, 0.16) !important;
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  color: #cfe6ff !important;
+}
+
+.dark .booking-status-chip-v1.cancelled,
+.dark .booking-status-chip-v1.declined,
+.app-wrap-v4.dark .booking-status-chip-v1.cancelled,
+.app-wrap-v4.dark .booking-status-chip-v1.declined {
+  --status-bg: rgba(251, 113, 133, 0.14);
+  --status-border: rgba(251, 113, 133, 0.24);
+  --status-text: #ffd0d7;
+  background: rgba(251, 113, 133, 0.14) !important;
+  border-color: rgba(251, 113, 133, 0.24) !important;
+  color: #ffd0d7 !important;
+}
+
+.schedule-status-pill-v9.booking-status-chip-v1 {
+  min-height: 32px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+@keyframes bookingStatusSettleV1 {
+  from {
+    opacity: 0.82;
+    transform: scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .booking-status-chip-v1 {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .booking-list-v4 > .simple-card-v4 .booking-badge-v4,
+  .booking-list-v4 > .simple-card-v4 .mini-action-btn-v4 {
+    flex-basis: 100% !important;
+    max-width: none;
+  }
+}

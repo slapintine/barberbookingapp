@@ -519,7 +519,11 @@ export default function MapDashboard({
 
       {/* ── Main ──────────────────────────────────────── */}
       <div className="qmd-main">
-        <header className="qmd-topbar">
+        <header className="qmd-topbar" data-testid="desktop-map-header">
+          <div className="qmd-page-title">
+            <strong>Services near you</strong>
+            <span>{locationLoading ? "Detecting location..." : locationLabel}</span>
+          </div>
           <form className="qmd-search" onSubmit={submitSearch}>
             <FiSearch />
             <input

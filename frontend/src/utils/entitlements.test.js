@@ -65,3 +65,45 @@ test("provider Premium unlocks analytics but not Provider Coach", () => {
   assert.equal(entitlements.canUseProviderCoach, false);
   assert.equal(entitlements.canViewAdvancedReports, false);
 });
+
+test("missing entitlement summary resolves to free plans without paid access", () => {
+  const entitlements = resolveEntitlements();
+
+  assert.equal(entitlements.customerPlan, "FREE");
+  assert.equal(entitlements.providerPlan, "FREE");
+  assert.equal(entitlements.customerPremiumActive, false);
+  assert.equal(entitlements.hasCustomerPremium, false);
+  assert.equal(entitlements.providerPlanActive, true);
+  assert.equal(entitlements.hasProviderPremium, false);
+  assert.equal(entitlements.hasProviderPlatinum, false);
+  assert.equal(entitlements.canUseSmartMatch, false);
+  assert.equal(entitlements.canUseProviderCoach, false);
+  assert.equal(entitlements.canViewAdvancedReports, false);
+});
+
+test("expired or inactive provider paid state falls back to Free Provider access", () => {
+  const entitlements = resolveEntitlements({
+    summary: {
+      customerPlan: "FREE",
+      providerPlan: "FREE",
+      customerPremiumActive: false,
+      providerPlanActive: true,
+      entitlements: {
+        providerCoach: false,
+        advancedReports: false,
+        providerAnalytics: false,
+      },
+    },
+    providerSubscription: {
+      tier: "PLATINUM",
+      status: "expired",
+    },
+  });
+
+  assert.equal(entitlements.providerPlan, "FREE");
+  assert.equal(entitlements.providerPlanActive, true);
+  assert.equal(entitlements.hasProviderPremium, false);
+  assert.equal(entitlements.hasProviderPlatinum, false);
+  assert.equal(entitlements.canUseProviderCoach, false);
+  assert.equal(entitlements.canViewAdvancedReports, false);
+});

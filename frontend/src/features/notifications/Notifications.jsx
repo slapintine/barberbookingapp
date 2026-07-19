@@ -9,14 +9,13 @@ import {
   FiCreditCard,
   FiInbox,
   FiMessageSquare,
-  FiPackage,
   FiStar,
   FiTag,
   FiVolume2,
   FiX,
   FiZap,
 } from "react-icons/fi";
-import quelessIcon from "../../assets/queless-logo-icon.png";
+import quelessIcon from "../../assets/queless-logo-icon-ui.webp";
 
 /* ── Type → Icon mapping ───────────────────────────────────────── */
 const TYPE_ICON_MAP = {
@@ -24,7 +23,7 @@ const TYPE_ICON_MAP = {
   chat:         FiMessageSquare,
   booking:      FiCalendar,
   payment:      FiCreditCard,
-  wallet:       FiPackage,
+  wallet:       FiCreditCard,
   review:       FiStar,
   verification: FiCheckCircle,
   promo:        FiTag,
@@ -161,10 +160,9 @@ export function NotificationSheet({
               <span className="notif-empty-icon">
                 <FiInbox />
               </span>
-              <strong>No notifications yet</strong>
+              <strong>You're all caught up</strong>
               <p>
-                Booking updates, messages, and payment alerts will appear
-                here.
+                Booking updates and important messages will appear here.
               </p>
             </div>
           ) : (

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { FiBell, FiChevronDown, FiMapPin, FiMoon, FiNavigation, FiSearch, FiSun, FiX } from "react-icons/fi";
-import logo from "../../assets/queless-logo-icon.png";
+import logo from "../../assets/queless-logo-icon-ui.webp";
 
 export default function AppHeader({
   theme = "light",

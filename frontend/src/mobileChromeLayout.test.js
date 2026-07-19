@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const chromeCss = [
+  "./App.css",
   "./styles/base.css",
   "./styles/queless-theme.css",
   "./styles/customer-home.css",
@@ -42,6 +43,23 @@ test("mobile app header paints a dark safe-area strip behind Android status icon
   assert.match(chromeCss, /body::before[\s\S]*#2b063a/);
   assert.match(chromeCss, /\.header-v4\.queless-app-header[\s\S]*#2b063a/);
   assert.match(chromeCss, /\.header-v4\.queless-app-header[\s\S]*var\(--device-safe-top/);
+});
+
+test("notification overlays respect safe areas and sit above app chrome", () => {
+  assert.match(chromeCss, /--queless-z-notifications:\s*1900/);
+  assert.match(chromeCss, /--queless-z-toast:\s*2400/);
+  assert.match(chromeCss, /\.notification-toast-v5\s*\{[\s\S]*top:\s*max\(12px, calc\(var\(--device-safe-top/);
+  assert.match(chromeCss, /\.notification-toast-v5\s*\{[\s\S]*z-index:\s*var\(--queless-z-toast\)/);
+  assert.match(chromeCss, /\.notif-screen\s*\{[\s\S]*height:\s*100dvh/);
+  assert.match(chromeCss, /\.notif-page\s*\{[\s\S]*padding-top:\s*var\(--device-safe-top/);
+  assert.match(chromeCss, /\.notif-page\s*\{[\s\S]*padding-bottom:\s*max\(16px, var\(--device-safe-bottom/);
+});
+
+test("mobile booking card actions wrap without one-button-per-row waste", () => {
+  assert.match(chromeCss, /\.booking-list-v4 > \.simple-card-v4 \.inline-actions-v4\s*\{[\s\S]*flex-wrap:\s*wrap !important/);
+  assert.match(chromeCss, /\.booking-list-v4 > \.simple-card-v4 \.inline-actions-v4\s*\{[\s\S]*flex-direction:\s*row !important/);
+  assert.match(chromeCss, /\.booking-list-v4 > \.simple-card-v4 \.booking-badge-v4,[\s\S]*flex:\s*1 1 138px !important/);
+  assert.match(chromeCss, /@media\s*\(max-width:\s*360px\)[\s\S]*flex-basis:\s*100% !important/);
 });
 
 test("mobile reports fit filters and cards inside the viewport", () => {

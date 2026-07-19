@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FiEye, FiEyeOff, FiLock, FiSave, FiShield, FiUser } from "react-icons/fi";
+import { FiBell, FiEye, FiEyeOff, FiLock, FiSave, FiShield, FiUser } from "react-icons/fi";
+import PushNotificationSettings from "../features/notifications/PushNotificationSettings.jsx";
 
 function isStrongPassword(value) {
   const text = String(value || "");
@@ -14,6 +15,7 @@ export default function SettingsPage({
   accountLoading,
   accountMessage,
   sessionExpiresAt,
+  onNotificationToast,
 }) {
   const [username, setUsername] = useState(currentUser?.username || "");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -72,7 +74,7 @@ export default function SettingsPage({
         <div className="settings-section-head-v6">
           <FiUser />
           <div>
-            <strong>Account identity</strong>
+            <strong>Account</strong>
               <span>{profile?.fullName || currentUser?.username || "Queless user"}</span>
           </div>
         </div>
@@ -92,6 +94,13 @@ export default function SettingsPage({
           />
         </label>
       </div>
+
+      <div className="settings-group-label-v1">
+        <FiBell />
+        <span>Notifications</span>
+      </div>
+
+      <PushNotificationSettings currentUser={currentUser} onToast={onNotificationToast} />
 
       <div className="simple-card-v4 settings-card-v6">
         <div className="settings-section-head-v6">

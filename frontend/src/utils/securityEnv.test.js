@@ -38,6 +38,23 @@ test("frontend only references public VITE env names", () => {
   assert.deepEqual(unsafeReferences, []);
 });
 
+test("frontend does not bundle the whole Vite env object", () => {
+  const files = walk(join(frontendRoot, "src")).filter((file) => /\.(js|jsx|ts|tsx)$/.test(file));
+  const wholeEnvReferences = [];
+
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    if (
+      /=\s*import\.meta\.env(?!\.)\b/.test(text) ||
+      /\bObject\.(?:assign|entries|keys|values)\(\s*import\.meta\.env\s*\)/.test(text)
+    ) {
+      wholeEnvReferences.push(file.replace(repoRoot, ""));
+    }
+  }
+
+  assert.deepEqual(wholeEnvReferences, []);
+});
+
 function parseEnv(text) {
   return Object.fromEntries(
     text

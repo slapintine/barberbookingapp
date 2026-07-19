@@ -1,19 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FiArrowLeft, FiCalendar, FiDollarSign, FiFileText, FiMapPin, FiSend, FiX } from "react-icons/fi";
 import { getAvailableServices, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
 
 function getProviderServices(provider) {
   const services = getAvailableServices(provider?.services || []);
-  return services.length ? services : [normalizeServiceForBooking("General service")];
+  const quoteServices = services.filter((service) => String(service.pricing_type || service.pricingType || "").toLowerCase() === "quote");
+  return quoteServices.length ? quoteServices : [{ ...normalizeServiceForBooking("General quote request"), id: "" }];
 }
 
-export default function QuoteRequestModal({ show, provider, onClose, onSubmit, submitting = false, error = "" }) {
+export default function QuoteRequestModal({ show, provider, initialServiceId = "", onClose, onSubmit, submitting = false, error = "" }) {
   const services = useMemo(() => getProviderServices(provider), [provider]);
   const [serviceId, setServiceId] = useState("");
   const [description, setDescription] = useState("");
   const [budget, setBudget] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
   const [location, setLocation] = useState("");
+
+  useEffect(() => {
+    if (!show) return;
+    const requested = services.find((service) => String(service.id) === String(initialServiceId));
+    setServiceId(requested ? String(requested.id) : String(services[0]?.id || ""));
+  }, [initialServiceId, services, show]);
 
   if (!show || !provider) return null;
 

@@ -23,7 +23,7 @@ export function getBookingCooldownInfo(bookings, currentUser, barber, nowMs = Da
   if (activeExisting) {
     return {
       blocked: true,
-      reason: "You already have an active booking with this barber.",
+      reason: "You already have an active booking with this provider.",
       minutesLeft: 0,
     };
   }
@@ -38,7 +38,7 @@ export function getBookingCooldownInfo(bookings, currentUser, barber, nowMs = Da
     const minutesLeft = Math.max(1, Math.ceil((cooldownMs - elapsed) / 60000));
     return {
       blocked: true,
-      reason: `Please wait about ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before booking this barber again.`,
+      reason: `Please wait about ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before booking this provider again.`,
       minutesLeft,
     };
   }

@@ -5,6 +5,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 function getBuildVersion() {
+  const explicitVersion = String(process.env.QUELESS_BUILD_VERSION || process.env.VITE_BUILD_VERSION || "").trim();
+  if (explicitVersion) return explicitVersion;
   try {
     return execSync("git rev-parse --short=12 HEAD", { encoding: "utf8" }).trim();
   } catch {
@@ -52,6 +54,12 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
     },
     server: {
+      watch: {
+        ignored: [
+          "**/android/**/build/**",
+          "**/android/.gradle/**",
+        ],
+      },
       proxy: {
         "/api": {
           target: backendTarget,

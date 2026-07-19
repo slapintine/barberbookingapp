@@ -12,6 +12,8 @@ test("labels booking payment methods accurately in customer and barber views", (
   assert.equal(getPaymentMethodLabel("wallet_balance"), "Wallet Balance");
   assert.equal(getPaymentMethodLabel("mtn_mobile_money"), "MTN Mobile Money");
   assert.equal(getPaymentMethodLabel("airtel_money"), "Airtel Money");
+  assert.equal(getPaymentMethodLabel("cash"), "Pay provider directly");
+  assert.equal(getPaymentMethodLabel(""), "Pay provider directly");
 });
 
 test("treats only mobile money methods as online payment methods", () => {
@@ -22,7 +24,7 @@ test("treats only mobile money methods as online payment methods", () => {
 });
 
 test("hides booking payment methods by default", () => {
-  assert.equal(isBookingPaymentMethodEnabled("cash"), false);
+  assert.equal(isBookingPaymentMethodEnabled("cash"), true);
   assert.equal(isBookingPaymentMethodEnabled("wallet"), false);
   assert.equal(isBookingPaymentMethodEnabled("mtn_mobile_money"), false);
   assert.deepEqual(getBookingPaymentOptions().map((option) => option.value), []);

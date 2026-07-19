@@ -26,6 +26,13 @@ test("server-relative upload paths are made absolute against the asset origin", 
   );
 });
 
+test("uploaded media paths normalize for Android and web", () => {
+  assert.equal(buildAssetUrl("api/uploads/providers/7/cover.jpg"), `${ASSET_ORIGIN}/api/uploads/providers/7/cover.jpg`);
+  assert.equal(buildAssetUrl("uploads/providers/7/cover.jpg"), `${ASSET_ORIGIN}/api/uploads/providers/7/cover.jpg`);
+  assert.equal(buildAssetUrl("/uploads/providers/7/cover.jpg"), `${ASSET_ORIGIN}/api/uploads/providers/7/cover.jpg`);
+  assert.equal(buildAssetUrl("\\api\\uploads\\providers\\7\\cover.jpg"), `${ASSET_ORIGIN}/api/uploads/providers/7/cover.jpg`);
+});
+
 test("public links use the API origin instead of the WebView origin", () => {
   assert.equal(buildPublicUrl("/providers/demo-stand"), `${ASSET_ORIGIN || "https://queless.org"}/providers/demo-stand`);
 });

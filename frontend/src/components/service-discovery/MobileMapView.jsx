@@ -22,7 +22,6 @@ import {
   FiUser,
   FiX,
 } from "react-icons/fi";
-import quelessLogoFull from "../../assets/queless-logo-full.png";
 import { getCategoryDef } from "../../utils/categoryRegistry.jsx";
 import { SERVICE_CATEGORY_DEFINITIONS } from "../../utils/serviceCatalog.js";
 import { resolveProviderMapIconType } from "../../utils/mapIconCategories.js";
@@ -391,13 +390,22 @@ export default function MobileMapView({
   };
 
   return (
-    <div className="qmm" data-theme={theme}>
+    <div className="qmm" data-theme={theme} data-testid="mobile-map-view">
 
       {/* ── Header ──────────────────────────────────────── */}
-      <header className="qmm-header">
-        <button type="button" className="qmm-logo-btn" onClick={onClose} aria-label="Back to home">
-          <img src={quelessLogoFull} alt="Queless" className="qmm-logo-img" />
-        </button>
+      <header className="qmm-header" data-testid="mobile-map-header">
+        <div className="qmm-header-top">
+          <button type="button" className="qmm-back-btn" onClick={onClose} aria-label="Back">
+            <FiArrowLeft />
+          </button>
+          <div className="qmm-title-block">
+            <strong>Services near you</strong>
+            <span>{locationLoading ? "Detecting location..." : (locationLabel || "Near you")}</span>
+          </div>
+          <button type="button" className="qmm-close-btn" onClick={onClose} aria-label="Close map">
+            <FiX />
+          </button>
+        </div>
 
         {/* Location pill + dropdown */}
         <div className="qmm-loc-wrap" ref={locMenuRef}>
@@ -459,9 +467,6 @@ export default function MobileMapView({
           )}
         </div>
 
-        <button type="button" className="qmm-close-btn" onClick={onClose} aria-label="Close map">
-          <FiX />
-        </button>
       </header>
 
       {/* ── Scrollable body ─────────────────────────────── */}

@@ -6,7 +6,7 @@
  *
  * PLAN STRUCTURE:
  *   Customer: free | premium
- *   Provider: none | free | premium | platinum
+ *   Provider: free | premium | platinum
  *
  * A user may be both a Premium Customer AND a Platinum Provider simultaneously.
  * These are tracked as two separate badge objects.
@@ -31,8 +31,8 @@ export const MEMBERSHIP_BADGE_CONFIGS = {
   },
   customer_free: {
     key: "customer_free",
-    label: "Customer Account",
-    shortLabel: "Customer",
+    label: "Free Customer",
+    shortLabel: "Free",
     scope: "customer",
     tier: "free",
     variant: "customer-free",
@@ -58,8 +58,8 @@ export const MEMBERSHIP_BADGE_CONFIGS = {
   },
   provider_free: {
     key: "provider_free",
-    label: "Provider Account",
-    shortLabel: "Provider",
+    label: "Free Provider",
+    shortLabel: "Free",
     scope: "provider",
     tier: "free",
     variant: "provider-free",
@@ -150,7 +150,7 @@ export function getBadgesFromSubscriptionStates(
  * The full badge row uses getBadgesFromSummary / getBadgesFromSubscriptionStates.
  */
 export function getPrimaryMembershipLabel(badges = []) {
-  if (!badges || badges.length === 0) return "Customer Account";
+  if (!badges || badges.length === 0) return "Free Customer";
   // Premium/Platinum beats free in both dimensions
   const premium = badges.find(
     (b) => b.tier === "premium" || b.tier === "platinum"
@@ -166,7 +166,7 @@ export function getMembershipSummaryText(badges = []) {
   const active = (badges || []).filter(
     (b) => b.tier !== "free" && b.tier !== "none"
   );
-  if (active.length === 0) return "Customer Account";
+  if (active.length === 0) return "Free Customer";
   return active.map((b) => b.label).join(" · ");
 }
 
@@ -179,7 +179,7 @@ export function hasAnyPaidMembership(badges = []) {
 
 /**
  * Resolve status text for the profile status strip.
- * "Premium Customer" | "Platinum Provider" | "Customer Account"
+ * "Premium Customer" | "Platinum Provider" | "Free Customer"
  */
 export function getAccountStatusStripText(
   customerSub,
@@ -194,6 +194,6 @@ export function getAccountStatusStripText(
   );
   const active = badges.filter((b) => b.tier !== "free");
   if (active.length > 0) return active.map((b) => b.label).join(" · ");
-  if (isProviderAccount) return "Provider Account";
-  return "Customer Free";
+  if (isProviderAccount) return "Free Provider";
+  return "Free Customer";
 }

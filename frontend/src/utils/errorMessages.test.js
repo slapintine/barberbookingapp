@@ -86,3 +86,13 @@ test("[object Object] is never rendered for a raw error object (the live login b
   assert.ok(!sanitizeErrorMessage({}).includes("[object Object]"));
   assert.equal(sanitizeErrorMessage({ message: "Incorrect username/email or password." }), "Incorrect username/email or password.");
 });
+
+test("technical id validation messages are mapped to friendly copy", () => {
+  const message = sanitizeErrorMessage("barberId must be a positive integer.");
+  assert.equal(message, "We could not open this conversation. Please return to the provider profile and try again.");
+  assert.doesNotMatch(message, /barberId|integer|uuid/i);
+
+  const bookingMessage = sanitizeErrorMessage("bookingId must be a positive integer.");
+  assert.equal(bookingMessage, "This booking is no longer available. Refresh the page and try again.");
+  assert.doesNotMatch(bookingMessage, /bookingId|integer|uuid/i);
+});

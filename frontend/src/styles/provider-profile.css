@@ -954,15 +954,17 @@ body[data-theme="light"] .pps-owner-action-btn:active {
   z-index: 1100;
   display: grid;
   place-items: end center;
-  padding: 18px;
+  padding: max(18px, env(safe-area-inset-top, 0px)) 18px max(18px, env(safe-area-inset-bottom, 0px));
   background: rgba(18, 7, 24, 0.62);
+  overscroll-behavior: contain;
 }
 
 .pps-service-detail {
   position: relative;
   width: min(520px, 100%);
-  max-height: min(86vh, 760px);
+  max-height: min(86dvh, 760px);
   overflow: auto;
+  overscroll-behavior: contain;
   border-radius: 22px;
   background: #fffaf7;
   color: #190019;
@@ -1097,13 +1099,14 @@ body[data-theme="light"] .pps-owner-action-btn:active {
   z-index: 1200;
   display: grid;
   place-items: center;
-  padding: 58px 18px;
+  padding: max(58px, calc(18px + env(safe-area-inset-top, 0px))) 18px max(58px, calc(24px + env(safe-area-inset-bottom, 0px)));
   background: rgba(10, 5, 14, 0.9);
+  overscroll-behavior: contain;
 }
 
 .pps-lightbox img {
   max-width: min(920px, 100%);
-  max-height: calc(100vh - 140px);
+  max-height: calc(100dvh - 150px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   object-fit: contain;
   border-radius: 14px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
@@ -1111,7 +1114,7 @@ body[data-theme="light"] .pps-owner-action-btn:active {
 
 .pps-lightbox-close {
   position: fixed;
-  top: 18px;
+  top: max(18px, calc(10px + env(safe-area-inset-top, 0px)));
   right: 18px;
   width: 42px;
   height: 42px;
@@ -1132,7 +1135,7 @@ body[data-theme="light"] .pps-owner-action-btn:active {
 .pps-lightbox-count {
   position: fixed;
   left: 50%;
-  bottom: 20px;
+  bottom: max(20px, calc(12px + env(safe-area-inset-bottom, 0px)));
   transform: translateX(-50%);
   border-radius: 999px;
   padding: 8px 12px;
@@ -1144,10 +1147,11 @@ body[data-theme="light"] .pps-owner-action-btn:active {
 @media (max-width: 560px) {
   .pps-dialog-shell {
     padding: 0;
+    padding-top: env(safe-area-inset-top, 0px);
     place-items: end center;
   }
   .pps-service-detail {
-    max-height: 90vh;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
     border-radius: 22px 22px 0 0;
   }
   .pps-service-detail-facts {

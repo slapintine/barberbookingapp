@@ -12,7 +12,7 @@ const barber = {
   business_name: "Prime Fade Studio",
 };
 
-test("blocks a customer from creating a second active booking with the same barber", () => {
+test("blocks a customer from creating a second active booking with the same provider", () => {
   const result = getBookingCooldownInfo(
     [
       {
@@ -28,7 +28,7 @@ test("blocks a customer from creating a second active booking with the same barb
   );
 
   assert.equal(result.blocked, true);
-  assert.equal(result.reason, "You already have an active booking with this barber.");
+  assert.equal(result.reason, "You already have an active booking with this provider.");
 });
 
 test("applies the 30 minute repeat-booking cooldown after inactive bookings", () => {
