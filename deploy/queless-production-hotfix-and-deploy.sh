@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Queless production hotfix + deployment runner.
-# Run this on the live server. It does not print .env files or secrets.
+# Deprecated one-off Queless production hotfix runner.
+#
+# Do not use this as the normal Queless deploy path. It was written for a
+# historical customer-subscription hotfix and its old defaults can restore the
+# previous non-services-only root website. Keep it blocked unless someone is
+# intentionally replaying that legacy hotfix with a separate reviewed plan.
 
 WEBSITE_SRC="${WEBSITE_SRC:-/var/www/queless.org/current/line-up-barber-website}"
 WEBSITE_DIST="${WEBSITE_DIST:-$WEBSITE_SRC/dist}"
@@ -13,6 +17,14 @@ BACKEND_SRC="${BACKEND_SRC:-$APP_REPO/backend}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/www/queless.org/backups}"
 PM2_PROCESS="${PM2_PROCESS:-queless-backend}"
 TS="${TS:-$(date +%Y%m%d-%H%M%S)}"
+
+if [[ "${ALLOW_DEPRECATED_HOTFIX_DEPLOY:-}" != "true" ]]; then
+  printf '%s\n' \
+    "This deprecated hotfix deploy script is intentionally blocked." \
+    "Use the reviewed Queless release procedure instead, keeping / as the services-only public website and /app/ as the application." \
+    "Set ALLOW_DEPRECATED_HOTFIX_DEPLOY=true only for the original legacy hotfix after explicit review."
+  exit 2
+fi
 
 log() {
   printf '\n[%s] %s\n' "$(date +%H:%M:%S)" "$*"
