@@ -137,12 +137,21 @@ test("guest public service-discovery route loads without auth", async () => {
   assert.ok(Array.isArray(body.categories));
 });
 
-test("deprecated marketplace alias loads public service discovery while retained", async () => {
-  const response = await request("/api/marketplace/categories");
-  assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.equal(body.success, true);
-  assert.ok(Array.isArray(body.categories));
+test("marketplace and product-era routes are unavailable", async () => {
+  for (const pathname of [
+    "/api/marketplace/categories",
+    "/api/marketplace/providers",
+    "/api/products",
+    "/api/product-orders",
+    "/api/product-inquiries",
+    "/api/cart",
+    "/api/inventory",
+    "/api/sellers",
+    "/api/product-payments",
+  ]) {
+    const response = await request(pathname);
+    assert.equal(response.status, 404, `${pathname} should not be callable`);
+  }
 });
 
 test("public provider discovery does not expose contact or owner ids", async () => {

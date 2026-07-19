@@ -160,9 +160,6 @@ app.use("/api/payments", paymentRateLimiter, paymentRoutes);
 app.use("/api/sms", smsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/discovery", discoveryRoutes);
-// Deprecated compatibility aliases for older web/Android clients. Remove after
-// released clients are verified against /api/discovery.
-app.use("/api/marketplace", discoveryRoutes);
 app.use("/api", discoveryRoutes);
 
 app.get("/api", (req, res) => {
