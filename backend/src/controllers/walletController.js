@@ -13,6 +13,12 @@ function httpError(statusCode, message) {
   return error;
 }
 
+function ensureWalletPaymentsEnabled() {
+  if (!env.bookingWalletPaymentsEnabled) {
+    throw httpError(503, "Wallet payments are not available yet.");
+  }
+}
+
 function toMoneyAmount(value, fieldName = "amount", minimum = 1000) {
   try {
     return normalizeMoneyAmount(value, fieldName, { minimum });
@@ -221,6 +227,8 @@ export async function getCustomerWallet(req, res, next) {
 
 export async function initiateCustomerWalletTopup(req, res, next) {
   try {
+    ensureWalletPaymentsEnabled();
+
     const amount = toTopUpAmount(req.body.amount);
     const provider = String(req.body.provider || req.body.method || "mtn_mobile_money").trim().toLowerCase();
     const phoneNumber = normalizeUgandaPhoneNumber(req.body.phoneNumber || req.body.phone_number || "");
@@ -684,6 +692,8 @@ export async function verifyWalletTopUp(req, res, next) {
 
 export async function requestWithdrawal(req, res, next) {
   try {
+    ensureWalletPaymentsEnabled();
+
     const amount = toMoneyAmount(req.body.amount);
     const note = String(req.body.note || "Barber withdrawal request").trim();
     const provider = String(req.body.provider || "mtn_mobile_money").trim().toLowerCase();

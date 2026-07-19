@@ -153,8 +153,15 @@ function normalizeMessageText(value) {
 function normalizePositiveId(value, fieldName) {
   const id = Number(value);
   if (!Number.isInteger(id) || id <= 0) {
-    const error = new Error(`${fieldName} must be a positive integer.`);
+    const field = String(fieldName || "").toLowerCase();
+    const error = new Error(
+      field.includes("barber") || field.includes("provider")
+        ? "We could not open this conversation. Please return to the provider profile and try again."
+        : "That request could not be completed. Refresh the page and try again."
+    );
     error.statusCode = 400;
+    error.code = "VALIDATION_ERROR";
+    error.details = { field: fieldName };
     throw error;
   }
   return id;
@@ -257,7 +264,7 @@ function serializeConversation(rows = [], user = {}) {
 async function getConversationRows({ barberId, customerUsername, user }) {
   const barber = await getBarberById(barberId);
   if (!barber) {
-    const error = new Error("Barber not found.");
+    const error = new Error("We couldn't open this provider. Please return to search and try again.");
     error.statusCode = 404;
     throw error;
   }
@@ -271,6 +278,11 @@ async function getConversationRows({ barberId, customerUsername, user }) {
 
   const isCustomer = Number(customer.id) === Number(user.id);
   const isBarber = Number(barber.owner_user_id) === Number(user.id);
+  if (isCustomer && isBarber) {
+    const error = new Error("This is your stand. Open your inbox from the provider dashboard to manage customer conversations.");
+    error.statusCode = 403;
+    throw error;
+  }
   if (!isCustomer && !isBarber) {
     const error = new Error("You are not allowed to view this conversation.");
     error.statusCode = 403;
@@ -406,7 +418,7 @@ export async function sendMessage(req, res, next) {
     if (!barber) {
       return res.status(404).json({
         success: false,
-        message: "Barber not found.",
+        message: "We couldn't open this provider. Please return to search and try again.",
       });
     }
 
@@ -422,6 +434,12 @@ export async function sendMessage(req, res, next) {
 
     const isCustomer = Number(customer.id) === Number(req.user.id);
     const isBarber = Number(barber.owner_user_id) === Number(req.user.id);
+    if (isCustomer && isBarber) {
+      return res.status(403).json({
+        success: false,
+        message: "This is your stand. Open your inbox from the provider dashboard to manage customer conversations.",
+      });
+    }
 
     if (!isCustomer && !isBarber) {
       return res.status(403).json({
@@ -529,7 +547,7 @@ export async function getConversation(req, res, next) {
     if (!barber) {
       return res.status(404).json({
         success: false,
-        message: "Barber not found.",
+        message: "We couldn't open this provider. Please return to search and try again.",
       });
     }
 
@@ -543,6 +561,12 @@ export async function getConversation(req, res, next) {
 
     const isCustomer = Number(customer.id) === Number(req.user.id);
     const isBarber = Number(barber.owner_user_id) === Number(req.user.id);
+    if (isCustomer && isBarber) {
+      return res.status(403).json({
+        success: false,
+        message: "This is your stand. Open your inbox from the provider dashboard to manage customer conversations.",
+      });
+    }
 
     if (!isCustomer && !isBarber) {
       return res.status(403).json({
@@ -640,12 +664,22 @@ export async function startConversation(req, res, next) {
     if (!barber) {
       return res.status(404).json({
         success: false,
-        message: "Barber not found.",
+        message: "We couldn't open this provider. Please return to search and try again.",
       });
     }
 
     if (!customerUsername && Number(barber.owner_user_id) !== Number(req.user.id)) {
       customerUsername = req.user.username;
+    }
+
+    if (
+      Number(barber.owner_user_id) === Number(req.user.id) &&
+      (!customerUsername || String(customerUsername).trim() === String(req.user.username || "").trim())
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This is your stand. Open your inbox from the provider dashboard to manage customer conversations.",
+      });
     }
 
     customerUsername = normalizeUsername(customerUsername);

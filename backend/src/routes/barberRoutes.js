@@ -1,5 +1,5 @@
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js";
+import { optionalAuth, protect } from "../middleware/authMiddleware.js";
 import { imageUploadRateLimiter, providerRegistrationRateLimiter } from "../middleware/securityMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { schemas } from "../validation/schemas.js";
@@ -16,7 +16,7 @@ import {
 
 const router = express.Router();
 
-router.get("/", getAllBarbers);
+router.get("/", optionalAuth, getAllBarbers);
 router.get("/me", protect, getMyBarberProfile);
 router.post("/register", protect, providerRegistrationRateLimiter, imageUploadRateLimiter, validateRequest(schemas.standUpsert), registerBarber);
 router.patch("/me", protect, imageUploadRateLimiter, validateRequest(schemas.standUpsert), updateMyBarberProfile);

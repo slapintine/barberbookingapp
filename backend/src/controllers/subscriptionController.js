@@ -213,11 +213,12 @@ function mapSubscription(subscription, barber) {
   const trialActive = Boolean(baseTier) && ["trialing", "trial"].includes(status) && trialEndsAt && Date.now() < new Date(trialEndsAt).getTime();
   const paidActive = Boolean(baseTier) && status === "active";
   if (!baseTier || (!trialActive && !paidActive)) {
+    const freeConfig = getSubscriptionTierConfig("FREE");
     return {
-      tier: "LOCKED",
-      name: "No active plan",
+      tier: freeConfig.code,
+      name: freeConfig.name,
       price: 0,
-      status: status === "expired" || status === "trial_expired" ? "expired" : "none",
+      status: "free",
       started_at: null,
       expires_at: null,
       activated_at: null,
@@ -226,37 +227,37 @@ function mapSubscription(subscription, barber) {
       trial_days_left: 0,
       fallback_tier_after_trial: null,
       features: {
-        rankingWeight: 0,
-        analyticsLevel: "locked",
-        homepageFeatured: false,
-        searchPriority: 0,
-        topBarberBadge: false,
-        verifiedBadge: false,
-        adsPlacement: false,
-        promotionsEnabled: false,
-        marketingPushEnabled: false,
-        homeServiceEnabled: false,
-        profileCustomizationLevel: "locked",
-        visibilityLabel: "Plan required",
-        supportLevel: "Choose a provider plan to activate your business.",
-        serviceLimit: 0,
-        photoLimit: 0,
-        imageUploadLimitMb: 0,
-        videoLimit: 0,
-        reviewsEnabled: false,
-        earningsTracking: false,
-        bookingAnalytics: false,
-        customBrandingHighlight: false,
-        portfolioEnabled: false,
-      beforeAfterGalleryEnabled: false,
-        advancedAnalytics: false,
-        aiBusinessCoach: false,
-        reviewInsights: false,
-        videoUploads: false,
-        homepageFeature: false,
-        priorityRanking: false,
-        customBanner: false,
-        aiWeeklyReport: false,
+        rankingWeight: freeConfig.rankingWeight,
+        analyticsLevel: freeConfig.analyticsLevel,
+        homepageFeatured: freeConfig.homepageFeatured,
+        searchPriority: freeConfig.searchPriority,
+        topBarberBadge: freeConfig.topBarberBadge,
+        verifiedBadge: freeConfig.verifiedBadge,
+        adsPlacement: freeConfig.adsPlacement,
+        promotionsEnabled: freeConfig.promotionsEnabled,
+        marketingPushEnabled: freeConfig.marketingPushEnabled,
+        homeServiceEnabled: freeConfig.homeServiceEnabled,
+        profileCustomizationLevel: freeConfig.profileCustomizationLevel,
+        visibilityLabel: freeConfig.visibilityLabel,
+        supportLevel: freeConfig.supportLevel,
+        serviceLimit: freeConfig.serviceLimit,
+        photoLimit: freeConfig.photoLimit,
+        imageUploadLimitMb: freeConfig.imageUploadLimitMb,
+        videoLimit: freeConfig.videoLimit,
+        reviewsEnabled: freeConfig.reviewsEnabled,
+        earningsTracking: freeConfig.earningsTracking,
+        bookingAnalytics: freeConfig.bookingAnalytics,
+        customBrandingHighlight: freeConfig.customBrandingHighlight,
+        portfolioEnabled: freeConfig.portfolioEnabled,
+        beforeAfterGalleryEnabled: freeConfig.beforeAfterGalleryEnabled,
+        advancedAnalytics: freeConfig.advancedAnalytics,
+        aiBusinessCoach: freeConfig.aiBusinessCoach,
+        reviewInsights: freeConfig.reviewInsights,
+        videoUploads: freeConfig.videoUploads,
+        homepageFeature: freeConfig.homepageFeature,
+        priorityRanking: freeConfig.priorityRanking,
+        customBanner: freeConfig.customBanner,
+        aiWeeklyReport: freeConfig.aiWeeklyReport,
       },
     };
   }
@@ -720,6 +721,12 @@ export async function startSubscriptionUpgrade(req, res, next) {
             canActivate: false,
             paymentsComingSoon: true,
           },
+        });
+      }
+
+      if (!env.bookingOnlinePaymentsEnabled) {
+        throw httpError(503, "Online plan payments are coming soon. You can keep using the Free plan for now.", {
+          code: "ONLINE_PAYMENTS_DISABLED",
         });
       }
 

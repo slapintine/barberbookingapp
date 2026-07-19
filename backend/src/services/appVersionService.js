@@ -24,14 +24,19 @@ export function buildAppVersionResponse(config = {}) {
   const configuredUrl = String(config.androidApkUrl || "").trim();
   const response = {
     platform: "android",
-    latestVersion: String(config.androidAppVersion || "1.0.0"),
+    latestVersion: String(config.androidAppVersion || "1.0.1"),
+    versionName: String(config.androidAppVersion || "1.0.1"),
+    versionCode: Number(config.androidVersionCode || 2),
     apkUrl: isSafeDistributionUrl(configuredUrl) ? configuredUrl : OFFICIAL_APK_URL,
+    buildId: String(config.androidBuildId || ""),
     releaseNotes: String(config.androidReleaseNotes || "Initial Queless Android release"),
     forceUpdate: config.androidForceUpdate === true,
   };
 
+  if (!response.buildId) delete response.buildId;
   if (config.androidReleaseDate) response.releasedAt = String(config.androidReleaseDate);
   if (config.androidApkSize) response.fileSize = String(config.androidApkSize);
+  if (config.androidApkSha256) response.sha256 = String(config.androidApkSha256);
 
   return response;
 }

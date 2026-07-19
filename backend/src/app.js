@@ -47,6 +47,7 @@ const app = express();
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
+app.set("etag", false);
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "same-origin" },
@@ -90,21 +91,40 @@ app.use((req, res, next) => {
   return (acceptsImages ? imageJsonParser : standardJsonParser)(req, res, next);
 });
 app.use(express.urlencoded({ extended: true, limit: STANDARD_JSON_LIMIT }));
-app.use("/api/uploads", express.static(providerImageStorageRoot, {
-  immutable: true,
-  maxAge: "1y",
-}));
+app.use(
+  "/api/uploads",
+  (req, res, next) => {
+    // The Android Capacitor WebView runs from https://localhost while uploaded
+    // provider media is served from https://queless.org. Public upload files
+    // must therefore be embeddable cross-origin, while JSON/API responses keep
+    // the stricter same-origin policy above.
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  },
+  express.static(providerImageStorageRoot, {
+    immutable: true,
+    maxAge: "1y",
+  })
+);
 
 app.use((req, res, next) => {
   req.id = req.get("x-request-id") || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   res.setHeader("X-Request-Id", req.id);
   req.log = createRequestLogger(req);
   const start = Date.now();
+  const writeHead = res.writeHead;
+  res.writeHead = function writeHeadWithTiming(...args) {
+    if (!res.headersSent) {
+      res.setHeader("X-Response-Time-Ms", String(Date.now() - start));
+    }
+    return writeHead.apply(this, args);
+  };
 
   res.on("finish", () => {
+    const durationMs = Date.now() - start;
     req.log.info({
       statusCode: res.statusCode,
-      duration_ms: Date.now() - start,
+      duration_ms: durationMs,
       ip: req.ip,
       forwardedFor: req.get("x-forwarded-for") || "",
       protocol: req.protocol,

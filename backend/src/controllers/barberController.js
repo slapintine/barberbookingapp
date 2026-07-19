@@ -329,6 +329,30 @@ function parseJsonArray(value, fallback = []) {
   }
 }
 
+function parseListPagination(query = {}) {
+  const requestedLimit = Number.parseInt(query.limit ?? query.pageSize ?? "", 10);
+  const requestedPage = Number.parseInt(query.page ?? "", 10);
+  const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(requestedLimit, 100)
+    : 50;
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  return { limit, page, offset: (page - 1) * limit };
+}
+
+function placeholders(values = []) {
+  return values.map(() => "?").join(", ");
+}
+
+function groupRowsByNumber(rows = [], key) {
+  return rows.reduce((grouped, row) => {
+    const id = Number(row?.[key]);
+    if (!Number.isFinite(id)) return grouped;
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id).push(row);
+    return grouped;
+  }, new Map());
+}
+
 function withEditableDraftFields(barber = {}) {
   const businessName = String(barber.business_name || "");
   const location = String(barber.location || "");
@@ -686,48 +710,49 @@ function buildSubscriptionMetadata(barber, latestSubscription) {
     Date.now() < new Date(trialEndsAt).getTime();
 
   if (!tierCode) {
+    const freeConfig = getSubscriptionTierConfig("FREE");
     return {
-      tier: "LOCKED",
-      name: "No active plan",
+      tier: freeConfig.code,
+      name: freeConfig.name,
       price: 0,
-      status: "none",
+      status: "free",
       expires_at: null,
       is_trial: false,
       trial_days_total: FREE_TRIAL_DAYS,
       trial_days_left: 0,
       fallback_tier_after_trial: null,
       features: {
-        rankingWeight: 0,
-        analyticsLevel: "locked",
-        homepageFeatured: false,
-        searchPriority: 0,
-        topBarberBadge: false,
-        verifiedBadge: false,
-        adsPlacement: false,
-        promotionsEnabled: false,
-        marketingPushEnabled: false,
-        homeServiceEnabled: false,
-        profileCustomizationLevel: "locked",
-        visibilityLabel: "Plan required",
-        supportLevel: "Choose a provider plan to activate your business.",
-        serviceLimit: 0,
-        photoLimit: 0,
-        imageUploadLimitMb: 0,
-        videoLimit: 0,
-        reviewsEnabled: false,
-        earningsTracking: false,
-        bookingAnalytics: false,
-        customBrandingHighlight: false,
-        portfolioEnabled: false,
-        beforeAfterGalleryEnabled: false,
-        advancedAnalytics: false,
-        aiBusinessCoach: false,
-        reviewInsights: false,
-        videoUploads: false,
-        homepageFeature: false,
-        priorityRanking: false,
-        customBanner: false,
-        aiWeeklyReport: false,
+        rankingWeight: freeConfig.rankingWeight,
+        analyticsLevel: freeConfig.analyticsLevel,
+        homepageFeatured: freeConfig.homepageFeatured,
+        searchPriority: freeConfig.searchPriority,
+        topBarberBadge: freeConfig.topBarberBadge,
+        verifiedBadge: freeConfig.verifiedBadge,
+        adsPlacement: freeConfig.adsPlacement,
+        promotionsEnabled: freeConfig.promotionsEnabled,
+        marketingPushEnabled: freeConfig.marketingPushEnabled,
+        homeServiceEnabled: freeConfig.homeServiceEnabled,
+        profileCustomizationLevel: freeConfig.profileCustomizationLevel,
+        visibilityLabel: freeConfig.visibilityLabel,
+        supportLevel: freeConfig.supportLevel,
+        serviceLimit: freeConfig.serviceLimit,
+        photoLimit: freeConfig.photoLimit,
+        imageUploadLimitMb: freeConfig.imageUploadLimitMb,
+        videoLimit: freeConfig.videoLimit,
+        reviewsEnabled: freeConfig.reviewsEnabled,
+        earningsTracking: freeConfig.earningsTracking,
+        bookingAnalytics: freeConfig.bookingAnalytics,
+        customBrandingHighlight: freeConfig.customBrandingHighlight,
+        portfolioEnabled: freeConfig.portfolioEnabled,
+        beforeAfterGalleryEnabled: freeConfig.beforeAfterGalleryEnabled,
+        advancedAnalytics: freeConfig.advancedAnalytics,
+        aiBusinessCoach: freeConfig.aiBusinessCoach,
+        reviewInsights: freeConfig.reviewInsights,
+        videoUploads: freeConfig.videoUploads,
+        homepageFeature: freeConfig.homepageFeature,
+        priorityRanking: freeConfig.priorityRanking,
+        customBanner: freeConfig.customBanner,
+        aiWeeklyReport: freeConfig.aiWeeklyReport,
       },
     };
   }
@@ -1107,6 +1132,7 @@ export async function registerBarber(req, res, next) {
 export async function getAllBarbers(req, res, next) {
   try {
     const now = new Date();
+    const pagination = parseListPagination(req.query);
     // Fill in missing subscription_tier / subscription_status defaults for new free accounts.
     // Do NOT touch is_published or business_status — those are controlled by the provider.
     await run(
@@ -1242,16 +1268,54 @@ export async function getAllBarbers(req, res, next) {
         b.used_trials,
         b.created_at,
         u.username
-       ORDER BY b.id DESC`,
-      publicBusinessParams(now)
+       ORDER BY b.id DESC
+       LIMIT ? OFFSET ?`,
+      [...publicBusinessParams(now), pagination.limit, pagination.offset]
     );
+
+    const barberIds = rows.map((row) => Number(row.id)).filter(Number.isFinite);
+    const serviceRows = barberIds.length
+      ? await all(
+          `SELECT id, barber_id, service_name, category, price_extra, pricing_type, min_price, max_price, starting_price, duration_minutes, location_type, description, is_available, image, is_featured
+           FROM barber_services
+           WHERE barber_id IN (${placeholders(barberIds)})
+           ORDER BY barber_id ASC, id ASC`,
+          barberIds
+        )
+      : [];
+    const teamRows = barberIds.length
+      ? await all(
+          `SELECT id, barber_id, name, title, bio, image, specialties, is_active, created_at, updated_at
+           FROM barber_team_members
+           WHERE barber_id IN (${placeholders(barberIds)})
+           ORDER BY barber_id ASC, id ASC`,
+          barberIds
+        )
+      : [];
+    const subscriptionRows = barberIds.length
+      ? await all(
+          `SELECT tier, price, status, payment_status, trial_status, started_at, expires_at, activated_at, barber_id, id
+           FROM barber_subscriptions
+           WHERE barber_id IN (${placeholders(barberIds)})
+           ORDER BY barber_id ASC, id DESC`,
+          barberIds
+        )
+      : [];
+    const servicesByBarber = groupRowsByNumber(serviceRows, "barber_id");
+    const teamByBarber = groupRowsByNumber(teamRows, "barber_id");
+    const subscriptionByBarber = subscriptionRows.reduce((latest, row) => {
+      const barberId = Number(row.barber_id);
+      if (Number.isFinite(barberId) && !latest.has(barberId)) latest.set(barberId, row);
+      return latest;
+    }, new Map());
 
     const result = [];
 
     for (const barber of rows || []) {
-      const services = await getServicesForBarber(barber.id);
-      const teamMembers = await getTeamMembersForBarber(barber.id);
-      const latestSubscription = await getLatestSubscription(barber.id);
+      const id = Number(barber.id);
+      const services = servicesByBarber.get(id) || [];
+      const teamMembers = teamByBarber.get(id) || [];
+      const latestSubscription = subscriptionByBarber.get(id) || null;
       if (!isBusinessPubliclyVisible(barber, latestSubscription, now)) continue;
       const subscription = buildSubscriptionMetadata(barber, latestSubscription);
 
@@ -1267,6 +1331,7 @@ export async function getAllBarbers(req, res, next) {
           : "new";
 
       const { owner_user_id, ...publicBarber } = barber;
+      const isOwnedByCurrentUser = Boolean(req.user?.id && owner_user_id && Number(req.user.id) === Number(owner_user_id));
 
       result.push({
         ...publicBarber,
@@ -1284,6 +1349,8 @@ export async function getAllBarbers(req, res, next) {
         portfolio: parseJsonArray(barber.portfolio_json, []),
         badge,
         featured: subscription.features.homepageFeatured,
+        isOwnedByCurrentUser,
+        is_owned_by_current_user: isOwnedByCurrentUser,
         subscription,
         services,
         team_members: teamMembers,
@@ -1303,7 +1370,12 @@ export async function getAllBarbers(req, res, next) {
         const reviewDiff = Number(b.total_reviews || 0) - Number(a.total_reviews || 0);
         if (reviewDiff !== 0) return reviewDiff;
         return Number(a.price_from || 0) - Number(b.price_from || 0);
-      })
+      }),
+      pagination: {
+        page: pagination.page,
+        limit: pagination.limit,
+        count: result.length,
+      }
     });
   } catch (error) {
     next(error);

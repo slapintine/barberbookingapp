@@ -23,8 +23,10 @@ export function toPositiveInteger(value, fieldName) {
   const number = Number(value);
 
   if (!Number.isInteger(number) || number <= 0) {
-    const error = new Error(`${fieldName} must be a positive integer.`);
+    const error = new Error(friendlyFieldMessage(fieldName, "id"));
     error.statusCode = 400;
+    error.code = "VALIDATION_ERROR";
+    error.details = { field: fieldName };
     throw error;
   }
 
@@ -35,8 +37,10 @@ export function requireIsoDate(value, fieldName) {
   const normalized = cleanString(value);
 
   if (!isIsoDate(normalized)) {
-    const error = new Error(`${fieldName} must be a valid date in YYYY-MM-DD format.`);
+    const error = new Error(friendlyFieldMessage(fieldName, "date"));
     error.statusCode = 400;
+    error.code = "VALIDATION_ERROR";
+    error.details = { field: fieldName };
     throw error;
   }
 
@@ -47,10 +51,35 @@ export function requireClockTime(value, fieldName) {
   const normalized = cleanString(value);
 
   if (!isClockTime(normalized)) {
-    const error = new Error(`${fieldName} must be a valid time in HH:MM format.`);
+    const error = new Error(friendlyFieldMessage(fieldName, "time"));
     error.statusCode = 400;
+    error.code = "VALIDATION_ERROR";
+    error.details = { field: fieldName };
     throw error;
   }
 
   return normalized;
+}
+
+function friendlyFieldMessage(fieldName, kind) {
+  const field = String(fieldName || "").toLowerCase();
+  if (field.includes("barber") || field.includes("provider")) {
+    return "This provider could not be found. Please return to search and try again.";
+  }
+  if (field.includes("service")) {
+    return "This service is no longer available. Choose another service.";
+  }
+  if (field.includes("booking")) {
+    return "This booking is no longer available. Refresh the page and try again.";
+  }
+  if (field.includes("team")) {
+    return "That provider team member is no longer available. Choose another option.";
+  }
+  if (kind === "date") {
+    return "Choose a valid booking date.";
+  }
+  if (kind === "time") {
+    return "Choose a valid booking time.";
+  }
+  return "That request could not be completed. Refresh the page and try again.";
 }

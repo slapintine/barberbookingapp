@@ -28,8 +28,8 @@ test("detects mobile money providers explicitly", () => {
   assert.equal(isMobileMoneyPayment("airtel_money"), true);
 });
 
-test("keeps digital booking payment methods behind feature flags", () => {
-  assert.equal(isBookingPaymentMethodEnabled("cash"), false);
+test("keeps cash bookings available and digital booking payment methods behind feature flags", () => {
+  assert.equal(isBookingPaymentMethodEnabled("cash"), true);
   assert.equal(isBookingPaymentMethodEnabled("wallet"), false);
   assert.equal(isBookingPaymentMethodEnabled("mtn_mobile_money"), false);
   assert.equal(isBookingPaymentMethodEnabled("airtel_money"), false);

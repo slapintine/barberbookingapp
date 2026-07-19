@@ -3,6 +3,7 @@ import { getFirebaseMessaging } from "../config/firebaseAdmin.js";
 import { logger } from "../config/logger.js";
 
 const FCM_MULTICAST_LIMIT = 500;
+const ANDROID_NOTIFICATION_CHANNEL_ID = "queless-booking-updates";
 const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered",
@@ -78,6 +79,31 @@ export async function unregisterNotificationToken({ userId, token }) {
   );
 }
 
+export async function getNotificationTokenStatus({ userId, token }) {
+  const cleanedToken = compactString(token, 4096);
+  if (!userId || !cleanedToken) {
+    return { registered: false, ownedByCurrentUser: false };
+  }
+
+  const row = await get(
+    `SELECT user_id, platform, browser, device_label, updated_at, last_used_at
+       FROM notification_tokens
+      WHERE token = ?`,
+    [cleanedToken]
+  );
+
+  return {
+    registered: Boolean(row && Number(row.user_id) === Number(userId)),
+    ownedByCurrentUser: Boolean(row && Number(row.user_id) === Number(userId)),
+    assignedToAnotherUser: Boolean(row && Number(row.user_id) !== Number(userId)),
+    platform: row?.platform || "",
+    browser: row?.browser || "",
+    deviceLabel: row?.device_label || "",
+    updatedAt: row?.updated_at || null,
+    lastUsedAt: row?.last_used_at || null,
+  };
+}
+
 export async function deleteNotificationTokens(tokens = []) {
   const uniqueTokens = [...new Set(tokens.filter(Boolean))];
   await Promise.all(
@@ -135,6 +161,20 @@ async function sendFirebaseToTokens(tokens, { title, body, data = {} }) {
     const response = await messaging.sendEachForMulticast({
       tokens: batch,
       data: payloadData,
+      notification: {
+        title: compactString(title, 160) || "Queless notification",
+        body: compactString(body, 240) || "Open Queless for the latest update.",
+      },
+      android: {
+        priority: data.type === "booking" || data.type === "payment" ? "high" : "normal",
+        notification: {
+          channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+          title: compactString(title, 160) || "Queless notification",
+          body: compactString(body, 240) || "Open Queless for the latest update.",
+          visibility: "private",
+          defaultSound: true,
+        },
+      },
       webpush: {
         headers: {
           Urgency: data.type === "booking" || data.type === "payment" ? "high" : "normal",
@@ -170,8 +210,9 @@ async function sendFirebaseToTokens(tokens, { title, body, data = {} }) {
 export async function sendNotificationToUser(userId, title, body, data = {}, options = {}) {
   if (!userId) return { sent: 0, failed: 0, tokenCount: 0 };
 
+  let notificationId = null;
   if (options.persist !== false) {
-    await createInAppNotification(userId, {
+    notificationId = await createInAppNotification(userId, {
       title,
       type: data.type || "system",
       message: body,
@@ -179,7 +220,10 @@ export async function sendNotificationToUser(userId, title, body, data = {}, opt
       customerUserId: data.customerUserId || data.customer_user_id || null,
       customerUsername: data.customerUsername || data.customer_username || "",
       barberOwnerUsername: data.barberOwnerUsername || data.barber_owner_username || "",
-    }).catch((error) => logger.warn({ err: error, userId }, "Could not create in-app notification"));
+    }).catch((error) => {
+      logger.warn({ err: error, userId }, "Could not create in-app notification");
+      return null;
+    });
   }
 
   const rows = await all(
@@ -197,6 +241,7 @@ export async function sendNotificationToUser(userId, title, body, data = {}, opt
     body,
     data: {
       ...data,
+      notificationId: notificationId || data.notificationId || "",
       type: data.type || "system",
       title,
       body,

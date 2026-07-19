@@ -32,6 +32,17 @@ router.post("/", validateRequest(schemas.favouriteCreate), async (req, res, next
       return res.status(400).json({ error: "barber_id is required." });
     }
 
+    const ownedBusiness = await get(
+      `SELECT id FROM barbers WHERE id = ? AND owner_user_id = ? LIMIT 1`,
+      [barberId, req.user.id]
+    );
+    if (ownedBusiness) {
+      return res.status(403).json({
+        success: false,
+        message: "This is your stand. Open your dashboard to manage it.",
+      });
+    }
+
     const existing = await get(
       `SELECT id, user_id, barber_id, created_at
        FROM favorites

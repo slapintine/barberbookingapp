@@ -25,6 +25,16 @@ function httpError(statusCode, message) {
   return error;
 }
 
+function ensureBookingOnlinePaymentsEnabled() {
+  if (!env.bookingOnlinePaymentsEnabled) {
+    throw httpError(503, "Online booking payments are not available yet.");
+  }
+}
+
+function anyMobileMoneyFlowEnabled() {
+  return Boolean(env.bookingOnlinePaymentsEnabled || env.bookingWalletPaymentsEnabled);
+}
+
 async function getBookingById(bookingId, client = { get }) {
   return client.get(`SELECT * FROM bookings WHERE id = ?`, [bookingId]);
 }
@@ -575,6 +585,8 @@ async function processPayoutWebhook({ client, providerReference, reference, stat
 
 export async function checkout(req, res, next) {
   try {
+    ensureBookingOnlinePaymentsEnabled();
+
     const bookingId = Number(req.body.bookingId || req.body.booking_id);
     const provider = String(req.body.provider || "").trim().toLowerCase();
     const requestedAmount = req.body.amount === undefined ? null : validatePositiveAmount(req.body.amount);
@@ -591,7 +603,7 @@ export async function checkout(req, res, next) {
       }
 
       if (Number(booking.customer_user_id) !== Number(req.user.id)) {
-        throw httpError(403, "Only the customer can start checkout for this booking.");
+        throw httpError(403, "Only the customer can start payment for this booking.");
       }
 
       if (requestedAmount !== null && requestedAmount !== toAmount(booking.price)) {
@@ -838,6 +850,8 @@ export async function initiateMtnPayment(req, res, next) {
 
 export async function verify(req, res, next) {
   try {
+    ensureBookingOnlinePaymentsEnabled();
+
     const bookingId = Number(req.body.bookingId || req.body.booking_id || req.params.id);
     let resolvedBookingId = bookingId;
 
@@ -871,6 +885,13 @@ async function handleMobileMoneyWebhook(req, res, next, providerKey) {
       return res.status(401).json({
         success: false,
         message: "Invalid webhook token.",
+      });
+    }
+
+    if (!anyMobileMoneyFlowEnabled()) {
+      return res.status(503).json({
+        success: false,
+        message: "Mobile money payment callbacks are disabled on this deployment.",
       });
     }
 
@@ -1103,6 +1124,8 @@ export async function getMtnHealth(req, res, next) {
 
 export async function testMtnPaymentInitiation(req, res, next) {
   try {
+    ensureBookingOnlinePaymentsEnabled();
+
     const phoneNumber = String(req.body.phoneNumber || req.body.phone_number || "").trim();
     const amount = Number(req.body.amount || 500);
     const reference = `mtn-check-${Date.now()}`;
@@ -1132,6 +1155,8 @@ export async function testMtnPaymentInitiation(req, res, next) {
 
 export async function getMtnPaymentStatus(req, res, next) {
   try {
+    ensureBookingOnlinePaymentsEnabled();
+
     const reference = String(req.params.reference || req.query.reference || "").trim();
     if (!reference) {
       throw httpError(400, "Payment reference is required.");

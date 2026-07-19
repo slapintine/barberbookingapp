@@ -398,14 +398,20 @@ function normalizePaymentMethod(value, barber) {
 function resolveServiceBookingPrice(barber, service) {
   const basePrice = Number(barber.price_from || 0);
   const pricingType = String(service?.pricing_type || "fixed").toLowerCase();
+  const serviceAmount =
+    pricingType === "range"
+      ? Number(service?.min_price || service?.price_extra || 0)
+      : pricingType === "starting_from"
+      ? Number(service?.starting_price || service?.price_extra || 0)
+      : pricingType === "quote"
+      ? 0
+      : Number(service?.price_extra || 0);
   const total =
     pricingType === "quote"
       ? basePrice
-      : pricingType === "range"
-      ? basePrice + Number(service?.min_price || service?.price_extra || 0)
-      : pricingType === "starting_from"
-      ? basePrice + Number(service?.starting_price || service?.price_extra || 0)
-      : basePrice + Number(service?.price_extra || 0);
+      : serviceAmount > 0
+      ? serviceAmount
+      : basePrice;
   return normalizeMoneyAmount(total, "Booking price");
 }
 
@@ -425,7 +431,17 @@ async function ensureWallet(userId, client) {
   return wallet;
 }
 
-async function transferWalletPayment({ fromUserId, barberId, bookingId, amount, barberAmount = amount, paymentTransactionId = null, reference = "", client }) {
+async function transferWalletPayment({
+  fromUserId,
+  barberId,
+  bookingId,
+  amount,
+  barberAmount = amount,
+  paymentTransactionId = null,
+  paymentId = null,
+  reference = "",
+  client,
+}) {
   const customerWallet = await ensureWallet(fromUserId, client);
   const ledgerReference = reference || `wallet-booking-${bookingId}-customer`;
   const existingDebit = await client.get(
@@ -456,7 +472,7 @@ async function transferWalletPayment({ fromUserId, barberId, bookingId, amount, 
     [
       fromUserId,
       bookingId,
-      paymentTransactionId,
+      paymentId,
       amount,
       ledgerReference,
       `Booking #${bookingId} wallet payment`,
@@ -801,12 +817,13 @@ export async function finalizeBookingPayment({ bookingId, actorUserId = null, fo
 
 export async function createBooking(req, res, next) {
   try {
-    const barberId = toPositiveInteger(req.body.barber_id, "barber_id");
-    const serviceId = toPositiveInteger(req.body.service_id, "service_id");
-    const rawTeamMemberId = req.body.team_member_id ? toPositiveInteger(req.body.team_member_id, "team_member_id") : null;
-    const bookingDate = requireIsoDate(req.body.booking_date, "booking_date");
+    const barberId = toPositiveInteger(req.body.barber_id ?? req.body.barberId, "barber_id");
+    const serviceId = toPositiveInteger(req.body.service_id ?? req.body.serviceId, "service_id");
+    const rawTeamMemberId = req.body.team_member_id ?? req.body.teamMemberId;
+    const teamMemberId = rawTeamMemberId ? toPositiveInteger(rawTeamMemberId, "team_member_id") : null;
+    const bookingDate = requireIsoDate(req.body.booking_date ?? req.body.date, "booking_date");
     const normalizedBookingTime = requireClockTime(
-      normalizeTimeInput(req.body.booking_time),
+      normalizeTimeInput(req.body.booking_time ?? req.body.time),
       "booking_time"
     );
 
@@ -837,11 +854,11 @@ export async function createBooking(req, res, next) {
     const { mappedBooking, payment } = await transaction(async (client) => {
       const barber = await getBarberById(barberId, client);
       if (!barber) {
-        throw httpError(404, "Barber not found.");
+        throw httpError(404, "We couldn't open this provider. Please return to search and try again.");
       }
       // Prevent self-booking: a provider cannot book their own stand
       if (barber.owner_user_id && Number(barber.owner_user_id) === Number(req.user.id)) {
-        throw httpError(400, "You cannot book your own stand.");
+        throw httpError(403, "This is your stand. Open your dashboard to manage bookings.");
       }
       if (Number(barber.is_banned || 0) === 1) {
         throw httpError(403, "This business is not available for bookings.");
@@ -851,19 +868,19 @@ export async function createBooking(req, res, next) {
       }
       const paymentMethod = normalizePaymentMethod(req.body.payment_method, barber);
       if (paymentMethod === "wallet" && !barber.owner_user_id) {
-        throw httpError(400, "This barber cannot receive wallet payments yet.");
+        throw httpError(400, "This provider cannot receive wallet payments yet.");
       }
       const requiresTeamMember = false;
-      const teamMember = rawTeamMemberId
-        ? await getTeamMemberById(rawTeamMemberId, barberId, client)
+      const teamMember = teamMemberId
+        ? await getTeamMemberById(teamMemberId, barberId, client)
         : null;
 
-      if (rawTeamMemberId && !teamMember) {
-        throw httpError(400, "Selected barber is not available on this stand.");
+      if (teamMemberId && !teamMember) {
+        throw httpError(400, "Selected provider is not available on this stand.");
       }
 
       if (requiresTeamMember && !teamMember) {
-        throw httpError(400, "Choose a barber from this stand before booking.");
+        throw httpError(400, "Choose a provider from this stand before booking.");
       }
 
       const service = await getBarberServiceById(serviceId, barberId, client);
@@ -912,7 +929,7 @@ export async function createBooking(req, res, next) {
 
       const active = await getActiveBookingsForCustomerWithBarber(req.user.id, barberId, client);
       if (active.length) {
-        throw httpError(409, "You already have an active booking with this barber.");
+        throw httpError(409, "You already have an active booking with this provider.");
       }
 
       const recent = await getRecentBookingForCustomerWithBarber(req.user.id, barberId, client);
@@ -930,13 +947,13 @@ export async function createBooking(req, res, next) {
       if (!isWithinSchedule(workingWindow, normalizedBookingTime, service.duration_minutes)) {
         throw httpError(
           400,
-          `Outside working hours. Barber works ${workingWindow?.start || "--:--"} to ${workingWindow?.end || "--:--"}.`
+          `That time is outside this provider's working hours. Choose a time between ${workingWindow?.start || "--:--"} and ${workingWindow?.end || "--:--"}.`
         );
       }
 
       const existing = await getActiveBookingsForBarberOnDate(barberId, bookingDate, teamMember?.id || null, client);
       if (hasOverlap(existing, normalizedBookingTime, service.duration_minutes)) {
-        throw httpError(409, "Time slot already booked.");
+        throw httpError(409, "That time is no longer available. Choose another time.");
       }
 
       const totalPrice = resolveServiceBookingPrice(barber, service);
@@ -1028,7 +1045,7 @@ export async function createBooking(req, res, next) {
           ]
         );
         payment = await getPaymentTransactionByBookingId(createdBooking.id, client);
-        await createPaymentRecord({
+        const paymentRecord = await createPaymentRecord({
           client,
           bookingId: createdBooking.id,
           barberId,
@@ -1051,6 +1068,7 @@ export async function createBooking(req, res, next) {
           amount: totalPrice,
           barberAmount,
           paymentTransactionId: payment?.id || null,
+          paymentId: paymentRecord?.id || null,
           reference: paymentReference,
           client
         });
@@ -1159,10 +1177,8 @@ export async function createBooking(req, res, next) {
 
     const providerPushResult = await sendNotificationToBusiness(
       barberId,
-      mappedBooking.payment_status === "paid" ? "New paid booking" : "New booking request",
-      mappedBooking.payment_status === "paid"
-        ? `${mappedBooking.customer_full_name || "A customer"} booked ${mappedBooking.service_name} at ${normalizedBookingTime}.`
-        : `A new booking request arrived for ${normalizedBookingTime}.`,
+      "New booking request",
+      "You have a new booking to review.",
       {
         type: "booking",
         bookingId: mappedBooking.id,
@@ -1196,7 +1212,7 @@ export async function createBooking(req, res, next) {
     if (error?.code === "SQLITE_CONSTRAINT" && String(error.message || "").includes("bookings")) {
       return res.status(409).json({
         success: false,
-        message: "Time slot already booked."
+        message: "That time is no longer available. Choose another time."
       });
     }
 
@@ -1327,7 +1343,7 @@ export async function payBookingWithWallet(req, res, next) {
         );
       }
 
-      await createPaymentRecord({
+      const paymentRecord = await createPaymentRecord({
         client,
         bookingId: booking.id,
         barberId: booking.barber_id,
@@ -1351,6 +1367,7 @@ export async function payBookingWithWallet(req, res, next) {
         amount,
         barberAmount,
         paymentTransactionId: payment?.id || null,
+        paymentId: paymentRecord?.id || null,
         reference: paymentReference,
         client,
       });
@@ -1423,7 +1440,7 @@ export async function getBarberDayAvailability(req, res, next) {
     if (!barber_id || !booking_date) {
       return res.status(400).json({
         success: false,
-        message: "barber_id and booking_date are required."
+        message: "Choose a provider and date to see available times."
       });
     }
 
@@ -1431,7 +1448,7 @@ export async function getBarberDayAvailability(req, res, next) {
     if (!barber) {
       return res.status(404).json({
         success: false,
-        message: "Barber not found."
+        message: "We couldn't open this provider. Please return to search and try again."
       });
     }
 
@@ -1441,7 +1458,7 @@ export async function getBarberDayAvailability(req, res, next) {
       if (!teamMember) {
         return res.status(400).json({
           success: false,
-          message: "Selected barber is not available on this stand."
+          message: "Selected provider is not available on this stand."
         });
       }
     }
@@ -1517,7 +1534,7 @@ export async function rescheduleBooking(req, res, next) {
       if (!isWithinSchedule(workingWindow, bookingTime, durationMinutes)) {
         throw httpError(
           400,
-          `Outside working hours. Barber works ${workingWindow?.start || "--:--"} to ${workingWindow?.end || "--:--"}.`
+          `That time is outside this provider's working hours. Choose a time between ${workingWindow?.start || "--:--"} and ${workingWindow?.end || "--:--"}.`
         );
       }
 
@@ -1529,7 +1546,7 @@ export async function rescheduleBooking(req, res, next) {
       );
       const conflicts = existing.filter((item) => Number(item.id) !== Number(bookingId));
       if (hasOverlap(conflicts, bookingTime, durationMinutes)) {
-        throw httpError(409, "Time slot already booked.");
+        throw httpError(409, "That time is no longer available. Choose another time.");
       }
 
       await client.run(
@@ -1708,17 +1725,23 @@ export async function updateBookingStatus(req, res, next) {
         recipientUserId: notifyUserId,
         title:
           status === "confirmed"
-            ? "Booking accepted"
+            ? "Booking confirmed"
             : ["cancelled", "rejected"].includes(status)
-            ? "Booking status changed"
+            ? status === "rejected"
+              ? "Booking not accepted"
+              : "Booking cancelled"
             : "Booking updated",
         body: refunded
-          ? `Booking status changed to ${status}. Wallet payment was refunded.`
+          ? "This booking was updated and your wallet payment was refunded."
           : releasedToAvailable
           ? "Booking completed. Earnings are now available for withdrawal."
           : status === "confirmed"
-          ? "Your booking has been accepted and confirmed."
-          : `Booking status changed to ${status}.`,
+          ? "Your booking has been accepted."
+          : status === "rejected"
+          ? "The provider couldn't accept this booking. You can choose another time."
+          : status === "cancelled"
+          ? "This booking has been cancelled."
+          : "There's an update to your booking.",
         status,
       }, { persist: false }).catch(() => {});
       if (isBarberOwner) {

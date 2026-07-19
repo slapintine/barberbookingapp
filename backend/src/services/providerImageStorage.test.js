@@ -9,6 +9,8 @@ const ONE_PIXEL_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQ
 
 test("rejects unsupported or malformed image data URLs", () => {
   assert.equal(parseImageDataUrl("data:image/svg+xml;base64,PHN2Zy8+"), null);
+  assert.equal(parseImageDataUrl("data:image/heic;base64,AAAA"), null);
+  assert.equal(parseImageDataUrl("data:image/heif;base64,AAAA"), null);
   assert.equal(parseImageDataUrl("javascript:alert(1)"), null);
 });
 

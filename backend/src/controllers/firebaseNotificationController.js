@@ -1,4 +1,5 @@
 import {
+  getNotificationTokenStatus,
   registerNotificationToken,
   sendAdminAnnouncement,
   sendNotificationToUser,
@@ -44,6 +45,30 @@ export async function unregisterToken(req, res, next) {
 
     await unregisterNotificationToken({ userId: req.user.id, token });
     res.status(200).json({ success: true, message: "Notification token removed." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getTokenStatus(req, res, next) {
+  try {
+    const token = clean(req.body.token, 4096);
+    if (!token) {
+      return res.status(400).json({ success: false, message: "FCM token is required." });
+    }
+
+    const status = await getNotificationTokenStatus({ userId: req.user.id, token });
+    res.status(200).json({
+      success: true,
+      registered: Boolean(status.registered),
+      assignedToAnotherUser: Boolean(status.assignedToAnotherUser),
+      platform: status.platform,
+      browser: status.browser,
+      deviceLabel: status.deviceLabel,
+      updatedAt: status.updatedAt,
+      lastUsedAt: status.lastUsedAt,
+      firebaseReady: isFirebaseMessagingReady(),
+    });
   } catch (error) {
     next(error);
   }

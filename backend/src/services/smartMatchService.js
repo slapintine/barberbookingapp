@@ -53,7 +53,7 @@ const SERVICE_ALIASES = {
   "education-tutoring": ["education", "tutoring", "tutor", "private tutor", "teacher", "lesson", "lessons", "academic support", "math", "mathematics", "english", "science", "french", "homework", "exam", "school", "music lessons", "art lessons"],
   "health-fitness": ["health", "fitness", "gym", "trainer", "physio", "wellness", "nutrition", "massage"],
   "repairs-maintenance": ["repair", "repairs", "maintenance", "fix", "technician", "appliance", "electronics", "phone repair", "computer", "furniture"],
-  "website-app-development": ["website", "web development", "app development", "mobile app", "ecommerce", "automation", "technical build"],
+  "website-app-development": ["website", "web development", "app development", "mobile app", "booking tool", "automation", "technical build"],
   "digital-marketing": ["digital marketing", "social media", "ads", "seo", "content strategy", "campaign"],
   "consulting-services": ["consulting", "consultant", "business strategy", "operations", "career advisory", "specialist advisory"],
   "accounting-tax": ["accounting", "tax", "bookkeeping", "payroll", "audit", "financial records"],
@@ -67,7 +67,7 @@ const SERVICE_ALIASES = {
   "laundry-services": ["laundry", "dry cleaning", "ironing", "wash and fold", "fabric care"],
   "cleaning-services": ["cleaning", "cleaner", "deep clean", "fumigation", "sanitation"],
   "catering-food-services": ["catering", "food", "meal prep", "cake", "private chef", "food vendor"],
-  "delivery-errands": ["delivery", "errand", "courier", "pickup", "shopping", "runner"],
+  "delivery-errands": ["delivery", "errand", "courier", "pickup", "document drop", "runner"],
 };
 
 const CATEGORY_BY_ID = new Map(SERVICE_CATEGORIES.map((category) => [category.id, category]));

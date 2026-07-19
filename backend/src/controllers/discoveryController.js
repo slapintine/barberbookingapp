@@ -44,8 +44,23 @@ function parseJsonArray(value, fallback = []) {
   }
 }
 
-function normalizeProvider(row = {}, services = []) {
+function parsePagination(query = {}) {
+  const requestedLimit = Number.parseInt(query.limit ?? query.pageSize ?? "", 10);
+  const requestedPage = Number.parseInt(query.page ?? "", 10);
+  const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(requestedLimit, 100)
+    : 50;
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  return { limit, page, offset: (page - 1) * limit };
+}
+
+function isOwnedByCurrentUser(row = {}, user = null) {
+  return Boolean(user?.id && row.owner_user_id && Number(user.id) === Number(row.owner_user_id));
+}
+
+function normalizeProvider(row = {}, services = [], currentUser = null) {
   const portfolio = parseJsonArray(row.portfolio_json, []);
+  const owned = isOwnedByCurrentUser(row, currentUser);
   return withCanonicalProviderFields({
     id: row.id,
     business_name: row.business_name,
@@ -65,9 +80,9 @@ function normalizeProvider(row = {}, services = []) {
     pricing_mode: row.pricing_mode || "fixed",
     requires_quote: Boolean(row.requires_quote),
     is_verified: String(row.verified_status || "").toLowerCase() === "verified",
-    subscription_plan: row.subscription_tier || "LOCKED",
-    subscription_tier: row.subscription_tier || "",
-    subscription_status: row.subscription_status || "pending_payment",
+    subscription_plan: row.subscription_tier || "FREE",
+    subscription_tier: row.subscription_tier || "FREE",
+    subscription_status: row.subscription_status || "free",
     subscription_expires_at: row.subscription_expires_at || null,
     trial_status: row.trial_status || "",
     trial_ends_at: row.trial_ends_at || null,
@@ -78,11 +93,14 @@ function normalizeProvider(row = {}, services = []) {
     deleted_at: row.deleted_at || null,
     rating: Number(row.rating || 0),
     total_reviews: Number(row.total_reviews || 0),
+    isOwnedByCurrentUser: owned,
+    is_owned_by_current_user: owned,
     created_at: row.created_at,
   }, { services, portfolio });
 }
 
-function normalizeService(row = {}) {
+function normalizeService(row = {}, currentUser = null) {
+  const owned = isOwnedByCurrentUser({ owner_user_id: row.provider_owner_user_id || row.owner_user_id }, currentUser);
   return {
     id: row.id,
     provider_id: row.barber_id,
@@ -97,6 +115,8 @@ function normalizeService(row = {}) {
     duration_minutes: Number(row.duration_minutes || 0),
     location_type: row.location_type || "provider_location",
     images: row.image ? [row.image] : [],
+    isOwnedByCurrentUser: owned,
+    is_owned_by_current_user: owned,
     is_featured: Boolean(row.is_featured),
     is_active: Number(row.is_available ?? 1) === 1,
     created_at: row.created_at || null,
@@ -117,6 +137,7 @@ export async function getCategories(req, res, next) {
 export async function getProviders(req, res, next) {
   try {
     const now = new Date();
+    const pagination = parsePagination(req.query);
     const rows = await all(
       `SELECT
          b.*,
@@ -124,8 +145,9 @@ export async function getProviders(req, res, next) {
          (SELECT COUNT(*) FROM reviews r WHERE r.barber_id = b.id AND COALESCE(r.blocked_from_public, 0) = 0) AS total_reviews
        FROM barbers b
        WHERE ${publicBusinessWhere("b")}
-       ORDER BY b.id DESC`,
-      publicBusinessParams(now)
+       ORDER BY b.id DESC
+       LIMIT ? OFFSET ?`,
+      [...publicBusinessParams(now), pagination.limit, pagination.offset]
     );
     const providerIds = rows.map((row) => Number(row.id)).filter(Boolean);
     const services = providerIds.length
@@ -146,7 +168,12 @@ export async function getProviders(req, res, next) {
 
     res.json({
       success: true,
-      providers: rows.map((row) => normalizeProvider(row, servicesByProvider.get(Number(row.id)) || [])),
+      providers: rows.map((row) => normalizeProvider(row, servicesByProvider.get(Number(row.id)) || [], req.user)),
+      pagination: {
+        page: pagination.page,
+        limit: pagination.limit,
+        count: rows.length,
+      },
     });
   } catch (error) {
     next(error);
@@ -156,19 +183,30 @@ export async function getProviders(req, res, next) {
 export async function getServiceListings(req, res, next) {
   try {
     const now = new Date();
+    const pagination = parsePagination(req.query);
     const rows = await all(
       `SELECT
          s.*,
+         b.owner_user_id AS provider_owner_user_id,
          COALESCE(s.pricing_type, 'fixed') AS pricing_type,
          COALESCE(s.location_type, 'provider_location') AS location_type,
          COALESCE(s.is_featured, 0) AS is_featured
        FROM barber_services s
        JOIN barbers b ON b.id = s.barber_id
        WHERE ${publicBusinessWhere("b")}
-       ORDER BY s.id DESC`,
-      publicBusinessParams(now)
+       ORDER BY s.id DESC
+       LIMIT ? OFFSET ?`,
+      [...publicBusinessParams(now), pagination.limit, pagination.offset]
     );
-    res.json({ success: true, service_listings: rows.map(normalizeService) });
+    res.json({
+      success: true,
+      service_listings: rows.map((row) => normalizeService(row, req.user)),
+      pagination: {
+        page: pagination.page,
+        limit: pagination.limit,
+        count: rows.length,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -204,17 +242,23 @@ export async function createQuoteRequest(req, res, next) {
       return res.status(404).json({ success: false, message: "This business is not available yet." });
     }
     if (Number(provider.owner_user_id) === Number(req.user.id)) {
-      return res.status(400).json({ success: false, message: "You cannot request a quote from your own business." });
+      return res.status(403).json({ success: false, message: "This is your stand. Open your dashboard to manage requests." });
     }
 
     const service = serviceId
       ? await get(
-          `SELECT id, service_name FROM barber_services WHERE id = ? AND barber_id = ?`,
+          `SELECT id, service_name, pricing_type FROM barber_services WHERE id = ? AND barber_id = ?`,
           [serviceId, providerId]
         )
       : null;
     if (serviceId && !service) {
       return res.status(400).json({ success: false, message: "Select a service offered by this provider." });
+    }
+    if (serviceId && String(service.pricing_type || "fixed").toLowerCase() !== "quote") {
+      return res.status(400).json({
+        success: false,
+        message: "This service can be booked directly. Choose Book Service instead.",
+      });
     }
 
     let outcome;

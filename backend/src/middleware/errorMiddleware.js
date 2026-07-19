@@ -1,7 +1,7 @@
 import { logger } from "../config/logger.js";
 
 export function notFoundHandler(req, res, next) {
-  const error = new Error(`Route not found: ${req.originalUrl}`);
+  const error = new Error("That request could not be completed. Refresh the page and try again.");
   error.statusCode = 404;
   next(error);
 }

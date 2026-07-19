@@ -180,7 +180,7 @@ export function buildRuleBasedInsights({ business, services = [], schedule = [],
     services.length && !missingPriceServices.length ? makeInsight(
       "Your service prices are visible",
       "Do this next: keep price ranges accurate and use quote-required only for custom work.",
-      "Why it matters: transparent prices reduce hesitation at checkout.",
+      "Why it matters: transparent prices reduce hesitation before booking.",
       "Expected benefit: customers can choose and confirm faster.",
       "View Services",
       "services"

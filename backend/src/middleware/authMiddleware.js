@@ -30,3 +30,25 @@ export async function protect(req, res, next) {
     });
   }
 }
+
+export async function optionalAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || "";
+
+    if (!authHeader.startsWith("Bearer ")) {
+      return next();
+    }
+
+    const token = authHeader.split(" ")[1];
+    const { user, sessionId } = await authenticateAccessToken(token);
+    const accountStatus = String(user.account_status || "active").trim().toLowerCase();
+    if (["inactive", "blocked", "disabled", "suspended"].includes(accountStatus) || user.disabled_at || user.blocked_at) {
+      return next();
+    }
+    req.user = user;
+    req.authSessionId = sessionId;
+    return next();
+  } catch {
+    return next();
+  }
+}

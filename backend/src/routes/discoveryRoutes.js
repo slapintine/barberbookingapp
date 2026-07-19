@@ -1,5 +1,5 @@
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js";
+import { optionalAuth, protect } from "../middleware/authMiddleware.js";
 import {
   createQuoteRequest,
   createSupportRequest,
@@ -19,8 +19,8 @@ import { schemas } from "../validation/schemas.js";
 const router = express.Router();
 
 router.get("/categories", getCategories);
-router.get("/providers", searchRateLimiter, getProviders);
-router.get("/service-listings", searchRateLimiter, getServiceListings);
+router.get("/providers", optionalAuth, searchRateLimiter, getProviders);
+router.get("/service-listings", optionalAuth, searchRateLimiter, getServiceListings);
 router.post("/smart-match", protect, requireCustomerPremium, smartMatchRateLimiter, smartMatch);
 router.post("/smart-match/search", protect, requireCustomerPremium, smartMatchRateLimiter, smartMatch);
 router.get("/quote-requests/me", protect, getMyQuoteRequests);

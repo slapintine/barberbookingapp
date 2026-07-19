@@ -18,6 +18,7 @@ import {
 import {
   getSubscriptionTierConfig,
   getSubscriptionPlans,
+  normalizeProviderPlan,
 } from "./paymentService.js";
 import { getCustomerEntitlements, getProviderEntitlements } from "./entitlementService.js";
 
@@ -83,11 +84,11 @@ async function getPendingProviderPayment(barberId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function resolveCustomerDisplayName(sub) {
-  if (!sub) return "Customer Account";
+  if (!sub) return "Free Customer";
   if (isActiveCustomerPremium(sub)) return "Premium Customer";
   const status = String(sub.status || "").toLowerCase();
-  if (status === "pending") return "Customer Account"; // pending payment
-  return "Customer Account";
+  if (status === "pending") return "Free Customer"; // pending payment has not upgraded the customer plan yet.
+  return "Free Customer";
 }
 
 function resolveProviderDisplayName(tier, status) {
@@ -96,7 +97,7 @@ function resolveProviderDisplayName(tier, status) {
   if (s !== "active" && s !== "trialing") return null; // no active provider plan
   if (t === "PLATINUM") return "Platinum Provider";
   if (t === "PREMIUM") return "Premium Provider";
-  if (t === "FREE") return "Provider Account";
+  if (t === "FREE") return "Free Provider";
   return null;
 }
 
@@ -169,10 +170,18 @@ export async function buildSubscriptionSummary(userId) {
   };
 
   // ── Provider membership ───────────────────────────────────────────────────
-  const providerActive = Boolean(latestProviderSub && isActiveProviderSub(latestProviderSub, now));
-  const providerTier = providerActive
-    ? String(latestProviderSub.tier || "").toUpperCase()
+  const providerPaidActive = Boolean(latestProviderSub && isActiveProviderSub(latestProviderSub, now));
+  const providerStoredStatus = String(providerBarber?.subscription_status || "").toLowerCase();
+  const providerStoredTier =
+    !latestProviderSub && ["active", "trialing", "manual_approved", "admin_approved", "approved"].includes(providerStoredStatus)
+      ? normalizeProviderPlan(providerBarber?.subscription_tier)
+      : "";
+  const providerTier = providerPaidActive
+    ? normalizeProviderPlan(latestProviderSub.tier) || "FREE"
+    : providerBarber
+    ? providerStoredTier || "FREE"
     : null;
+  const providerActive = Boolean(providerBarber && providerTier);
   const providerTierConfig = providerTier ? getSubscriptionTierConfig(providerTier) : null;
   const pendingProviderPayment = providerBarber
     ? await getPendingProviderPayment(providerBarber.id).catch(() => null)
@@ -182,26 +191,28 @@ export async function buildSubscriptionSummary(userId) {
     ? {
         planCode: providerActive
           ? `provider_${(providerTier || "free").toLowerCase()}`
-          : "provider_none",
-        tier: providerTier || "NONE",
+          : "provider_free",
+        tier: providerTier || "FREE",
         plan: providerTier || "FREE",
         active: providerActive,
         displayName: resolveProviderDisplayName(
-          latestProviderSub?.tier,
-          latestProviderSub?.status
+          providerTier || "FREE",
+          providerActive ? "active" : "free"
         ),
         status: providerActive
-          ? String(latestProviderSub.status || "active").toLowerCase()
+          ? providerPaidActive
+            ? String(latestProviderSub.status || "active").toLowerCase()
+            : "free"
           : latestProviderSub
           ? String(latestProviderSub.status || "none").toLowerCase()
-          : "none",
+          : "free",
         billingPeriod: latestProviderSub?.billing_cycle || null,
-        amountPaid: providerActive ? Number(latestProviderSub?.amount_paid || 0) : 0,
+        amountPaid: providerPaidActive ? Number(latestProviderSub?.amount_paid || 0) : 0,
         currency: "UGX",
-        startsAt: latestProviderSub?.started_at || latestProviderSub?.activated_at || null,
-        currentPeriodEnd: latestProviderSub?.expires_at || null,
-        expiresAt: latestProviderSub?.expires_at || null,
-        activatedAt: latestProviderSub?.activated_at || null,
+        startsAt: providerPaidActive ? latestProviderSub?.started_at || latestProviderSub?.activated_at || null : null,
+        currentPeriodEnd: providerPaidActive ? latestProviderSub?.expires_at || null : null,
+        expiresAt: providerPaidActive ? latestProviderSub?.expires_at || null : null,
+        activatedAt: providerPaidActive ? latestProviderSub?.activated_at || null : null,
         autoRenew: false,
         isTrial: Boolean(latestProviderSub?.status === "trialing"),
         pendingPayment: pendingProviderPayment
@@ -240,7 +251,7 @@ export async function buildSubscriptionSummary(userId) {
   } else {
     badges.push({
       key: "customer_free",
-      label: "Customer Account",
+      label: "Free Customer",
       scope: "customer",
       tier: "free",
       status: "free",
@@ -259,11 +270,11 @@ export async function buildSubscriptionSummary(userId) {
     }
   } else if (providerBarber && !providerActive) {
     badges.push({
-      key: "provider_inactive",
-      label: "Provider Account",
+      key: "provider_free",
+      label: "Free Provider",
       scope: "provider",
       tier: "free",
-      status: latestProviderSub?.status || "none",
+      status: "free",
     });
   }
 
@@ -271,7 +282,7 @@ export async function buildSubscriptionSummary(userId) {
     customer: customerSummary,
     provider: providerSummary,
     customerPlan: customerActive ? "PREMIUM" : "FREE",
-    providerPlan: providerActive && providerTier ? providerTier : "FREE",
+    providerPlan: providerTier || "FREE",
     customerPremiumActive: customerActive,
     providerPlanActive: providerActive,
     entitlements: {

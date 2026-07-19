@@ -161,6 +161,14 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
       );
     }
 
+    if (!env.bookingOnlinePaymentsEnabled && !rawPromoCode) {
+      throw httpError(
+        503,
+        "Online plan payments are coming soon. Your current plan remains active.",
+        "ONLINE_PAYMENTS_DISABLED"
+      );
+    }
+
     const idempotencyKey = String(req.get("Idempotency-Key") || req.body.idempotencyKey || "").trim();
     const result = await transaction(async (client) => {
       const activeSubscription = await getActiveCustomerPremiumSubscription(req.user.id, client);
@@ -201,6 +209,14 @@ export async function startCustomerSubscriptionUpgrade(req, res, next) {
         );
         const subscription = await client.get(`SELECT * FROM customer_subscriptions WHERE id = ?`, [insertResult.lastID]);
         return { payment: null, subscription, promoActivated: true };
+      }
+
+      if (!env.bookingOnlinePaymentsEnabled) {
+        throw httpError(
+          503,
+          "Online plan payments are coming soon. Your current plan remains active.",
+          "ONLINE_PAYMENTS_DISABLED"
+        );
       }
 
       if (!provider) throw httpError(400, "Choose MTN Mobile Money or Airtel Money.", "INVALID_PHONE_NUMBER");

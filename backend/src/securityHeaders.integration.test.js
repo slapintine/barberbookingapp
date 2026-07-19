@@ -44,6 +44,43 @@ test("baseline security headers are present on an API response", async () => {
   assert.ok(res.headers.get("permissions-policy"), "expected Permissions-Policy");
 });
 
+test("uploaded provider media can be embedded by the Android WebView", async () => {
+  const uploadDir = path.join(tempDir, "uploads", "providers", "3");
+  fs.mkdirSync(uploadDir, { recursive: true });
+  fs.writeFileSync(path.join(uploadDir, "cover-test.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  fs.writeFileSync(
+    path.join(uploadDir, "cover-test.png"),
+    Buffer.from("89504e470d0a1a0a0000000d49484452", "hex")
+  );
+  fs.writeFileSync(path.join(uploadDir, "cover-test.webp"), Buffer.from("RIFF\x00\x00\x00\x00WEBP", "binary"));
+
+  for (const [filename, contentType] of [
+    ["cover-test.jpg", /image\/jpeg/],
+    ["cover-test.png", /image\/png/],
+    ["cover-test.webp", /image\/webp/],
+  ]) {
+    const res = await fetch(`${baseUrl}/api/uploads/providers/3/${filename}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("cross-origin-resource-policy"), "cross-origin");
+    assert.match(res.headers.get("content-type") || "", contentType);
+  }
+});
+
+test("uploaded media HEAD and missing-file responses keep the media CORP override", async () => {
+  const uploadDir = path.join(tempDir, "uploads", "providers", "4");
+  fs.mkdirSync(uploadDir, { recursive: true });
+  fs.writeFileSync(path.join(uploadDir, "head-test.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+  const head = await fetch(`${baseUrl}/api/uploads/providers/4/head-test.jpg`, { method: "HEAD" });
+  assert.equal(head.status, 200);
+  assert.equal(head.headers.get("cross-origin-resource-policy"), "cross-origin");
+  assert.match(head.headers.get("content-type") || "", /image\/jpeg/);
+
+  const missing = await fetch(`${baseUrl}/api/uploads/providers/4/missing.jpg`);
+  assert.equal(missing.status, 404);
+  assert.equal(missing.headers.get("cross-origin-resource-policy"), "cross-origin");
+});
+
 test("Content-Security-Policy is set with strict directives and no dangerous wildcards", async () => {
   const res = await fetch(`${baseUrl}/api/health`);
   const csp = res.headers.get("content-security-policy");

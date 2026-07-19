@@ -137,7 +137,7 @@ function getFeatureRules() {
     { key: "book_service", label: "Book service", freeCustomer: true, premiumCustomer: true, proProvider: false, premiumProvider: false, platinumProvider: false },
     { key: "smart_match", label: "Smart Match", freeCustomer: false, premiumCustomer: true, proProvider: false, premiumProvider: false, platinumProvider: false },
     { key: "customer_wallet_topup", label: "Customer wallet/top-up", freeCustomer: true, premiumCustomer: true, proProvider: false, premiumProvider: false, platinumProvider: false },
-    { key: "checkout_payment", label: "Checkout/payment", freeCustomer: true, premiumCustomer: true, proProvider: true, premiumProvider: true, platinumProvider: true },
+    { key: "booking_payment", label: "Booking payment", freeCustomer: true, premiumCustomer: true, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "provider_listing", label: "Provider listing", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "booking_management", label: "Booking management", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
     { key: "business_wallet", label: "Business wallet/earnings", freeCustomer: false, premiumCustomer: false, proProvider: true, premiumProvider: true, platinumProvider: true },
@@ -1188,7 +1188,7 @@ export async function runAdminFeatureAccessTest(req, res, next) {
     let reason = "Feature is locked for the selected account.";
     let subject = null;
 
-    if (["smart_match", "browse_services", "book_service", "customer_wallet_topup", "checkout_payment", "subscription_upgrade", "subscription_expiry_lock"].includes(feature)) {
+    if (["smart_match", "browse_services", "book_service", "customer_wallet_topup", "booking_payment", "subscription_upgrade", "subscription_expiry_lock"].includes(feature)) {
       const user = await get(`SELECT * FROM users WHERE id = ?`, [userId]);
       if (!user) throw httpError(404, "Customer account is required for this test.");
       const subscription = await getLatestCustomerSubscriptionForAdmin(userId);
