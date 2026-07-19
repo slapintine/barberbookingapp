@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "307296345583",
+    "project_id": "queless-solo",
+    "storage_bucket": "queless-solo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:307296345583:android:f4285712f1307f1adf6a1a",
+        "android_client_info": {
+          "package_name": "org.queless.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0fyONpPmz1pxmS4bd9uO-Li-xaTwqOV4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

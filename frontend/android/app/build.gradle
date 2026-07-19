@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+def releaseSigningProperties = new Properties()
+def releaseSigningPath = System.getenv("QUELESS_ANDROID_SIGNING_PROPERTIES") ?: "${rootProject.projectDir}/release-signing.properties"
+def releaseSigningFile = file(releaseSigningPath)
+def releaseSigningConfigured = false
+
+if (releaseSigningFile.exists()) {
+    releaseSigningFile.withInputStream { releaseSigningProperties.load(it) }
+    releaseSigningConfigured = releaseSigningProperties['storeFile'] &&
+        releaseSigningProperties['storePassword'] &&
+        releaseSigningProperties['keyAlias'] &&
+        releaseSigningProperties['keyPassword']
+}
+
 android {
     namespace = "org.queless.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +20,8 @@ android {
         applicationId "org.queless.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 5
+        versionName "1.0.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +29,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (releaseSigningConfigured) {
+                storeFile file(releaseSigningProperties['storeFile'])
+                storePassword releaseSigningProperties['storePassword']
+                keyAlias releaseSigningProperties['keyAlias']
+                keyPassword releaseSigningProperties['keyPassword']
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
     buildTypes {
         release {
+            debuggable false
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -43,6 +72,14 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+tasks.matching { it.name in ['preReleaseBuild', 'assembleRelease', 'bundleRelease'] }.configureEach {
+    doFirst {
+        if (!releaseSigningConfigured) {
+            throw new GradleException("Release signing is not configured. Set QUELESS_ANDROID_SIGNING_PROPERTIES to an untracked properties file with storeFile, storePassword, keyAlias, and keyPassword.")
+        }
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')
