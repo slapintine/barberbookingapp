@@ -24,9 +24,18 @@ logs/
 *.err.log
 *.tar.gz
 # Local deploy bundle artifacts (not committed)
+artifacts/
+release-evidence/
+release-logs/
 frontend/*.tgz
 *.tgz
 *.apk
+*.apks
+*.aab
+*.idsig
+*-unzip/
+*-extracted/
+apktool-out/
 *.sqlite
 *.sqlite3
 *.db
@@ -41,6 +50,18 @@ layout-*.png
 home-*.png
 auth-*.png
 login-*.png
+release-qa-session*.json
+qa-session*.json
+*session*.har
+*.hprof
+keystore.properties
+signing.properties
+release-signing.properties
+local-signing.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
 
 # Tooling / vendored copies — not part of the app
 .claude/
