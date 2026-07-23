@@ -308,6 +308,7 @@ export async function getProviderCoachChatContext(business) {
 
   return {
     stand: {
+      id: Number(business.id || 0),
       name: clipCoachText(business.business_name, 120) || "Unnamed stand",
       category: clipCoachText(business.business_type, 80) || "Not set",
       description: description || "Not provided",

@@ -5,6 +5,7 @@ import { buildSmartRuleBasedCoachResponse } from "./providerCoachChatService.js"
 
 const context = {
   stand: {
+    id: 44,
     name: "QA Services",
     status: "published",
     plan: "premium",
@@ -68,3 +69,14 @@ test("Business Assistant answers analytics questions without inventing causes", 
   assert.match(ask("How many returning customers do I have?").answer, /2 returning customer/i);
 });
 
+test("Business Assistant returns grounded priority sections and safe navigation actions", () => {
+  const response = ask("Which bookings need attention?");
+  assert.deepEqual(response.prioritySections.urgent, ["1 booking request needs a response."]);
+  assert.equal(response.structuredActions[0].type, "open_bookings");
+  assert.equal(response.structuredActions[0].businessId, 44);
+  assert.equal(response.structuredActions[0].filter, "needs_attention");
+
+  const bestService = ask("Which service performs best?");
+  assert.equal(bestService.structuredActions[0].type, "open_services");
+  assert.match(bestService.prioritySections.opportunity.join(" "), /Haircut/);
+});

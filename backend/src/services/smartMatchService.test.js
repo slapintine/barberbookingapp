@@ -7,6 +7,7 @@ import {
   buildSmartMatchAssistantCriteria,
   categoryMatches,
   normalizeCategoryKey,
+  scoreProvider,
 } from "./smartMatchService.js";
 
 test("Smart Match category matching supports Tutor aliases", () => {
@@ -224,4 +225,57 @@ test("Smart Match Assistant treats a short standalone follow-up as the missing l
   assert.equal(location.criteria.address, "Ntinda");
   assert.equal(location.criteria.when, "today");
   assert.deepEqual(location.missing, []);
+});
+
+test("Smart Match Assistant extracts richer natural-language constraints", () => {
+  const result = buildSmartMatchAssistantCriteria({
+    message: "Find me an affordable barber near Ntinda who is available after 5 and can come to my location.",
+  });
+
+  assert.equal(result.criteria.serviceKey, "barber");
+  assert.equal(result.criteria.address, "Ntinda");
+  assert.equal(result.criteria.time, "17:00");
+  assert.equal(result.criteria.serviceLocationPreference, "customer_location");
+});
+
+test("Smart Match ranks exact and budget-fitting services above weaker partial matches", () => {
+  const exact = scoreProvider({
+    id: 1,
+    business_name: "Exact Barber",
+    business_type: "Barber",
+    service_name: "Classic haircut",
+    category: "Barber",
+    description: "Clean haircut",
+    price_extra: 25000,
+    pricing_type: "fixed",
+    schedule_is_open: 1,
+    schedule_start: "08:00",
+    schedule_end: "20:00",
+    rating: 4.7,
+    total_reviews: 8,
+    location: "Ntinda",
+    latitude: 0.35,
+    longitude: 32.58,
+  }, { serviceKey: "barber", budgetMax: 30000, time: "17:00" });
+  const partial = scoreProvider({
+    id: 2,
+    business_name: "General Grooming",
+    business_type: "Beauty",
+    service_name: "General grooming consultation",
+    category: "Beauty",
+    description: "Can advise on haircut preparation",
+    price_extra: 90000,
+    pricing_type: "fixed",
+    schedule_is_open: 1,
+    schedule_start: "08:00",
+    schedule_end: "20:00",
+    rating: 4.9,
+    total_reviews: 20,
+    location: "Kira",
+    latitude: 0.5,
+    longitude: 32.7,
+  }, { serviceKey: "barber", budgetMax: 30000, time: "17:00" });
+
+  assert.equal(exact.matchType, "exact");
+  assert.equal(exact.score > (partial?.score || 0), true);
 });

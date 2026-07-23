@@ -3,10 +3,14 @@ import { SERVICE_CATEGORIES } from "../data/serviceCategories.js";
 
 export const SMART_MATCH_WEIGHTS = {
   serviceMatch: 35,
+  exactServiceMatch: 38,
+  relatedServiceMatch: 26,
   distance: 25,
   timingFit: 15,
   rating: 10,
   reviewsConfidence: 5,
+  budgetFit: 10,
+  profileCompleteness: 4,
   availability: 10,
 };
 
@@ -36,7 +40,7 @@ const LEGACY_CATEGORY_KEYS = {
 
 const SERVICE_ALIASES = {
   barber: ["barber", "haircut", "hair cut", "grooming", "shave"],
-  beauty: ["beauty", "makeup", "nails", "lashes", "skin care"],
+  beauty: ["beauty", "makeup", "make up", "bridal makeup", "wedding makeup", "graduation makeup", "nails", "lashes", "skin care"],
   salon: ["salon", "hair", "braids", "styling", "hair treatment"],
   spa: ["spa", "massage", "facial", "wellness"],
   "plumbing-services": ["plumbing", "plumber", "pipe", "leak", "drainage", "water tank", "bathroom repair"],
@@ -49,10 +53,10 @@ const SERVICE_ALIASES = {
   "agriculture-services": ["agriculture", "farm", "gardening", "livestock", "agribusiness"],
   "home-services": ["home service", "home help", "installation", "household help", "at home"],
   "auto-services": ["auto", "car", "mechanic", "garage", "car wash", "detailing", "towing", "vehicle"],
-  "events-photography": ["events", "event", "photography", "photo", "video", "decor", "dj", "mc"],
+  "events-photography": ["events", "event", "photography", "photographer", "photo", "video", "decor", "decorator", "wedding", "graduation", "party", "dj", "mc"],
   "education-tutoring": ["education", "tutoring", "tutor", "private tutor", "teacher", "lesson", "lessons", "academic support", "math", "mathematics", "english", "science", "french", "homework", "exam", "school", "music lessons", "art lessons"],
   "health-fitness": ["health", "fitness", "gym", "trainer", "physio", "wellness", "nutrition", "massage"],
-  "repairs-maintenance": ["repair", "repairs", "maintenance", "fix", "technician", "appliance", "electronics", "phone repair", "computer", "furniture"],
+  "repairs-maintenance": ["repair", "repairs", "maintenance", "fix", "technician", "appliance", "electronics", "phone repair", "computer", "furniture", "leaking sink"],
   "website-app-development": ["website", "web development", "app development", "mobile app", "booking tool", "automation", "technical build"],
   "digital-marketing": ["digital marketing", "social media", "ads", "seo", "content strategy", "campaign"],
   "consulting-services": ["consulting", "consultant", "business strategy", "operations", "career advisory", "specialist advisory"],
@@ -131,6 +135,42 @@ export function categoryMatches(row, requestedCategory) {
   return terms.some((term) => haystack.includes(term));
 }
 
+function categoryMatchStrength(row, requestedCategory) {
+  const serviceKey = normalizeCategoryKey(requestedCategory);
+  if (serviceKey === "other") {
+    return { matches: true, score: SMART_MATCH_WEIGHTS.relatedServiceMatch, label: "partial" };
+  }
+  const category = CATEGORY_BY_ID.get(serviceKey);
+  const aliases = SERVICE_ALIASES[serviceKey] || [];
+  const requestedTerms = [serviceKey, category?.name].map(normalize).filter(Boolean);
+  const relatedTerms = aliases.map(normalize).filter(Boolean);
+  const serviceCategory = normalize(row.category || row.business_type || "");
+  const serviceName = normalize(row.service_name || "");
+  const description = normalize(row.description || row.intro_text || "");
+  const haystack = normalize([
+    row.business_type,
+    row.map_icon_type,
+    row.service_name,
+    row.category,
+    row.description,
+    row.intro_text,
+  ].join(" "));
+
+  if (requestedTerms.some((term) => serviceCategory === term || slugifyCategory(serviceCategory) === slugifyCategory(term))) {
+    return { matches: true, score: SMART_MATCH_WEIGHTS.exactServiceMatch, label: "exact" };
+  }
+  if (requestedTerms.some((term) => serviceName.includes(term))) {
+    return { matches: true, score: SMART_MATCH_WEIGHTS.exactServiceMatch - 4, label: "exact" };
+  }
+  if (relatedTerms.some((term) => serviceName.includes(term) || description.includes(term))) {
+    return { matches: true, score: SMART_MATCH_WEIGHTS.relatedServiceMatch, label: "strong" };
+  }
+  if ([...requestedTerms, ...relatedTerms].some((term) => haystack.includes(term))) {
+    return { matches: true, score: SMART_MATCH_WEIGHTS.relatedServiceMatch - 6, label: "partial" };
+  }
+  return { matches: false, score: 0, label: "none" };
+}
+
 function toRad(value) {
   return (Number(value || 0) * Math.PI) / 180;
 }
@@ -206,6 +246,27 @@ function calculateDistanceScore(distanceKm) {
   if (distance <= 5) return 18;
   if (distance <= 10) return 10;
   return 3;
+}
+
+function calculateBudgetScore(price, budgetMax = 0) {
+  const budget = Number(budgetMax || 0);
+  if (!budget) return 0;
+  const min = Number(price?.min || 0);
+  const max = Number(price?.max || 0);
+  const comparable = min > 0 ? min : max;
+  if (!comparable) return 3;
+  if (comparable <= budget) return SMART_MATCH_WEIGHTS.budgetFit;
+  if (comparable <= budget * 1.15) return 4;
+  return -8;
+}
+
+function calculateProfileScore(row) {
+  let score = 0;
+  if (String(row.image || "").trim()) score += 1;
+  if (String(row.intro_text || "").trim().length >= 40) score += 1;
+  if (String(row.location || "").trim()) score += 1;
+  if (Number(row.is_verified || 0) === 1 || String(row.verified_status || "").toLowerCase() === "verified") score += 1;
+  return Math.min(score, SMART_MATCH_WEIGHTS.profileCompleteness);
 }
 
 function calculateTimingScore(row, when = "today") {
@@ -337,12 +398,15 @@ export function calculateSmartMatchScore({ row, price, distanceKm, budgetMin, bu
   const legacyBudgetBoost = price && (budgetMin || budgetMax) ? 4 : 0;
   const legacyPreferenceBoost = preference === "best_rated" ? calculateRatingScore(row) : calculatePaymentScore(row, preference);
   const timing = when ? calculateTimingScore(row, when) : calculateAvailabilityScore(row, date, time);
+  const serviceStrength = categoryMatchStrength(row, row._requestedServiceKey || row.category).score || SMART_MATCH_WEIGHTS.serviceMatch;
   return Math.round(Math.min(100,
-    SMART_MATCH_WEIGHTS.serviceMatch +
+    serviceStrength +
     calculateDistanceScore(distanceKm) +
     timing +
+    calculateBudgetScore(price, budgetMax) +
     calculateRatingScore(row) +
     calculateReviewsScore(row) +
+    calculateProfileScore(row) +
     legacyPreferenceBoost +
     legacyBudgetBoost
   ));
@@ -351,17 +415,23 @@ export function calculateSmartMatchScore({ row, price, distanceKm, budgetMin, bu
 export function scoreProvider(row, criteria = {}) {
   const serviceKey = normalizeCategoryKey(criteria.serviceKey || criteria.category || "other");
   const serviceLabel = criteria.serviceLabel || serviceLabelForKey(serviceKey);
-  if (!categoryMatches(row, serviceKey)) return null;
+  const matchStrength = categoryMatchStrength(row, serviceKey);
+  if (!matchStrength.matches) return null;
   const coordinates = criteria.coordinates || {};
   const distanceKm = calculateDistanceKm(coordinates.lat, coordinates.lng, row.latitude, row.longitude);
   const price = resolveServicePrice(row);
   const score = calculateSmartMatchScore({
-    row,
+    row: { ...row, _requestedServiceKey: serviceKey },
     price,
     distanceKm,
+    budgetMax: criteria.budgetMax,
+    time: criteria.time,
     when: criteria.when || "today",
   });
   const timingExact =
+    criteria.time
+      ? calculateAvailabilityScore(row, null, criteria.time) >= SMART_MATCH_WEIGHTS.availability
+      :
     String(criteria.when || "").toLowerCase() === "now"
       ? calculateTimingScore(row, "now") >= SMART_MATCH_WEIGHTS.timingFit
       : true;
@@ -373,6 +443,7 @@ export function scoreProvider(row, criteria = {}) {
     serviceLabel,
     serviceId: row.service_id,
     serviceName: row.service_name,
+    locationType: row.location_type || "",
     category: row.category || row.business_type || "Services",
     rating: Number(row.rating || 0),
     reviewsCount: Number(row.total_reviews || 0),
@@ -380,6 +451,7 @@ export function scoreProvider(row, criteria = {}) {
     distanceKm,
     availabilityLabel: labelAvailability(row, criteria.when),
     score,
+    matchType: matchStrength.label === "exact" ? "exact" : matchStrength.label === "strong" ? "strong" : "partial",
     timingExact,
     badges: buildBadges({ score, distanceKm, row, when: criteria.when }),
     reasons: buildReasons({ row, serviceLabel, distanceKm, when: criteria.when }),
@@ -401,6 +473,7 @@ export function scoreProvider(row, criteria = {}) {
       verified_status: row.verified_status || row.review_status || "",
       rating: Number(row.rating || 0),
       total_reviews: Number(row.total_reviews || 0),
+      selectedServiceLocationType: row.location_type || "",
     },
   };
 }
@@ -451,12 +524,23 @@ export async function findSmartMatches(criteria = {}) {
        sch.is_open AS schedule_is_open,
        sch.start_time AS schedule_start,
        sch.end_time AS schedule_end,
-       (SELECT COALESCE(AVG(r.rating), 0) FROM reviews r WHERE r.barber_id = b.id AND COALESCE(r.blocked_from_public, 0) = 0) AS rating,
-       (SELECT COUNT(*) FROM reviews r WHERE r.barber_id = b.id AND COALESCE(r.blocked_from_public, 0) = 0) AS total_reviews,
-       (SELECT provider FROM payment_transactions pt WHERE pt.barber_id = b.id AND pt.provider = 'mtn_mobile_money' AND pt.status = 'successful' LIMIT 1) AS payment_provider
+       COALESCE(rv.rating, 0) AS rating,
+       COALESCE(rv.total_reviews, 0) AS total_reviews,
+       pay.payment_provider
      FROM barbers b
      JOIN barber_services s ON s.barber_id = b.id AND COALESCE(s.is_available, 1) = 1
      LEFT JOIN barber_schedule sch ON sch.barber_id = b.id AND sch.day_of_week = ?
+     LEFT JOIN (
+       SELECT barber_id, COALESCE(AVG(rating), 0) AS rating, COUNT(*) AS total_reviews
+       FROM reviews
+       WHERE COALESCE(blocked_from_public, 0) = 0
+       GROUP BY barber_id
+     ) rv ON rv.barber_id = b.id
+     LEFT JOIN (
+       SELECT barber_id, MAX(CASE WHEN provider = 'mtn_mobile_money' AND status = 'successful' THEN provider ELSE '' END) AS payment_provider
+       FROM payment_transactions
+       GROUP BY barber_id
+     ) pay ON pay.barber_id = b.id
      WHERE ${publicBusinessWhere("b")}
      ORDER BY b.id DESC, s.id ASC`,
     [dayOfWeek ?? -1, ...publicBusinessParams(now)]
@@ -468,15 +552,22 @@ export async function findSmartMatches(criteria = {}) {
     .filter(Boolean);
   const nearbyMatches = scored.filter(isNearbyMatch);
   const timingMatches = nearbyMatches.filter((item) => item.timingExact !== false);
+  const locationPreference = String(criteria.serviceLocationPreference || "").toLowerCase();
+  const locationModeMatches = locationPreference
+    ? timingMatches.filter((item) => {
+        const mode = String(item.provider?.selectedServiceLocationType || item.locationType || "").toLowerCase();
+        return mode === locationPreference || mode === "both" || mode === "flexible";
+      })
+    : timingMatches;
   const budgetMax = Number(criteria.budgetMax || 0);
   const budgetMatches = budgetMax > 0
-    ? timingMatches.filter((item) => {
+    ? locationModeMatches.filter((item) => {
         const min = Number(item.priceMin || 0);
         const max = Number(item.priceMax || 0);
         const comparable = min > 0 ? min : max;
         return comparable > 0 && comparable <= budgetMax;
       })
-    : timingMatches;
+    : locationModeMatches;
   const eligibleMatches = criteria.verifiedOnly
     ? budgetMatches.filter((item) => item.provider?.is_verified || String(item.provider?.verified_status || "").toLowerCase() === "verified")
     : budgetMatches;
@@ -537,6 +628,23 @@ function extractBudget(text) {
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
+function extractPreferredTime(text) {
+  const value = String(text || "").toLowerCase();
+  const afterMatch = value.match(/\bafter\s+([0-9]{1,2})(?::([0-9]{2}))?\s*(am|pm)?\b/);
+  if (afterMatch) {
+    let hour = Number(afterMatch[1]);
+    const minute = afterMatch[2] || "00";
+    const meridiem = afterMatch[3] || (hour <= 7 ? "pm" : "");
+    if (meridiem === "pm" && hour < 12) hour += 12;
+    if (meridiem === "am" && hour === 12) hour = 0;
+    if (hour >= 0 && hour <= 23) return `${String(hour).padStart(2, "0")}:${minute}`;
+  }
+  if (/\bmorning\b/.test(value)) return "09:00";
+  if (/\bafternoon\b/.test(value)) return "14:00";
+  if (/\bevening\b|\btonight\b/.test(value)) return "17:00";
+  return "";
+}
+
 function extractWhen(text) {
   const value = String(text || "").toLowerCase();
   if (/\b(now|open now|right now|urgent)\b/.test(value)) return "now";
@@ -554,7 +662,7 @@ function extractServiceKey(text) {
 
 function extractAddress(text) {
   const value = String(text || "");
-  const nearMatch = value.match(/\b(?:near|around|in|at)\s+([A-Za-z][A-Za-z\s'-]{2,40})(?:\s+(?:today|tomorrow|saturday|sunday|below|under|at|around|near)|[.,]|$)/i);
+  const nearMatch = value.match(/\b(?:near|around|in|at)\s+([A-Za-z][A-Za-z\s'-]{2,40}?)(?:\s+(?:who|that|which|available|today|tomorrow|saturday|sunday|below|under|at|around|near)|[.,]|$)/i);
   if (nearMatch) return nearMatch[1].trim();
 
   const standalonePlace = value
@@ -592,6 +700,13 @@ function extractSortIntent(text) {
   return "";
 }
 
+function extractServiceLocationPreference(text) {
+  const value = String(text || "").toLowerCase();
+  if (/\b(come to me|come to my location|at my location|home service|come home|mobile service)\b/.test(value)) return "customer_location";
+  if (/\b(at the provider|at their shop|visit them|provider location|at the stand)\b/.test(value)) return "provider_location";
+  return "";
+}
+
 export function buildSmartMatchAssistantCriteria({ message, conversation = {} } = {}) {
   const text = String(message || "").trim();
   const conversationItems = Array.isArray(conversation) ? conversation : [conversation];
@@ -603,6 +718,8 @@ export function buildSmartMatchAssistantCriteria({ message, conversation = {} } 
   const extractedAddress = extractAddress(text);
   const extractedBudget = extractBudget(text);
   const extractedWhen = extractWhen(text);
+  const extractedTime = extractPreferredTime(text);
+  const serviceLocationPreference = extractServiceLocationPreference(text);
   const requestedSortIntent = extractSortIntent(text);
   const removeVerified = extractRemoveVerified(text);
   const requestedVerifiedOnly = extractVerifiedOnly(text);
@@ -612,6 +729,8 @@ export function buildSmartMatchAssistantCriteria({ message, conversation = {} } 
     extractedAddress ||
     extractedBudget ||
     extractedWhen ||
+    extractedTime ||
+    serviceLocationPreference ||
     requestedVerifiedOnly ||
     removeVerified
   );
@@ -623,6 +742,8 @@ export function buildSmartMatchAssistantCriteria({ message, conversation = {} } 
     ...previousCriteria,
     serviceKey: serviceKey === "other" ? previousCriteria.serviceKey || "" : serviceKey,
     when,
+    time: extractedTime || previousCriteria.time || "",
+    serviceLocationPreference: serviceLocationPreference || previousCriteria.serviceLocationPreference || "",
     locationType: address ? "enter_address" : previousCriteria.locationType || "enter_address",
     address,
     budgetMax,
@@ -659,9 +780,21 @@ function explainMatch(match, criteria) {
   const budget = Number(criteria.budgetMax || 0);
   const price = Number(match?.priceMin || match?.priceMax || 0);
   const budgetReason = budget && price && price <= budget ? "within your budget" : "";
+  const matchReason = match?.matchType === "exact"
+    ? "exact service match"
+    : match?.matchType === "strong"
+    ? "strong related-service match"
+    : "partial match; check details before booking";
+  const quoteReason = !price ? "price may require a quote" : "";
+  const locationReason = criteria.serviceLocationPreference === "customer_location" && match.locationType === "customer_location"
+    ? "can serve at your location"
+    : "";
   return [
+    matchReason,
     match?.availabilityLabel,
     budgetReason,
+    quoteReason,
+    locationReason,
     Number.isFinite(Number(match?.distanceKm)) ? "near your selected area" : "",
     ...reasons,
   ].filter(Boolean).slice(0, 4);
@@ -706,6 +839,20 @@ function assistantMatchMessage({ matches, criteria, fallbackMessage }) {
   return `I found ${matches.length} real Queless match${matches.length === 1 ? "" : "es"} based on your request.`;
 }
 
+function actionsForAssistantMatch(match) {
+  const providerId = Number(match?.providerId || match?.businessId || 0);
+  const serviceId = Number(match?.serviceId || 0);
+  const actions = [];
+  if (providerId > 0) actions.push({ type: "open_provider", providerId });
+  if (providerId > 0 && serviceId > 0) {
+    actions.push({ type: "open_service_details", providerId, serviceId });
+    const quoteRequired = !Number(match?.priceMin || match?.priceMax || 0);
+    actions.push({ type: quoteRequired ? "request_quote" : "start_booking", providerId, serviceId });
+  }
+  if (Number.isFinite(Number(match?.distanceKm))) actions.push({ type: "view_on_map", providerId });
+  return actions;
+}
+
 export async function runSmartMatchAssistant({ message, conversation = {}, userId = null } = {}) {
   const text = String(message || "").trim();
   if (!text) {
@@ -724,7 +871,7 @@ export async function runSmartMatchAssistant({ message, conversation = {}, userI
     ...match,
     rank: index + 1,
     explanation: explainMatch(match, criteria),
-    actions: ["view_profile", "view_location", "book", "compare"],
+    actions: actionsForAssistantMatch(match),
   }));
   const messagePrefix = assistantMatchMessage({ matches, criteria, fallbackMessage: result.message });
 

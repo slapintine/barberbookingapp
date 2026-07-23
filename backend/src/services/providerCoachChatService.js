@@ -477,6 +477,60 @@ function avoidExactRepeat(answer, history, diagnosis) {
     : `${answer}\n\nThis time, choose one detail to change and I will help you rewrite it.`;
 }
 
+function providerCoachActionForIntent(intent, context = {}) {
+  const actions = {
+    today_bookings: { type: "open_bookings", target: "bookings" },
+    tomorrow_schedule: { type: "open_schedule", target: "schedule" },
+    attention_bookings: { type: "open_bookings", target: "bookings", filter: "needs_attention" },
+    weekly_comparison: { type: "open_reports", target: "reports" },
+    best_service: { type: "open_services", target: "services" },
+    cancellation_summary: { type: "open_bookings", target: "bookings", filter: "cancelled" },
+    busiest_hours: { type: "open_schedule", target: "schedule" },
+    low_demand_days: { type: "open_reports", target: "reports" },
+    returning_customers: { type: "open_messages", target: "messages" },
+    schedule_gaps: { type: "open_schedule", target: "schedule" },
+    visibility_help: { type: "edit_profile", target: "profile" },
+    photos_trust_help: { type: "add_portfolio_item", target: "portfolio" },
+    pricing_help: { type: "edit_services", target: "services" },
+    services_help: { type: "edit_services", target: "services" },
+    description_help: { type: "edit_profile", target: "profile" },
+    customer_message_help: { type: "open_messages", target: "messages" },
+    promo_help: { type: "open_profile", target: "profile" },
+    plan_help: { type: "open_subscription", target: "subscription" },
+  };
+  const action = actions[intent] || { type: "review_stand", target: "dashboard" };
+  const businessId = Number(context?.stand?.id || context?.businessId || 0);
+  return businessId > 0 ? { ...action, businessId } : action;
+}
+
+function buildProviderCoachPrioritySections({ context, diagnosis, intent, nextBestAction }) {
+  const analytics = context.bookingAnalytics || {};
+  const urgent = [];
+  const important = [];
+  const opportunity = [];
+  if (analytics.attentionBookings?.length) {
+    urgent.push(`${analytics.attentionBookings.length} booking request${analytics.attentionBookings.length === 1 ? "" : "s"} ${analytics.attentionBookings.length === 1 ? "needs" : "need"} a response.`);
+  }
+  if (diagnosis.missingFields?.length) {
+    important.push(`Complete ${diagnosis.missingFields.slice(0, 2).join(" and ")}.`);
+  }
+  if (diagnosis.weakAreas?.[0]?.nextAction) {
+    important.push(diagnosis.weakAreas[0].nextAction);
+  }
+  if (intent === "best_service" && analytics.bestServices?.[0]) {
+    opportunity.push(`Promote ${analytics.bestServices[0].service}, your strongest recent booking signal.`);
+  }
+  if (intent === "low_demand_days") {
+    opportunity.push("Use quiet days for availability updates, photos, or a small announcement.");
+  }
+  if (!opportunity.length && nextBestAction) opportunity.push(nextBestAction);
+  return {
+    urgent: urgent.slice(0, 2),
+    important: important.slice(0, 2),
+    opportunity: opportunity.slice(0, 2),
+  };
+}
+
 export function buildSmartRuleBasedCoachResponse({
   message,
   history = [],
@@ -486,11 +540,14 @@ export function buildSmartRuleBasedCoachResponse({
 }) {
   const answer = coachAnswerForIntent({ context, diagnosis, intentResult });
   const resolvedIntent = intentResult.resolvedIntent;
+  const nextBestAction = getProviderCoachNextAction(resolvedIntent, diagnosis, context);
   return {
     answer: avoidExactRepeat(answer, history, diagnosis),
     intent: intentResult.detectedIntent,
     topic: resolvedIntent,
-    nextBestAction: getProviderCoachNextAction(resolvedIntent, diagnosis, context),
+    nextBestAction,
+    prioritySections: buildProviderCoachPrioritySections({ context, diagnosis, intent: resolvedIntent, nextBestAction }),
+    structuredActions: [providerCoachActionForIntent(resolvedIntent, context)],
     suggestedChips: getProviderCoachSuggestions(
       resolvedIntent === "unclear" ? "unclear" : resolvedIntent
     ),
@@ -636,6 +693,10 @@ export async function createProviderCoachChatReply({
   normalizedGenerated.intent ||= smartResponse.intent;
   normalizedGenerated.topic ||= smartResponse.topic;
   normalizedGenerated.nextBestAction ??= smartResponse.nextBestAction;
+  normalizedGenerated.prioritySections ??= smartResponse.prioritySections;
+  normalizedGenerated.structuredActions = Array.isArray(normalizedGenerated.structuredActions)
+    ? normalizedGenerated.structuredActions.slice(0, 4)
+    : smartResponse.structuredActions;
   normalizedGenerated.suggestedChips = Array.isArray(normalizedGenerated.suggestedChips)
     ? normalizedGenerated.suggestedChips.slice(0, 6)
     : smartResponse.suggestedChips;
@@ -662,6 +723,8 @@ export async function createProviderCoachChatReply({
     intent: normalizedGenerated.intent,
     topic: normalizedGenerated.topic,
     nextBestAction: String(normalizedGenerated.nextBestAction || "").trim().slice(0, 300),
+    prioritySections: normalizedGenerated.prioritySections,
+    structuredActions: normalizedGenerated.structuredActions,
     suggestedChips: normalizedGenerated.suggestedChips,
     businessId: business.id,
     usage,
