@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FiEye, FiEyeOff, FiLock, FiMail, FiUser } from "react-icons/fi";
+import { FiEye, FiEyeOff, FiLock, FiMail } from "react-icons/fi";
 import logo from "../../assets/queless-logo-full.png";
 import { sanitizeErrorMessage } from "../../utils/errorMessages.js";
 import { normalizeAppBasePath } from "../../utils/appBasePath.js";
@@ -171,18 +171,19 @@ export default function AuthScreen(props) {
         <div className="lineup-auth-form">
           {(isLogin || isSignup) && (
             <label className="lineup-auth-field">
-              <FiUser />
-              <span className="lineup-auth-label">{isLogin ? "Username or email" : "Username"}</span>
+              <FiMail />
+              <span className="lineup-auth-label">Email address</span>
               <input
-                ref={usernameRef}
-                autoComplete="username"
-                placeholder={isLogin ? "Enter your username or email" : "Choose a username"}
+                ref={isLogin ? usernameRef : emailRef}
+                type="email"
+                autoComplete="email"
+                placeholder="Email address"
                 onInput={handleAuthInput}
               />
             </label>
           )}
 
-          {(isSignup || isForgot || isReset) && (
+          {(isForgot || isReset) && (
             <label className="lineup-auth-field">
               <FiMail />
               <span className="lineup-auth-label">Email address</span>

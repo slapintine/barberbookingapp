@@ -13,7 +13,6 @@ import {
 import db from "../config/db.js";
 import { run, get } from "../db/query.js";
 import { otpEmail, passwordResetEmail, sendEmail } from "../services/emailService.js";
-import { normalizePhoneNumber, sendOtpSms } from "../services/smsService.js";
 import {
   createAuthSession,
   refreshAccessToken,
@@ -58,34 +57,6 @@ function validatePasswordLength(password) {
   return "";
 }
 
-function findUserByUsernameOrEmail(identifier) {
-  const value = String(identifier || "").trim();
-  // Match usernames AND emails case-insensitively and whitespace-trimmed so a
-  // user who signed up as "Timothy" can still log in typing "timothy" (this was
-  // the live bug: the email path was already case-insensitive, the username path
-  // was not, so a case/whitespace mismatch looked like a wrong password). An
-  // exact-case username still wins when legacy rows differ only by case.
-  const normalized = value.toLowerCase();
-
-  return new Promise((resolve, reject) => {
-    db.get(
-      `SELECT u.id, u.username, u.password_hash, u.role, u.account_status,
-              u.email_verified_at, u.disabled_at, u.blocked_at, u.created_at,
-              p.email
-       FROM users u
-       LEFT JOIN profiles p ON p.user_id = u.id
-       WHERE LOWER(TRIM(u.username)) = ? OR LOWER(TRIM(p.email)) = ?
-       ORDER BY CASE WHEN u.username = ? THEN 0 ELSE 1 END, u.id ASC
-       LIMIT 1`,
-      [normalized, normalized, value],
-      (err, row) => {
-        if (err) reject(err);
-        else resolve(row || null);
-      }
-    );
-  });
-}
-
 function findUserByUsername(username) {
   const value = String(username || "").trim();
   const normalized = value.toLowerCase();
@@ -110,9 +81,25 @@ function findUserByUsername(username) {
 
 function findUserByEmail(email) {
   return get(
-    `SELECT u.id, u.username, u.password_hash, u.role, u.account_status, u.created_at, p.email
+    `SELECT u.id, u.username, u.password_hash, u.role, u.account_status,
+            u.email_verified_at, u.disabled_at, u.blocked_at, u.created_at, p.email,
+            b.id AS barber_id,
+            b.subscription_tier,
+            COALESCE(
+              (
+                SELECT bs.tier
+                FROM barber_subscriptions bs
+                WHERE bs.barber_id = b.id
+                  AND COALESCE(bs.is_active, 0) = 1
+                  AND LOWER(COALESCE(bs.status, '')) IN ('active', 'trialing')
+                ORDER BY bs.id DESC
+                LIMIT 1
+              ),
+              b.subscription_tier
+            ) AS provider_plan
      FROM users u
      INNER JOIN profiles p ON p.user_id = u.id
+     LEFT JOIN barbers b ON b.owner_user_id = u.id AND b.deleted_at IS NULL
      WHERE LOWER(p.email) = ?
      LIMIT 1`,
     [normalizeEmail(email)]
@@ -131,9 +118,6 @@ function getInactiveAccountCode(user = {}) {
   const status = String(user.account_status || "active").trim().toLowerCase();
   if (["inactive", "blocked", "disabled", "suspended"].includes(status) || user.disabled_at || user.blocked_at) {
     return "ACCOUNT_INACTIVE";
-  }
-  if (["unverified", "pending_verification"].includes(status)) {
-    return "ACCOUNT_UNVERIFIED";
   }
   return "";
 }
@@ -163,6 +147,22 @@ function createUser(username, passwordHash) {
       }
     );
   });
+}
+
+async function createUniqueUsernameFromEmail(email) {
+  const localPart = normalizeEmail(email).split("@")[0] || "queless";
+  const base = localPart
+    .replace(/[^a-zA-Z0-9._-]+/g, ".")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .slice(0, 24) || "queless";
+  let candidate = base.length >= 3 ? base : `${base}user`.slice(0, 24);
+  let suffix = 0;
+  while (await findUserByUsername(candidate)) {
+    suffix += 1;
+    const tail = String(suffix);
+    candidate = `${base.slice(0, Math.max(3, 31 - tail.length))}${tail}`;
+  }
+  return candidate;
 }
 
 function createEmptyProfile(userId, email = "") {
@@ -268,7 +268,7 @@ async function verifyOtpCode(row, code) {
 
 export async function registerUser(req, res, next) {
   try {
-    const { username, password } = req.body;
+    const password = String(req.body.password || "");
     const email = normalizeEmail(req.body.email);
 
     if (!email) {
@@ -278,10 +278,10 @@ export async function registerUser(req, res, next) {
       });
     }
 
-    if (!username || !password) {
+    if (!password) {
       return res.status(400).json({
         success: false,
-        message: "Username and password are required."
+        message: "Password is required."
       });
     }
 
@@ -292,7 +292,8 @@ export async function registerUser(req, res, next) {
       });
     }
 
-    if (!isValidUsername(username)) {
+    const requestedUsername = normalizeUsername(req.body.username || "");
+    if (requestedUsername && !isValidUsername(requestedUsername)) {
       return res.status(400).json({
         success: false,
         message: "Username must be 3-32 characters and use only letters, numbers, dots, dashes, or underscores."
@@ -307,7 +308,7 @@ export async function registerUser(req, res, next) {
       });
     }
 
-    const normalizedUsername = normalizeUsername(username);
+    const normalizedUsername = requestedUsername || await createUniqueUsernameFromEmail(email);
     const existingUser = await findUserByUsername(normalizedUsername);
 
     if (existingUser) {
@@ -328,12 +329,38 @@ export async function registerUser(req, res, next) {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await createUser(normalizedUsername, passwordHash);
     await createEmptyProfile(user.id, email);
+    let emailSent = false;
+    try {
+      const code = await createOtp({
+        userId: user.id,
+        channel: "email",
+        destination: email,
+        purpose: "account_verification",
+      });
+      const otpRow = await getLatestOtp({ channel: "email", destination: email, purpose: "account_verification" });
+      await run(
+        `UPDATE users
+         SET email_verification_code_hash = ?,
+             email_verification_expires_at = ?,
+             last_email_code_sent_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [otpRow?.code_hash || "", otpRow?.expires_at || null, user.id]
+      ).catch(() => {});
+      await sendEmailOtp(email, code);
+      emailSent = true;
+    } catch {
+      emailSent = false;
+    }
 
     const session = await createAuthSession(user, sessionRequest(req));
 
     return res.status(201).json({
       success: true,
-      message: "Account created successfully.",
+      message: emailSent
+        ? "Account created. Check your email to verify your Queless account."
+        : "Account created. We could not send the verification email right now, but you can resend it from Profile.",
+      emailVerificationRequired: true,
+      emailVerificationSent: emailSent,
       ...session,
     });
   } catch (error) {
@@ -343,15 +370,19 @@ export async function registerUser(req, res, next) {
 
 export async function loginUser(req, res, next) {
   try {
-    const username = String(req.body.username || "").trim();
+    const email = normalizeEmail(req.body.email || req.body.username || "");
     const password = String(req.body.password || "");
 
-    if (!username && !password) {
-      return authError(res, 400, "VALIDATION_ERROR", "Please enter your username/email and password.");
+    if (!email && !password) {
+      return authError(res, 400, "VALIDATION_ERROR", "Please enter your email and password.");
     }
 
-    if (!username) {
-      return authError(res, 400, "VALIDATION_ERROR", "Please enter your username or email.");
+    if (!email) {
+      return authError(res, 400, "VALIDATION_ERROR", "Please enter your email address.");
+    }
+
+    if (!isValidEmail(email)) {
+      return authError(res, 400, "VALIDATION_ERROR", "Please enter a valid email address.");
     }
 
     if (!password) {
@@ -362,31 +393,31 @@ export async function loginUser(req, res, next) {
     // so a distributed/IP-rotating attacker still can't brute-force one account.
     // Checked before the password comparison and keyed by the submitted identifier
     // so it behaves identically for real and non-existent accounts (anti-enumeration).
-    const existingLock = getLoginLock(username);
+    const existingLock = getLoginLock(email);
     if (existingLock.locked) {
       res.setHeader("Retry-After", String(existingLock.retryAfterSeconds));
       await recordAuditEvent({
         eventType: AUDIT_EVENTS.ACCOUNT_LOCKOUT,
         targetType: "account",
-        metadata: { emailHash: hashAuditEmail(username), reason: "already_locked" },
+        metadata: { emailHash: hashAuditEmail(email), reason: "already_locked" },
         req,
       });
       return authError(res, 429, "TOO_MANY_ATTEMPTS", "Too many failed attempts. Please try again in a few minutes.");
     }
 
-    const user = await findUserByUsernameOrEmail(username);
+    const user = await findUserByEmail(email);
 
     const passwordMatches = user ? await bcrypt.compare(password, user.password_hash) : false;
     if (!user || !passwordMatches) {
       // Same message and code path whether the account is missing or the password
       // is wrong, so the response never reveals which accounts exist.
-      const lock = recordLoginFailure(username);
+      const lock = recordLoginFailure(email);
       // Failed login: store only a hashed email, never the plain address.
       await recordAuditEvent({
         eventType: AUDIT_EVENTS.LOGIN_FAILURE,
         actorUserId: user?.id ?? null,
         targetType: "account",
-        metadata: { emailHash: hashAuditEmail(username) },
+        metadata: { emailHash: hashAuditEmail(email) },
         req,
       });
       if (lock.locked) {
@@ -395,7 +426,7 @@ export async function loginUser(req, res, next) {
           eventType: AUDIT_EVENTS.ACCOUNT_LOCKOUT,
           actorUserId: user?.id ?? null,
           targetType: "account",
-          metadata: { emailHash: hashAuditEmail(username), reason: "failed_attempt_threshold" },
+          metadata: { emailHash: hashAuditEmail(email), reason: "failed_attempt_threshold" },
           req,
         });
         return authError(res, 429, "TOO_MANY_ATTEMPTS", "Too many failed attempts. Please try again in a few minutes.");
@@ -409,7 +440,7 @@ export async function loginUser(req, res, next) {
     }
 
     // Successful login clears the account's failure counter.
-    clearLoginFailures(username);
+    clearLoginFailures(email);
     const session = await createAuthSession(user, sessionRequest(req));
     await recordAuditEvent({
       eventType: AUDIT_EVENTS.LOGIN_SUCCESS,
@@ -616,43 +647,29 @@ export async function sendEmailVerification(req, res, next) {
   }
 }
 
-export async function sendPhoneOtp(req, res, next) {
-  try {
-    const phone = normalizePhoneNumber(req.body.phone || "");
-    if (!phone) {
-      return res.status(400).json({ success: false, message: "Valid phone number is required." });
-    }
-
-    await sendOtpSms({
-      phone,
-      userId: req.user?.id || null,
-      purpose: req.body.purpose || "account_verification",
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Phone verification code sent.",
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
 export async function verifyOtp(req, res, next) {
   try {
-    const channel = String(req.body.channel || "").trim().toLowerCase();
+    const channel = String(req.body.channel || "email").trim().toLowerCase();
     const rawDestination = String(req.body.destination || "").trim();
-    const destination = channel === "sms" ? normalizePhoneNumber(rawDestination) : normalizeEmail(rawDestination);
+    const destination = normalizeEmail(rawDestination);
     const purpose = String(req.body.purpose || "account_verification").trim();
     const code = String(req.body.code || "").trim();
 
-    if (!["email", "sms"].includes(channel) || !destination || !code) {
-      return res.status(400).json({ success: false, message: "Channel, destination, and code are required." });
+    if (channel !== "email") {
+      return res.status(410).json({
+        success: false,
+        code: "PHONE_VERIFICATION_RETIRED",
+        message: "Phone verification is no longer used for Queless accounts. Please verify your email instead.",
+      });
+    }
+
+    if (!destination || !code) {
+      return res.status(400).json({ success: false, message: "Email and verification code are required." });
     }
 
     const row = await getLatestOtp({ channel, destination, purpose });
     await verifyOtpCode(row, code);
-    if (channel === "email" && purpose === "account_verification") {
+    if (purpose === "account_verification") {
       const profile = await get(`SELECT email FROM profiles WHERE user_id = ?`, [req.user.id]);
       if (!profile?.email || normalizeEmail(profile.email) !== normalizeEmail(destination)) {
         return res.status(404).json({ success: false, message: "Email not found. Add your email before verifying." });
@@ -674,8 +691,8 @@ export async function verifyOtp(req, res, next) {
 
     res.status(200).json({
       success: true,
-      message: channel === "email" ? "Email verified" : "Verification completed.",
-      channel,
+      message: "Email verified",
+      channel: "email",
       destination,
       verified: true,
     });

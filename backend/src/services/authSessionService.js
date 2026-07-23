@@ -26,6 +26,8 @@ function accessTokenFor(user, sessionId) {
 }
 
 function publicUser(row = {}) {
+  const barberId = row.barber_id || row.barberId || null;
+  const providerPlan = String(row.provider_plan || row.providerPlan || row.subscription_tier || "").toUpperCase();
   return {
     id: row.id,
     username: row.username,
@@ -36,6 +38,10 @@ function publicUser(row = {}) {
     email_verified: Boolean(row.email_verified_at),
     created_at: row.created_at,
     account_status: row.account_status || "active",
+    barber_id: barberId,
+    barberId,
+    providerPlan: providerPlan || null,
+    subscription_tier: row.subscription_tier || providerPlan || null,
   };
 }
 
@@ -71,10 +77,25 @@ export async function rotateAuthSession(refreshToken) {
   const row = await get(
     `SELECT s.id AS session_id, s.user_id, s.expires_at, s.revoked_at,
             u.id, u.username, u.role, u.account_status, u.disabled_at, u.blocked_at,
-            u.email_verified_at, u.created_at, p.email
+            u.email_verified_at, u.created_at, p.email,
+            b.id AS barber_id,
+            b.subscription_tier,
+            COALESCE(
+              (
+                SELECT bs.tier
+                FROM barber_subscriptions bs
+                WHERE bs.barber_id = b.id
+                  AND COALESCE(bs.is_active, 0) = 1
+                  AND LOWER(COALESCE(bs.status, '')) IN ('active', 'trialing')
+                ORDER BY bs.id DESC
+                LIMIT 1
+              ),
+              b.subscription_tier
+            ) AS provider_plan
      FROM auth_sessions s
      JOIN users u ON u.id = s.user_id
      LEFT JOIN profiles p ON p.user_id = u.id
+     LEFT JOIN barbers b ON b.owner_user_id = u.id AND b.deleted_at IS NULL
      WHERE s.refresh_token_hash = ?`,
     [tokenHash]
   );
@@ -143,9 +164,27 @@ export async function authenticateAccessToken(token) {
   }
   const row = await get(
     `SELECT u.id, u.username, u.role, u.account_status, u.disabled_at, u.blocked_at, u.created_at,
+            p.email,
+            u.email_verified_at,
+            b.id AS barber_id,
+            b.subscription_tier,
+            COALESCE(
+              (
+                SELECT bs.tier
+                FROM barber_subscriptions bs
+                WHERE bs.barber_id = b.id
+                  AND COALESCE(bs.is_active, 0) = 1
+                  AND LOWER(COALESCE(bs.status, '')) IN ('active', 'trialing')
+                ORDER BY bs.id DESC
+                LIMIT 1
+              ),
+              b.subscription_tier
+            ) AS provider_plan,
             s.id AS session_id, s.expires_at AS session_expires_at, s.revoked_at
      FROM users u
      JOIN auth_sessions s ON s.user_id = u.id
+     LEFT JOIN profiles p ON p.user_id = u.id
+     LEFT JOIN barbers b ON b.owner_user_id = u.id AND b.deleted_at IS NULL
      WHERE u.id = ? AND s.id = ?`,
     [decoded.userId, decoded.sid]
   );
@@ -154,6 +193,8 @@ export async function authenticateAccessToken(token) {
     error.statusCode = 401;
     throw error;
   }
+  row.barberId = row.barber_id || null;
+  row.providerPlan = row.provider_plan || row.subscription_tier || null;
   return { user: row, sessionId: row.session_id, decoded };
 }
 

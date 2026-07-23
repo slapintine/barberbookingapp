@@ -175,6 +175,36 @@ test("canonical service listings route loads without auth", async () => {
   assert.ok(Array.isArray(body.service_listings));
 });
 
+test("Free Customer can use standard Smart Match but not conversational assistant", async () => {
+  const standardResponse = await request("/api/discovery/smart-match", {
+    method: "POST",
+    headers: authHeaders("customer_one"),
+    body: JSON.stringify({
+      serviceKey: "beauty",
+      serviceLabel: "Beauty",
+      when: "this_week",
+      locationType: "enter_address",
+      address: "Kampala",
+    }),
+  });
+  assert.equal(standardResponse.status, 200);
+  const standardBody = await standardResponse.json();
+  assert.equal(standardBody.success, true);
+  assert.equal(standardBody.mode, "standard");
+  assert.ok(Array.isArray(standardBody.matches));
+
+  const assistantResponse = await request("/api/discovery/smart-match/assistant", {
+    method: "POST",
+    headers: authHeaders("customer_one"),
+    body: JSON.stringify({
+      message: "Find a beauty provider in Kampala today",
+    }),
+  });
+  assert.equal(assistantResponse.status, 403);
+  const assistantBody = await assistantResponse.json();
+  assert.equal(assistantBody.code, "CUSTOMER_PREMIUM_REQUIRED");
+});
+
 test("unauthenticated private route returns 401", async () => {
   const response = await request("/api/bookings/me");
   assert.equal(response.status, 401);

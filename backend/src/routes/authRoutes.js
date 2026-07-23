@@ -1,5 +1,5 @@
 import express from "express";
-import { confirmPasswordReset, getMe, loginUser, logoutSession, refreshSession, registerUser, requestPasswordReset, sendEmailVerification, sendPhoneOtp, updateAccount, verifyOtp } from "../controllers/authController.js";
+import { confirmPasswordReset, getMe, loginUser, logoutSession, refreshSession, registerUser, requestPasswordReset, sendEmailVerification, updateAccount, verifyOtp } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { authRateLimiter, otpRateLimiter } from "../middleware/securityMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
@@ -14,7 +14,6 @@ router.post("/logout", logoutSession);
 router.post("/password-reset/request", otpRateLimiter, validateRequest(schemas.passwordResetRequest), requestPasswordReset);
 router.post("/password-reset/confirm", otpRateLimiter, validateRequest(schemas.passwordResetConfirm), confirmPasswordReset);
 router.post("/send-email-verification", protect, otpRateLimiter, sendEmailVerification);
-router.post("/send-phone-otp", protect, otpRateLimiter, sendPhoneOtp);
 router.post("/verify-otp", protect, otpRateLimiter, verifyOtp);
 router.get("/me", protect, getMe);
 router.patch("/me", protect, validateRequest(schemas.accountUpdate), updateAccount);

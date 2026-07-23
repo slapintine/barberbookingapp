@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { FiArrowDownLeft, FiArrowLeft, FiArrowUpRight, FiBriefcase, FiCamera, FiCheckCircle, FiCreditCard, FiEdit2, FiHeart, FiLogOut, FiMail, FiMapPin, FiMoon, FiSettings, FiShield, FiSmartphone, FiSun, FiUser, FiX } from "react-icons/fi";
-import { sendEmailVerification, sendPhoneOtp, verifyOtp } from "../api/authApi.js";
+import { sendEmailVerification, verifyOtp } from "../api/authApi.js";
 import TopUpWalletModal from "../components/wallet/TopUpWalletModal.jsx";
 import UserAvatar from "../components/ui/UserAvatar.jsx";
 import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
@@ -15,8 +15,6 @@ import {
 } from "../utils/membershipDisplay.js";
 import {
   PAYMENTS_ENABLED,
-  SMS_COMING_SOON_MESSAGE,
-  SMS_ENABLED,
   WALLET_PAYMENTS_COMING_SOON_MESSAGE,
 } from "../utils/launchFlags.js";
 
@@ -90,31 +88,24 @@ export default function ProfilePage({
   const [editing, setEditing] = useState(false);
   const emailProfileKey = profile.email || "";
   const phoneProfileKey = profile.phone || "";
-  const resendProfileKey = `${emailProfileKey}|${phoneProfileKey}`;
   const [emailCodeEntry, setEmailCodeEntry] = useState({ key: "", value: "" });
-  const [phoneCodeEntry, setPhoneCodeEntry] = useState({ key: "", value: "" });
   const [sendingEmailCode, setSendingEmailCode] = useState(false);
-  const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
   const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [verifyError, setVerifyError] = useState("");
   const [verifyStatus, setVerifyStatus] = useState("");
-  const [verificationPage, setVerificationPage] = useState("email");
   const [emailCodeSentEntry, setEmailCodeSentEntry] = useState({ key: "", value: false });
   const [emailDraftEntry, setEmailDraftEntry] = useState({ key: "", value: "" });
   const [changingEmailEntry, setChangingEmailEntry] = useState({ key: "", value: false });
   const [verifiedChannelsOverride, setVerifiedChannelsOverride] = useState({
     emailKey: "",
-    phoneKey: "",
     email: null,
-    phone: null,
   });
-  const [resendCooldownsEntry, setResendCooldownsEntry] = useState({ key: "", value: { email: 0, phone: 0 } });
+  const [resendCooldownsEntry, setResendCooldownsEntry] = useState({ key: "", value: { email: 0 } });
   const [withdrawAmount, setWithdrawAmount] = useState("10000");
   const [planDetailsTier, setPlanDetailsTier] = useState("");
   const [topupOpen, setTopupOpen] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState("account");
-  const [phoneCodeSentEntry, setPhoneCodeSentEntry] = useState({ key: "", value: false });
   const initialPhone = splitPhoneNumber(profile.phone);
   const [phoneDraftEntry, setPhoneDraftEntry] = useState({ key: "", countryCode: "", localNumber: "" });
   const profilePhotoInputRef = useRef(null);
@@ -133,31 +124,24 @@ export default function ProfilePage({
     setPhoneDraftEntry({ key: phoneProfileKey, countryCode: phoneCountryCode, localNumber });
   };
   const emailCode = emailCodeEntry.key === emailProfileKey ? emailCodeEntry.value : "";
-  const phoneCode = phoneCodeEntry.key === phoneProfileKey ? phoneCodeEntry.value : "";
   const emailCodeSent = emailCodeSentEntry.key === emailProfileKey ? emailCodeSentEntry.value : false;
-  const phoneCodeSent = phoneCodeSentEntry.key === phoneProfileKey ? phoneCodeSentEntry.value : false;
   const emailDraft = emailDraftEntry.key === emailProfileKey ? emailDraftEntry.value : profile.email || "";
   const changingEmail = changingEmailEntry.key === emailProfileKey ? changingEmailEntry.value : false;
-  const resendCooldowns = resendCooldownsEntry.key === resendProfileKey ? resendCooldownsEntry.value : { email: 0, phone: 0 };
+  const resendCooldowns = resendCooldownsEntry.key === emailProfileKey ? resendCooldownsEntry.value : { email: 0 };
   const verifiedChannels = {
     email: verifiedChannelsOverride.emailKey === emailProfileKey && verifiedChannelsOverride.email !== null
       ? verifiedChannelsOverride.email
       : Boolean(profile.emailVerified || profile.email_verified),
-    phone: verifiedChannelsOverride.phoneKey === phoneProfileKey && verifiedChannelsOverride.phone !== null
-      ? verifiedChannelsOverride.phone
-      : Boolean(profile.phoneVerified || profile.phone_verified),
   };
   const setEmailCode = (value) => setEmailCodeEntry({ key: emailProfileKey, value });
-  const setPhoneCode = (value) => setPhoneCodeEntry({ key: phoneProfileKey, value });
   const setEmailCodeSent = (value) => setEmailCodeSentEntry({ key: emailProfileKey, value });
-  const setPhoneCodeSent = (value) => setPhoneCodeSentEntry({ key: phoneProfileKey, value });
   const setEmailDraft = (value) => setEmailDraftEntry({ key: emailProfileKey, value });
   const setChangingEmail = (value) => setChangingEmailEntry({ key: emailProfileKey, value });
   const setResendCooldowns = (updater) => {
     setResendCooldownsEntry((prev) => {
-      const current = prev.key === resendProfileKey ? prev.value : { email: 0, phone: 0 };
+      const current = prev.key === emailProfileKey ? prev.value : { email: 0 };
       return {
-        key: resendProfileKey,
+        key: emailProfileKey,
         value: typeof updater === "function" ? updater(current) : updater,
       };
     });
@@ -166,9 +150,7 @@ export default function ProfilePage({
     const next = typeof updater === "function" ? updater(verifiedChannels) : updater;
     setVerifiedChannelsOverride({
       emailKey: emailProfileKey,
-      phoneKey: phoneProfileKey,
       email: next.email,
-      phone: next.phone,
     });
   };
 
@@ -179,7 +161,7 @@ export default function ProfilePage({
   };
 
   const startResendCooldown = (type) => {
-    setResendCooldowns((prev) => ({ ...prev, [type]: type === "email" ? 60 : 45 }));
+    setResendCooldowns((prev) => ({ ...prev, [type]: 60 }));
     const timer = setInterval(() => {
       setResendCooldowns((prev) => {
         const nextValue = Math.max(0, Number(prev[type] || 0) - 1);
@@ -235,72 +217,34 @@ export default function ProfilePage({
       }
       return;
     }
-
-    if (!SMS_ENABLED) {
-      setPhoneCode("");
-      setPhoneCodeSent(false);
-      setVerifyStatus(SMS_COMING_SOON_MESSAGE);
-      return;
-    }
-
-    if (!profile.phone?.trim()) {
-      setVerifyError("Please save your phone number in Profile first.");
-      return;
-    }
-
-    if (!isValidPhoneNumber(phoneCountryCode, phoneLocalNumber)) {
-      setVerifyError(`Enter a valid phone number for ${phoneCountryCode} before requesting a code.`);
-      return;
-    }
-    if (resendCooldowns.phone > 0) return;
-
-    try {
-      setSendingPhoneCode(true);
-      await sendPhoneOtp(profile.phone.trim());
-      setPhoneCode("");
-      setPhoneCodeSent(true);
-      setVerifyStatus("Phone code sent.");
-      startResendCooldown("phone");
-    } catch (error) {
-      setVerifyError(error.message || "Could not send phone code.");
-    } finally {
-      setSendingPhoneCode(false);
-    }
   };
 
-  const confirmVerification = async (type) => {
+  const confirmVerification = async () => {
     setVerifyError("");
     setVerifyStatus("");
 
-    if (type === "phone" && !SMS_ENABLED) {
-      setVerifyStatus(SMS_COMING_SOON_MESSAGE);
-      return;
-    }
-
-    const destination = type === "email" ? profile.email?.trim() : profile.phone?.trim();
-    const code = type === "email" ? emailCode : phoneCode;
+    const destination = profile.email?.trim();
+    const code = emailCode;
     if (!destination || !code.trim()) {
       setVerifyError("Enter the verification code first.");
       return;
     }
 
     try {
-      if (type === "email") setVerifyingEmail(true);
+      setVerifyingEmail(true);
       const data = await verifyOtp({
-        channel: type === "email" ? "email" : "sms",
+        channel: "email",
         destination,
         code: code.trim(),
       });
       setVerifyStatus(data?.message || "Verification completed.");
-      setVerifiedChannels((prev) => ({ ...prev, [type]: true }));
-      if (type === "email") {
-        resetEmailVerificationCodeState();
-        setProfile((prev) => ({ ...prev, emailVerified: true, email_verified: true }));
-      }
+      setVerifiedChannels({ email: true });
+      resetEmailVerificationCodeState();
+      setProfile((prev) => ({ ...prev, emailVerified: true, email_verified: true }));
     } catch (error) {
       setVerifyError(error.message || "Could not verify code.");
     } finally {
-      if (type === "email") setVerifyingEmail(false);
+      setVerifyingEmail(false);
     }
   };
 
@@ -390,7 +334,7 @@ export default function ProfilePage({
   const accountDetailRows = [
     { label: "Username", value: currentUser?.username || profile.username || "Not set", icon: FiUser, cta: !currentUser?.username && !profile.username ? "Edit profile" : "" },
     { label: "Email", value: profile.email || currentUser?.email || "Email not added", icon: FiMail, cta: profile.email ? (verifiedChannels.email ? "Verified" : "Update email") : "Update email" },
-    { label: "Phone", value: profile.phone || "Phone not added", icon: FiSmartphone, cta: profile.phone ? (verifiedChannels.phone ? "Verified" : "SMS Coming Soon") : "Add phone number" },
+    { label: "Contact phone", value: profile.phone || "Phone not added", icon: FiSmartphone, cta: profile.phone ? "Contact only" : "Add phone number" },
     { label: "Address", value: profile.address || profile.location || currentUser?.location || "Address not added", icon: FiMapPin, cta: profile.address || profile.location || currentUser?.location ? "" : "Add address" },
     {
       label: "Account type",
@@ -1181,7 +1125,7 @@ export default function ProfilePage({
         </div>
         <div className="profile-status-strip-v17">
           <span>{verifiedChannels.email ? "Email verified" : "Email needs verification"}</span>
-          <span>{verifiedChannels.phone ? "Phone verified" : profile.phone ? "SMS verification coming soon" : "Add phone number"}</span>
+          <span>{profile.phone ? "Phone saved for contact/payment use" : "Phone optional"}</span>
           <span>{getAccountStatusStripText(customerSubscriptionState, subscriptionState, Boolean(myBarberProfile), isProviderAccount)}</span>
         </div>
         {verifyStatus ? <div className="auth-success">{verifyStatus}</div> : null}
@@ -1189,9 +1133,6 @@ export default function ProfilePage({
         <div className="inline-actions-v4">
           {!profile.phone ? <button type="button" className="mini-action-btn-v4" onClick={() => setEditing(true)}>Add phone number</button> : null}
           {!profile.address ? <button type="button" className="mini-action-btn-v4" onClick={() => setEditing(true)}>Add address</button> : null}
-          {!verifiedChannels.phone && profile.phone ? (
-            <button type="button" className="mini-action-btn-v4" onClick={() => setActiveProfileTab("security")} disabled title={SMS_COMING_SOON_MESSAGE}>SMS Coming Soon</button>
-          ) : null}
           </div>
       </div>
       ) : null}
@@ -1200,7 +1141,7 @@ export default function ProfilePage({
       <div className="simple-card-v4 profile-confirm-card-v4">
         <div className="profile-confirm-copy-v4">
           <h3>Account security</h3>
-          <p>Manage email verification for booking and account updates.</p>
+          <p>Queless uses email verification for account security. Phone numbers are optional contact or payment details, not account verification.</p>
         </div>
 
         <div className="security-status-grid-v7">
@@ -1209,67 +1150,27 @@ export default function ProfilePage({
             <strong>Email</strong>
             <span>{verifiedChannels.email ? "Verified" : profile.email?.trim() ? "Email not verified" : "Missing"}</span>
           </div>
-          <div className={verifiedChannels.phone ? "security-status-card-v7 verified" : "security-status-card-v7"}>
+          <div className="security-status-card-v7">
             <FiSmartphone />
-            <strong>Phone</strong>
-            <span>{verifiedChannels.phone ? "Verified" : profile.phone?.trim() ? "SMS Coming Soon" : "Missing"}</span>
+            <strong>Contact phone</strong>
+            <span>{profile.phone?.trim() ? "Saved for contact/payment use" : "Optional"}</span>
           </div>
         </div>
 
         <div className="verify-pager-shell-v4">
           <div className="verify-pager-head-v4">
-            <button
-              type="button"
-              className="verify-nav-btn-v4"
-              onClick={() => setVerificationPage("email")}
-              disabled={verificationPage === "email"}
-            >
-              <FiArrowLeft />
-            </button>
-
             <div className="verify-pager-summary-v4">
-              <div className="verify-pager-title-v4">
-                {verificationPage === "email" ? "Email verification" : "Phone verification"}
-              </div>
+              <div className="verify-pager-title-v4">Email verification</div>
               <div className="verify-pager-sub-v4">
-                {verificationPage === "email"
-                  ? (profile.email?.trim()
-                      ? verifiedChannels.email
-                        ? "Your email is verified."
-                        : "Email not verified."
-                      : "Add and save your email first.")
-                  : (profile.phone?.trim()
-                      ? "Phone verification by SMS will be available soon."
-                      : "Add and save your phone number first.")}
+                {profile.email?.trim()
+                  ? verifiedChannels.email
+                    ? "Your email is verified."
+                    : "Check your email and enter the verification code."
+                  : "Add and save your email first."}
               </div>
             </div>
-
-            <button
-              type="button"
-              className="verify-nav-btn-v4"
-              onClick={() => setVerificationPage("phone")}
-              disabled={verificationPage === "phone"}
-            >
-              <span className="verify-nav-arrow-v4">&rarr;</span>
-            </button>
           </div>
 
-          <div className="verify-step-dots-v4">
-            <button
-              type="button"
-              className={verificationPage == "email" ? "verify-step-dot-v4 active" : "verify-step-dot-v4"}
-              onClick={() => setVerificationPage("email")}
-              aria-label="Go to email verification"
-            />
-            <button
-              type="button"
-              className={verificationPage == "phone" ? "verify-step-dot-v4 active" : "verify-step-dot-v4"}
-              onClick={() => setVerificationPage("phone")}
-              aria-label="Go to phone verification"
-            />
-          </div>
-
-          {verificationPage === "email" ? (
             <div className="verify-page-card-v4">
               <div className="verify-page-top-v4">
                 <div>
@@ -1375,7 +1276,7 @@ export default function ProfilePage({
                           : "You can resend the code now."}
                       </div>
                       <div className="verify-page-actions-v4">
-                        <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmVerification("email")} disabled={verifyingEmail}>
+                        <button type="button" className="mini-action-btn-v4 success" onClick={confirmVerification} disabled={verifyingEmail}>
                           <FiCheckCircle /> {verifyingEmail ? "Verifying..." : "Verify code"}
                         </button>
                         <button type="button" className="mini-action-btn-v4" onClick={() => sendVerification("email")} disabled={sendingEmailCode || resendCooldowns.email > 0}>
@@ -1387,61 +1288,6 @@ export default function ProfilePage({
                 </>
               )}
             </div>
-          ) : (
-            <div className="verify-page-card-v4">
-              <div className="verify-page-top-v4">
-                <div>
-                  <div className="verify-page-label-v4">Phone verification</div>
-                  <div className="verify-page-helper-v4">
-                    SMS verification for sign-in recovery and account alerts is coming soon.
-                  </div>
-                </div>
-                <span className={verifiedChannels.phone ? "verify-status-chip-v4 ready verified" : profile.phone?.trim() ? "verify-status-chip-v4 ready" : "verify-status-chip-v4 missing"}>
-                  {verifiedChannels.phone ? "Verified" : profile.phone?.trim() ? "Coming Soon" : "Missing"}
-                </span>
-              </div>
-
-              <div className="verify-channel-row-v4">
-                <strong>Saved phone</strong>
-                <span>{profile.phone?.trim() || "No phone number saved yet"}</span>
-              </div>
-
-              {!phoneCodeSent ? (
-                <button type="button" className="secondary-btn-v4 verify-send-btn-v4" onClick={() => sendVerification("phone")} disabled={!SMS_ENABLED || sendingPhoneCode || resendCooldowns.phone > 0}>
-                  {SMS_ENABLED ? (sendingPhoneCode ? "Sending..." : resendCooldowns.phone > 0 ? `Resend in ${resendCooldowns.phone}s` : "Send code") : "SMS Coming Soon"}
-                </button>
-              ) : null}
-              <div className="cooldown-note-v7">{SMS_COMING_SOON_MESSAGE}</div>
-
-              {phoneCodeSent ? (
-                <>
-                  <label className="label-v4">
-                    Verification code
-                    <input
-                      className="field-input-v4 profile-input-v4"
-                      placeholder="Enter phone code"
-                      value={phoneCode}
-                      onChange={(e) => setPhoneCode(e.target.value)}
-                    />
-                  </label>
-
-                  <div className="verify-page-actions-v4">
-                    <button type="button" className="mini-action-btn-v4 success" onClick={() => confirmVerification("phone")} disabled={!SMS_ENABLED}>
-                      <FiCheckCircle /> {SMS_ENABLED ? "Verify phone" : "SMS Coming Soon"}
-                    </button>
-                    <button type="button" className="mini-action-btn-v4" onClick={() => sendVerification("phone")} disabled={!SMS_ENABLED || sendingPhoneCode || resendCooldowns.phone > 0}>
-                      {SMS_ENABLED ? (sendingPhoneCode ? "Sending..." : "Resend code") : "SMS Coming Soon"}
-                    </button>
-                  </div>
-                </>
-              ) : null}
-              <div className="verify-page-actions-v4">
-                <button type="button" className="mini-action-btn-v4" onClick={() => setVerificationPage("email")}>
-                  &larr; Back to email
-                </button>
-              </div>
-            </div>
-          )}
 
           {verifyError ? <div className="auth-error">{verifyError}</div> : null}
           {verifyStatus ? <div className="auth-success">{verifyStatus}</div> : null}

@@ -66,8 +66,8 @@ test.after(async () => {
 
 test("login success writes a LOGIN_SUCCESS audit row with hashed IP and no secrets", async () => {
   // Register then log in through the real routes so controller wiring is exercised.
-  await req("/api/auth/register", { method: "POST", body: { username: "audit_login", email: "audit_login@example.test", password: "Password123" } });
-  const res = await req("/api/auth/login", { method: "POST", body: { username: "audit_login", password: "Password123" } });
+  await req("/api/auth/register", { method: "POST", body: { email: "audit_login@example.test", password: "Password123" } });
+  const res = await req("/api/auth/login", { method: "POST", body: { email: "audit_login@example.test", password: "Password123" } });
   assert.equal(res.status, 200);
 
   const rows = await all(`SELECT * FROM security_audit_logs WHERE event_type = ? ORDER BY id DESC`, [AUDIT_EVENTS.LOGIN_SUCCESS]);

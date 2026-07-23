@@ -4,11 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-// Regression coverage for the live login bug: a user whose username is stored
-// with different case/whitespace than what they type could not log in — it
-// looked like "incorrect password", and changing the password never helped
-// (the email path was already case-insensitive; the username path was not).
-// Also covers the password-change round-trip end to end.
+// Email-only account authentication: usernames remain internal display handles,
+// but login and recovery use email only.
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "queless-auth-ci-"));
 process.env.NODE_ENV = "test";
@@ -32,8 +29,8 @@ function post(pathname, body, tkn) {
   });
 }
 
-async function login(username, password) {
-  return post("/api/auth/login", { username, password });
+async function login(email, password) {
+  return post("/api/auth/login", { email, password });
 }
 
 test.before(async () => {
@@ -45,7 +42,6 @@ test.before(async () => {
   await new Promise((resolve) => server.once("listening", resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 
-  // Sign up with a mixed-case username + mixed-case email, like a real user.
   const res = await post("/api/auth/register", { username: "Timothy", email: "Timothy@Example.com", password: "Passw0rd!" });
   const body = await res.json();
   assert.equal(res.status, 201, "registration should succeed");
@@ -58,25 +54,26 @@ test.after(async () => {
   try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* Windows temp lock */ }
 });
 
-test("login works regardless of username case or surrounding whitespace", async () => {
-  assert.equal((await login("Timothy", "Passw0rd!")).status, 200, "exact case");
-  assert.equal((await login("timothy", "Passw0rd!")).status, 200, "lowercase (the reported bug)");
-  assert.equal((await login("  TIMOTHY  ", "Passw0rd!")).status, 200, "uppercase + whitespace");
-});
-
 test("login by email is case/whitespace-insensitive", async () => {
   assert.equal((await login("  Timothy@Example.com ", "Passw0rd!")).status, 200);
   assert.equal((await login("timothy@example.com", "Passw0rd!")).status, 200);
 });
 
+test("username-only login is no longer accepted for account authentication", async () => {
+  const res = await post("/api/auth/login", { email: "Timothy", password: "Passw0rd!" });
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.code, "VALIDATION_ERROR");
+});
+
 test("a genuinely wrong password is still rejected", async () => {
-  const res = await login("timothy", "definitely-wrong");
+  const res = await login("timothy@example.com", "definitely-wrong");
   assert.equal(res.status, 401);
   const body = await res.json();
   assert.equal(body.code, "INVALID_CREDENTIALS");
 });
 
-test("password change persists: old rejected, new works by username + email", async () => {
+test("password change persists: old rejected, new works by email", async () => {
   const res = await fetch(`${baseUrl}/api/auth/me`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -86,8 +83,6 @@ test("password change persists: old rejected, new works by username + email", as
   assert.equal(res.status, 200);
   assert.equal(body.success, true);
 
-  assert.equal((await login("timothy", "Passw0rd!")).status, 401, "old password must be rejected");
-  assert.equal((await login("timothy", "NewPass99")).status, 200, "new password by lowercase username");
-  assert.equal((await login("TIMOTHY", "NewPass99")).status, 200, "new password by uppercase username");
+  assert.equal((await login("timothy@example.com", "Passw0rd!")).status, 401, "old password must be rejected");
   assert.equal((await login("timothy@example.com", "NewPass99")).status, 200, "new password by email");
 });

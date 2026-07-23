@@ -30,14 +30,15 @@ export const schemas = {
   // ── Auth ────────────────────────────────────────────────────────────────
   register: {
     body: Joi.object({
-      username: Joi.string().trim().min(3).max(32).required(),
+      username: Joi.string().trim().min(3).max(32).optional().allow(""),
       email: Joi.string().trim().max(254).required(),
       password: Joi.string().min(1).max(200).required(),
     }).unknown(true),
   },
   login: {
     body: Joi.object({
-      username: Joi.string().trim().max(254).required(),
+      email: Joi.string().trim().max(254).optional().allow(""),
+      username: Joi.string().trim().max(254).optional().allow(""),
       password: Joi.string().max(200).required(),
     }).unknown(true),
   },

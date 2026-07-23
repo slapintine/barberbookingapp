@@ -558,7 +558,203 @@ body:has(.app-auth-v4) {
 
 body[data-theme="dark"] .lineup-auth-page,
 body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page {
+  --auth-page-bg: #18051f;
+  --auth-text: #fff6f1;
+  --auth-muted: rgba(255, 239, 232, 0.76);
+  --auth-soft: rgba(223, 182, 178, 0.82);
+  --auth-primary: #fbe4d8;
+  --auth-accent: #f2b8c6;
+  --auth-peach: #fbe4d8;
+  --auth-pink: #dfb6b2;
+  --auth-border: rgba(255, 239, 232, 0.17);
+  --auth-field-bg: rgba(43, 18, 76, 0.64);
+  --auth-shadow: 0 18px 42px rgba(10, 0, 14, 0.28);
+  --auth-button-bg: linear-gradient(135deg, #fbe4d8 0%, #dfb6b2 54%, #b46b8f 100%);
+  background:
+    radial-gradient(circle at 50% -12%, rgba(223, 182, 178, 0.18), transparent 34%),
+    linear-gradient(180deg, #18051f 0%, #26082f 54%, #32123c 100%) !important;
   color: var(--auth-text) !important;
+}
+
+body[data-theme="dark"] html:has(.app-auth-v4),
+body[data-theme="dark"]:has(.app-auth-v4),
+body[data-theme="dark"] .app-wrap-v4.app-auth-v4 {
+  background: #18051f !important;
+}
+
+body[data-theme="dark"] .lineup-auth-page::before,
+body[data-theme="dark"] .lineup-auth-page::after,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page::before,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page::after {
+  opacity: 0.3 !important;
+  filter: none !important;
+}
+
+body[data-theme="dark"] .lineup-auth-page::before,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page::before {
+  background:
+    linear-gradient(145deg, rgba(251, 228, 216, 0.16), rgba(133, 79, 108, 0.08)) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-page::after,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page::after {
+  background:
+    linear-gradient(145deg, rgba(43, 18, 76, 0.12), rgba(223, 182, 178, 0.12)) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-shell,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-shell {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="dark"] .lineup-auth-card,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-card {
+  color: var(--auth-text) !important;
+  background: rgba(33, 11, 43, 0.76) !important;
+  border: 1px solid var(--auth-border) !important;
+  border-radius: 24px !important;
+  box-shadow: var(--auth-shadow), inset 0 1px 0 rgba(255, 239, 232, 0.08) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-card::before,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-card::before,
+body[data-theme="dark"] .lineup-auth-brand::before,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-brand::before {
+  content: none !important;
+}
+
+body[data-theme="dark"] .lineup-auth-logo,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-logo {
+  background: rgba(255, 239, 232, 0.96) !important;
+  border-color: rgba(255, 239, 232, 0.52) !important;
+  box-shadow: 0 10px 24px rgba(10, 0, 14, 0.24) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-header h1,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-header h1 {
+  color: var(--auth-text) !important;
+  text-shadow: none !important;
+}
+
+body[data-theme="dark"] .lineup-auth-header p,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-header p,
+body[data-theme="dark"] .lineup-auth-label,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-label,
+body[data-theme="dark"] .lineup-auth-note,
+body[data-theme="dark"] .lineup-auth-hint,
+body[data-theme="dark"] .lineup-auth-switch,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-note,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-hint,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-switch {
+  color: var(--auth-muted) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-tabs,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-tabs {
+  border-color: rgba(255, 239, 232, 0.14) !important;
+  background: rgba(24, 5, 31, 0.64) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-tabs button,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-tabs button {
+  color: rgba(255, 239, 232, 0.78) !important;
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .lineup-auth-tabs button.active,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-tabs button.active {
+  color: #22003f !important;
+  background: linear-gradient(135deg, #fbe4d8, #dfb6b2) !important;
+  box-shadow: 0 10px 22px rgba(10, 0, 14, 0.22) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-field,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field {
+  border-color: rgba(255, 239, 232, 0.16) !important;
+  background: var(--auth-field-bg) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 239, 232, 0.06) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-field:focus-within,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field:focus-within {
+  border-color: rgba(223, 182, 178, 0.76) !important;
+  box-shadow: 0 0 0 3px rgba(223, 182, 178, 0.18), inset 0 1px 0 rgba(255, 239, 232, 0.08) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-field > svg,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field > svg,
+body[data-theme="dark"] .lineup-auth-eye,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-eye,
+body[data-theme="dark"] .lineup-auth-eye svg,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-eye svg {
+  color: var(--auth-soft) !important;
+  stroke: currentColor !important;
+}
+
+body[data-theme="dark"] .lineup-auth-field input,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field input {
+  color: var(--auth-text) !important;
+  caret-color: var(--auth-peach) !important;
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .lineup-auth-field input::placeholder,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field input::placeholder {
+  color: rgba(255, 239, 232, 0.5) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-field input:-webkit-autofill,
+body[data-theme="dark"] .lineup-auth-field input:-webkit-autofill:hover,
+body[data-theme="dark"] .lineup-auth-field input:-webkit-autofill:focus,
+body[data-theme="dark"] .lineup-auth-field input:-webkit-autofill:active,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field input:-webkit-autofill,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field input:-webkit-autofill:hover,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field input:-webkit-autofill:focus,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-field input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--auth-text) !important;
+  caret-color: var(--auth-peach) !important;
+  border-color: rgba(223, 182, 178, 0.68) !important;
+  box-shadow: 0 0 0 1000px #2b124c inset !important;
+  transition: background-color 9999s ease-out 0s !important;
+}
+
+body[data-theme="dark"] .lineup-auth-link,
+body[data-theme="dark"] .lineup-auth-back,
+body[data-theme="dark"] .lineup-auth-switch button,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-link,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-back,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-switch button {
+  color: var(--auth-peach) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-submit,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-submit {
+  color: #22003f !important;
+  background: var(--auth-button-bg) !important;
+  box-shadow: 0 14px 28px rgba(10, 0, 14, 0.28) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-submit:disabled,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-submit:disabled {
+  color: rgba(255, 239, 232, 0.58) !important;
+  background: rgba(255, 239, 232, 0.12) !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="dark"] .lineup-auth-error,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-error {
+  color: #ffe5eb !important;
+  border-color: rgba(242, 118, 145, 0.28) !important;
+  background: rgba(126, 30, 58, 0.32) !important;
+}
+
+body[data-theme="dark"] .lineup-auth-success,
+body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-success {
+  color: #e5fff0 !important;
+  border-color: rgba(82, 203, 132, 0.28) !important;
+  background: rgba(27, 91, 58, 0.34) !important;
 }
 
 @media (min-width: 481px) {
@@ -615,6 +811,93 @@ body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page {
   .screen-v4.screen-auth-v4 .lineup-auth-shell {
     width: 100% !important;
     max-width: 390px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus),
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-shell,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-shell {
+    gap: 12px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-hero,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-hero {
+    gap: 10px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-logo,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-logo {
+    max-width: 184px !important;
+    max-height: 58px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-header,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-header {
+    gap: 4px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-header h1,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-header h1 {
+    font-size: 26px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-header p,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-header p {
+    display: none !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-card,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-card {
+    gap: 10px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-tabs,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-tabs {
+    height: 52px !important;
+    min-height: 52px !important;
+    padding: 5px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-tabs button,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-tabs button {
+    min-height: 40px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-form,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-form {
+    gap: 10px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-field,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-field {
+    padding-top: 20px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-field input,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-field input {
+    height: 50px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-field > svg,
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-eye,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-field > svg,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-eye {
+    top: 45px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-row,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-row {
+    gap: 8px !important;
+  }
+
+  .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-submit,
+  .screen-v4.screen-auth-v4 .lineup-auth-page:has(.lineup-auth-field input:focus) .lineup-auth-submit {
+    min-height: 52px !important;
+    font-size: 17px !important;
   }
 }
 

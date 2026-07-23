@@ -66,7 +66,8 @@ test("new customer resolves to Free Customer without unlocking Premium", async (
   assert.equal(summary.customerPlan, "FREE");
   assert.equal(summary.customerPremiumActive, false);
   assert.equal(summary.customer.displayName, "Free Customer");
-  assert.equal(summary.entitlements.smartMatch, false);
+  assert.equal(summary.entitlements.smartMatch, true);
+  assert.equal(summary.entitlements.conversationalSmartMatch, false);
   assert.deepEqual(
     summary.badges.filter((badge) => badge.scope === "customer").map((badge) => badge.label),
     ["Free Customer"]
@@ -84,7 +85,8 @@ test("provider with no paid subscription resolves to Free Provider", async () =>
   assert.equal(summary.provider.tier, "FREE");
   assert.equal(summary.provider.status, "free");
   assert.equal(summary.provider.displayName, "Free Provider");
-  assert.equal(summary.entitlements.providerCoach, false);
+  assert.equal(summary.entitlements.providerCoach, true);
+  assert.equal(summary.entitlements.providerAssistantAnalytics, false);
   assert.equal(summary.entitlements.advancedReports, false);
   assert.deepEqual(
     summary.badges.filter((badge) => badge.scope === "provider").map((badge) => badge.label),
@@ -120,8 +122,10 @@ test("expired paid customer and provider plans resolve to Free without downgradi
   assert.equal(summary.provider.tier, "FREE");
   assert.equal(summary.provider.status, "free");
   assert.equal(summary.provider.displayName, "Free Provider");
-  assert.equal(summary.entitlements.smartMatch, false);
-  assert.equal(summary.entitlements.providerCoach, false);
+  assert.equal(summary.entitlements.smartMatch, true);
+  assert.equal(summary.entitlements.conversationalSmartMatch, false);
+  assert.equal(summary.entitlements.providerCoach, true);
+  assert.equal(summary.entitlements.providerAssistantAnalytics, false);
 });
 
 test("active paid customer and provider plans remain independent", async () => {
