@@ -92,6 +92,18 @@ test("conversation loads + provider can reply via the colon conversation id", as
   assert.ok(reply.status === 200 || reply.status === 201, `expected created/ok, got ${reply.status}`);
 });
 
+test("conversation list returns lightweight summaries, not full message histories", async () => {
+  const res = await req("/api/messages/conversations", { token: customerToken });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(Array.isArray(body.conversations) && body.conversations.length >= 1);
+  const conversation = body.conversations[0];
+  assert.ok(conversation.lastMessage || conversation.last_message);
+  assert.equal(Array.isArray(conversation.messages), true);
+  assert.equal(conversation.messages.length, 0);
+  assert.ok(Number(conversation.unreadCount ?? conversation.unread_count ?? 0) >= 0);
+});
+
 test("REGRESSION: a legacy dash-format conversation id is handled cleanly, never a 500", async () => {
   // This is the exact live bug: on Postgres the old "barberId-userId" form made
   // barber_id a non-integer and crashed the query with a 500. It must now be a

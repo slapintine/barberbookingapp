@@ -614,39 +614,55 @@ export async function getConversations(req, res, next) {
 
     const rows = await dbAll(
       `SELECT
-        m.id,
-        m.barber_id AS barberId,
+        latest.id,
+        latest.barber_id AS barberId,
         b.business_name AS barberName,
         b.owner_user_id AS barberOwnerUserId,
         bu.username AS barberOwnerUsername,
-        m.customer_user_id AS customerUserId,
+        latest.customer_user_id AS customerUserId,
         cu.username AS customerUsername,
-        m.sender_user_id,
+        latest.sender_user_id,
         su.username AS sender,
-        m.text,
-        m.seen,
-        m.client_message_id AS clientMessageId,
-        m.created_at AS createdAt
-       FROM messages m
-       JOIN users su ON su.id = m.sender_user_id
-       JOIN barbers b ON b.id = m.barber_id
+        latest.text,
+        latest.seen,
+        latest.client_message_id AS clientMessageId,
+        latest.created_at AS createdAt,
+        unread.unreadCount
+       FROM (
+         SELECT m.*
+         FROM messages m
+         JOIN (
+           SELECT barber_id, customer_user_id, MAX(id) AS latest_id
+           FROM messages
+           GROUP BY barber_id, customer_user_id
+         ) grouped ON grouped.latest_id = m.id
+       ) latest
+       JOIN barbers b ON b.id = latest.barber_id
        JOIN users bu ON bu.id = b.owner_user_id
-       JOIN users cu ON cu.id = m.customer_user_id
-       WHERE m.customer_user_id = ?
+       JOIN users cu ON cu.id = latest.customer_user_id
+       JOIN users su ON su.id = latest.sender_user_id
+       LEFT JOIN (
+         SELECT barber_id, customer_user_id, COUNT(*) AS unreadCount
+         FROM messages
+         WHERE sender_user_id <> ? AND seen = 0
+         GROUP BY barber_id, customer_user_id
+       ) unread ON unread.barber_id = latest.barber_id AND unread.customer_user_id = latest.customer_user_id
+       WHERE latest.customer_user_id = ?
           OR b.owner_user_id = ?
-       ORDER BY m.id ASC`,
-      [req.user.id, req.user.id]
+       ORDER BY latest.id DESC
+       LIMIT 100`,
+      [req.user.id, req.user.id, req.user.id]
     );
 
-    const grouped = new Map();
-    rows.forEach((row) => {
-      const key = conversationIdFor(row);
-      grouped.set(key, [...(grouped.get(key) || []), row]);
+    const conversations = rows.map((row) => {
+      const conversation = serializeConversation([{ ...row, seen: Number(row.unreadCount || 0) > 0 ? 0 : row.seen }], req.user);
+      return {
+        ...conversation,
+        unreadCount: Number(row.unreadCount || 0),
+        unread_count: Number(row.unreadCount || 0),
+        messages: [],
+      };
     });
-
-    const conversations = [...grouped.values()]
-      .map((items) => serializeConversation(items, req.user))
-      .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
     res.status(200).json({ success: true, conversations });
   } catch (error) {

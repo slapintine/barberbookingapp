@@ -68,6 +68,7 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_support_requests_status ON support_requests(status, created_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_messages_barber_id ON messages(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_messages_customer_user_id ON messages(customer_user_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_messages_conversation_latest ON messages(barber_id, customer_user_id, id)`).catch(() => {});
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_messages_sender_client_id ON messages(sender_user_id, client_message_id) WHERE client_message_id <> ''`);
   await run(`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_notifications_thread_message ON notifications(user_id, type, barber_id, customer_user_id, read)`);
