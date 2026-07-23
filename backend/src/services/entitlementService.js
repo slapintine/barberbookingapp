@@ -8,6 +8,13 @@
 
 import { getActiveCustomerPremiumSubscription } from "./customerSubscriptionService.js";
 import { get } from "../db/query.js";
+import {
+  CAPABILITY,
+  capabilitiesToFlags,
+  getCustomerCapabilityList,
+  getProviderCapabilityList,
+  hasCapability,
+} from "./entitlementMatrix.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers
@@ -76,19 +83,31 @@ async function getProviderBarber(userId, client = null) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function canUseSmartMatch(userId) {
-  const sub = await getActiveCustomerPremiumSubscription(userId);
-  return Boolean(sub);
+  const entitlements = await getCustomerEntitlements(userId);
+  return hasCapability(entitlements.capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_STANDARD);
+}
+
+export async function canUseConversationalSmartMatch(userId) {
+  const entitlements = await getCustomerEntitlements(userId);
+  return hasCapability(entitlements.capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_CONVERSATIONAL);
 }
 
 export async function getCustomerEntitlements(userId) {
   const sub = await getActiveCustomerPremiumSubscription(userId);
   const premium = Boolean(sub);
+  const capabilities = getCustomerCapabilityList(premium ? "PREMIUM" : "FREE");
   return {
-    smartMatch: premium,
+    tier: premium ? "PREMIUM" : "FREE",
+    plan: premium ? "PREMIUM" : "FREE",
+    capabilities,
+    capabilityFlags: capabilitiesToFlags(capabilities),
+    smartMatch: hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_STANDARD),
+    conversationalSmartMatch: hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_CONVERSATIONAL),
+    savedSmartMatchPreferences: hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_SAVED_PREFERENCES),
     rankedRecommendations: premium,
-    budgetMatching: premium,
-    availabilityMatching: premium,
-    paymentMatching: premium,
+    budgetMatching: true,
+    availabilityMatching: true,
+    paymentMatching: true,
     premiumSupport: premium,
   };
 }
@@ -110,7 +129,14 @@ export async function canAccessProviderAnalytics(userId) {
 
 export async function canAccessBusinessCoach(userId) {
   const tier = await getProviderTier(userId);
-  return tier === "PLATINUM";
+  const capabilities = getProviderCapabilityList(tier || "FREE");
+  return hasCapability(capabilities, CAPABILITY.PROVIDER_ASSISTANT_BASIC);
+}
+
+export async function canAccessProviderAssistantAnalytics(userId) {
+  const tier = await getProviderTier(userId);
+  const capabilities = getProviderCapabilityList(tier || "FREE");
+  return hasCapability(capabilities, CAPABILITY.PROVIDER_ASSISTANT_ANALYTICS);
 }
 
 export async function canUsePlatinumProviderFeatures(userId) {
@@ -162,13 +188,21 @@ export async function getProviderEntitlements(userId) {
 
   const isPremium = tier === "PREMIUM" || tier === "PLATINUM";
   const isPlatinum = tier === "PLATINUM";
+  const plan = tier || "FREE";
+  const capabilities = getProviderCapabilityList(plan);
 
   return {
-    tier: tier || "NONE",
+    tier: plan,
+    plan,
+    capabilities,
+    capabilityFlags: capabilitiesToFlags(capabilities),
     advancedAnalytics: isPremium,
     aiBusinessCoach: isPlatinum,
-    providerCoach: isPlatinum,
-    advancedReports: isPlatinum,
+    providerCoach: hasCapability(capabilities, CAPABILITY.PROVIDER_ASSISTANT_BASIC),
+    providerAssistantBasic: hasCapability(capabilities, CAPABILITY.PROVIDER_ASSISTANT_BASIC),
+    providerAssistantAnalytics: hasCapability(capabilities, CAPABILITY.PROVIDER_ASSISTANT_ANALYTICS),
+    providerAssistantForecasting: hasCapability(capabilities, CAPABILITY.PROVIDER_ASSISTANT_FORECASTING),
+    advancedReports: hasCapability(capabilities, CAPABILITY.PROVIDER_REPORTS_ADVANCED),
     providerAnalytics: isPremium,
     featuredPlacement: isPlatinum,
     reviewInsights: isPremium,

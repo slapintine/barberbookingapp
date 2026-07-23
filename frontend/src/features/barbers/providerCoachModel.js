@@ -185,21 +185,28 @@ export function getCoachPlanState({ subscription, barber, questionsData } = {}) 
   const status = String(subscription?.status || barber?.subscription_status || "").toLowerCase();
   const explicitlyInactive = ["expired", "cancelled", "inactive", "suspended", "failed"].includes(status);
   const apiAllowed = questionsData?.access?.allowed;
-  const enabled = typeof apiAllowed === "boolean" ? apiAllowed : tier === "PLATINUM" && !explicitlyInactive;
-  const unlimited = Boolean(questionsData?.usage?.unlimited) || tier === "PLATINUM";
+  const enabled = typeof apiAllowed === "boolean" ? apiAllowed : !explicitlyInactive;
+  const unlimited = Boolean(questionsData?.usage?.unlimited);
+  const label =
+    tier === "PLATINUM" ? "Platinum assistant" :
+    tier === "PREMIUM" ? "Premium assistant" :
+    "Basic assistant";
   return {
     tier,
     plan: tier.toLowerCase(),
     enabled,
     unlimited,
-    label: unlimited ? "Platinum active" : "Platinum feature",
+    label,
   };
 }
 
 export function getCoachUsageText(usage) {
   if (!usage) return "";
-  if (usage.unlimited) return "Unlimited coaching";
-  return "Upgrade to unlock coach advice";
+  if (usage.unlimited) return "Assistant guidance available";
+  const used = Number(usage.usedToday ?? usage.used ?? 0);
+  const limit = Number(usage.dailyLimit ?? usage.limit ?? 0);
+  if (limit > 0) return `${Math.max(0, limit - used)} assistant question${Math.max(0, limit - used) === 1 ? "" : "s"} left today`;
+  return "Assistant guidance available";
 }
 
 export function getProfileCompletion(checklist = []) {

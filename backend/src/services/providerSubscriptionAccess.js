@@ -1,4 +1,5 @@
 import { normalizeProviderPlan } from "./paymentService.js";
+import { ASSISTANT_USAGE_LIMITS, normalizeProviderPlanKey } from "./entitlementMatrix.js";
 
 const PAID_PAYMENT_STATUSES = new Set(["paid", "successful"]);
 const TRIAL_PAYMENT_STATUSES = new Set(["trial", "trialing", "free_trial"]);
@@ -55,7 +56,15 @@ export function getProviderCoachPlan(business, subscription, now = new Date()) {
   const tier = subscriptionTier || businessTier || "FREE";
 
   if (tier === "FREE") {
-    return { plan: "free", active: true, unlimited: false };
+    return {
+      plan: "free",
+      tier: "FREE",
+      active: true,
+      unlimited: false,
+      dailyLimit: ASSISTANT_USAGE_LIMITS.provider.FREE.assistantDaily,
+      analytics: false,
+      forecasting: false,
+    };
   }
 
   const status = String(subscription?.status || business?.subscription_status || "").trim().toLowerCase();
@@ -79,12 +88,37 @@ export function getProviderCoachPlan(business, subscription, now = new Date()) {
     Number(business?.admin_approved || 0) === 1;
 
   if (tier === "PLATINUM") {
-    return { plan: "platinum", active: paidActive || trialActive || adminActive, unlimited: true };
+    return {
+      plan: "platinum",
+      tier: "PLATINUM",
+      active: paidActive || trialActive || adminActive,
+      unlimited: false,
+      dailyLimit: ASSISTANT_USAGE_LIMITS.provider.PLATINUM.assistantDaily,
+      analytics: true,
+      forecasting: false,
+    };
   }
 
   if (tier === "PREMIUM") {
-    return { plan: "premium", active: false, unlimited: false };
+    return {
+      plan: "premium",
+      tier: "PREMIUM",
+      active: paidActive || trialActive || adminActive,
+      unlimited: false,
+      dailyLimit: ASSISTANT_USAGE_LIMITS.provider.PREMIUM.assistantDaily,
+      analytics: true,
+      forecasting: false,
+    };
   }
 
-  return { plan: "free", active: true, unlimited: false };
+  const freePlan = normalizeProviderPlanKey(tier);
+  return {
+    plan: freePlan.toLowerCase(),
+    tier: freePlan,
+    active: true,
+    unlimited: false,
+    dailyLimit: ASSISTANT_USAGE_LIMITS.provider.FREE.assistantDaily,
+    analytics: false,
+    forecasting: false,
+  };
 }

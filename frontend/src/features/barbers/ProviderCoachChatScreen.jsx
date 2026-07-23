@@ -19,13 +19,13 @@ const PROMPTS = [
   "How can I attract more customers?",
   "Write a better welcome message",
   "What should I post today?",
-  "How do I improve my Platinum stand?",
+  "Explain my current plan",
 ];
 
 const WELCOME_MESSAGE = {
   id: "provider-coach-welcome",
   role: "assistant",
-  content: "Hi! I’m your Queless Provider Coach. Ask me about your stand, services, pricing, photos, profile readiness, or ways to build customer trust. I’ll use the business details you’ve saved on Queless.",
+  content: "Hi! I am your Queless Business Assistant. Ask me about your stand, services, pricing, photos, profile readiness, or ways to build customer trust. I will use the business details you have saved on Queless.",
 };
 
 function storageKey(businessId) {
@@ -76,18 +76,18 @@ function getPlanLabel(subscription, barber) {
 
 function getFriendlyCoachError(error) {
   if (error?.code === "DAILY_LIMIT_REACHED") {
-    return error?.userMessage || "You've reached today's Provider Coach limit. Please come back tomorrow.";
+    return error?.userMessage || "You've reached today's Business Assistant limit. Please come back tomorrow.";
   }
   if (error?.status === 429) return "Coach is receiving a lot of questions. Please wait a moment and try again.";
   if (error?.status === 404 || error?.code === "NO_STAND") {
     return "Create or save your stand first so Coach can give advice based on your business.";
   }
   if (error?.status === 503 || error?.code === "AI_UNAVAILABLE") {
-    return "Provider Coach is taking a short break. Your stand is safe—please try again shortly.";
+    return "Business Assistant is taking a short break. Your stand is safe—please try again shortly.";
   }
-  if (error?.status === 401) return "Please log in again to continue with Provider Coach.";
-  if (error?.status === 403 || error?.code === "PLATINUM_PROVIDER_REQUIRED") return "Provider Coach is included with Platinum Provider.";
-  return error?.userMessage || error?.message || "Coach couldn’t answer that question. Please try again.";
+  if (error?.status === 401) return "Please log in again to continue with Business Assistant.";
+  if (error?.status === 403 || error?.code === "PROVIDER_PLAN_INACTIVE") return "Choose an active provider plan to use Business Assistant.";
+  return error?.userMessage || error?.message || "Business Assistant couldn’t answer that question. Please try again.";
 }
 
 export default function ProviderCoachChatScreen({
@@ -102,6 +102,8 @@ export default function ProviderCoachChatScreen({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showJump, setShowJump] = useState(false);
   const messageListRef = useRef(null);
   const inputRef = useRef(null);
   const messageSequenceRef = useRef(0);
@@ -113,6 +115,16 @@ export default function ProviderCoachChatScreen({
   );
 
   useEffect(() => {
+    document.body.dataset.quelessProviderCoachOpen = "true";
+    const handleNativeBack = () => onBack?.();
+    window.addEventListener("queless:native-back", handleNativeBack);
+    return () => {
+      delete document.body.dataset.quelessProviderCoachOpen;
+      window.removeEventListener("queless:native-back", handleNativeBack);
+    };
+  }, [onBack]);
+
+  useEffect(() => {
     setMessages(readStoredMessages(barber?.id));
     setDraft("");
     setError("");
@@ -121,8 +133,30 @@ export default function ProviderCoachChatScreen({
   useEffect(() => {
     saveStoredMessages(barber?.id, messages);
     const list = messageListRef.current;
-    if (list) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
-  }, [barber?.id, messages, sending]);
+    if (!list) return;
+    if (autoScroll) {
+      window.requestAnimationFrame(() => {
+        list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+      });
+    }
+  }, [barber?.id, messages, sending, autoScroll]);
+
+  const scrollToLatest = () => {
+    const list = messageListRef.current;
+    if (!list) return;
+    list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+    setAutoScroll(true);
+    setShowJump(false);
+  };
+
+  const handleMessageScroll = () => {
+    const list = messageListRef.current;
+    if (!list) return;
+    const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+    const nearBottom = distanceFromBottom < 96;
+    setAutoScroll(nearBottom);
+    setShowJump(!nearBottom);
+  };
 
   async function submitQuestion(rawQuestion = draft) {
     const question = String(rawQuestion || "").trim();
@@ -171,12 +205,12 @@ export default function ProviderCoachChatScreen({
     return (
       <main className="provider-coach-chat-page provider-coach-chat-empty">
         <header className="provider-coach-chat-header">
-          <button type="button" className="provider-coach-back" onClick={onBack} aria-label="Back to dashboard">
+          <button type="button" className="provider-coach-back" data-testid="provider-coach-back" onClick={onBack} aria-label="Back to dashboard">
             <FiArrowLeft />
           </button>
           <div>
             <span>Queless</span>
-            <h1>Provider Coach</h1>
+            <h1>Business Assistant</h1>
           </div>
         </header>
         <section className="provider-coach-empty-card">
@@ -192,12 +226,12 @@ export default function ProviderCoachChatScreen({
   return (
     <main className="provider-coach-chat-page">
       <header className="provider-coach-chat-header">
-        <button type="button" className="provider-coach-back" onClick={onBack} aria-label="Back to dashboard">
+          <button type="button" className="provider-coach-back" data-testid="provider-coach-back" onClick={onBack} aria-label="Back to dashboard">
           <FiArrowLeft />
         </button>
         <div className="provider-coach-chat-title">
           <span><FiZap /> Queless AI</span>
-          <h1>Provider Coach</h1>
+          <h1>Business Assistant</h1>
           <p>Ask me how to improve your stand, bookings, pricing, services, and customer experience.</p>
         </div>
         <div className="provider-coach-chat-status" title={`${planLabel} plan · ${standStatus}`}>
@@ -210,15 +244,15 @@ export default function ProviderCoachChatScreen({
         <span>{barber.business_name || "Your stand"}</span>
         <i aria-hidden="true" />
         <span>{standStatus}</span>
-        <button type="button" onClick={onEditStand}>Edit stand</button>
+        <button type="button" data-testid="provider-coach-edit-stand" onClick={onEditStand}>Edit stand</button>
       </div>
 
-      <section className="provider-coach-message-list" ref={messageListRef} aria-live="polite">
+      <section className="provider-coach-message-list" ref={messageListRef} onScroll={handleMessageScroll} aria-live="polite">
         <div className="provider-coach-prompt-area">
           <strong>Try asking</strong>
           <div className="provider-coach-prompt-chips">
             {PROMPTS.map((prompt) => (
-              <button type="button" key={prompt} onClick={() => submitQuestion(prompt)} disabled={sending}>
+              <button type="button" key={prompt} data-testid="provider-coach-quick-action" onClick={() => submitQuestion(prompt)} disabled={sending}>
                 {prompt}
               </button>
             ))}
@@ -232,7 +266,7 @@ export default function ProviderCoachChatScreen({
           >
             {message.role === "assistant" ? <span className="provider-coach-avatar"><FiZap /></span> : null}
             <div>
-              <small>{message.role === "assistant" ? "Provider Coach" : "You"}</small>
+              <small>{message.role === "assistant" ? "Business Assistant" : "You"}</small>
               <p>{message.content}</p>
               {message.role === "assistant" && message.nextBestAction ? (
                 <aside className="provider-coach-next-action">
@@ -246,7 +280,7 @@ export default function ProviderCoachChatScreen({
               message.suggestedChips.length ? (
                 <div className="provider-coach-response-chips" aria-label="Suggested follow-up questions">
                   {message.suggestedChips.map((chip) => (
-                    <button type="button" key={chip} onClick={() => submitQuestion(chip)} disabled={sending}>
+                    <button type="button" key={chip} data-testid="provider-coach-suggested-action" onClick={() => submitQuestion(chip)} disabled={sending}>
                       {chip}
                     </button>
                   ))}
@@ -259,8 +293,8 @@ export default function ProviderCoachChatScreen({
         {sending ? (
           <article className="provider-coach-message provider-coach-message--assistant">
             <span className="provider-coach-avatar"><FiZap /></span>
-            <div className="provider-coach-typing" aria-label="Provider Coach is typing">
-              <small>Provider Coach</small>
+            <div className="provider-coach-typing" aria-label="Business Assistant is typing">
+              <small>Business Assistant</small>
               <span><i /><i /><i /></span>
             </div>
           </article>
@@ -279,20 +313,29 @@ export default function ProviderCoachChatScreen({
         ) : null}
       </section>
 
+      {showJump ? (
+        <button type="button" className="provider-coach-jump-latest" data-testid="provider-coach-jump-latest" onClick={scrollToLatest}>
+          Jump to latest
+        </button>
+      ) : null}
+
       <form
         className="provider-coach-composer"
+        data-testid="provider-coach-composer"
         onSubmit={(event) => {
           event.preventDefault();
           submitQuestion();
         }}
       >
-        <label htmlFor="provider-coach-message">Ask Provider Coach</label>
+        <label htmlFor="provider-coach-message">Ask Business Assistant</label>
         <div>
           <textarea
             id="provider-coach-message"
+            data-testid="provider-coach-input"
             ref={inputRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value.slice(0, 1000))}
+            onFocus={() => window.setTimeout(scrollToLatest, 120)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -304,7 +347,7 @@ export default function ProviderCoachChatScreen({
             maxLength={1000}
             disabled={sending}
           />
-          <button type="submit" disabled={sending || !draft.trim()} aria-label="Send message">
+          <button type="submit" data-testid="provider-coach-submit" disabled={sending || !draft.trim()} aria-label="Send message">
             <FiSend />
           </button>
         </div>

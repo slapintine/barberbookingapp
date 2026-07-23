@@ -23,7 +23,7 @@ test("frontend provider plan features gate Free, Premium, and Platinum correctly
   assert.equal(free.maxPhotos, 8);
   assert.equal(free.imageUploadLimitMb, 80);
   assert.equal(free.promotions, false);
-  assert.equal(free.aiBusinessCoach, false);
+  assert.equal(free.aiBusinessCoach, true);
   assert.equal(free.reviewInsights, false);
 
   assert.equal(premium.maxServices, 20);
@@ -32,8 +32,7 @@ test("frontend provider plan features gate Free, Premium, and Platinum correctly
   assert.equal(premium.promotions, true);
   assert.equal(premium.advancedAnalytics, true);
   assert.equal(premium.reviewInsights, true);
-  // Open Coach is Platinum-only, so Premium does not carry the AI coach flag.
-  assert.equal(premium.aiBusinessCoach, false);
+  assert.equal(premium.aiBusinessCoach, true);
 
   assert.equal(platinum.maxServices, Infinity);
   assert.equal(platinum.maxPhotos, Infinity);
@@ -41,7 +40,8 @@ test("frontend provider plan features gate Free, Premium, and Platinum correctly
   assert.equal(platinum.aiBusinessCoach, true);
   assert.equal(platinum.verifiedBadge, true);
   assert.equal(platinum.homepageFeature, true);
-  assert.equal(platinum.aiWeeklyReport, true);
+  assert.equal(platinum.videoUploads, false);
+  assert.equal(platinum.aiWeeklyReport, false);
 });
 
 test("plan selection keeps normalized plan IDs and tiers stable", () => {
@@ -97,18 +97,20 @@ test("stand final CTA publishes active Platinum directly and keeps inactive paid
   );
 });
 
-test("free providers keep messaging and Open Coach is Platinum-only", () => {
+test("free providers keep messaging and basic Business Assistant access", () => {
   const free = PROVIDER_PLANS.find((plan) => plan.tier === "FREE");
   assert.ok(free.features.some((f) => /messaging/i.test(f)), "Free must keep customer messaging");
+  assert.ok(free.features.some((f) => /business assistant/i.test(f)), "Free lists basic Business Assistant");
 
   const platinum = PROVIDER_PLANS.find((plan) => plan.tier === "PLATINUM");
-  assert.ok(platinum.features.some((f) => /open coach/i.test(f)), "Platinum lists Open Coach");
+  assert.ok(platinum.features.some((f) => /business assistant/i.test(f)), "Platinum lists advanced Business Assistant");
   const premium = PROVIDER_PLANS.find((plan) => plan.tier === "PREMIUM");
-  assert.ok(!premium.features.some((f) => /coach/i.test(f)), "Premium does not advertise Coach");
+  assert.ok(premium.features.some((f) => /business assistant/i.test(f)), "Premium advertises analytics assistant value");
 
-  // Open Coach access gate: active Platinum only.
+  // Business Assistant access gate: active provider plan at the current tier.
+  assert.equal(hasOpenCoachAccess({ tier: "FREE", status: "free" }), true);
   assert.equal(hasOpenCoachAccess({ tier: "PLATINUM", status: "active" }), true);
-  assert.equal(hasOpenCoachAccess({ tier: "PREMIUM", status: "active" }), false);
+  assert.equal(hasOpenCoachAccess({ tier: "PREMIUM", status: "active" }), true);
   assert.equal(hasOpenCoachAccess({ tier: "PLATINUM", status: "expired" }), false);
 });
 

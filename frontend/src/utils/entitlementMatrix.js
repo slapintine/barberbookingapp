@@ -1,0 +1,112 @@
+export const CUSTOMER_PLAN = Object.freeze({
+  FREE: "FREE",
+  PREMIUM: "PREMIUM",
+});
+
+export const PROVIDER_PLAN = Object.freeze({
+  FREE: "FREE",
+  PREMIUM: "PREMIUM",
+  PLATINUM: "PLATINUM",
+});
+
+export const CAPABILITY = Object.freeze({
+  CUSTOMER_DISCOVERY_PUBLIC: "customer.discovery.public",
+  CUSTOMER_BOOKING_STANDARD: "customer.booking.standard",
+  CUSTOMER_SMART_MATCH_STANDARD: "customer.smartMatch.standard",
+  CUSTOMER_SMART_MATCH_CONVERSATIONAL: "customer.smartMatch.conversational",
+  CUSTOMER_SMART_MATCH_SAVED_PREFERENCES: "customer.smartMatch.savedPreferences",
+  CUSTOMER_SMART_MATCH_REBOOKING: "customer.smartMatch.rebooking",
+  CUSTOMER_NOTIFICATIONS_STANDARD: "customer.notifications.standard",
+  PROVIDER_STAND_CORE: "provider.stand.core",
+  PROVIDER_SERVICES_CORE: "provider.services.core",
+  PROVIDER_SCHEDULE_CORE: "provider.schedule.core",
+  PROVIDER_BOOKINGS_CORE: "provider.bookings.core",
+  PROVIDER_ASSISTANT_BASIC: "provider.assistant.basic",
+  PROVIDER_ASSISTANT_ANALYTICS: "provider.assistant.analytics",
+  PROVIDER_ASSISTANT_FORECASTING: "provider.assistant.forecasting",
+  PROVIDER_ASSISTANT_DRAFTING: "provider.assistant.drafting",
+  PROVIDER_REPORTS_BASIC: "provider.reports.basic",
+  PROVIDER_REPORTS_ADVANCED: "provider.reports.advanced",
+  PROVIDER_INSIGHTS_PROACTIVE: "provider.insights.proactive",
+  PROVIDER_STAFF_MULTI_USER: "provider.staff.multiUser",
+});
+
+const CUSTOMER_CAPABILITIES = {
+  [CUSTOMER_PLAN.FREE]: [
+    CAPABILITY.CUSTOMER_DISCOVERY_PUBLIC,
+    CAPABILITY.CUSTOMER_BOOKING_STANDARD,
+    CAPABILITY.CUSTOMER_SMART_MATCH_STANDARD,
+    CAPABILITY.CUSTOMER_NOTIFICATIONS_STANDARD,
+  ],
+  [CUSTOMER_PLAN.PREMIUM]: [
+    CAPABILITY.CUSTOMER_DISCOVERY_PUBLIC,
+    CAPABILITY.CUSTOMER_BOOKING_STANDARD,
+    CAPABILITY.CUSTOMER_SMART_MATCH_STANDARD,
+    CAPABILITY.CUSTOMER_SMART_MATCH_CONVERSATIONAL,
+    CAPABILITY.CUSTOMER_NOTIFICATIONS_STANDARD,
+  ],
+};
+
+const PROVIDER_CAPABILITIES = {
+  [PROVIDER_PLAN.FREE]: [
+    CAPABILITY.PROVIDER_STAND_CORE,
+    CAPABILITY.PROVIDER_SERVICES_CORE,
+    CAPABILITY.PROVIDER_SCHEDULE_CORE,
+    CAPABILITY.PROVIDER_BOOKINGS_CORE,
+    CAPABILITY.PROVIDER_ASSISTANT_BASIC,
+    CAPABILITY.PROVIDER_REPORTS_BASIC,
+  ],
+  [PROVIDER_PLAN.PREMIUM]: [
+    CAPABILITY.PROVIDER_STAND_CORE,
+    CAPABILITY.PROVIDER_SERVICES_CORE,
+    CAPABILITY.PROVIDER_SCHEDULE_CORE,
+    CAPABILITY.PROVIDER_BOOKINGS_CORE,
+    CAPABILITY.PROVIDER_ASSISTANT_BASIC,
+    CAPABILITY.PROVIDER_ASSISTANT_ANALYTICS,
+    CAPABILITY.PROVIDER_ASSISTANT_DRAFTING,
+    CAPABILITY.PROVIDER_REPORTS_BASIC,
+    CAPABILITY.PROVIDER_REPORTS_ADVANCED,
+    CAPABILITY.PROVIDER_INSIGHTS_PROACTIVE,
+  ],
+  [PROVIDER_PLAN.PLATINUM]: [
+    CAPABILITY.PROVIDER_STAND_CORE,
+    CAPABILITY.PROVIDER_SERVICES_CORE,
+    CAPABILITY.PROVIDER_SCHEDULE_CORE,
+    CAPABILITY.PROVIDER_BOOKINGS_CORE,
+    CAPABILITY.PROVIDER_ASSISTANT_BASIC,
+    CAPABILITY.PROVIDER_ASSISTANT_ANALYTICS,
+    CAPABILITY.PROVIDER_ASSISTANT_DRAFTING,
+    CAPABILITY.PROVIDER_REPORTS_BASIC,
+    CAPABILITY.PROVIDER_REPORTS_ADVANCED,
+    CAPABILITY.PROVIDER_INSIGHTS_PROACTIVE,
+  ],
+};
+
+export function normalizeCustomerPlan(value = "") {
+  return String(value || "").trim().toUpperCase() === CUSTOMER_PLAN.PREMIUM
+    ? CUSTOMER_PLAN.PREMIUM
+    : CUSTOMER_PLAN.FREE;
+}
+
+export function normalizeProviderPlanKey(value = "") {
+  const plan = String(value || "").trim().toUpperCase();
+  if (plan === PROVIDER_PLAN.PLATINUM) return PROVIDER_PLAN.PLATINUM;
+  if (plan === PROVIDER_PLAN.PREMIUM) return PROVIDER_PLAN.PREMIUM;
+  return PROVIDER_PLAN.FREE;
+}
+
+export function getCustomerCapabilityList(plan) {
+  return CUSTOMER_CAPABILITIES[normalizeCustomerPlan(plan)] || CUSTOMER_CAPABILITIES[CUSTOMER_PLAN.FREE];
+}
+
+export function getProviderCapabilityList(plan) {
+  return PROVIDER_CAPABILITIES[normalizeProviderPlanKey(plan)] || PROVIDER_CAPABILITIES[PROVIDER_PLAN.FREE];
+}
+
+export function hasCapability(capabilities, capability) {
+  return Array.isArray(capabilities) && capabilities.includes(capability);
+}
+
+export function capabilitiesToFlags(capabilities) {
+  return Object.fromEntries((capabilities || []).map((capability) => [capability, true]));
+}

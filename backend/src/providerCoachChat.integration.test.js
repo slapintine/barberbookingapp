@@ -28,6 +28,7 @@ let successToken;
 let noStandToken;
 let rateLimitToken;
 let dailyLimitToken;
+let freeProviderToken;
 let capturedContext;
 
 async function insertUser(username) {
@@ -86,9 +87,10 @@ test.before(async () => {
   const noStandUser = await insertUser("coach_no_stand_provider");
   const limiterUser = await insertUser("coach_rate_limit_provider");
   const dailyLimitUser = await insertUser("coach_daily_limit_provider");
+  const freeProviderUser = await insertUser("coach_free_provider");
   let dailyLimitBusinessId = null;
 
-  for (const user of [successUser, limiterUser, dailyLimitUser]) {
+  for (const user of [successUser, limiterUser, dailyLimitUser, freeProviderUser]) {
     const businessResult = await run(
       `INSERT INTO barbers
        (owner_user_id, business_name, normalized_business_name, location, latitude, longitude,
@@ -96,11 +98,17 @@ test.before(async () => {
         subscription_tier, selected_plan, subscription_status, image)
        VALUES (?, ?, ?, 'Kampala, Uganda', 0.3136, 32.5811,
         'Beauty', 'beauty', 'Friendly beauty services for appointments and events.',
-        'draft', 0, 'PLATINUM', 'PLATINUM', 'active', '/api/uploads/stand.webp')`,
-      [user.id, `${user.username} Studio`, `${user.username} studio`]
+        'draft', 0, ?, ?, 'active', '/api/uploads/stand.webp')`,
+      [
+        user.id,
+        `${user.username} Studio`,
+        `${user.username} studio`,
+        user.id === freeProviderUser.id || user.id === dailyLimitUser.id ? "FREE" : "PLATINUM",
+        user.id === freeProviderUser.id || user.id === dailyLimitUser.id ? "FREE" : "PLATINUM",
+      ]
     );
     if (user.id === dailyLimitUser.id) dailyLimitBusinessId = businessResult.lastID;
-    await activatePlatinumSubscription(businessResult.lastID);
+    if (user.id !== freeProviderUser.id && user.id !== dailyLimitUser.id) await activatePlatinumSubscription(businessResult.lastID);
     await run(
       `INSERT INTO barber_services
        (barber_id, service_name, category, price_extra, pricing_type, duration_minutes, description, image)
@@ -118,8 +126,9 @@ test.before(async () => {
   noStandToken = await createToken(noStandUser);
   rateLimitToken = await createToken(limiterUser);
   dailyLimitToken = await createToken(dailyLimitUser);
+  freeProviderToken = await createToken(freeProviderUser);
 
-  for (let index = 0; index < 20; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     await run(
       `INSERT INTO provider_coach_usage (barber_id, user_id, question_id, usage_date, created_at)
        VALUES (?, ?, 'chat', ?, CURRENT_TIMESTAMP)`,
@@ -184,12 +193,23 @@ test("provider coach chat uses server-fetched stand data and returns a coach res
   assert.notEqual(capturedContext.stand.name, "Fake frontend stand");
 });
 
+test("provider coach chat is available to Free Provider for basic guidance", async () => {
+  const response = await request(freeProviderToken, {
+    message: "What bookings do I have today?",
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.equal(body.contextSummary.plan, "free");
+  assert.match(body.answer, /What bookings do I have today/);
+});
+
 test("provider coach chat enforces the per-user daily limit", async () => {
   const response = await request(dailyLimitToken, { message: "One more question" });
   const body = await response.json();
   assert.equal(response.status, 429);
   assert.equal(body.code, "DAILY_LIMIT_REACHED");
-  assert.match(body.message, /today's Provider Coach limit/i);
+  assert.match(body.message, /today's Queless Business Assistant limit/i);
 });
 
 test("provider coach chat rate limiter blocks abuse", async () => {

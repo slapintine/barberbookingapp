@@ -26,6 +26,7 @@ export const PROVIDER_PLANS = [
       "Service listings",
       "Customer bookings & requests",
       "Customer messaging",
+      "Basic Business Assistant help",
       "Customer reviews",
       "Map & location listing",
     ],
@@ -38,22 +39,22 @@ export const PROVIDER_PLANS = [
     annualPrice: 120000,
     annualSavings: 24000,
     recommended: true,
-    headline: "Look professional and get discovered",
-    summary: "Stand out, rank higher, and understand your customers.",
-    bestFor: "Stand out, rank higher, and understand your customers.",
-    whyUpgrade: "No ads, a Premium badge, higher ranking, more services & photos, and basic analytics so more customers find and trust you.",
+    headline: "Understand your bookings",
+    summary: "Add more services and photos, then use reports and Business Assistant analytics to improve your stand.",
+    bestFor: "Providers who want richer reports and practical growth guidance.",
+    whyUpgrade: "Premium adds higher service and portfolio limits, a Premium badge, deeper reports, review insights, and Business Assistant analytics based on your own data.",
     trialAvailable: false,
     features: [
       "Everything in Free",
-      "No ads",
       "Premium badge",
-      "Higher search & category ranking",
+      "Better service and portfolio capacity",
       "Up to 20 services and 30 portfolio photos",
       "Custom logo & business hours",
       "UGX price ranges",
       "Booking management",
-      "Basic analytics (views, bookings, profile clicks)",
-      "Limited offers",
+      "Booking and review reports",
+      "Business Assistant analytics",
+      "Customer follow-up message drafts",
       "Can request verification",
     ],
   },
@@ -64,24 +65,22 @@ export const PROVIDER_PLANS = [
     monthlyPrice: 24000,
     annualPrice: 240000,
     annualSavings: 48000,
-    headline: "Grow, manage, and dominate your category",
-    summary: "The full growth toolkit: Open Coach, top ranking, and advanced insights.",
-    bestFor: "The full growth toolkit: Open Coach, top ranking, and advanced insights.",
-    whyUpgrade: "Unlimited Open Coach, top priority placement, advanced analytics, AI offer/reply/description helpers, a weekly report and business health score, plus 'Recommended by Queless' eligibility once verified.",
+    headline: "Go deeper with your business data",
+    summary: "Higher limits, stronger visibility tools, advanced reports, and deeper Business Assistant guidance.",
+    bestFor: "Providers who need more capacity and sharper business insights.",
+    whyUpgrade: "Platinum adds very high service and portfolio limits, Platinum visibility eligibility, advanced report sections, deeper Business Assistant guidance, and business health insights where enough data exists.",
     trialAvailable: false,
     features: [
       "Everything in Premium",
-      "Open Coach (full Provider Coach)",
-      "Top priority ranking & placement",
+      "Deeper Business Assistant guidance",
+      "Platinum visibility eligibility",
       "Platinum badge",
-      "Advanced analytics & conversion insights",
-      "AI offer generator & reply assistant",
-      "AI service description helper",
-      "Weekly business report & health score",
+      "Advanced reports and conversion insights",
+      "Offer, reply, and description drafting help",
+      "Business health insights",
       "Service area and mobile service",
       "Very high service and portfolio limits",
-      "'Recommended by Queless' eligibility (after verification)",
-      "VIP support",
+      "Future forecasting and multi-location tools when supported",
     ],
   },
 ];
@@ -94,7 +93,7 @@ export const PLAN_FEATURES = {
     promotions: false,
     homeService: false,
     advancedAnalytics: false,
-    aiBusinessCoach: false,
+    aiBusinessCoach: true,
     reviewInsights: false,
     videoUploads: false,
     verifiedBadge: false,
@@ -110,8 +109,7 @@ export const PLAN_FEATURES = {
     promotions: true,
     homeService: true,
     advancedAnalytics: true,
-    // Open Coach is a Platinum-only growth tool, not a Premium feature.
-    aiBusinessCoach: false,
+    aiBusinessCoach: true,
     reviewInsights: true,
     videoUploads: false,
     verifiedBadge: false,
@@ -129,12 +127,12 @@ export const PLAN_FEATURES = {
     advancedAnalytics: true,
     aiBusinessCoach: true,
     reviewInsights: true,
-    videoUploads: true,
+    videoUploads: false,
     verifiedBadge: true,
     homepageFeature: true,
     priorityRanking: true,
-    customBanner: true,
-    aiWeeklyReport: true,
+    customBanner: false,
+    aiWeeklyReport: false,
   },
 };
 
@@ -257,9 +255,12 @@ export function getPlanUpgradeCta(targetTier) {
   return "Upgrade";
 }
 
-/** True only for an active Platinum provider — the gate for Open Coach. */
+/** True when a provider has an active plan that includes Business Assistant. */
 export function hasOpenCoachAccess(subscription = {}) {
-  return isProviderPlanActive(subscription, "PLATINUM");
+  const tier = normalizePlanTier(subscription?.tier, "FREE");
+  const status = String(subscription?.status || "").trim().toLowerCase();
+  if (tier === "FREE") return ["", "free", "active", "trialing"].includes(status);
+  return isProviderPlanActive(subscription, tier);
 }
 
 export function getPlanAmount(plan, billingCycle = "monthly") {

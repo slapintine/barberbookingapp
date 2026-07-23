@@ -383,11 +383,11 @@ export function ProviderCoachPreviewCard({ loading, focus, planState, usage, loc
   return (
     <div className={`provider-coach-preview ${locked ? "is-locked" : ""}`}>
       <div className="provider-coach-preview-head">
-        <div className="provider-coach-preview-brand"><span><FiZap /></span><div><strong>Queless Provider Coach</strong><small>Practical guidance for your next growth move</small></div></div>
+        <div className="provider-coach-preview-brand"><span><FiZap /></span><div><strong>Queless Business Assistant</strong><small>Practical guidance for your next growth move</small></div></div>
         <span className={`provider-coach-plan-chip provider-coach-plan-chip--${planState?.plan || "free"}`}>{planState?.label}</span>
       </div>
       <div className="provider-coach-preview-focus">
-        <span>{locked ? "Platinum coaching" : "Recommended next step"}</span>
+        <span>{locked ? "Assistant unavailable" : "Recommended next step"}</span>
         <h3>{locked ? "Turn your business signals into clear growth actions." : loading ? "Reading your stand signals…" : focus}</h3>
       </div>
       {!locked && !limitReached && questionModel?.recommended?.length ? (
@@ -400,8 +400,8 @@ export function ProviderCoachPreviewCard({ loading, focus, planState, usage, loc
         </div>
       ) : null}
       <div className="provider-coach-preview-actions">
-        <button type="button" className="provider-coach-primary" onClick={locked || limitReached ? () => onUpgrade?.("PLATINUM") : onOpen}>
-          {limitReached ? "Upgrade to Platinum" : locked ? "Upgrade to Platinum" : "Open Coach"} <FiArrowRight />
+        <button type="button" className="provider-coach-primary" onClick={locked || limitReached ? () => onUpgrade?.("PREMIUM") : onOpen}>
+          {limitReached ? "View plan options" : locked ? "View plan options" : "Open Assistant"} <FiArrowRight />
         </button>
         {!locked && usage?.plan === "premium" ? <span>{getCoachUsageText(usage)}</span> : null}
       </div>

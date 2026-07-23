@@ -9,6 +9,17 @@ export const PROVIDER_COACH_INTENTS = Object.freeze([
   "customer_message_help",
   "promo_help",
   "plan_help",
+  "today_bookings",
+  "tomorrow_schedule",
+  "attention_bookings",
+  "weekly_comparison",
+  "best_service",
+  "cancellation_summary",
+  "busiest_hours",
+  "low_demand_days",
+  "returning_customers",
+  "schedule_gaps",
+  "visibility_help",
   "general_audit",
   "follow_up_question",
 ]);
@@ -67,6 +78,17 @@ function serviceDescriptionIsClear(service) {
 
 function detectBaseIntent(message) {
   const text = normalizedText(message);
+  if (/\b(today).*\b(bookings?|appointments?)\b|\b(bookings?|appointments?).*\b(today)\b/.test(text)) return "today_bookings";
+  if (/\b(tomorrow).*\b(schedule|hours|availability|bookings?)\b|\b(schedule|hours|availability|bookings?).*\b(tomorrow)\b/.test(text)) return "tomorrow_schedule";
+  if (/\b(need attention|pending|confirm|unconfirmed|requests?)\b/.test(text)) return "attention_bookings";
+  if (/\b(compare).*\b(this week|week).*\b(last week|previous week)\b|\b(last week).*\b(this week)\b/.test(text)) return "weekly_comparison";
+  if (/\b(best|top|performing|performance).*\b(service)\b|\b(service).*\b(best|top|performing)\b/.test(text)) return "best_service";
+  if (/\b(cancel|cancelled|canceled|cancellation|cancellations|no show|no-show)\b/.test(text)) return "cancellation_summary";
+  if (/\b(busiest|busy|peak).*\b(hour|hours|time|times)\b|\b(hour|hours|time|times).*\b(busiest|busy|peak)\b/.test(text)) return "busiest_hours";
+  if (/\b(low demand|quiet|slow).*\b(day|days)\b|\b(day|days).*\b(low demand|quiet|slow)\b/.test(text)) return "low_demand_days";
+  if (/\b(returning|repeat).*\b(customer|customers)\b/.test(text)) return "returning_customers";
+  if (/\b(gap|gaps|free slot|open slot|available gap)\b/.test(text)) return "schedule_gaps";
+  if (/\b(not visible|publicly visible|not public|hidden|published|discoverable)\b/.test(text)) return "visibility_help";
   if (/\b(reply|respond|response|message|customer text|client text|whatsapp)\b/.test(text)) return "customer_message_help";
   if (/\b(description|bio|about|welcome|introduction|wording)\b/.test(text)) return "description_help";
   if (/\b(price|pricing|cost|charge|charges|expensive|cheap|ugx)\b/.test(text)) return "pricing_help";
@@ -290,6 +312,17 @@ export function getProviderCoachNextAction(intent, diagnosis, context) {
     plan_help: diagnosis?.missingFields?.length
       ? `Complete ${diagnosis.missingFields[0]} before focusing on plan extras.`
       : "Use your current plan features to strengthen your weakest stand area.",
+    today_bookings: "Review today's active bookings and confirm any pending requests.",
+    tomorrow_schedule: "Check tomorrow's opening hours and booked times before sharing availability.",
+    attention_bookings: "Handle pending or time-sensitive bookings first.",
+    weekly_comparison: "Compare current booking volume with the previous week using your own booking history.",
+    best_service: "Promote the service with the strongest completed booking signal.",
+    cancellation_summary: "Review cancelled bookings and keep availability accurate.",
+    busiest_hours: "Use your busiest hours to protect your best slots.",
+    low_demand_days: "Use quiet days for availability updates, promos, or admin work.",
+    returning_customers: "Invite returning customers to book again with a short friendly message.",
+    schedule_gaps: "Fill open gaps only when your schedule can support them.",
+    visibility_help: "Publish your stand and complete location, hours, services, and photos.",
     bookings_help: diagnosis?.weakAreas?.[0]?.nextAction || "Complete the first missing booking detail.",
     general_audit: diagnosis?.weakAreas?.[0]?.nextAction || "Improve one stand area at a time.",
   };

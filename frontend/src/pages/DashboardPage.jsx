@@ -273,8 +273,8 @@ export default function DashboardPage({
           <button type="button" className="secondary-btn-v4 compact-btn-v4" onClick={onOpenReports}>
             <FiStar /> Reports
           </button>
-          <button type="button" className={isPlatinum ? "primary-btn-v4 compact-btn-v4" : "secondary-btn-v4 compact-btn-v4"} onClick={isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PLATINUM")}>
-            <FiZap /> {isPlatinum ? "Open Coach" : "Upgrade to Platinum"}
+          <button type="button" className="primary-btn-v4 compact-btn-v4" onClick={onOpenAiCoach}>
+            <FiZap /> Business Assistant
           </button>
           {!isPlatinum ? (
             <button type="button" className="primary-btn-v4 compact-btn-v4" onClick={() => onOpenUpgradePlan?.(currentPlan)}>
@@ -330,34 +330,39 @@ export default function DashboardPage({
           <div className="dashboard-coach-head-v15">
             <FiZap className="dashboard-coach-icon-v15" />
             <div>
-              <strong>Queless Provider Coach</strong>
-              <span className={`dashboard-coach-badge-v15 ${isPlatinum ? "platinum" : isPremium ? "premium" : "locked"}`}>
-                {isPlatinum ? "Platinum active" : isPremium ? "Platinum feature" : "Platinum feature"}
+              <strong>Queless Business Assistant</strong>
+              <span className={`dashboard-coach-badge-v15 ${isPlatinum ? "platinum" : isPremium ? "premium" : "free"}`}>
+                {isPlatinum ? "Advanced assistant" : isPremium ? "Analytics assistant" : "Basic assistant"}
               </span>
             </div>
           </div>
           <p className="dashboard-coach-desc-v15">
-            Get practical recommendations based on your stand, bookings, reviews, and customer activity.
+            Get practical recommendations based on your stand, bookings, services, schedule, and customer activity.
           </p>
           <div className="dashboard-coach-status-v15">
             {isPlatinum ? (
               <>
                 <span className="dashboard-coach-ready-dot-v15" />
-                <span>Coach ready. Included in your plan</span>
+                <span>Advanced assistant ready. Included in your plan</span>
+              </>
+            ) : isPremium ? (
+              <>
+                <span className="dashboard-coach-ready-dot-v15" />
+                <span>Analytics assistant ready. Included in your plan</span>
               </>
             ) : (
               <>
-                <span className="dashboard-coach-locked-dot-v15" />
-                <span>Upgrade to Platinum for Provider Coach</span>
+                <span className="dashboard-coach-ready-dot-v15" />
+                <span>Basic assistant ready. Upgrade later for deeper analytics.</span>
               </>
             )}
           </div>
           <button
             type="button"
             className="dashboard-coach-btn-v15"
-            onClick={isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PLATINUM")}
+            onClick={onOpenAiCoach}
           >
-            {isPlatinum ? "Open Coach" : "Upgrade to Platinum"}
+            Open Assistant
           </button>
         </div>
       </div>

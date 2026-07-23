@@ -39,12 +39,13 @@ test("does not infer Customer Premium from provider plan", () => {
   });
 
   assert.equal(entitlements.hasCustomerPremium, false);
-  assert.equal(entitlements.canUseSmartMatch, false);
+  assert.equal(entitlements.canUseSmartMatch, true);
+  assert.equal(entitlements.canUseConversationalSmartMatch, false);
   assert.equal(entitlements.hasProviderPlatinum, true);
   assert.equal(entitlements.canUseProviderCoach, true);
 });
 
-test("provider Premium unlocks analytics but not Provider Coach", () => {
+test("provider Premium unlocks analytics and the Business Assistant", () => {
   const entitlements = resolveEntitlements({
     summary: {
       customerPlan: "FREE",
@@ -53,7 +54,7 @@ test("provider Premium unlocks analytics but not Provider Coach", () => {
       providerPlanActive: true,
       entitlements: {
         providerAnalytics: true,
-        providerCoach: false,
+        providerCoach: true,
         advancedReports: false,
       },
     },
@@ -62,8 +63,9 @@ test("provider Premium unlocks analytics but not Provider Coach", () => {
   assert.equal(entitlements.hasProviderPremium, true);
   assert.equal(entitlements.hasProviderPlatinum, false);
   assert.equal(entitlements.canViewProviderAnalytics, true);
-  assert.equal(entitlements.canUseProviderCoach, false);
-  assert.equal(entitlements.canViewAdvancedReports, false);
+  assert.equal(entitlements.canUseProviderCoach, true);
+  assert.equal(entitlements.canUseProviderAssistantAnalytics, true);
+  assert.equal(entitlements.canViewAdvancedReports, true);
 });
 
 test("missing entitlement summary resolves to free plans without paid access", () => {
@@ -76,8 +78,9 @@ test("missing entitlement summary resolves to free plans without paid access", (
   assert.equal(entitlements.providerPlanActive, true);
   assert.equal(entitlements.hasProviderPremium, false);
   assert.equal(entitlements.hasProviderPlatinum, false);
-  assert.equal(entitlements.canUseSmartMatch, false);
-  assert.equal(entitlements.canUseProviderCoach, false);
+  assert.equal(entitlements.canUseSmartMatch, true);
+  assert.equal(entitlements.canUseConversationalSmartMatch, false);
+  assert.equal(entitlements.canUseProviderCoach, true);
   assert.equal(entitlements.canViewAdvancedReports, false);
 });
 
@@ -89,7 +92,7 @@ test("expired or inactive provider paid state falls back to Free Provider access
       customerPremiumActive: false,
       providerPlanActive: true,
       entitlements: {
-        providerCoach: false,
+        providerCoach: true,
         advancedReports: false,
         providerAnalytics: false,
       },
@@ -104,6 +107,45 @@ test("expired or inactive provider paid state falls back to Free Provider access
   assert.equal(entitlements.providerPlanActive, true);
   assert.equal(entitlements.hasProviderPremium, false);
   assert.equal(entitlements.hasProviderPlatinum, false);
-  assert.equal(entitlements.canUseProviderCoach, false);
+  assert.equal(entitlements.canUseProviderCoach, true);
   assert.equal(entitlements.canViewAdvancedReports, false);
+});
+
+test("Customer Premium adds conversational Smart Match without weakening regular matching", () => {
+  const free = resolveEntitlements({
+    summary: {
+      customerPlan: "FREE",
+      customerPremiumActive: false,
+      providerPlan: "FREE",
+      providerPlanActive: true,
+    },
+  });
+  const premium = resolveEntitlements({
+    summary: {
+      customerPlan: "PREMIUM",
+      customerPremiumActive: true,
+      providerPlan: "FREE",
+      providerPlanActive: true,
+    },
+  });
+
+  assert.equal(free.canUseSmartMatch, true);
+  assert.equal(free.canUseConversationalSmartMatch, false);
+  assert.equal(premium.canUseSmartMatch, true);
+  assert.equal(premium.canUseConversationalSmartMatch, true);
+});
+
+test("Provider Platinum keeps implemented assistant capabilities without advertising forecasting yet", () => {
+  const entitlements = resolveEntitlements({
+    summary: {
+      customerPlan: "FREE",
+      customerPremiumActive: false,
+      providerPlan: "PLATINUM",
+      providerPlanActive: true,
+    },
+  });
+
+  assert.equal(entitlements.canUseProviderCoach, true);
+  assert.equal(entitlements.canUseProviderAssistantAnalytics, true);
+  assert.equal(entitlements.canUseProviderAssistantForecasting, false);
 });

@@ -1,6 +1,7 @@
 import { all, get } from "../db/query.js";
 import { buildRuleBasedInsights } from "./insightRules.js";
 import { getProviderCoachPlan, getLatestProviderSubscription } from "./providerSubscriptionAccess.js";
+import { CAPABILITY, getProviderCapabilityList } from "./entitlementMatrix.js";
 
 export const PROVIDER_COACH_CATEGORIES = [
   {
@@ -63,22 +64,13 @@ function getQuestion(questionId) {
 }
 
 function formatUsage(access, usedThisMonth = 0) {
-  if (access.plan === "platinum") {
-    return {
-      plan: "platinum",
-      limit: null,
-      usedThisMonth: 0,
-      remainingThisMonth: null,
-      unlimited: true,
-    };
-  }
-
   return {
-    plan: "free",
-    limit: 0,
-    usedThisMonth: 0,
-    remainingThisMonth: 0,
-    unlimited: false,
+    plan: access?.plan || "free",
+    tier: access?.tier || "FREE",
+    limit: Number(access?.dailyLimit || 5),
+    usedThisMonth,
+    remainingThisMonth: Math.max(Number(access?.dailyLimit || 5) - Number(usedThisMonth || 0), 0),
+    unlimited: Boolean(access?.unlimited),
   };
 }
 
@@ -174,6 +166,87 @@ function buildCoachStats({ business, services, schedule, bookings, reviews }) {
   };
 }
 
+function toDateKey(value) {
+  const date = value ? new Date(`${String(value).slice(0, 10)}T00:00:00`) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString().slice(0, 10) : "";
+}
+
+function startOfWeek(date = new Date()) {
+  const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  copy.setDate(copy.getDate() - ((copy.getDay() + 6) % 7));
+  return copy;
+}
+
+function summarizeBookingAnalytics(bookings = [], schedule = []) {
+  const now = new Date();
+  const today = toDateKey(now.toISOString());
+  const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const tomorrow = toDateKey(tomorrowDate.toISOString());
+  const thisWeekStart = startOfWeek(now);
+  const lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+  const lastWeekEnd = new Date(thisWeekStart);
+  lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+
+  const summaries = bookings.map((booking) => {
+    const date = toDateKey(booking.booking_date || booking.date);
+    const status = String(booking.status || "").toLowerCase();
+    const service = String(booking.service_name || booking.service || booking.service_title || "Service").trim();
+    const customer = String(booking.customer_username || booking.customerUsername || booking.customer_name || "").trim();
+    return {
+      id: Number(booking.id || 0),
+      date,
+      time: String(booking.booking_time || booking.time || "").slice(0, 5),
+      status,
+      service,
+      customerKey: customer || `booking-${booking.id}`,
+    };
+  }).filter((booking) => booking.date);
+
+  const inRange = (booking, start, end) => {
+    const date = new Date(`${booking.date}T00:00:00`);
+    return date >= start && date <= end;
+  };
+  const countBy = (items, keyFn) => {
+    const counts = new Map();
+    items.forEach((item) => {
+      const key = keyFn(item);
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  };
+  const thisWeekBookings = summaries.filter((booking) => inRange(booking, thisWeekStart, now));
+  const lastWeekBookings = summaries.filter((booking) => inRange(booking, lastWeekStart, lastWeekEnd));
+  const activeStatuses = new Set(["pending", "requested", "confirmed", "accepted"]);
+  const cancelledStatuses = new Set(["cancelled", "canceled", "rejected", "declined", "no_show", "no-show"]);
+  const returningCustomers = countBy(summaries, (booking) => booking.customerKey)
+    .filter(([, count]) => count > 1);
+  const tomorrowDay = tomorrowDate.getDay();
+  const tomorrowSchedule = schedule.find((day) => Number(day.day_of_week) === tomorrowDay);
+  const tomorrowBookings = summaries.filter((booking) => booking.date === tomorrow);
+
+  return {
+    today,
+    tomorrow,
+    todayBookings: summaries.filter((booking) => booking.date === today && activeStatuses.has(booking.status)).slice(0, 12),
+    tomorrowBookings: tomorrowBookings.slice(0, 12),
+    attentionBookings: summaries.filter((booking) => ["pending", "requested"].includes(booking.status)).slice(0, 12),
+    thisWeekCount: thisWeekBookings.length,
+    lastWeekCount: lastWeekBookings.length,
+    bestServices: countBy(summaries, (booking) => booking.service).slice(0, 5).map(([service, count]) => ({ service, count })),
+    cancelledByService: countBy(summaries.filter((booking) => cancelledStatuses.has(booking.status)), (booking) => booking.service).slice(0, 5).map(([service, count]) => ({ service, count })),
+    busiestHours: countBy(summaries, (booking) => booking.time?.slice(0, 2)).slice(0, 5).map(([hour, count]) => ({ hour: `${hour}:00`, count })),
+    busiestDays: countBy(summaries, (booking) => {
+      const day = new Date(`${booking.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+      return day;
+    }),
+    returningCustomerCount: returningCustomers.length,
+    tomorrowOpen: Number(tomorrowSchedule?.is_open ?? tomorrowSchedule?.open ?? 0) === 1,
+    tomorrowStart: String(tomorrowSchedule?.start_time || "").slice(0, 5),
+    tomorrowEnd: String(tomorrowSchedule?.end_time || "").slice(0, 5),
+  };
+}
+
 async function getCoachData(business) {
   const businessId = Number(business?.id || 0);
   const [services, schedule, bookings, reviews] = await Promise.all([
@@ -217,6 +290,7 @@ export async function getProviderCoachChatContext(business) {
     [business.owner_user_id]
   );
   const { access } = await getProviderCoachAccess(business);
+  const capabilities = getProviderCapabilityList(access.tier || access.plan || "FREE");
   const description = clipCoachText(business.intro_text, 700);
   const phonePresent = Boolean(clipCoachText(profile?.phone, 40));
   const missingFields = [];
@@ -243,6 +317,10 @@ export async function getProviderCoachChatContext(business) {
       verification: clipCoachText(business.review_status || business.verified_status, 60) || "not reviewed",
       plan: access.plan || "free",
       planActive: Boolean(access.active),
+      assistantDailyLimit: Number(access.dailyLimit || 5),
+      capabilities,
+      analyticsAvailable: capabilities.includes(CAPABILITY.PROVIDER_ASSISTANT_ANALYTICS),
+      forecastingAvailable: capabilities.includes(CAPABILITY.PROVIDER_ASSISTANT_FORECASTING),
       profileCompleteness: data.stats.profileCompleteness,
       missingFields,
     },
@@ -273,6 +351,7 @@ export async function getProviderCoachChatContext(business) {
       photoCount: data.stats.photosCount,
       portfolioPhotoCount: data.stats.portfolioCount,
     },
+    bookingAnalytics: summarizeBookingAnalytics(data.bookings, data.schedule),
   };
 }
 
@@ -288,7 +367,7 @@ export async function getAiCoachInsightsForBusiness(business) {
 export async function getOwnedAiCoachBusiness(userId, requestedBusinessId = null) {
   const ownerId = Number(userId || 0);
   if (!Number.isInteger(ownerId) || ownerId <= 0) {
-    const error = new Error("Please log in to use Queless Provider Coach.");
+    const error = new Error("Please log in to use Queless Business Assistant.");
     error.statusCode = 401;
     throw error;
   }
@@ -315,7 +394,7 @@ export async function getOwnedAiCoachBusiness(userId, requestedBusinessId = null
       );
 
   if (!business) {
-    const error = new Error("Create your provider profile before using Queless Provider Coach.");
+    const error = new Error("Create your provider profile before using Queless Business Assistant.");
     error.statusCode = 404;
     throw error;
   }
@@ -336,8 +415,11 @@ export async function getProviderCoachQuestions({ business }) {
     questions: PROVIDER_COACH_QUESTIONS,
     categories: PROVIDER_COACH_CATEGORIES,
     access: {
-      allowed: access.plan === "platinum" && access.active,
-      upgradeRequired: access.plan !== "platinum" || !access.active,
+      allowed: Boolean(access.active),
+      upgradeRequired: false,
+      plan: access.plan,
+      analytics: Boolean(access.analytics),
+      forecasting: Boolean(access.forecasting),
     },
     usage: formatUsage(access, 0),
   };
@@ -549,8 +631,8 @@ export async function createProviderCoachAdvice({ business, questionId }) {
   }
 
   const { access } = await getProviderCoachAccess(business);
-  if (access.plan !== "platinum" || !access.active) {
-    const error = new Error("Upgrade to Platinum to use Provider Coach advice.");
+  if (!access.active) {
+    const error = new Error("Your provider assistant access is not active.");
     error.statusCode = 403;
     error.code = "UPGRADE_REQUIRED";
     error.usage = formatUsage(access);

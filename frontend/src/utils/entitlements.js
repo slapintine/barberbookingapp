@@ -1,5 +1,11 @@
 import { isCustomerPremiumActive } from "./customerPremium.js";
 import { normalizePlanTier, isProviderPlanActive } from "./subscriptionPlans.js";
+import {
+  CAPABILITY,
+  getCustomerCapabilityList,
+  getProviderCapabilityList,
+  hasCapability,
+} from "./entitlementMatrix.js";
 
 export const CUSTOMER_PLAN = {
   FREE: "FREE",
@@ -57,19 +63,34 @@ export function resolveEntitlements({
   const hasProviderPremium = providerPlanActive && [PROVIDER_PLAN.PREMIUM, PROVIDER_PLAN.PLATINUM].includes(providerPlan);
   const hasProviderPlatinum = providerPlanActive && providerPlan === PROVIDER_PLAN.PLATINUM;
   const explicit = summary?.entitlements || {};
+  const customerCapabilities = Array.isArray(explicit.customerCapabilities)
+    ? explicit.customerCapabilities
+    : Array.isArray(summary?.customer?.entitlements?.capabilities)
+    ? summary.customer.entitlements.capabilities
+    : getCustomerCapabilityList(customerPlan);
+  const providerCapabilities = Array.isArray(explicit.providerCapabilities)
+    ? explicit.providerCapabilities
+    : Array.isArray(summary?.provider?.entitlements?.capabilities)
+    ? summary.provider.entitlements.capabilities
+    : getProviderCapabilityList(providerPlanActive ? providerPlan : PROVIDER_PLAN.FREE);
 
   return {
     customerPlan,
     providerPlan,
+    customerCapabilities,
+    providerCapabilities,
     customerPremiumActive,
     hasCustomerPremium: customerPremiumActive && customerPlan === CUSTOMER_PLAN.PREMIUM,
     providerPlanActive,
     hasProviderPremium,
     hasProviderPlatinum,
-    canUseSmartMatch: bool(explicit.smartMatch) || (customerPremiumActive && customerPlan === CUSTOMER_PLAN.PREMIUM),
-    canUseProviderCoach: bool(explicit.providerCoach) || hasProviderPlatinum,
-    canViewAdvancedReports: bool(explicit.advancedReports) || hasProviderPlatinum,
-    canViewProviderAnalytics: bool(explicit.providerAnalytics) || hasProviderPremium,
+    canUseSmartMatch: hasCapability(customerCapabilities, CAPABILITY.CUSTOMER_SMART_MATCH_STANDARD) || bool(explicit.smartMatch),
+    canUseConversationalSmartMatch: hasCapability(customerCapabilities, CAPABILITY.CUSTOMER_SMART_MATCH_CONVERSATIONAL) || bool(explicit.conversationalSmartMatch),
+    canUseProviderCoach: hasCapability(providerCapabilities, CAPABILITY.PROVIDER_ASSISTANT_BASIC) || bool(explicit.providerCoach),
+    canUseProviderAssistantAnalytics: hasCapability(providerCapabilities, CAPABILITY.PROVIDER_ASSISTANT_ANALYTICS) || bool(explicit.providerAssistantAnalytics),
+    canUseProviderAssistantForecasting: hasCapability(providerCapabilities, CAPABILITY.PROVIDER_ASSISTANT_FORECASTING) || bool(explicit.providerAssistantForecasting),
+    canViewAdvancedReports: bool(explicit.advancedReports) || hasCapability(providerCapabilities, CAPABILITY.PROVIDER_REPORTS_ADVANCED),
+    canViewProviderAnalytics: bool(explicit.providerAnalytics) || hasProviderPremium || hasCapability(providerCapabilities, CAPABILITY.PROVIDER_ASSISTANT_ANALYTICS),
     canUseFeaturedPlacement: bool(explicit.featuredPlacement) || hasProviderPlatinum,
   };
 }

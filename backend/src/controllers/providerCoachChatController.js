@@ -1,5 +1,4 @@
 import { createProviderCoachChatReply } from "../services/providerCoachChatService.js";
-import { canAccessBusinessCoach } from "../services/entitlementService.js";
 import { get } from "../db/query.js";
 
 export async function postProviderCoachChat(req, res, next) {
@@ -9,7 +8,7 @@ export async function postProviderCoachChat(req, res, next) {
       return res.status(400).json({
         success: false,
         code: "INVALID_MESSAGE",
-        message: "Enter a question for Provider Coach.",
+        message: "Enter a question for Business Assistant.",
       });
     }
 
@@ -18,16 +17,7 @@ export async function postProviderCoachChat(req, res, next) {
       return res.status(404).json({
         success: false,
         code: "NO_STAND",
-        message: "Create or save your stand first so Coach can give advice based on your business.",
-      });
-    }
-
-    const coachAccess = await canAccessBusinessCoach(req.user?.id);
-    if (!coachAccess) {
-      return res.status(403).json({
-        success: false,
-        code: "PLATINUM_PROVIDER_REQUIRED",
-        message: "Provider Coach is included with Platinum Provider.",
+        message: "Create or save your stand first so Business Assistant can give advice based on your business.",
       });
     }
 
@@ -47,7 +37,7 @@ export async function postProviderCoachChat(req, res, next) {
       return res.status(404).json({
         success: false,
         code: "NO_STAND",
-        message: "Create or save your stand first so Coach can give advice based on your business.",
+        message: "Create or save your stand first so Business Assistant can give advice based on your business.",
       });
     }
     return next(error);
