@@ -22,12 +22,13 @@ test("Reports uses the dedicated Provider Coach preview instead of the legacy pi
   assert.doesNotMatch(reportsSource, /reports-coach-modal-v15/);
 });
 
-test("Provider Coach opens a native stand-aware chat workspace", () => {
+test("Business Assistant opens a native stand-aware chat workspace", () => {
   assert.match(coachSource, /subscription,/);
   assert.match(coachSource, /sendProviderCoachMessage\(question, history\)/);
   assert.match(coachSource, /Why am I not getting bookings\?/);
-  assert.match(coachSource, /How do I improve my Platinum stand\?/);
-  assert.match(coachSource, /Create or save your stand first so Coach can give advice/);
+  assert.match(coachSource, /Explain my current plan/);
+  assert.match(coachSource, /Queless Business Assistant/);
+  assert.match(coachSource, /Create or save your stand first so Coach can give advice|Create or save your stand first so Business Assistant can give advice/);
   assert.match(coachSource, /result\?\.nextBestAction/);
   assert.match(coachSource, /result\?\.suggestedChips/);
   assert.match(coachSource, /provider-coach-next-action/);
@@ -40,4 +41,35 @@ test("Provider Coach opens a native stand-aware chat workspace", () => {
 test("Smart Match subscription notices distinguish success from real errors", () => {
   assert.match(smartMatchSource, /smart-match-subscription-message is-success/);
   assert.match(smartMatchSource, /smart-match-subscription-message is-error/);
+});
+
+test("Premium Smart Match renders one assistant composer without the standard form underneath", () => {
+  assert.match(smartMatchSource, /const showPremiumAssistant = premiumActive && standardSmartMatchActive && !includedButUnavailable;/);
+  assert.match(smartMatchSource, /const showStandardSmartMatch = standardSmartMatchActive && !includedButUnavailable && !showPremiumAssistant;/);
+  assert.match(smartMatchSource, /\{showPremiumAssistant \? \(\s*<SmartMatchAssistantPanel/);
+  assert.match(smartMatchSource, /\{showStandardSmartMatch \? <SmartMatchStepper/);
+  assert.match(smartMatchSource, /\{showStandardSmartMatch && state\.step === "need" \? \(/);
+  assert.match(smartMatchSource, /\{showStandardSmartMatch \? \(\s*<footer className="smart-match-footer">/);
+  assert.match(smartMatchSource, /data-testid="smart-match-assistant-form"/);
+  assert.match(smartMatchSource, /data-testid="smart-match-assistant-input"/);
+  assert.doesNotMatch(smartMatchSource, /\{standardSmartMatchActive && !includedButUnavailable && state\.step/);
+});
+
+test("Free Smart Match leads with the standard flow before the Premium promotion", () => {
+  const freeLabelIndex = smartMatchSource.indexOf('data-testid="smart-match-free-label"');
+  const needStepIndex = smartMatchSource.indexOf('{showStandardSmartMatch && state.step === "need" ? (');
+  const matchesStepIndex = smartMatchSource.indexOf('{showStandardSmartMatch && state.step === "matches" ? (');
+  const promotionRenderIndex = smartMatchSource.indexOf('{premiumPromotion}');
+
+  assert.match(smartMatchSource, /const showPremiumPromotion = showStandardSmartMatch && !premiumActive && state\.step === "matches";/);
+  assert.match(smartMatchSource, /data-testid="smart-match-premium-promotion"/);
+  assert.match(smartMatchSource, /You're using Free Smart Match/);
+  assert.match(smartMatchSource, /Premium Smart Match can guide you through your request in a conversation/);
+  assert.ok(freeLabelIndex > -1, "Free Smart Match label should be rendered");
+  assert.ok(needStepIndex > -1, "Free Smart Match need step should remain available");
+  assert.ok(matchesStepIndex > -1, "Free Smart Match results step should remain available");
+  assert.ok(promotionRenderIndex > matchesStepIndex, "Premium promotion should render after Free results/no-results content");
+  assert.ok(freeLabelIndex < needStepIndex, "Free Smart Match label should appear before the standard form");
+  assert.doesNotMatch(smartMatchSource, /Premium Customer adds the conversational Smart Match Assistant/);
+  assert.doesNotMatch(smartMatchSource, /!\s*premiumActive && state\.step === "need"/);
 });

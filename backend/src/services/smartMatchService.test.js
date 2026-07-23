@@ -4,6 +4,7 @@ import {
   calculateDistanceKm,
   calculatePaymentScore,
   calculateSmartMatchScore,
+  buildSmartMatchAssistantCriteria,
   categoryMatches,
   normalizeCategoryKey,
 } from "./smartMatchService.js";
@@ -63,4 +64,164 @@ test("Smart Match score ranks available nearby provider higher", () => {
   });
   assert.equal(good > weak, true);
   assert.equal(calculatePaymentScore(base), 5);
+});
+
+test("Smart Match Assistant preserves conversation criteria across follow-ups", () => {
+  const first = buildSmartMatchAssistantCriteria({ message: "I need braids on Saturday around Makerere." });
+  assert.equal(first.criteria.serviceKey, "salon");
+  assert.equal(first.criteria.address, "Makerere");
+  assert.equal(first.criteria.when, "this_week");
+  assert.deepEqual(first.missing, []);
+
+  const changedBudget = buildSmartMatchAssistantCriteria({
+    message: "Change the budget to UGX 100,000.",
+    conversation: [{ role: "assistant", criteria: first.criteria }],
+  });
+  assert.equal(changedBudget.criteria.serviceKey, "salon");
+  assert.equal(changedBudget.criteria.address, "Makerere");
+  assert.equal(changedBudget.criteria.when, "this_week");
+  assert.equal(changedBudget.criteria.budgetMax, 100000);
+});
+
+test("Smart Match Assistant tracks verified-only requests without resetting service or location", () => {
+  const previous = {
+    serviceKey: "barber",
+    address: "Ntinda",
+    when: "today",
+    budgetMax: 30000,
+  };
+  const next = buildSmartMatchAssistantCriteria({
+    message: "Only show verified ones.",
+    conversation: [{ role: "assistant", criteria: previous }],
+  });
+
+  assert.equal(next.criteria.serviceKey, "barber");
+  assert.equal(next.criteria.address, "Ntinda");
+  assert.equal(next.criteria.when, "today");
+  assert.equal(next.criteria.budgetMax, 30000);
+  assert.equal(next.criteria.verifiedOnly, true);
+});
+
+test("Smart Match Assistant can remove verified-only without resetting other criteria", () => {
+  const previous = {
+    serviceKey: "barber",
+    address: "Ntinda",
+    when: "today",
+    budgetMax: 30000,
+    verifiedOnly: true,
+  };
+  const next = buildSmartMatchAssistantCriteria({
+    message: "Show all providers again.",
+    conversation: [{ role: "assistant", criteria: previous }],
+  });
+
+  assert.equal(next.criteria.serviceKey, "barber");
+  assert.equal(next.criteria.address, "Ntinda");
+  assert.equal(next.criteria.when, "today");
+  assert.equal(next.criteria.budgetMax, 30000);
+  assert.equal(next.criteria.verifiedOnly, false);
+});
+
+test("Smart Match Assistant records closest, cheapest, and rated sort intents", () => {
+  const previous = { serviceKey: "barber", address: "Ntinda", when: "today" };
+  assert.equal(buildSmartMatchAssistantCriteria({
+    message: "Which is closest?",
+    conversation: [{ role: "assistant", criteria: previous }],
+  }).criteria.sortIntent, "closest");
+  assert.equal(buildSmartMatchAssistantCriteria({
+    message: "Which is cheapest?",
+    conversation: [{ role: "assistant", criteria: previous }],
+  }).criteria.sortIntent, "cheapest");
+  assert.equal(buildSmartMatchAssistantCriteria({
+    message: "Show the best rated ones.",
+    conversation: [{ role: "assistant", criteria: previous }],
+  }).criteria.sortIntent, "rated");
+});
+
+test("Smart Match Assistant clears stale sort intent when a later follow-up changes criteria", () => {
+  const previous = {
+    serviceKey: "barber",
+    address: "Ntinda",
+    when: "this_week",
+    budgetMax: 30000,
+    verifiedOnly: true,
+    sortIntent: "closest",
+  };
+  const next = buildSmartMatchAssistantCriteria({
+    message: "Change the budget to UGX 50,000.",
+    conversation: [{ role: "assistant", criteria: previous }],
+  });
+
+  assert.equal(next.criteria.serviceKey, "barber");
+  assert.equal(next.criteria.address, "Ntinda");
+  assert.equal(next.criteria.when, "this_week");
+  assert.equal(next.criteria.budgetMax, 50000);
+  assert.equal(next.criteria.verifiedOnly, true);
+  assert.equal(next.criteria.sortIntent, "");
+});
+
+test("Smart Match Assistant clears stale sort intent when location or verified preference changes", () => {
+  const cheapestPrevious = {
+    serviceKey: "barber",
+    address: "Ntinda",
+    when: "this_week",
+    budgetMax: 30000,
+    sortIntent: "cheapest",
+  };
+  const moved = buildSmartMatchAssistantCriteria({
+    message: "Search around Kira.",
+    conversation: [{ role: "assistant", criteria: cheapestPrevious }],
+  });
+  assert.equal(moved.criteria.address, "Kira");
+  assert.equal(moved.criteria.sortIntent, "");
+
+  const ratedPrevious = {
+    serviceKey: "barber",
+    address: "Ntinda",
+    when: "this_week",
+    budgetMax: 30000,
+    verifiedOnly: true,
+    sortIntent: "rated",
+  };
+  const allProviders = buildSmartMatchAssistantCriteria({
+    message: "Remove verified only.",
+    conversation: [{ role: "assistant", criteria: ratedPrevious }],
+  });
+  assert.equal(allProviders.criteria.verifiedOnly, false);
+  assert.equal(allProviders.criteria.sortIntent, "");
+});
+
+test("Smart Match Assistant applies a newly requested sort after criteria changes", () => {
+  const previous = {
+    serviceKey: "barber",
+    address: "Ntinda",
+    when: "this_week",
+    budgetMax: 50000,
+    verifiedOnly: true,
+    sortIntent: "",
+  };
+  const next = buildSmartMatchAssistantCriteria({
+    message: "Show the cheapest one.",
+    conversation: [{ role: "assistant", criteria: previous }],
+  });
+  assert.equal(next.criteria.budgetMax, 50000);
+  assert.equal(next.criteria.verifiedOnly, true);
+  assert.equal(next.criteria.sortIntent, "cheapest");
+});
+
+test("Smart Match Assistant treats a short standalone follow-up as the missing location", () => {
+  const first = buildSmartMatchAssistantCriteria({ message: "I need a barber." });
+  assert.equal(first.criteria.serviceKey, "barber");
+  assert.equal(first.criteria.address, "");
+  assert.deepEqual(first.missing, ["location"]);
+
+  const location = buildSmartMatchAssistantCriteria({
+    message: "Ntinda.",
+    conversation: [{ role: "assistant", criteria: first.criteria }],
+  });
+
+  assert.equal(location.criteria.serviceKey, "barber");
+  assert.equal(location.criteria.address, "Ntinda");
+  assert.equal(location.criteria.when, "today");
+  assert.deepEqual(location.missing, []);
 });

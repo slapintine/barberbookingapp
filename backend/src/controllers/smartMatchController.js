@@ -1,4 +1,5 @@
-import { findSmartMatches, normalizeCategoryKey } from "../services/smartMatchService.js";
+import { findSmartMatches, normalizeCategoryKey, runSmartMatchAssistant } from "../services/smartMatchService.js";
+import { canUseConversationalSmartMatch } from "../services/entitlementService.js";
 
 const VALID_WHEN = new Set(["now", "today", "this_week"]);
 const VALID_LOCATION_TYPES = new Set(["use_current_location", "enter_address"]);
@@ -53,7 +54,28 @@ export async function smartMatch(req, res, next) {
     }
 
     const result = await findSmartMatches(validation.value);
-    res.json({ success: true, ...result });
+    res.json({ success: true, mode: "standard", ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function smartMatchAssistant(req, res, next) {
+  try {
+    const allowed = await canUseConversationalSmartMatch(req.user?.id);
+    if (!allowed) {
+      return res.status(403).json({
+        success: false,
+        code: "CUSTOMER_PREMIUM_REQUIRED",
+        message: "Smart Match Assistant is included with Premium Customer. You can still use regular Smart Match and book normally.",
+      });
+    }
+    const result = await runSmartMatchAssistant({
+      message: req.body?.message,
+      conversation: req.body?.conversation,
+      userId: req.user?.id,
+    });
+    res.json({ success: true, mode: "assistant", ...result });
   } catch (error) {
     next(error);
   }

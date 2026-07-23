@@ -9,9 +9,8 @@ import {
   getProviders,
   getServiceListings,
 } from "../controllers/discoveryController.js";
-import { smartMatch } from "../controllers/smartMatchController.js";
+import { smartMatch, smartMatchAssistant } from "../controllers/smartMatchController.js";
 import { requireRole } from "../middleware/roleMiddleware.js";
-import { requireCustomerPremium } from "../middleware/customerPremiumMiddleware.js";
 import { searchRateLimiter, smartMatchRateLimiter, supportRateLimiter } from "../middleware/securityMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { schemas } from "../validation/schemas.js";
@@ -21,8 +20,9 @@ const router = express.Router();
 router.get("/categories", getCategories);
 router.get("/providers", optionalAuth, searchRateLimiter, getProviders);
 router.get("/service-listings", optionalAuth, searchRateLimiter, getServiceListings);
-router.post("/smart-match", protect, requireCustomerPremium, smartMatchRateLimiter, smartMatch);
-router.post("/smart-match/search", protect, requireCustomerPremium, smartMatchRateLimiter, smartMatch);
+router.post("/smart-match", protect, smartMatchRateLimiter, smartMatch);
+router.post("/smart-match/search", protect, smartMatchRateLimiter, smartMatch);
+router.post("/smart-match/assistant", protect, requireRole("customer"), smartMatchRateLimiter, smartMatchAssistant);
 router.get("/quote-requests/me", protect, getMyQuoteRequests);
 router.post("/quote-requests", protect, requireRole("customer"), supportRateLimiter, validateRequest(schemas.quoteRequest), createQuoteRequest);
 router.get("/support-requests/me", protect, getMySupportRequests);

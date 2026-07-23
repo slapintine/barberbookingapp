@@ -6,3 +6,10 @@ export function findSmartMatches(payload) {
     body: JSON.stringify(payload || {}),
   });
 }
+
+export function askSmartMatchAssistant(payload) {
+  return apiFetch("/api/discovery/smart-match/assistant", {
+    method: "POST",
+    body: JSON.stringify(payload || {}),
+  });
+}

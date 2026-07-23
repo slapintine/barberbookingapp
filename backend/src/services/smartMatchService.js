@@ -397,6 +397,8 @@ export function scoreProvider(row, criteria = {}) {
       latitude: row.latitude,
       longitude: row.longitude,
       image: row.image,
+      is_verified: Number(row.is_verified || 0) === 1,
+      verified_status: row.verified_status || row.review_status || "",
       rating: Number(row.rating || 0),
       total_reviews: Number(row.total_reviews || 0),
     },
@@ -425,6 +427,9 @@ export async function findSmartMatches(criteria = {}) {
        b.location,
        b.latitude,
        b.longitude,
+       b.is_verified,
+       b.verified_status,
+       b.review_status,
        b.price_from,
        b.image,
        b.intro_text,
@@ -463,16 +468,28 @@ export async function findSmartMatches(criteria = {}) {
     .filter(Boolean);
   const nearbyMatches = scored.filter(isNearbyMatch);
   const timingMatches = nearbyMatches.filter((item) => item.timingExact !== false);
+  const budgetMax = Number(criteria.budgetMax || 0);
+  const budgetMatches = budgetMax > 0
+    ? timingMatches.filter((item) => {
+        const min = Number(item.priceMin || 0);
+        const max = Number(item.priceMax || 0);
+        const comparable = min > 0 ? min : max;
+        return comparable > 0 && comparable <= budgetMax;
+      })
+    : timingMatches;
+  const eligibleMatches = criteria.verifiedOnly
+    ? budgetMatches.filter((item) => item.provider?.is_verified || String(item.provider?.verified_status || "").toLowerCase() === "verified")
+    : budgetMatches;
 
   const bestByProvider = new Map();
-  timingMatches.forEach((item) => {
+  eligibleMatches.forEach((item) => {
     const existing = bestByProvider.get(String(item.providerId));
     if (!existing || item.score > existing.score) bestByProvider.set(String(item.providerId), item);
   });
 
   const matches = [...bestByProvider.values()]
     .sort((a, b) => b.score - a.score)
-    .slice(0, 12);
+      .slice(0, 12);
 
   if (!matches.length) {
     return {
@@ -496,5 +513,242 @@ export async function findSmartMatches(criteria = {}) {
     nearestDistanceKm: null,
     suggestions: [],
     message: "Ranked using your service, timing, and location choices.",
+  };
+}
+
+const SERVICE_INTENT_ALIASES = [
+  ["barber", /\b(barber|haircut|hair cut|shave)\b/i],
+  ["salon", /\b(braid|braids|knotless|salon|hair styling|hair treatment)\b/i],
+  ["beauty", /\b(makeup|make up|nails?|lashes?|beauty)\b/i],
+  ["printing-stationery", /\b(print|printing|banner|banners|poster|flyer|photocopy)\b/i],
+  ["design-branding", /\b(logo|brand|branding|graphic design)\b/i],
+  ["cleaning-services", /\b(clean|cleaning|cleaner|fumigation|deep clean)\b/i],
+  ["catering-food-services", /\b(cater|catering|food|cake|meal|chef)\b/i],
+  ["repairs-maintenance", /\b(repair|fix|maintenance|mechanic)\b/i],
+  ["plumbing-services", /\b(plumber|plumbing|pipe|leak)\b/i],
+  ["electrical-services", /\b(electrician|electrical|wiring|solar)\b/i],
+  ["education-tutoring", /\b(tutor|teacher|lesson|training|class)\b/i],
+];
+
+function extractBudget(text) {
+  const match = String(text || "").match(/(?:ugx|below|under|less than|budget)?\s*([0-9][0-9,\s]{2,})(?:\s*(?:ugx|shs|shillings))?/i);
+  if (!match) return null;
+  const amount = Number(String(match[1]).replace(/[^\d]/g, ""));
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function extractWhen(text) {
+  const value = String(text || "").toLowerCase();
+  if (/\b(now|open now|right now|urgent)\b/.test(value)) return "now";
+  if (/\b(today|this afternoon|this evening|tonight)\b/.test(value)) return "today";
+  if (/\b(tomorrow|saturday|sunday|monday|tuesday|wednesday|thursday|friday|weekend|this week)\b/.test(value)) return "this_week";
+  return "";
+}
+
+function extractServiceKey(text) {
+  const value = String(text || "");
+  const match = SERVICE_INTENT_ALIASES.find(([, pattern]) => pattern.test(value));
+  if (match) return match[0];
+  return normalizeCategoryKey(value);
+}
+
+function extractAddress(text) {
+  const value = String(text || "");
+  const nearMatch = value.match(/\b(?:near|around|in|at)\s+([A-Za-z][A-Za-z\s'-]{2,40})(?:\s+(?:today|tomorrow|saturday|sunday|below|under|at|around|near)|[.,]|$)/i);
+  if (nearMatch) return nearMatch[1].trim();
+
+  const standalonePlace = value
+    .replace(/[.,!?]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (
+    /^[A-Za-z][A-Za-z\s'-]{2,40}$/.test(standalonePlace) &&
+    !extractWhen(standalonePlace) &&
+    !extractBudget(standalonePlace) &&
+    !extractVerifiedOnly(standalonePlace) &&
+    extractServiceKey(standalonePlace) === "other" &&
+    !/\b(which|what|who|show|compare|closest|cheapest|book|change|only|more)\b/i.test(standalonePlace)
+  ) {
+    return standalonePlace;
+  }
+
+  return "";
+}
+
+function extractVerifiedOnly(text) {
+  return /\b(verified|only verified|verified providers?)\b/i.test(String(text || ""));
+}
+
+function extractRemoveVerified(text) {
+  return /\b(show all|remove verified|not only verified|include unverified|any provider|all providers)\b/i.test(String(text || ""));
+}
+
+function extractSortIntent(text) {
+  const value = String(text || "").toLowerCase();
+  if (/\b(closest|nearest|nearby)\b/.test(value)) return "closest";
+  if (/\b(cheapest|affordable|lowest price|least expensive)\b/.test(value)) return "cheapest";
+  if (/\b(best rated|top rated|highest rated|rating)\b/.test(value)) return "rated";
+  if (/\b(more options|show more|more providers)\b/.test(value)) return "more";
+  return "";
+}
+
+export function buildSmartMatchAssistantCriteria({ message, conversation = {} } = {}) {
+  const text = String(message || "").trim();
+  const conversationItems = Array.isArray(conversation) ? conversation : [conversation];
+  const previousCriteria = [...conversationItems]
+    .reverse()
+    .find((item) => item?.criteria && typeof item.criteria === "object")
+    ?.criteria || {};
+  const serviceKey = extractServiceKey(text);
+  const extractedAddress = extractAddress(text);
+  const extractedBudget = extractBudget(text);
+  const extractedWhen = extractWhen(text);
+  const requestedSortIntent = extractSortIntent(text);
+  const removeVerified = extractRemoveVerified(text);
+  const requestedVerifiedOnly = extractVerifiedOnly(text);
+  const serviceChanged = serviceKey !== "other" && serviceKey !== previousCriteria.serviceKey;
+  const criteriaChanged = Boolean(
+    serviceChanged ||
+    extractedAddress ||
+    extractedBudget ||
+    extractedWhen ||
+    requestedVerifiedOnly ||
+    removeVerified
+  );
+  const address = extractedAddress || previousCriteria.address || "";
+  const budgetMax = extractedBudget || previousCriteria.budgetMax || null;
+  const when = extractedWhen || previousCriteria.when || "today";
+  const sortIntent = requestedSortIntent || (criteriaChanged ? "" : previousCriteria.sortIntent || "");
+  const criteria = {
+    ...previousCriteria,
+    serviceKey: serviceKey === "other" ? previousCriteria.serviceKey || "" : serviceKey,
+    when,
+    locationType: address ? "enter_address" : previousCriteria.locationType || "enter_address",
+    address,
+    budgetMax,
+    verifiedOnly: removeVerified ? false : (requestedVerifiedOnly || Boolean(previousCriteria.verifiedOnly)),
+    sortIntent,
+  };
+  const missing = [];
+  if (!criteria.serviceKey) missing.push("service");
+  if (!criteria.address && !criteria.coordinates) missing.push("location");
+  return { criteria, missing };
+}
+
+function buildAssistantPrompt({ criteria, missing }) {
+  if (missing.length) {
+    const question = missing.includes("service")
+      ? "What service do you need?"
+      : missing.includes("location")
+      ? "Which area should I search around?"
+      : "What time works best for you?";
+    return {
+      role: "assistant",
+      kind: "clarification",
+      message: question,
+      missing,
+      criteria,
+      results: [],
+    };
+  }
+  return null;
+}
+
+function explainMatch(match, criteria) {
+  const reasons = Array.isArray(match?.reasons) ? match.reasons : [];
+  const budget = Number(criteria.budgetMax || 0);
+  const price = Number(match?.priceMin || match?.priceMax || 0);
+  const budgetReason = budget && price && price <= budget ? "within your budget" : "";
+  return [
+    match?.availabilityLabel,
+    budgetReason,
+    Number.isFinite(Number(match?.distanceKm)) ? "near your selected area" : "",
+    ...reasons,
+  ].filter(Boolean).slice(0, 4);
+}
+
+function sortAssistantMatches(matches, criteria = {}) {
+  const intent = String(criteria.sortIntent || "").toLowerCase();
+  const list = [...matches];
+  if (intent === "closest") {
+    const hasDistances = list.some((match) => Number.isFinite(Number(match.distanceKm)));
+    if (!hasDistances) return list;
+    return list.sort((a, b) => {
+      const ad = Number.isFinite(Number(a.distanceKm)) ? Number(a.distanceKm) : Number.POSITIVE_INFINITY;
+      const bd = Number.isFinite(Number(b.distanceKm)) ? Number(b.distanceKm) : Number.POSITIVE_INFINITY;
+      return ad - bd || Number(b.score || 0) - Number(a.score || 0);
+    });
+  }
+  if (intent === "cheapest") {
+    return list.sort((a, b) => {
+      const ap = Number(a.priceMin || a.priceMax || Number.POSITIVE_INFINITY);
+      const bp = Number(b.priceMin || b.priceMax || Number.POSITIVE_INFINITY);
+      return ap - bp || Number(b.score || 0) - Number(a.score || 0);
+    });
+  }
+  if (intent === "rated") {
+    return list.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0) || Number(b.score || 0) - Number(a.score || 0));
+  }
+  return list;
+}
+
+function assistantMatchMessage({ matches, criteria, fallbackMessage }) {
+  if (!matches.length) return fallbackMessage || "I could not find an exact match. Try another area, time, or service.";
+  const intent = String(criteria.sortIntent || "").toLowerCase();
+  if (intent === "closest") {
+    const first = matches[0];
+    return Number.isFinite(Number(first.distanceKm))
+      ? `I found ${matches.length} real Queless match${matches.length === 1 ? "" : "es"} and placed the closest available option first.`
+      : "I found real matches, but distance comparison is unavailable because coordinates are missing.";
+  }
+  if (intent === "cheapest") return `I found ${matches.length} real Queless match${matches.length === 1 ? "" : "es"} and placed the lowest listed price first.`;
+  if (intent === "rated") return `I found ${matches.length} real Queless match${matches.length === 1 ? "" : "es"} and placed stronger real ratings first where ratings exist.`;
+  return `I found ${matches.length} real Queless match${matches.length === 1 ? "" : "es"} based on your request.`;
+}
+
+export async function runSmartMatchAssistant({ message, conversation = {}, userId = null } = {}) {
+  const text = String(message || "").trim();
+  if (!text) {
+    const error = new Error("Tell Smart Match what service you need.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const { criteria, missing } = buildSmartMatchAssistantCriteria({ message: text, conversation });
+  const clarification = buildAssistantPrompt({ criteria, missing });
+  if (clarification) return clarification;
+
+  const result = await findSmartMatches(criteria);
+  const sortedMatches = sortAssistantMatches(result.matches || [], criteria);
+  const matches = sortedMatches.map((match, index) => ({
+    ...match,
+    rank: index + 1,
+    explanation: explainMatch(match, criteria),
+    actions: ["view_profile", "view_location", "book", "compare"],
+  }));
+  const messagePrefix = assistantMatchMessage({ matches, criteria, fallbackMessage: result.message });
+
+  return {
+    role: "assistant",
+    kind: "matches",
+    message: messagePrefix,
+    criteria,
+    results: matches,
+    comparison: matches.slice(0, 3).map((match) => ({
+      rank: match.rank,
+      providerId: match.providerId,
+      stand: match.businessName,
+      service: match.serviceName,
+      priceMin: match.priceMin,
+      priceMax: match.priceMax,
+      distanceKm: match.distanceKm,
+      availability: match.availabilityLabel,
+      verified: Boolean(match.provider?.is_verified || match.provider?.verified_status === "verified"),
+    })),
+    dataGrounding: {
+      source: "queless_discovery",
+      inventedProviders: false,
+      userId: userId ? Number(userId) : null,
+    },
   };
 }

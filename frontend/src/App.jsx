@@ -69,6 +69,7 @@ import { createPendingBookingIntent, resolvePendingBookingIntent } from "./utils
 import {
   DEFAULT_SERVICE_TYPES,
   getAvailableServices,
+  getStableSelectedServiceId,
   normalizeServiceForBooking,
   serviceMatchesCategory,
 } from "./utils/serviceCatalog.js";
@@ -1945,7 +1946,7 @@ function App() {
     if (!selectedBarber) return;
     const services = getBarberServices(selectedBarber);
     if (services.length) {
-      setSelectedService(services[0].id);
+      setSelectedService((current) => getStableSelectedServiceId(services, current));
     }
     const teamMembers = normalizeTeamMembers(selectedBarber.team_members || selectedBarber.teamMembers || []);
     const activeTeamMembers = teamMembers.filter((item) => Number(item.is_active ?? 1) === 1);
@@ -2634,7 +2635,6 @@ const fetchBarbers = async () => {
 
   const handleRegister = async () => {
     clearAuthMessages();
-    const username = usernameRef.current?.value?.trim() || "";
     const email = emailRef.current?.value?.trim() || "";
     const password = passwordRef.current?.value || "";
     const confirm = confirmPasswordRef.current?.value || "";
@@ -2646,11 +2646,6 @@ const fetchBarbers = async () => {
 
     if (!isValidEmail(email)) {
       setAuthError("Please enter a valid email address.");
-      return;
-    }
-
-    if (!username) {
-      setAuthError("Username is required.");
       return;
     }
 
@@ -2676,7 +2671,7 @@ const fetchBarbers = async () => {
 
     try {
       setAuthLoading(true);
-      const data = await registerUser({ username, email, password, role: "customer" });
+      const data = await registerUser({ email, password, role: "customer" });
       const nextToken = data.token || "";
       saveAuthSession(nextToken, data.user, { rememberMe: true, refreshToken: data.refreshToken });
       setSessionExpiresAt(readSessionExpiry(nextToken));
@@ -2684,7 +2679,7 @@ const fetchBarbers = async () => {
       setCurrentUser(data.user);
       setActiveTab("home");
       setScreen("app");
-      setAuthSuccess(data?.message || "Account created.");
+      setAuthSuccess(data?.message || "Account created. Check your email to verify your Queless account.");
       if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
     } catch (error) {
       setAuthError(error.message || "Could not create your account. Please check your connection and try again.");
@@ -2696,16 +2691,21 @@ const fetchBarbers = async () => {
   const handleLogin = async ({ rememberMe = true } = {}) => {
     if (loginRequestRef.current || authLoading) return;
     clearAuthMessages();
-    const username = usernameRef.current?.value?.trim() || "";
+    const email = usernameRef.current?.value?.trim() || "";
     const password = passwordRef.current?.value || "";
 
-    if (!username && !password) {
-      setAuthError("Please enter your username/email and password.");
+    if (!email && !password) {
+      setAuthError("Please enter your email and password.");
       return;
     }
 
-    if (!username) {
-      setAuthError("Please enter your username or email.");
+    if (!email) {
+      setAuthError("Please enter your email address.");
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      setAuthError("Please enter a valid email address.");
       return;
     }
 
@@ -2717,7 +2717,7 @@ const fetchBarbers = async () => {
     try {
       loginRequestRef.current = true;
       setAuthLoading(true);
-      const data = await loginUser({ username, password });
+      const data = await loginUser({ username: email, password });
       const nextToken = data.token || "";
       saveAuthSession(nextToken, data.user, { rememberMe, refreshToken: data.refreshToken });
       setSessionExpiresAt(readSessionExpiry(nextToken));
@@ -4375,7 +4375,7 @@ const registerBarber = async (payload) => {
     const locationType = String(restored.service.location_type || "provider_location").toLowerCase();
     setBookingLocationType(locationType === "customer_location" ? "customer_location" : "provider_location");
     setBookingAddress("");
-    setShowBarberProfile(false);
+    setShowBarberProfile(true);
     setShowQuoteModal(false);
     setShowChat(false);
     setShowBookingModal(true);
@@ -4851,6 +4851,7 @@ const registerBarber = async (payload) => {
   });
   const customerPremiumActive = entitlementState.hasCustomerPremium;
   const canUseSmartMatch = entitlementState.canUseSmartMatch;
+  const canUseConversationalSmartMatch = entitlementState.canUseConversationalSmartMatch;
   const smartMatchUpsellVisible = Boolean(currentUser?.username) && !canUseSmartMatch;
   useEffect(() => {
     if (customerPremiumActive && customerPremiumPaymentOpen) {
@@ -5516,8 +5517,7 @@ const registerBarber = async (payload) => {
             providers={enrichedBarbers.filter(isPublicProvider)}
             locationLabel={locationLabel}
             customerSubscription={customerSubscriptionState}
-            premiumActive={canUseSmartMatch}
-            customerSubscriptionLoading={customerSubscriptionLoading}
+            premiumActive={canUseConversationalSmartMatch}
             customerSubscriptionMessage={customerSubscriptionMessage}
             pendingCustomerSubscriptionPayment={pendingCustomerSubscriptionPayment}
             onBack={() => setActiveTab(previousMobileView === "smartMatch" ? "home" : previousMobileView || "home")}

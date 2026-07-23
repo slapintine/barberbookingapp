@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { FiArrowLeft, FiCheck, FiCheckCircle, FiCreditCard, FiHelpCircle, FiHome, FiLock, FiMap, FiMapPin, FiMessageSquare, FiSearch, FiShield, FiStar, FiX, FiZap } from "react-icons/fi";
-import { findSmartMatches } from "../../api/smartMatchApi.js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FiArrowLeft, FiCheck, FiCheckCircle, FiCreditCard, FiHelpCircle, FiHome, FiMap, FiMapPin, FiMessageSquare, FiSearch, FiShield, FiStar, FiX, FiZap } from "react-icons/fi";
+import { askSmartMatchAssistant, findSmartMatches } from "../../api/smartMatchApi.js";
 import { getProviderTier, isProviderOpenNow, isProviderVerified } from "../../utils/providerDiscovery.js";
 import logo from "../../assets/queless-logo-full.png";
 import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
@@ -28,7 +28,7 @@ import "./SmartMatchPage.css";
 
 function friendlySmartMatchError(error) {
   const status = Number(error?.status || error?.payload?.status || 0);
-  if (status === 403) return "Smart Match needs active Customer Premium. Please verify your access and try again.";
+  if (status === 403) return "Smart Match is not available for this account right now. You can still browse providers normally.";
   if (status === 0 || status >= 500) return "Smart Match is temporarily unavailable. Please try again in a moment.";
   return "We couldn't load matches right now. Please try again.";
 }
@@ -118,6 +118,108 @@ function LoadingResults() {
       <span />
       <span />
     </div>
+  );
+}
+
+function SmartMatchAssistantPanel({
+  messages,
+  draft,
+  loading,
+  error,
+  onDraftChange,
+  onSubmit,
+  onOpenProvider,
+  onAsk,
+  onViewOnMap,
+}) {
+  const latestMatches = [...messages].reverse().find((item) => item.kind === "matches" && Array.isArray(item.results))?.results || [];
+  const messageListRef = useRef(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showJump, setShowJump] = useState(false);
+
+  const scrollToLatest = (behavior = "smooth") => {
+    const list = messageListRef.current;
+    if (!list) return;
+    list.scrollTo({ top: list.scrollHeight, behavior });
+    setAutoScroll(true);
+    setShowJump(false);
+  };
+
+  const handleScroll = () => {
+    const list = messageListRef.current;
+    if (!list) return;
+    const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+    const nearBottom = distanceFromBottom < 96;
+    setAutoScroll(nearBottom);
+    setShowJump(!nearBottom);
+  };
+
+  useEffect(() => {
+    if (autoScroll) {
+      window.requestAnimationFrame(() => scrollToLatest("smooth"));
+    }
+  }, [autoScroll, messages, loading]);
+
+  return (
+    <section className="smart-match-assistant-panel" aria-label="Smart Match Assistant" data-testid="smart-match-assistant-panel">
+      <div className="smart-match-assistant-title">
+        <span><FiZap /></span>
+        <div>
+          <strong>Smart Match Assistant</strong>
+          <p>Tell Queless what you need in your own words. Premium Customer uses real providers, services, images, prices, and availability.</p>
+        </div>
+      </div>
+      <div className="smart-match-assistant-messages" ref={messageListRef} onScroll={handleScroll} aria-live="polite" data-testid="smart-match-assistant-messages">
+        {messages.map((message) => (
+          <article key={message.id} className={`smart-match-assistant-message is-${message.role}`}>
+            <strong>{message.role === "assistant" ? "Assistant" : "You"}</strong>
+            <p>{message.content}</p>
+          </article>
+        ))}
+        {loading ? <div className="smart-match-assistant-loading">Finding real matches...</div> : null}
+        {error ? <div className="smart-match-error" role="alert">{error}</div> : null}
+      </div>
+      {showJump ? (
+        <button type="button" className="smart-match-jump-latest" data-testid="smart-match-jump-latest" onClick={() => scrollToLatest()}>
+          Jump to latest
+        </button>
+      ) : null}
+      {latestMatches.length ? (
+        <div className="smart-match-assistant-results" data-testid="smart-match-assistant-results">
+          {latestMatches.slice(0, 3).map((match) => (
+            <MatchProviderCard
+              key={`${match.providerId || match.businessId}-${match.serviceId || match.serviceName}`}
+              match={{
+                ...match,
+                reasons: Array.isArray(match.explanation) ? match.explanation : match.reasons,
+                providerName: match.standName || match.providerName,
+              }}
+              provider={match.provider || null}
+              onOpenProvider={onOpenProvider}
+              onAsk={onAsk}
+              onViewOnMap={onViewOnMap}
+            />
+          ))}
+        </div>
+      ) : null}
+      <form className="smart-match-assistant-form" onSubmit={onSubmit} data-testid="smart-match-assistant-form">
+        <label htmlFor="smart-match-assistant-input">Ask for a match</label>
+        <div>
+          <input
+            id="smart-match-assistant-input"
+            data-testid="smart-match-assistant-input"
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value.slice(0, 500))}
+            placeholder="Example: I need braids in Ntinda on Saturday afternoon"
+            disabled={loading}
+            onFocus={() => window.setTimeout(() => scrollToLatest(), 120)}
+          />
+          <button type="submit" disabled={loading || !draft.trim()} data-testid="smart-match-assistant-submit">
+            {loading ? "Checking..." : "Ask"}
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 
@@ -284,6 +386,12 @@ function ChipIcon({ name }) {
   return null;
 }
 
+function MatchProviderImage({ src }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <FiMapPin className="smart-match-result-fallback-icon" aria-hidden="true" />;
+  return <img src={src} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />;
+}
+
 function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap }) {
   const score = Number(match.score || 0);
   const chips = getMatchChips(match, provider);
@@ -291,9 +399,9 @@ function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap
   const providerImage = buildAssetUrl(match.imageUrl || provider?.image || "");
   const hasRating = Number(match.rating) > 0;
   return (
-    <article className="smart-match-result-card">
+    <article className="smart-match-result-card" data-testid="smart-match-result-card">
       <div className="smart-match-result-media">
-        {providerImage ? <img src={providerImage} alt="" loading="lazy" decoding="async" /> : <FiMapPin />}
+        <MatchProviderImage src={providerImage} />
         <b>{score ? `${score}` : "Fit"}</b>
       </div>
       <div className="smart-match-result-body">
@@ -319,6 +427,7 @@ function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap
           <button
             type="button"
             className="smart-match-result-btn primary"
+            data-testid="smart-match-result-profile"
             onClick={() => (provider ? onOpenProvider?.(provider) : null)}
             disabled={!provider}
           >
@@ -327,13 +436,14 @@ function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap
           <button
             type="button"
             className="smart-match-result-btn"
+            data-testid="smart-match-result-ask"
             onClick={() => (provider ? onAsk?.(provider) : null)}
             disabled={!provider}
           >
             <FiMessageSquare /> Ask
           </button>
           {onViewOnMap ? (
-            <button type="button" className="smart-match-result-btn" onClick={() => onViewOnMap(provider || match)}>
+            <button type="button" className="smart-match-result-btn" data-testid="smart-match-result-map" onClick={() => onViewOnMap(provider || match)}>
               <FiMap /> Map
             </button>
           ) : null}
@@ -350,13 +460,10 @@ export default function SmartMatchPage({
   customerSubscription,
   premiumActive: premiumActiveProp,
   smartMatchAvailable = true,
-  customerSubscriptionLoading = false,
   customerSubscriptionMessage = "",
   pendingCustomerSubscriptionPayment,
   onBack,
   onOpenProvider,
-  onUpgradePremium,
-  onVerifyPremium,
   onContinueManualSearch,
   onAsk,
   onViewOnMap,
@@ -366,9 +473,25 @@ export default function SmartMatchPage({
   const [locationMessageEntry, setLocationMessageEntry] = useState({ key: "", value: "" });
   const [showHelp, setShowHelp] = useState(false);
   const [sortMode, setSortMode] = useState("best");
+  const [assistantMessages, setAssistantMessages] = useState([
+    {
+      id: "assistant-welcome",
+      role: "assistant",
+      kind: "welcome",
+      content: "Tell me what service you need, where, and when. I will only recommend real Queless providers.",
+    },
+  ]);
+  const [assistantDraft, setAssistantDraft] = useState("");
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState("");
+  const [budgetInput, setBudgetInput] = useState("");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const cacheRef = useRef(new Map());
   const premiumActive = typeof premiumActiveProp === "boolean" ? premiumActiveProp : isCustomerPremiumActive(customerSubscription);
-  const includedButUnavailable = premiumActive && !smartMatchAvailable;
+  const standardSmartMatchActive = Boolean(smartMatchAvailable);
+  const includedButUnavailable = !standardSmartMatchActive;
+  const showPremiumAssistant = premiumActive && standardSmartMatchActive && !includedButUnavailable;
+  const showStandardSmartMatch = standardSmartMatchActive && !includedButUnavailable && !showPremiumAssistant;
   const state = stateEntry.key === draftKey ? stateEntry.value : readStoredDraft(initial, locationLabel);
   const locationMessage = locationMessageEntry.key === draftKey ? locationMessageEntry.value : "";
   const setState = (updater) => {
@@ -383,7 +506,6 @@ export default function SmartMatchPage({
   const setLocationMessage = (value) => setLocationMessageEntry({ key: draftKey, value });
 
   useEffect(() => {
-    if (!premiumActive) return;
     const draft = {
       step: state.step === "matches" ? "need" : state.step,
       selectedService: state.selectedService,
@@ -393,13 +515,15 @@ export default function SmartMatchPage({
       userCoordinates: state.userCoordinates,
     };
     sessionStorage.setItem(SMART_MATCH_SESSION_KEY, JSON.stringify(draft));
-  }, [premiumActive, state]);
+  }, [state]);
 
   const localProviderById = useMemo(() => {
     return new Map((providers || []).map((provider) => [String(provider.id), provider]));
   }, [providers]);
 
-  const updateState = (patch) => setState((prev) => ({ ...prev, ...patch, error: patch.error ?? "" }));
+  const updateState = useCallback((patch) => {
+    setState((prev) => ({ ...prev, ...patch, error: patch.error ?? "" }));
+  }, [setState]);
   const stepIndex = SMART_MATCH_STEPS.findIndex((item) => item.key === state.step);
   const canContinue =
     state.step === "need" ? Boolean(state.selectedService) :
@@ -408,14 +532,28 @@ export default function SmartMatchPage({
       ? state.selectedLocationType === "use_current_location" || (state.selectedLocationType === "enter_address" && Boolean(state.selectedAddress.trim()))
       : true;
 
-  const goBack = () => {
+  const goBack = useCallback(() => {
     if (state.loading) return;
-    if (!premiumActive || stepIndex <= 0) {
+    if (showPremiumAssistant || !standardSmartMatchActive || stepIndex <= 0) {
       onBack?.();
       return;
     }
     updateState({ step: SMART_MATCH_STEPS[stepIndex - 1].key });
-  };
+  }, [onBack, showPremiumAssistant, standardSmartMatchActive, state.loading, stepIndex, updateState]);
+
+  useEffect(() => {
+    document.body.dataset.quelessSmartMatchOpen = "true";
+    const handleNativeBack = () => {
+      goBack();
+    };
+    window.addEventListener("queless:native-back", handleNativeBack);
+    return () => {
+      if (document.body?.dataset?.quelessSmartMatchOpen === "true") {
+        delete document.body.dataset.quelessSmartMatchOpen;
+      }
+      window.removeEventListener("queless:native-back", handleNativeBack);
+    };
+  }, [goBack]);
 
   const requestCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -495,6 +633,8 @@ export default function SmartMatchPage({
         locationType: state.selectedLocationType,
         coordinates: state.userCoordinates,
         address: state.selectedLocationType === "enter_address" ? state.selectedAddress : "",
+        budgetMax: budgetInput ? Number(String(budgetInput).replace(/[^\d]/g, "")) : null,
+        verifiedOnly,
       });
       const matches = Array.isArray(response?.matches) ? response.matches : [];
       const matchPayload = {
@@ -504,6 +644,8 @@ export default function SmartMatchPage({
         nearestLocation: response?.nearestLocation || "",
         nearestDistanceKm: response?.nearestDistanceKm ?? null,
         suggestions: Array.isArray(response?.suggestions) ? response.suggestions : [],
+        budgetMax: budgetInput ? Number(String(budgetInput).replace(/[^\d]/g, "")) : null,
+        verifiedOnly,
         loading: false,
       };
       cacheRef.current?.set?.(criteriaKey, matchPayload);
@@ -522,6 +664,53 @@ export default function SmartMatchPage({
     }
   };
 
+  const submitAssistantRequest = async (event) => {
+    event?.preventDefault?.();
+    const message = assistantDraft.trim();
+    if (!message || assistantLoading) return;
+    const userMessage = {
+      id: `assistant-user-${Date.now()}`,
+      role: "user",
+      kind: "message",
+      content: message,
+    };
+    const conversation = assistantMessages
+      .filter((item) => item.id !== "assistant-welcome")
+      .slice(-8)
+      .map((item) => ({
+        role: item.role,
+        content: item.content,
+        criteria: item.criteria,
+      }));
+    setAssistantMessages((current) => [...current, userMessage]);
+    setAssistantDraft("");
+    setAssistantLoading(true);
+    setAssistantError("");
+    try {
+      const result = await askSmartMatchAssistant({ message, conversation });
+      setAssistantMessages((current) => [
+        ...current,
+        {
+          id: `assistant-response-${Date.now()}`,
+          role: "assistant",
+          kind: result?.kind || "message",
+          content: result?.message || "I could not prepare a recommendation just now.",
+          criteria: result?.criteria || {},
+          results: Array.isArray(result?.results) ? result.results : [],
+        },
+      ]);
+    } catch (error) {
+      const status = Number(error?.status || error?.payload?.status || 0);
+      setAssistantError(
+        status === 403
+          ? "Smart Match Assistant is included with Premium Customer. You can still use regular Smart Match and book normally."
+          : "Smart Match Assistant is temporarily unavailable. Regular Smart Match still works."
+      );
+    } finally {
+      setAssistantLoading(false);
+    }
+  };
+
   const goNext = () => {
     if (!canContinue || state.loading) return;
     if (state.step === "where") {
@@ -531,29 +720,58 @@ export default function SmartMatchPage({
     updateState({ step: SMART_MATCH_STEPS[Math.min(stepIndex + 1, SMART_MATCH_STEPS.length - 1)].key });
   };
 
-  const matches = Array.isArray(state.matchResults) ? state.matchResults : [];
+  const matches = useMemo(
+    () => (Array.isArray(state.matchResults) ? state.matchResults : []),
+    [state.matchResults]
+  );
   const displayedMatches = useMemo(
     () => sortMatches(matches, sortMode, localProviderById),
     [matches, sortMode, localProviderById]
   );
+  const showPremiumPromotion = showStandardSmartMatch && !premiumActive && state.step === "matches";
+  const premiumPromotion = showPremiumPromotion ? (
+    <aside
+      className="smart-match-help smart-match-premium-assistant"
+      aria-label="Premium Smart Match Assistant"
+      data-testid="smart-match-premium-promotion"
+    >
+      <strong>Want help describing what you need?</strong>
+      <p>Premium Smart Match can guide you through your request in a conversation and refine your matches as you go.</p>
+      {pendingCustomerSubscriptionPayment?.reference ? (
+        <div className="smart-match-pending">
+          <strong>Payments Coming Soon</strong>
+          <span>Customer Premium payments are not active yet.</span>
+        </div>
+      ) : null}
+      <div className="smart-match-lock-list">
+        {["Natural-language requests", "Provider comparisons", "Real provider cards", "Images and map actions"].map((item) => (
+          <span key={item}><FiCheck /> {item}</span>
+        ))}
+      </div>
+      <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX {CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month - Coming Soon</div>
+      <div className="smart-match-subscription-message" role="status">{PAYMENTS_COMING_SOON_MESSAGE}</div>
+      {customerSubscriptionMessage ? <div className={customerSubscriptionMessageClass(customerSubscriptionMessage)} role="status">{customerSubscriptionMessage}</div> : null}
+    </aside>
+  ) : null;
 
   return (
     <div className="smart-match-page">
       <header className="smart-match-header">
-        <button type="button" onClick={goBack} aria-label="Back"><FiArrowLeft /></button>
+        <button type="button" onClick={goBack} aria-label="Back" data-testid="smart-match-back"><FiArrowLeft /></button>
         <img src={logo} alt="Queless" />
         <button
           type="button"
           aria-label={showHelp ? "Close Smart Match help" : "Smart Match help"}
           aria-expanded={showHelp}
           aria-controls="smart-match-help"
+          data-testid="smart-match-help-toggle"
           onClick={() => setShowHelp((visible) => !visible)}
         >
           {showHelp ? <FiX /> : <FiHelpCircle />}
         </button>
       </header>
 
-      {premiumActive && !includedButUnavailable ? <SmartMatchStepper currentStep={state.step} /> : null}
+      {showStandardSmartMatch ? <SmartMatchStepper currentStep={state.step} /> : null}
 
       <main className="smart-match-content">
         {showHelp ? (
@@ -571,29 +789,23 @@ export default function SmartMatchPage({
             <p>Smart Match is included in your plan, but it is temporarily unavailable.</p>
             <button type="button" className="smart-match-secondary-button" onClick={onContinueManualSearch || onBack}>Continue with Manual Search</button>
           </section>
-        ) : !premiumActive ? (
-          <section className="smart-match-lock-panel">
-            <div className="smart-match-lock-icon"><FiLock /></div>
-            <h1>Smart Match</h1>
-            <p>Smart Match is included with Customer Premium. Manual search and normal booking stay free.</p>
-            {pendingCustomerSubscriptionPayment?.reference ? (
-              <div className="smart-match-pending">
-                <strong>Payments Coming Soon</strong>
-                <span>Customer Premium payments are not active yet.</span>
-              </div>
-            ) : null}
-            <div className="smart-match-lock-list">
-              {["Guided matching", "Ranked providers", "Location fit", "Availability signals"].map((item) => (
-                <span key={item}><FiCheck /> {item}</span>
-              ))}
-            </div>
-            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX {CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month · Coming Soon</div>
-            <div className="smart-match-subscription-message" role="status">{PAYMENTS_COMING_SOON_MESSAGE}</div>
-            {customerSubscriptionMessage ? <div className={customerSubscriptionMessageClass(customerSubscriptionMessage)} role="status">{customerSubscriptionMessage}</div> : null}
-          </section>
         ) : null}
 
-        {premiumActive && !includedButUnavailable && state.error ? (
+        {showPremiumAssistant ? (
+          <SmartMatchAssistantPanel
+            messages={assistantMessages}
+            draft={assistantDraft}
+            loading={assistantLoading}
+            error={assistantError}
+            onDraftChange={setAssistantDraft}
+            onSubmit={submitAssistantRequest}
+            onOpenProvider={onOpenProvider}
+            onAsk={onAsk}
+            onViewOnMap={onViewOnMap}
+          />
+        ) : null}
+
+        {showStandardSmartMatch && state.error ? (
           <section className="smart-match-error smart-match-error-card" role="alert">
             <strong>We couldn't finish the match</strong>
             <span>{state.error}</span>
@@ -606,7 +818,14 @@ export default function SmartMatchPage({
           </section>
         ) : null}
 
-        {premiumActive && !includedButUnavailable && state.step === "need" ? (
+        {showStandardSmartMatch ? (
+          <div className="smart-match-plan-label" data-testid="smart-match-free-label">
+            <FiZap aria-hidden="true" />
+            <span>You're using Free Smart Match</span>
+          </div>
+        ) : null}
+
+        {showStandardSmartMatch && state.step === "need" ? (
           <section className="smart-match-step">
             <div className="smart-match-title">
               <h1>What do you need?</h1>
@@ -617,7 +836,7 @@ export default function SmartMatchPage({
                 const Icon = item.icon;
                 const active = state.selectedService?.key === item.key;
                 return (
-                  <button type="button" key={item.key} className={active ? "smart-match-tile is-selected" : "smart-match-tile"} style={{ "--cat-color": item.primaryColor, "--cat-bg": item.softBg }} onClick={() => updateState({ selectedService: item })}>
+                  <button type="button" key={item.key} className={active ? "smart-match-tile is-selected" : "smart-match-tile"} data-testid="smart-match-category-option" style={{ "--cat-color": item.primaryColor, "--cat-bg": item.softBg }} onClick={() => updateState({ selectedService: item })}>
                     <span className="smart-match-icon-box" style={{ background: item.softBg, color: item.primaryColor }}><Icon /></span>
                     <span className="smart-match-label">{item.label}</span>
                     {active ? <FiCheck className="smart-match-check" /> : null}
@@ -628,7 +847,7 @@ export default function SmartMatchPage({
           </section>
         ) : null}
 
-        {premiumActive && !includedButUnavailable && state.step === "when" ? (
+        {showStandardSmartMatch && state.step === "when" ? (
           <section className="smart-match-step">
             <div className="smart-match-title">
               <h1>How soon?</h1>
@@ -639,7 +858,7 @@ export default function SmartMatchPage({
                 const Icon = item.icon;
                 const active = state.selectedWhen === item.key;
                 return (
-                  <button type="button" key={item.key} className={active ? "smart-match-option is-selected" : "smart-match-option"} onClick={() => updateState({ selectedWhen: item.key })}>
+                  <button type="button" key={item.key} className={active ? "smart-match-option is-selected" : "smart-match-option"} data-testid="smart-match-when-option" onClick={() => updateState({ selectedWhen: item.key })}>
                     <span className="smart-match-icon-box"><Icon /></span>
                     <span><strong>{item.label}</strong><small>{item.helper}</small></span>
                     {active ? <FiCheck /> : null}
@@ -650,7 +869,7 @@ export default function SmartMatchPage({
           </section>
         ) : null}
 
-        {premiumActive && !includedButUnavailable && state.step === "where" ? (
+        {showStandardSmartMatch && state.step === "where" ? (
           <section className="smart-match-step">
             <SummaryCard state={state} />
             <div className="smart-match-title">
@@ -666,6 +885,7 @@ export default function SmartMatchPage({
                     type="button"
                     key={item.key}
                     className={active ? "smart-match-option is-selected" : "smart-match-option"}
+                    data-testid="smart-match-location-option"
                     onClick={() => item.key === "use_current_location" ? requestCurrentLocation() : updateState({ selectedLocationType: "enter_address" })}
                   >
                     <span className="smart-match-icon-box"><Icon /></span>
@@ -687,16 +907,57 @@ export default function SmartMatchPage({
               </label>
             ) : null}
             {state.selectedLocationType ? <LocationReasonCard locationType={state.selectedLocationType} /> : null}
+            <div className="smart-match-filter-panel" aria-label="Optional Smart Match filters">
+              <label className="smart-match-address-field">
+                <span>Budget (optional)</span>
+                <input
+                  value={budgetInput}
+                  inputMode="numeric"
+                  data-testid="smart-match-budget-input"
+                  onChange={(event) => setBudgetInput(event.target.value.replace(/[^\d,]/g, "").slice(0, 12))}
+                  placeholder="Example: 30000"
+                />
+              </label>
+              <label className="smart-match-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={verifiedOnly}
+                  data-testid="smart-match-verified-toggle"
+                  onChange={(event) => setVerifiedOnly(event.target.checked)}
+                />
+                <span>Only show verified providers</span>
+              </label>
+            </div>
           </section>
         ) : null}
 
-        {premiumActive && !includedButUnavailable && state.step === "matches" ? (
+        {showStandardSmartMatch && state.step === "matches" ? (
           <section className="smart-match-step">
             <div className="smart-match-title">
               <h1>Best matches for you</h1>
               <p>Ranked using your service, timing, and location choices.</p>
             </div>
             <div className="smart-match-summary-card compact">{smartMatchSummary(state)}</div>
+            {(state.budgetMax || state.verifiedOnly) ? (
+              <div className="smart-match-filter-row" aria-label="Active Smart Match filters">
+                {state.budgetMax ? (
+                  <button type="button" className="smart-match-filter-chip is-active" data-testid="smart-match-active-filter" onClick={() => {
+                    setBudgetInput("");
+                    updateState({ step: "where", budgetMax: null });
+                  }}>
+                    Budget up to UGX {Number(state.budgetMax).toLocaleString()} ×
+                  </button>
+                ) : null}
+                {state.verifiedOnly ? (
+                  <button type="button" className="smart-match-filter-chip is-active" data-testid="smart-match-active-filter" onClick={() => {
+                    setVerifiedOnly(false);
+                    updateState({ step: "where", verifiedOnly: false });
+                  }}>
+                    Verified only ×
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {matches.length ? (
               <div className="smart-match-why-card">
                 <strong>Why these matches?</strong>
@@ -710,6 +971,7 @@ export default function SmartMatchPage({
                     type="button"
                     key={option.key}
                     className={sortMode === option.key ? "smart-match-filter-chip is-active" : "smart-match-filter-chip"}
+                    data-testid="smart-match-sort-filter"
                     aria-pressed={sortMode === option.key}
                     onClick={() => setSortMode(option.key)}
                   >
@@ -744,24 +1006,21 @@ export default function SmartMatchPage({
             )}
           </section>
         ) : null}
+
+        {premiumPromotion}
       </main>
 
-      <footer className="smart-match-footer">
-        {includedButUnavailable ? null : !premiumActive ? (
-          <>
-            <button type="button" className="smart-match-primary-button" onClick={onUpgradePremium}>
-              Have a promo code? Apply promo code
+      {showStandardSmartMatch ? (
+        <footer className="smart-match-footer">
+          {state.step === "matches" ? (
+            <button type="button" className="smart-match-secondary-button" onClick={() => updateState({ step: "need" })}>Adjust choices</button>
+          ) : (
+            <button type="button" className="smart-match-primary-button" onClick={goNext} disabled={!canContinue || state.loading}>
+              {state.step === "where" ? state.loading ? "Finding matches..." : "Show best matches" : "Continue"}
             </button>
-            <button type="button" className="smart-match-secondary-button" onClick={onContinueManualSearch || onBack}>Continue with Manual Search</button>
-          </>
-        ) : state.step === "matches" ? (
-          <button type="button" className="smart-match-secondary-button" onClick={() => updateState({ step: "need" })}>Adjust choices</button>
-        ) : (
-          <button type="button" className="smart-match-primary-button" onClick={goNext} disabled={!canContinue || state.loading}>
-            {state.step === "where" ? state.loading ? "Finding matches..." : "Show best matches" : "Continue"}
-          </button>
-        )}
-      </footer>
+          )}
+        </footer>
+      ) : null}
     </div>
   );
 }
