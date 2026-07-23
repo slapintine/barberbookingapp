@@ -37,6 +37,7 @@ body[data-lineup-theme="light"] {
      vars above so there is one definition point. */
   --device-safe-top: var(--safe-top);
   --device-safe-bottom: var(--safe-bottom);
+  --mobile-page-safe-top: var(--device-safe-top);
   --bottom-nav-total-height: calc(var(--bottom-nav-height) + var(--bottom-nav-float-gap) + var(--device-safe-bottom));
   --bg-dark: linear-gradient(180deg, #18051f 0%, #2b124c 60%, #522b5b 100%);
   --bg-light: linear-gradient(180deg, #fff8f4 0%, #f7ede8 100%);
@@ -1868,11 +1869,12 @@ img {
   font-size: 0.92rem;
 }
 
-/* Mobile only: guarantee a minimum safe-area floor so Android browsers that
-   report env(safe-area-inset-bottom)=0 still clear the system nav bar. Desktop
-   keeps the raw inset (0) so no blank gap is added under the phone frame. */
+/* Mobile only: guarantee minimum safe-area floors so Android WebViews that
+   report env(safe-area-inset-*)=0 still clear the system bars. Desktop keeps
+   the raw inset (0) so no blank gap is added under the phone frame. */
 @media (max-width: 768px) {
   :root {
+    --mobile-page-safe-top: max(var(--device-safe-top), 32px);
     --device-safe-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
   }
 }

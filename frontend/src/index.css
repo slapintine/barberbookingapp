@@ -82,6 +82,186 @@ select {
   font: inherit;
 }
 
+:root {
+  --queless-focus-ring: rgba(133, 79, 108, 0.34);
+  --queless-focus-ring-soft: rgba(251, 228, 216, 0.42);
+  --queless-press-glow: 0 0 0 4px rgba(223, 182, 178, 0.16);
+}
+
+body[data-theme="dark"],
+.app-wrap-v4.dark {
+  --queless-focus-ring: rgba(251, 228, 216, 0.48);
+  --queless-focus-ring-soft: rgba(223, 182, 178, 0.28);
+  --queless-press-glow: 0 0 0 4px rgba(251, 228, 216, 0.12);
+}
+
+html,
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(
+  a[href],
+  button,
+  summary,
+  label,
+  select,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [tabindex]:not([tabindex="-1"]),
+  .top-barber-card-v4,
+  .barber-card-v4,
+  .simple-card-v4,
+  .notification-item-v4.as-card,
+  .smart-match-tile,
+  .smart-match-option,
+  .smart-match-filter-chip,
+  .smart-match-result-card,
+  .smart-match-result-btn,
+  .smart-match-quick-reply,
+  .provider-coach-chip,
+  .provider-coach-result-card,
+  .provider-coach-response-chips button,
+  .provider-coach-prompt-chip,
+  .account-menu-item-v6,
+  .customer-home-provider-card,
+  .pps-tab,
+  .pps-circle-btn
+) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(
+  button,
+  a[href],
+  summary,
+  select,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  .top-barber-card-v4,
+  .barber-card-v4,
+  .simple-card-v4,
+  .notification-item-v4.as-card,
+  .smart-match-tile,
+  .smart-match-option,
+  .smart-match-filter-chip,
+  .smart-match-result-card,
+  .smart-match-result-btn,
+  .smart-match-quick-reply,
+  .provider-coach-chip,
+  .provider-coach-result-card,
+  .provider-coach-response-chips button,
+  .provider-coach-prompt-chip,
+  .account-menu-item-v6,
+  .customer-home-provider-card,
+  .pps-tab,
+  .pps-circle-btn
+):not(:disabled):not([aria-disabled="true"]) {
+  touch-action: manipulation;
+  transition-property: transform, opacity, background-color, border-color, box-shadow, filter;
+  transition-duration: 140ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+:where(
+  button,
+  a[href],
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  .smart-match-tile,
+  .smart-match-option,
+  .smart-match-filter-chip,
+  .smart-match-result-card,
+  .smart-match-quick-reply,
+  .provider-coach-chip,
+  .provider-coach-prompt-chip,
+  .account-menu-item-v6,
+  .customer-home-provider-card,
+  .pps-tab,
+  .pps-circle-btn
+):not(:disabled):not([aria-disabled="true"]):active {
+  opacity: 0.94;
+  transform: scale(0.985);
+  box-shadow: var(--queless-press-glow);
+}
+
+.icon-btn:not(:disabled):active,
+.field-action-btn-v4:not(:disabled):active {
+  transform: translateY(-50%) scale(0.96);
+}
+
+:where(
+  input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  [contenteditable="true"],
+  [data-selectable="true"]
+) {
+  -webkit-tap-highlight-color: rgba(133, 79, 108, 0.12);
+  touch-action: auto;
+}
+
+:where(button, a[href], input, textarea, select, summary, [role="button"], [role="tab"], [role="menuitem"], [tabindex]:not([tabindex="-1"])):focus {
+  outline: none;
+}
+
+:where(button, a[href], input, textarea, select, summary, [role="button"], [role="tab"], [role="menuitem"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 3px solid var(--queless-focus-ring) !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--queless-focus-ring-soft) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    button,
+    a[href],
+    summary,
+    select,
+    input[type="button"],
+    input[type="submit"],
+    input[type="reset"],
+    input[type="checkbox"],
+    input[type="radio"],
+    [role="button"],
+    [role="tab"],
+    [role="menuitem"],
+    .top-barber-card-v4,
+    .barber-card-v4,
+    .simple-card-v4,
+    .notification-item-v4.as-card,
+    .smart-match-tile,
+    .smart-match-option,
+    .smart-match-filter-chip,
+    .smart-match-result-card,
+    .smart-match-result-btn,
+    .smart-match-quick-reply,
+    .provider-coach-chip,
+    .provider-coach-result-card,
+    .provider-coach-response-chips button,
+    .provider-coach-prompt-chip,
+    .account-menu-item-v6,
+    .customer-home-provider-card,
+    .pps-tab,
+    .pps-circle-btn
+  ):not(:disabled):not([aria-disabled="true"]):active {
+    opacity: 0.92;
+    transform: none !important;
+    box-shadow: var(--queless-press-glow);
+  }
+}
+
 img {
   display: block;
   max-width: 100%;
