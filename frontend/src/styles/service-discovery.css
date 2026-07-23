@@ -1836,13 +1836,6 @@ body[data-theme="dark"] .queless-category-empty-v18 > p {
   stroke-linejoin: round !important;
 }
 
-.service-map-marker__icon[data-marker-icon="multi"] {
-  width: 18px !important;
-  height: 18px !important;
-  fill: currentColor !important;
-  stroke: none !important;
-}
-
 .service-map-marker:hover {
   transform: translateY(-3px) scale(1.06) !important;
   filter: drop-shadow(0 14px 22px rgba(43, 18, 76, 0.28)) !important;
@@ -2073,11 +2066,6 @@ body[data-theme="dark"] .queless-category-empty-v18 > p {
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.queless-map-popup-icon svg[data-marker-icon="multi"] {
-  fill: currentColor;
-  stroke: none;
 }
 
 .queless-map-pin {

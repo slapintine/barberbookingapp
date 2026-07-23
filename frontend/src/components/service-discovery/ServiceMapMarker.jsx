@@ -1,26 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { getCategoryDef, CATEGORY_FALLBACK } from "../../utils/categoryRegistry.jsx";
-
-function MultiServiceIcon(props) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      data-marker-icon="multi"
-      focusable="false"
-      {...props}
-    >
-      <rect x="4.7" y="4.7" width="5.7" height="5.7" rx="1.75" />
-      <rect x="13.6" y="4.7" width="5.7" height="5.7" rx="1.75" />
-      <rect x="4.7" y="13.6" width="5.7" height="5.7" rx="1.75" />
-      <rect x="13.6" y="13.6" width="5.7" height="5.7" rx="1.75" />
-    </svg>
-  );
-}
+import { normalizeMapIconType } from "../../utils/mapIconCategories.js";
 
 export function getCategoryIconComponent(iconType = "default") {
-  if (iconType === "multi" || iconType === "multi-service") return MultiServiceIcon;
-  return getCategoryDef(iconType).Icon || CATEGORY_FALLBACK.Icon;
+  const resolvedType = normalizeMapIconType(iconType) || "default";
+  return getCategoryDef(resolvedType).Icon || CATEGORY_FALLBACK.Icon;
 }
 
 function CrownBadge() {
@@ -54,7 +38,8 @@ export function ServiceMapMarker({
   closed = false,
   own = false,
 }) {
-  const Icon = getCategoryIconComponent(iconType);
+  const resolvedIconType = normalizeMapIconType(iconType) || "default";
+  const Icon = getCategoryIconComponent(resolvedIconType);
   const tierKey = String(tier || "FREE").toLowerCase();
   const className = [
     "service-map-marker",
@@ -67,7 +52,7 @@ export function ServiceMapMarker({
     .join(" ");
 
   return (
-    <div className={className} data-icon-type={iconType} data-tier={tierKey} aria-hidden="true">
+    <div className={className} data-icon-type={resolvedIconType} data-tier={tierKey} aria-hidden="true">
       <span className="service-map-marker__shadow" />
       <span className="service-map-marker__tail" />
       <span className="service-map-marker__bubble">

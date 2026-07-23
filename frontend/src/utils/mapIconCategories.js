@@ -1,5 +1,3 @@
-export const MULTI_SERVICE_MAP_ICON_TYPE = "multi";
-
 export const MAP_ICON_OPTIONS = [
   {
     id: "default",
@@ -80,15 +78,11 @@ export const MAP_ICON_OPTIONS = [
   { id: "pet-services", label: "Pet Services", svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.2" cy="9" r="1.4"/><circle cx="10.2" cy="6.7" r="1.4"/><circle cx="13.8" cy="6.7" r="1.4"/><circle cx="16.8" cy="9" r="1.4"/><path d="M8.3 15.2c.5-2.2 2-3.4 3.7-3.4s3.2 1.2 3.7 3.4c.45 2-1.1 3.2-3.7 2.2-2.6 1-4.15-.2-3.7-2.2Z"/></svg>' },
   { id: "agriculture-services", label: "Agriculture Services", svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V7"/><path d="M12 12.4c-3.5 0-5.6-1.8-6.4-5.3 3.5 0 5.6 1.8 6.4 5.3Z"/><path d="M12 14.2c3.5 0 5.6-1.8 6.4-5.3-3.5 0-5.6 1.8-6.4 5.3Z"/></svg>' },
   { id: "security-services", label: "Security Services", svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 18 6.5v4.8c0 3.8-2.2 6.4-6 8.5-3.8-2.1-6-4.7-6-8.5V6.5l6-2.3Z"/><path d="m9.6 12.1 1.5 1.5 3.5-3.7"/></svg>' },
-  {
-    id: MULTI_SERVICE_MAP_ICON_TYPE,
-    label: "Multi-service",
-    svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.4" y="5.4" width="5.1" height="5.1" rx="1.25" fill="currentColor"/><rect x="13.5" y="5.4" width="5.1" height="5.1" rx="1.25" fill="currentColor"/><rect x="5.4" y="13.5" width="5.1" height="5.1" rx="1.25" fill="currentColor"/><rect x="13.5" y="13.5" width="5.1" height="5.1" rx="1.25" fill="currentColor"/></svg>',
-  },
 ];
 
 const MAP_ICON_BY_ID = new Map(MAP_ICON_OPTIONS.map((option) => [option.id, option]));
 const CATEGORY_TO_ICON = new Map(MAP_ICON_OPTIONS.map((option) => [normalizeCategoryKey(option.label), option.id]));
+const LEGACY_MULTI_SERVICE_ICON_TYPES = new Set(["multi", "multi-service", "multi-category", "multiple-services", "mixed-services", "all-services"]);
 
 export function normalizeCategoryKey(value = "") {
   return String(value || "")
@@ -104,7 +98,6 @@ export function getMapIconTypeForCategory(category = "") {
   if (!key) return "default";
   if (MAP_ICON_BY_ID.has(key)) return key;
   if (CATEGORY_TO_ICON.has(key)) return CATEGORY_TO_ICON.get(key);
-  if (key.includes("multi")) return MULTI_SERVICE_MAP_ICON_TYPE;
   if (key.includes("barber") || key.includes("haircut")) return "barber";
   if (key.includes("beauty") || key.includes("makeup") || key.includes("nail")) return "beauty";
   if (key.includes("salon")) return "salon";
@@ -145,6 +138,7 @@ export function getMapIconTypeForCategory(category = "") {
 export function normalizeMapIconType(value = "") {
   const key = normalizeCategoryKey(value);
   if (!key) return "";
+  if (LEGACY_MULTI_SERVICE_ICON_TYPES.has(key)) return "default";
   if (MAP_ICON_BY_ID.has(key)) return key;
   return getMapIconTypeForCategory(value);
 }
@@ -161,7 +155,6 @@ export function getMapIconSvg(type = "") {
 export function getMapIconTypeForSelectedCategories(categories = []) {
   const selected = Array.isArray(categories) ? categories.filter(Boolean) : [];
   if (!selected.length) return "";
-  if (selected.length > 1) return MULTI_SERVICE_MAP_ICON_TYPE;
   return getMapIconTypeForCategory(selected[0]);
 }
 
@@ -174,7 +167,7 @@ export function resolveProviderMapIconType(provider = {}, marker = {}) {
       provider?.business_icon_category ||
       ""
   );
-  if (savedType === MULTI_SERVICE_MAP_ICON_TYPE) return savedType;
+  if (savedType) return savedType;
 
   const services = Array.isArray(provider?.services) ? provider.services : [];
   const categories = new Set(
@@ -184,8 +177,6 @@ export function resolveProviderMapIconType(provider = {}, marker = {}) {
         return category ? [category] : [];
       })
   );
-  if (categories.size > 1) return MULTI_SERVICE_MAP_ICON_TYPE;
-  if (savedType) return savedType;
 
   const markerCategory = marker?.category || marker?.service?.category || marker?.service?.category_name || "";
   if (markerCategory) return getMapIconTypeForCategory(markerCategory);

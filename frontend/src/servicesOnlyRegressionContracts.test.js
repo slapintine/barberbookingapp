@@ -81,6 +81,19 @@ test("current frontend discovery clients use canonical service-discovery routes"
   assert.doesNotMatch(combined, /\/api\/marketplace/);
 });
 
+test("service discovery map does not expose a multi-service marker override", () => {
+  const iconUtils = source("./utils/mapIconCategories.js");
+  const marker = source("./components/service-discovery/ServiceMapMarker.jsx");
+  const markerCss = source("./components/service-discovery/ServiceMapMarker.css");
+  const discoveryCss = source("./styles/service-discovery.css");
+
+  assert.doesNotMatch(iconUtils, /Multi-service/);
+  assert.doesNotMatch(iconUtils, /categories\.size\s*>\s*1/);
+  assert.doesNotMatch(marker, /MultiServiceIcon|data-marker-icon="multi"|multi-service/);
+  assert.doesNotMatch(markerCss, /data-marker-icon="multi"/);
+  assert.doesNotMatch(discoveryCss, /data-marker-icon="multi"/);
+});
+
 test("structured booking details remain supported without exposing the old raw validation message", () => {
   const app = source("./App.jsx");
   const bookingModal = source("./features/bookings/BookingModal.jsx");

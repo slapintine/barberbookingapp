@@ -92,12 +92,6 @@
   fill: none;
 }
 
-.service-map-marker__icon[data-marker-icon="multi"],
-.service-map-marker__icon[data-marker-icon="multi"] rect {
-  fill: currentColor;
-  stroke: none;
-}
-
 .service-map-marker--selected {
   z-index: 999 !important;
   transform: translateY(-5px) scale(1.13);
