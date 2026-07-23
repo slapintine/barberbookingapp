@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { buildAssetUrl } from "../../config/api.js";
 import {
   FiArrowLeft,
@@ -6,7 +6,6 @@ import {
   FiCamera,
   FiCheckCircle,
   FiChevronRight,
-  FiChevronLeft,
   FiClock,
   FiCreditCard,
   FiEdit2,
@@ -27,7 +26,6 @@ import {
   FiTag,
   FiUsers,
   FiVideo,
-  FiX,
   FiZap,
   FiSliders,
   FiBookOpen,
@@ -36,6 +34,8 @@ import {
   FiInfo,
 } from "react-icons/fi";
 import VerificationBadge from "../../components/ui/VerificationBadge.jsx";
+import PortfolioLightbox from "../../components/ui/PortfolioLightbox.jsx";
+import ServiceDetailsModal from "../../components/ui/ServiceDetailsModal.jsx";
 import { resolveProviderImage } from "../../utils/providerImage.js";
 
 /* ── helpers ──────────────────────────────────────────── */
@@ -228,18 +228,25 @@ function StarRow({ rating, size = 14 }) {
   );
 }
 
-function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenChat, onOpenDetails, currentUserIsBarber }) {
+function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenDetails, currentUserIsBarber }) {
   const isQuote =
     String(service.pricing_type || service.pricingType || "").toLowerCase() ===
       "quote" || formatServicePrice(service) === "Request quote";
+  const unavailable =
+    service.is_available === false ||
+    service.isAvailable === false ||
+    Number(service.is_available) === 0 ||
+    Number(service.isAvailable) === 0;
   const SvcIcon = getServiceIcon(service, barber.business_type);
   const priceLabel = formatServicePrice(service);
   const duration = fmtDuration(service.duration_minutes);
-  const tags = getPopularityTags(service, 0, barber.rating, barber.reviewCount);
+  const tags = unavailable
+    ? ["Currently unavailable"]
+    : getPopularityTags(service, 0, barber.rating, barber.reviewCount);
   const imgSrc = buildAssetUrl(service.image || service.image_url || "");
 
   function handleAction() {
-    if (isOwner) return;
+    if (isOwner || unavailable) return;
     if (isQuote) {
       onRequestQuote?.(service);
     } else {
@@ -252,13 +259,14 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
       className="pps-svc-card pps-svc-card--clickable"
       role="button"
       tabIndex={0}
-      onClick={() => onOpenDetails?.(service)}
+      onClick={(event) => onOpenDetails?.(service, event)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onOpenDetails?.(service);
+          onOpenDetails?.(service, event);
         }
       }}
+      data-testid="service-card"
     >
       <div className="pps-svc-img-wrap">
         {imgSrc ? (
@@ -299,8 +307,8 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
           <FiClock size={11} /> {duration}
         </span>}
         {!isOwner && !currentUserIsBarber && (
-          <button type="button" className="pps-svc-action-btn" onClick={(event) => { event.stopPropagation(); handleAction(); }}>
-            {isQuote ? "Quote" : "Select"}
+          <button type="button" className="pps-svc-action-btn" onClick={(event) => { event.stopPropagation(); handleAction(); }} disabled={unavailable}>
+            {unavailable ? "Unavailable" : isQuote ? "Quote" : "Select"}
           </button>
         )}
       </div>
@@ -405,8 +413,8 @@ export default function BarberProfileSheet({
   const [bioExpanded, setBioExpanded] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
-  const closeServiceButtonRef = useRef(null);
-  const closeLightboxButtonRef = useRef(null);
+  const serviceDetailsReturnRef = useRef(null);
+  const lightboxReturnRef = useRef(null);
 
   /* ── safe data ── */
   const profileImage = buildAssetUrl(
@@ -513,24 +521,9 @@ export default function BarberProfileSheet({
       index,
       src: buildAssetUrl(getPortfolioImage(item)),
       title: item?.title || `Portfolio image ${index + 1}`,
+      alt: item?.alt || item?.altText || item?.caption || item?.title || `${safeBarber.business_name} portfolio image ${index + 1}`,
     }))
     .filter((item) => item.src);
-  const activeLightbox = lightboxIndex >= 0 ? portfolioLightboxItems[lightboxIndex] : null;
-  const selectedServiceIsQuote = selectedService
-    ? String(selectedService.pricing_type || selectedService.pricingType || "").toLowerCase() === "quote" ||
-      formatServicePrice(selectedService) === "Request quote"
-    : false;
-  const selectedServiceImages = selectedService
-    ? [selectedService.image, selectedService.image_url, selectedService.photo, selectedService.photo_url]
-        .map((value) => buildAssetUrl(value || ""))
-        .filter(Boolean)
-    : [];
-  const selectedServiceReviews = selectedService
-    ? safeBarber.reviews.filter((review) => {
-        const serviceName = String(selectedService.service_name || selectedService.name || "").toLowerCase();
-        return serviceName && String(review.service || review.serviceName || review.bookingService || "").toLowerCase() === serviceName;
-      })
-    : [];
 
   /* rating distribution (simulated from reviews array if per-star breakdown not available) */
   const ratingDist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
@@ -561,36 +554,17 @@ export default function BarberProfileSheet({
     .filter(Boolean)
     .join(", ") || "Cash";
 
-  useEffect(() => {
-    if (!selectedService && !activeLightbox) return undefined;
+  const openServiceDetails = (service, event) => {
+    serviceDetailsReturnRef.current = event?.currentTarget || null;
+    setSelectedService(service);
+  };
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setSelectedService(null);
-        setLightboxIndex(-1);
-      }
-      if (activeLightbox && portfolioLightboxItems.length > 1 && event.key === "ArrowLeft") {
-        setLightboxIndex((index) => (index <= 0 ? portfolioLightboxItems.length - 1 : index - 1));
-      }
-      if (activeLightbox && portfolioLightboxItems.length > 1 && event.key === "ArrowRight") {
-        setLightboxIndex((index) => (index + 1) % portfolioLightboxItems.length);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.setTimeout(() => {
-      if (activeLightbox) closeLightboxButtonRef.current?.focus();
-      else closeServiceButtonRef.current?.focus();
-    }, 0);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [activeLightbox, portfolioLightboxItems.length, selectedService]);
+  const openPortfolioLightbox = (portfolioIndex, event) => {
+    const galleryIndex = portfolioLightboxItems.findIndex((entry) => entry.index === portfolioIndex);
+    if (galleryIndex < 0) return;
+    lightboxReturnRef.current = event.currentTarget;
+    setLightboxIndex(galleryIndex);
+  };
 
   /* ── render ── */
   return (
@@ -1061,8 +1035,7 @@ export default function BarberProfileSheet({
                         isOwner={isOwnBarberProfile}
                         onBook={onBook}
                         onRequestQuote={onRequestQuote}
-                        onOpenChat={onOpenChat}
-                        onOpenDetails={setSelectedService}
+                        onOpenDetails={openServiceDetails}
                         currentUserIsBarber={currentUserIsBarber}
                       />
                     ))}
@@ -1113,7 +1086,8 @@ export default function BarberProfileSheet({
                           type="button"
                           key={item.id || i}
                           className="pps-portfolio-item pps-portfolio-item--button"
-                          onClick={() => setLightboxIndex(portfolioLightboxItems.findIndex((entry) => entry.index === i))}
+                          onClick={(event) => openPortfolioLightbox(i, event)}
+                          data-testid="portfolio-thumbnail"
                         >
                           {imgSrc ? (
                             <img
@@ -1383,66 +1357,27 @@ export default function BarberProfileSheet({
         </div>
       </div>
 
-      {selectedService ? (
-        <div className="pps-dialog-shell" role="presentation" onClick={() => setSelectedService(null)}>
-          <section className="pps-service-detail" role="dialog" aria-modal="true" aria-labelledby="pps-service-detail-title" onClick={(event) => event.stopPropagation()}>
-            <button ref={closeServiceButtonRef} type="button" className="pps-dialog-close" onClick={() => setSelectedService(null)} aria-label="Close service details">
-              <FiX />
-            </button>
-            {selectedServiceImages[0] ? <img className="pps-service-detail-image" src={selectedServiceImages[0]} alt="" /> : null}
-            <div className="pps-service-detail-body">
-              <span className="pps-service-detail-provider">{safeBarber.business_name}</span>
-              <h2 id="pps-service-detail-title">{selectedService.service_name || selectedService.name || "Service"}</h2>
-              {selectedService.description ? <p>{selectedService.description}</p> : null}
-              <div className="pps-service-detail-facts">
-                <span><strong>{formatServicePrice(selectedService)}</strong><small>Price</small></span>
-                {fmtDuration(selectedService.duration_minutes) ? <span><strong>{fmtDuration(selectedService.duration_minutes)}</strong><small>Duration</small></span> : null}
-                <span><strong>{safeBarber.rating ? safeBarber.rating.toFixed(1) : "New"}</strong><small>{safeBarber.reviewCount} reviews</small></span>
-                <span><strong>{isOpen ? "Open today" : "Next opening"}</strong><small>{safeBarber.availability.start} - {safeBarber.availability.end}</small></span>
-              </div>
-              {selectedServiceReviews.length ? (
-                <div className="pps-service-detail-reviews">
-                  <strong>Reviews for this service</strong>
-                  {selectedServiceReviews.slice(0, 3).map((review) => <ReviewCard key={review.id} review={review} canManage={false} blockUsage={blockUsage} />)}
-                </div>
-              ) : safeBarber.reviews.length ? (
-                <div className="pps-service-detail-reviews">
-                  <strong>Provider reviews</strong>
-                  {safeBarber.reviews.slice(0, 2).map((review) => <ReviewCard key={review.id} review={review} canManage={false} blockUsage={blockUsage} />)}
-                </div>
-              ) : (
-                <div className="pps-service-detail-empty">
-                  <strong>No reviews yet</strong>
-                  <span>Customer reviews will appear here after completed bookings.</span>
-                </div>
-              )}
-              {isOwnBarberProfile ? (
-                <button type="button" className="pps-btn-primary pps-service-book-btn" onClick={onEditStand}>
-                  <FiEdit2 /> Manage stand
-                </button>
-              ) : selectedServiceIsQuote ? (
-                <button type="button" className="pps-btn-primary pps-service-book-btn" onClick={() => { setSelectedService(null); onRequestQuote?.(selectedService); }}>
-                  <FiTag /> Request quote
-                </button>
-              ) : !currentUserIsBarber ? (
-                <button type="button" className="pps-btn-primary pps-service-book-btn" onClick={() => { setSelectedService(null); onBook?.(selectedService); }}>
-                  <FiCalendar /> Book appointment
-                </button>
-              ) : null}
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <ServiceDetailsModal
+        open={Boolean(selectedService)}
+        service={selectedService}
+        provider={safeBarber}
+        isOwner={isOwnBarberProfile}
+        currentUserIsBarber={currentUserIsBarber}
+        onClose={() => setSelectedService(null)}
+        onBook={onBook}
+        onRequestQuote={onRequestQuote}
+        onManageStand={onEditStand}
+        returnFocusRef={serviceDetailsReturnRef}
+      />
 
-      {activeLightbox ? (
-        <div className="pps-lightbox" role="dialog" aria-modal="true" aria-label="Portfolio image viewer" onClick={() => setLightboxIndex(-1)}>
-          <button ref={closeLightboxButtonRef} type="button" className="pps-lightbox-close" onClick={() => setLightboxIndex(-1)} aria-label="Close image viewer"><FiX /></button>
-          <button type="button" className="pps-lightbox-nav prev" onClick={(event) => { event.stopPropagation(); setLightboxIndex((index) => (index <= 0 ? portfolioLightboxItems.length - 1 : index - 1)); }} aria-label="Previous image"><FiChevronLeft /></button>
-          <img src={activeLightbox.src} alt={activeLightbox.title} decoding="async" onClick={(event) => event.stopPropagation()} />
-          <button type="button" className="pps-lightbox-nav next" onClick={(event) => { event.stopPropagation(); setLightboxIndex((index) => (index + 1) % portfolioLightboxItems.length); }} aria-label="Next image"><FiChevronRight /></button>
-          <div className="pps-lightbox-count">{lightboxIndex + 1} / {portfolioLightboxItems.length}</div>
-        </div>
-      ) : null}
+      <PortfolioLightbox
+        items={portfolioLightboxItems}
+        activeIndex={lightboxIndex}
+        onIndexChange={setLightboxIndex}
+        onClose={() => setLightboxIndex(-1)}
+        returnFocusRef={lightboxReturnRef}
+        label={`${safeBarber.business_name} portfolio image viewer`}
+      />
     </>
   );
 }

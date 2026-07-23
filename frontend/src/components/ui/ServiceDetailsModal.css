@@ -1,0 +1,339 @@
+.ql-service-details {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
+  display: grid;
+  place-items: center;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 16px)
+    max(16px, env(safe-area-inset-right, 0px))
+    calc(env(safe-area-inset-bottom, 0px) + 16px)
+    max(16px, env(safe-area-inset-left, 0px));
+  background:
+    radial-gradient(circle at 50% 0%, rgba(248, 180, 210, 0.16), transparent 34%),
+    rgba(21, 8, 30, 0.78);
+  backdrop-filter: blur(10px);
+  animation: ql-service-details-fade 140ms ease-out;
+}
+
+.ql-service-details__panel {
+  position: relative;
+  width: min(640px, 100%);
+  max-height: min(820px, 100%);
+  display: grid;
+  grid-template-rows: minmax(190px, 34vh) minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid rgba(122, 31, 146, 0.14);
+  border-radius: 24px;
+  background: linear-gradient(180deg, #fffaf3 0%, #fff4f7 100%);
+  box-shadow: 0 24px 80px rgba(35, 12, 47, 0.26);
+  color: #281237;
+  animation: ql-service-details-rise 160ms ease-out;
+}
+
+.ql-service-details__close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: calc(env(safe-area-inset-right, 0px) + 12px);
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(122, 31, 146, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 250, 243, 0.92);
+  color: #4b175e;
+  box-shadow: 0 10px 28px rgba(51, 17, 67, 0.14);
+}
+
+.ql-service-details__close svg,
+.ql-service-details__primary svg,
+.ql-service-details__secondary svg,
+.ql-service-details__eyebrow svg,
+.ql-service-details__provider svg {
+  flex: 0 0 auto;
+}
+
+.ql-service-details__media {
+  display: grid;
+  place-items: center;
+  min-height: 190px;
+  background:
+    linear-gradient(135deg, rgba(122, 31, 146, 0.1), rgba(245, 143, 167, 0.14)),
+    #fff7ef;
+}
+
+.ql-service-details__image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 16px;
+}
+
+.ql-service-details__fallback {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  color: #7d3a75;
+  font-weight: 800;
+}
+
+.ql-service-details__fallback svg {
+  width: 42px;
+  height: 42px;
+  color: #b75583;
+}
+
+.ql-service-details__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+  overscroll-behavior: contain;
+}
+
+.ql-service-details__eyebrow,
+.ql-service-details__provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: #7d3a75;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.ql-service-details__provider {
+  color: #6a4b71;
+  font-weight: 700;
+}
+
+.ql-service-details h2 {
+  margin: 0 52px 8px 0;
+  color: #281237;
+  font-size: clamp(1.35rem, 3vw, 1.85rem);
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.ql-service-details__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.ql-service-details__fact {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(122, 31, 146, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.ql-service-details__fact small {
+  display: block;
+  margin-bottom: 4px;
+  color: #805779;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ql-service-details__fact strong {
+  display: block;
+  color: #2c123d;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.ql-service-details__section {
+  margin-top: 16px;
+}
+
+.ql-service-details__section h3 {
+  margin: 0 0 8px;
+  color: #3a174b;
+  font-size: 0.95rem;
+}
+
+.ql-service-details__section p {
+  margin: 0;
+  color: #5c4365;
+  line-height: 1.58;
+  white-space: pre-line;
+  user-select: text;
+}
+
+.ql-service-details__unavailable,
+.ql-service-details__owner-note {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(245, 143, 167, 0.14);
+  color: #6b244e;
+  font-weight: 800;
+}
+
+.ql-service-details__actions {
+  padding: 14px 20px calc(env(safe-area-inset-bottom, 0px) + 18px);
+  border-top: 1px solid rgba(122, 31, 146, 0.12);
+  background: rgba(255, 250, 243, 0.92);
+}
+
+.ql-service-details__primary,
+.ql-service-details__secondary {
+  width: 100%;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 16px;
+  font-weight: 900;
+}
+
+.ql-service-details__primary {
+  background: linear-gradient(135deg, #7a1f92, #c04786);
+  color: #fffaf3;
+  box-shadow: 0 14px 30px rgba(122, 31, 146, 0.24);
+}
+
+.ql-service-details__secondary {
+  border: 1px solid rgba(122, 31, 146, 0.18);
+  background: #fffaf3;
+  color: #5f206f;
+}
+
+.ql-service-details__primary:disabled {
+  cursor: not-allowed;
+  background: #d7c4d5;
+  color: #6d5a72;
+  box-shadow: none;
+}
+
+.ql-service-details__close:focus-visible,
+.ql-service-details__primary:focus-visible,
+.ql-service-details__secondary:focus-visible {
+  outline: 3px solid rgba(245, 143, 167, 0.58);
+  outline-offset: 3px;
+}
+
+.dark .ql-service-details,
+body[data-theme="dark"] .ql-service-details {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(245, 143, 167, 0.18), transparent 34%),
+    rgba(13, 6, 22, 0.86);
+}
+
+.dark .ql-service-details__panel,
+body[data-theme="dark"] .ql-service-details__panel {
+  border-color: rgba(255, 221, 188, 0.12);
+  background: linear-gradient(180deg, #2b1436 0%, #1e1128 100%);
+  color: #fff4dd;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+}
+
+.dark .ql-service-details__close,
+body[data-theme="dark"] .ql-service-details__close {
+  border-color: rgba(255, 221, 188, 0.14);
+  background: rgba(43, 20, 54, 0.94);
+  color: #ffe0c5;
+}
+
+.dark .ql-service-details__media,
+body[data-theme="dark"] .ql-service-details__media {
+  background:
+    linear-gradient(135deg, rgba(255, 221, 188, 0.08), rgba(245, 143, 167, 0.12)),
+    #1a0d22;
+}
+
+.dark .ql-service-details__fallback,
+body[data-theme="dark"] .ql-service-details__fallback,
+.dark .ql-service-details__eyebrow,
+.dark .ql-service-details__provider,
+body[data-theme="dark"] .ql-service-details__eyebrow,
+body[data-theme="dark"] .ql-service-details__provider {
+  color: #ffd7ba;
+}
+
+.dark .ql-service-details h2,
+.dark .ql-service-details__fact strong,
+.dark .ql-service-details__section h3,
+body[data-theme="dark"] .ql-service-details h2,
+body[data-theme="dark"] .ql-service-details__fact strong,
+body[data-theme="dark"] .ql-service-details__section h3 {
+  color: #fff4dd;
+}
+
+.dark .ql-service-details__fact,
+body[data-theme="dark"] .ql-service-details__fact {
+  border-color: rgba(255, 221, 188, 0.12);
+  background: rgba(255, 244, 221, 0.06);
+}
+
+.dark .ql-service-details__fact small,
+.dark .ql-service-details__section p,
+body[data-theme="dark"] .ql-service-details__fact small,
+body[data-theme="dark"] .ql-service-details__section p {
+  color: #dec5dc;
+}
+
+.dark .ql-service-details__actions,
+body[data-theme="dark"] .ql-service-details__actions {
+  border-top-color: rgba(255, 221, 188, 0.12);
+  background: rgba(30, 17, 40, 0.94);
+}
+
+.dark .ql-service-details__secondary,
+body[data-theme="dark"] .ql-service-details__secondary {
+  border-color: rgba(255, 221, 188, 0.16);
+  background: #2b1436;
+  color: #ffe0c5;
+}
+
+@keyframes ql-service-details-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ql-service-details-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 560px) {
+  .ql-service-details {
+    align-items: stretch;
+    justify-items: stretch;
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 8px)
+      8px
+      calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+
+  .ql-service-details__panel {
+    width: 100%;
+    max-height: 100%;
+    border-radius: 20px;
+    grid-template-rows: minmax(170px, 31vh) minmax(0, 1fr) auto;
+  }
+
+  .ql-service-details__facts {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ql-service-details,
+  .ql-service-details__panel {
+    animation: none;
+  }
+}

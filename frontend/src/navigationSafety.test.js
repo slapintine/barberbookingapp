@@ -127,12 +127,86 @@ test("Android hardware back closes the schedule sheet before leaving the app", (
   assert.match(mainActivity, /return 'handled'/);
 });
 
+test("Android app locks MainActivity to upright portrait without staging network config", () => {
+  const manifest = fs.readFileSync(new URL("./../android/app/src/main/AndroidManifest.xml", import.meta.url), "utf8");
+  const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
+  const assetDir = new URL("./../android/app/src/main/assets/public/assets/", import.meta.url);
+  const bundledSources = fs
+    .readdirSync(assetDir)
+    .filter((name) => name.endsWith(".js"))
+    .map((name) => fs.readFileSync(new URL(name, assetDir), "utf8"))
+    .join("\n");
+
+  assert.match(manifest, /android:name="\.MainActivity"[\s\S]*android:screenOrientation="portrait"/);
+  assert.doesNotMatch(manifest, /screenOrientation="(?:sensor|fullSensor|landscape|reverseLandscape|userLandscape)"/);
+  assert.doesNotMatch(mainActivity, /setRequestedOrientation|SCREEN_ORIENTATION|OrientationEventListener/);
+  assert.doesNotMatch(manifest, /usesCleartextTraffic/);
+  assert.doesNotMatch(bundledSources, /127\.0\.0\.1:5055/);
+});
+
 test("Android hardware back closes the map overlay before leaving the app", () => {
   const app = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
   assert.match(app, /document\.body\.dataset\.quelessMapOpen = "true"/);
   assert.match(app, /window\.addEventListener\("queless:native-back", handleNativeBack\)/);
   assert.match(mainActivity, /dataset\.quelessMapOpen/);
+  assert.match(mainActivity, /queless:native-back/);
+});
+
+test("Android hardware back closes service details before leaving the stand", () => {
+  const serviceModal = fs.readFileSync(new URL("./components/ui/ServiceDetailsModal.jsx", import.meta.url), "utf8");
+  const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
+
+  assert.match(serviceModal, /document\.body\.dataset\.quelessServiceDetailsOpen = "true"/);
+  assert.match(serviceModal, /window\.addEventListener\("queless:native-back", closeModal\)/);
+  assert.match(mainActivity, /dataset\.quelessServiceDetailsOpen/);
+  assert.match(mainActivity, /queless:native-back/);
+});
+
+test("Android hardware back closes booking before leaving the stand", () => {
+  const bookingModal = fs.readFileSync(new URL("./features/bookings/BookingModal.jsx", import.meta.url), "utf8");
+  const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
+  const app = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+
+  assert.match(bookingModal, /document\.body\.dataset\.quelessBookingOpen = "true"/);
+  assert.match(bookingModal, /window\.addEventListener\("queless:native-back", handleNativeBack\)/);
+  assert.match(bookingModal, /if \(step > 0\) setStep/);
+  assert.match(bookingModal, /else onClose\?\.\(\)/);
+  assert.match(mainActivity, /dataset\.quelessBookingOpen/);
+  assert.match(mainActivity, /queless:native-back/);
+  assert.match(app, /setShowBarberProfile\(true\);[\s\S]*setShowBookingModal\(true\);/);
+});
+
+test("Android hardware back closes quote request before leaving the stand", () => {
+  const quoteModal = fs.readFileSync(new URL("./features/bookings/QuoteRequestModal.jsx", import.meta.url), "utf8");
+  const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
+
+  assert.match(quoteModal, /document\.body\.dataset\.quelessQuoteRequestOpen = "true"/);
+  assert.match(quoteModal, /window\.addEventListener\("queless:native-back", handleNativeBack\)/);
+  assert.match(quoteModal, /onClose\?\.\(\)/);
+  assert.match(mainActivity, /dataset\.quelessQuoteRequestOpen/);
+  assert.match(mainActivity, /queless:native-back/);
+});
+
+test("Android hardware back is routed to Smart Match before app exit", () => {
+  const smartMatch = fs.readFileSync(new URL("./features/smart-match/SmartMatchPage.jsx", import.meta.url), "utf8");
+  const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
+
+  assert.match(smartMatch, /document\.body\.dataset\.quelessSmartMatchOpen = "true"/);
+  assert.match(smartMatch, /window\.addEventListener\("queless:native-back", handleNativeBack\)/);
+  assert.match(smartMatch, /goBack\(\)/);
+  assert.match(mainActivity, /dataset\.quelessSmartMatchOpen/);
+  assert.match(mainActivity, /queless:native-back/);
+});
+
+test("Android hardware back is routed to Provider Assistant before app exit", () => {
+  const coach = fs.readFileSync(new URL("./features/barbers/ProviderCoachChatScreen.jsx", import.meta.url), "utf8");
+  const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
+
+  assert.match(coach, /document\.body\.dataset\.quelessProviderCoachOpen = "true"/);
+  assert.match(coach, /window\.addEventListener\("queless:native-back", handleNativeBack\)/);
+  assert.match(coach, /onBack\?\.\(\)/);
+  assert.match(mainActivity, /dataset\.quelessProviderCoachOpen/);
   assert.match(mainActivity, /queless:native-back/);
 });
 
@@ -178,7 +252,8 @@ test("anonymous provider and service details stay browseable but booking actions
 
   assert.doesNotMatch(openProviderProfile, /setScreen\("login"\)|LOGIN_PATH|setAuthMode\("login"\)/);
   assert.match(openProviderProfile, /setSelectedBarber\(provider\)/);
-  assert.match(profile, /pps-service-detail/);
+  assert.match(profile, /<ServiceDetailsModal/);
+  assert.match(profile, /data-testid="service-card"/);
   assert.match(profile, /setSelectedService/);
   assert.match(bookingAction, /if \(!currentUser\?\.username\)/);
   assert.match(bookingAction, /setAuthError\("Sign in to continue booking\."\)/);
@@ -195,6 +270,27 @@ test("auth screens avoid mobile horizontal overflow contracts", () => {
   assert.match(authCss, /@media \(max-width: 480px\)[\s\S]*\.lineup-auth-shell,[\s\S]*width: 100% !important;/);
 });
 
+test("auth redesign owns dark login styling and autofill after audit layers", () => {
+  const appCss = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  const authCss = fs.readFileSync(new URL("./styles/auth-redesign.css", import.meta.url), "utf8");
+  const darkAuditIndex = appCss.indexOf('@import "./styles/dark-mode-audit.css";');
+  const authRedesignIndex = appCss.indexOf('@import "./styles/auth-redesign.css";');
+
+  assert.ok(darkAuditIndex > -1, "dark audit import should exist");
+  assert.ok(authRedesignIndex > darkAuditIndex, "auth redesign should load after broad dark audit overrides");
+  assert.match(authCss, /body\[data-theme="dark"\] \.lineup-auth-page/);
+  assert.match(authCss, /#18051f/);
+  assert.match(authCss, /background:\s*rgba\(33, 11, 43, 0\.76\) !important;/);
+  assert.match(authCss, /body\[data-theme="dark"\] \.lineup-auth-field:focus-within/);
+  assert.match(authCss, /rgba\(223, 182, 178, 0\.18\)/);
+  assert.match(authCss, /body\[data-theme="dark"\] \.lineup-auth-field input:-webkit-autofill/);
+  assert.match(authCss, /-webkit-text-fill-color: var\(--auth-text\) !important;/);
+  assert.match(authCss, /\.lineup-auth-page:has\(\.lineup-auth-field input:focus\)/);
+  assert.match(authCss, /max-height: 58px !important;/);
+  assert.match(authCss, /min-height: 52px !important;/);
+  assert.doesNotMatch(authCss, /blue|#00f|#0000ff/i);
+});
+
 test("profile logout does not surface the click event as an auth error", () => {
   const app = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   const profile = fs.readFileSync(new URL("./pages/ProfilePage.jsx", import.meta.url), "utf8");
@@ -202,4 +298,91 @@ test("profile logout does not surface the click event as an auth error", () => {
   assert.match(app, /const authMessage = typeof message === "string" \? message : ""/);
   assert.doesNotMatch(profile, /onClick=\{logout\}/);
   assert.match(profile, /onClick=\{\(\) => logout\(\)\}/);
+});
+
+test("account authentication UI is email-only and phone OTP is not presented", () => {
+  const authScreen = fs.readFileSync(new URL("./features/auth/AuthScreen.jsx", import.meta.url), "utf8");
+  const authApi = fs.readFileSync(new URL("./api/authApi.js", import.meta.url), "utf8");
+  const profile = fs.readFileSync(new URL("./pages/ProfilePage.jsx", import.meta.url), "utf8");
+
+  assert.match(authScreen, /Email address/);
+  assert.doesNotMatch(authScreen, /Username or email|Choose a username/);
+  assert.doesNotMatch(authApi, /sendPhoneOtp|send-phone-otp/);
+  assert.doesNotMatch(profile, /sendPhoneOtp|Phone verification|Verify phone|SMS Coming Soon/);
+  assert.match(profile, /Phone numbers are optional contact or payment details/);
+});
+
+test("mobile interaction layer disables WebView tap highlight without hiding keyboard focus", () => {
+  const css = fs.readFileSync(new URL("./index.css", import.meta.url), "utf8");
+
+  assert.match(css, /-webkit-tap-highlight-color: transparent;/);
+  assert.match(css, /:focus-visible\s*\{[\s\S]*outline: 3px solid var\(--queless-focus-ring\) !important;/);
+  assert.match(css, /transform: scale\(0\.985\);/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /input:not\(\[type="button"\]\)/);
+  assert.doesNotMatch(css, /user-select:\s*none/);
+  assert.doesNotMatch(css, /pointer-events:\s*none/);
+});
+
+test("Smart Match and Business Assistant expose mobile jump-to-latest controls", () => {
+  const smartMatch = fs.readFileSync(new URL("./features/smart-match/SmartMatchPage.jsx", import.meta.url), "utf8");
+  const smartCss = fs.readFileSync(new URL("./features/smart-match/SmartMatchPage.css", import.meta.url), "utf8");
+  const coach = fs.readFileSync(new URL("./features/barbers/ProviderCoachChatScreen.jsx", import.meta.url), "utf8");
+  const coachCss = fs.readFileSync(new URL("./features/barbers/ProviderCoachChatScreen.css", import.meta.url), "utf8");
+
+  assert.match(smartMatch, /smart-match-jump-latest/);
+  assert.match(smartMatch, /distanceFromBottom < 96/);
+  assert.match(smartCss, /\.smart-match-assistant-messages\s*\{[\s\S]*overflow-y: auto;/);
+  assert.match(coach, /provider-coach-jump-latest/);
+  assert.match(coach, /distanceFromBottom < 96/);
+  assert.match(coachCss, /\.provider-coach-composer\s*\{[\s\S]*env\(safe-area-inset-bottom\)/);
+});
+
+test("Smart Match result images fall back instead of showing broken image glyphs", () => {
+  const smartMatch = fs.readFileSync(new URL("./features/smart-match/SmartMatchPage.jsx", import.meta.url), "utf8");
+  const smartCss = fs.readFileSync(new URL("./features/smart-match/SmartMatchPage.css", import.meta.url), "utf8");
+
+  assert.match(smartMatch, /function MatchProviderImage/);
+  assert.match(smartMatch, /onError=\{\(\) => setFailed\(true\)\}/);
+  assert.match(smartMatch, /smart-match-result-fallback-icon/);
+  assert.match(smartCss, /\.smart-match-result-fallback-icon\s*\{/);
+});
+
+test("Smart Match and Business Assistant headers use the shared mobile safe-top contract", () => {
+  const baseCss = fs.readFileSync(new URL("./styles/base.css", import.meta.url), "utf8");
+  const smartCss = fs.readFileSync(new URL("./features/smart-match/SmartMatchPage.css", import.meta.url), "utf8");
+  const coachCss = fs.readFileSync(new URL("./features/barbers/ProviderCoachChatScreen.css", import.meta.url), "utf8");
+
+  assert.match(baseCss, /--mobile-page-safe-top: var\(--device-safe-top\)/);
+  assert.match(baseCss, /--mobile-page-safe-top: max\(var\(--device-safe-top\), 32px\)/);
+  assert.match(smartCss, /\.smart-match-header\s*\{[\s\S]*var\(--mobile-page-safe-top/);
+  assert.match(smartCss, /\.smart-match-header\s*\{[\s\S]*z-index: 5;/);
+  assert.match(coachCss, /\.provider-coach-chat-header\s*\{[\s\S]*var\(--mobile-page-safe-top/);
+});
+
+test("mobile assistant surfaces expose stable non-secret test targets", () => {
+  const smartMatch = fs.readFileSync(new URL("./features/smart-match/SmartMatchPage.jsx", import.meta.url), "utf8");
+  const coach = fs.readFileSync(new URL("./features/barbers/ProviderCoachChatScreen.jsx", import.meta.url), "utf8");
+
+  [
+    "smart-match-back",
+    "smart-match-assistant-input",
+    "smart-match-assistant-submit",
+    "smart-match-jump-latest",
+    "smart-match-result-card",
+    "smart-match-result-map",
+    "smart-match-result-profile",
+    "smart-match-budget-input",
+    "smart-match-verified-toggle",
+  ].forEach((id) => assert.match(smartMatch, new RegExp(`data-testid="${id}"`)));
+
+  [
+    "provider-coach-back",
+    "provider-coach-composer",
+    "provider-coach-input",
+    "provider-coach-submit",
+    "provider-coach-jump-latest",
+    "provider-coach-quick-action",
+    "provider-coach-suggested-action",
+  ].forEach((id) => assert.match(coach, new RegExp(`data-testid="${id}"`)));
 });

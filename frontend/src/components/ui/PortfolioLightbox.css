@@ -1,0 +1,214 @@
+.ql-portfolio-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding:
+    max(62px, calc(18px + env(safe-area-inset-top, 0px)))
+    max(18px, env(safe-area-inset-right, 0px))
+    max(62px, calc(22px + env(safe-area-inset-bottom, 0px)))
+    max(18px, env(safe-area-inset-left, 0px));
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 161, 132, 0.18), transparent 34%),
+    rgba(11, 5, 16, 0.94);
+  color: #fffaf7;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  animation: qlLightboxFade 150ms ease-out;
+}
+
+.ql-portfolio-lightbox__figure {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(1040px, 100%);
+  height: min(760px, calc(100dvh - 148px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+  margin: 0;
+  min-width: 0;
+  min-height: 180px;
+}
+
+.ql-portfolio-lightbox__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+  box-shadow: 0 26px 72px rgba(0, 0, 0, 0.38);
+  animation: qlLightboxImageIn 150ms ease-out;
+}
+
+.ql-portfolio-lightbox__loading,
+.ql-portfolio-lightbox__fallback {
+  position: absolute;
+  inset: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: min(260px, 82vw);
+  min-height: 156px;
+  border: 1px solid rgba(255, 244, 237, 0.18);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(255, 244, 237, 0.08);
+  color: rgba(255, 250, 247, 0.86);
+  font-weight: 850;
+  text-align: center;
+}
+
+.ql-portfolio-lightbox__fallback {
+  position: relative;
+  flex-direction: column;
+}
+
+.ql-portfolio-lightbox__fallback svg {
+  width: 32px;
+  height: 32px;
+}
+
+.ql-portfolio-lightbox__caption {
+  position: fixed;
+  left: 50%;
+  bottom: max(62px, calc(48px + env(safe-area-inset-bottom, 0px)));
+  max-width: min(680px, calc(100vw - 36px));
+  transform: translateX(-50%);
+  color: rgba(255, 250, 247, 0.86);
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ql-portfolio-lightbox__control,
+.ql-portfolio-lightbox__count {
+  border: 1px solid rgba(255, 244, 237, 0.16);
+  color: #fffaf7;
+  background: linear-gradient(135deg, rgba(82, 43, 91, 0.9), rgba(188, 86, 111, 0.82));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(12px);
+}
+
+.ql-portfolio-lightbox__control {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 140ms ease, background-color 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ql-portfolio-lightbox__control:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.ql-portfolio-lightbox__control:focus-visible {
+  outline: 3px solid rgba(255, 202, 178, 0.72);
+  outline-offset: 3px;
+}
+
+.ql-portfolio-lightbox__control:disabled {
+  opacity: 0.38;
+  cursor: default;
+  transform: none;
+}
+
+.ql-portfolio-lightbox__control svg {
+  width: 22px;
+  height: 22px;
+}
+
+.ql-portfolio-lightbox__close {
+  position: fixed;
+  top: max(14px, calc(10px + env(safe-area-inset-top, 0px)));
+  right: max(14px, calc(10px + env(safe-area-inset-right, 0px)));
+}
+
+.ql-portfolio-lightbox__nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.ql-portfolio-lightbox__nav:active {
+  transform: translateY(-50%) scale(0.98);
+}
+
+.ql-portfolio-lightbox__nav--previous {
+  left: max(14px, calc(10px + env(safe-area-inset-left, 0px)));
+}
+
+.ql-portfolio-lightbox__nav--next {
+  right: max(14px, calc(10px + env(safe-area-inset-right, 0px)));
+}
+
+.ql-portfolio-lightbox__count {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, calc(12px + env(safe-area-inset-bottom, 0px)));
+  transform: translateX(-50%);
+  border-radius: 999px;
+  padding: 8px 13px;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+@media (max-width: 560px) {
+  .ql-portfolio-lightbox {
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+  }
+
+  .ql-portfolio-lightbox__figure {
+    width: 100%;
+    height: calc(100dvh - 154px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
+  .ql-portfolio-lightbox__nav {
+    width: 42px;
+    height: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ql-portfolio-lightbox,
+  .ql-portfolio-lightbox__image {
+    animation: none;
+  }
+
+  .ql-portfolio-lightbox__control {
+    transition: opacity 120ms ease, background-color 120ms ease;
+  }
+
+  .ql-portfolio-lightbox__control:active,
+  .ql-portfolio-lightbox__nav:active {
+    transform: none;
+  }
+
+  .ql-portfolio-lightbox__nav,
+  .ql-portfolio-lightbox__nav:active {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes qlLightboxFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes qlLightboxImageIn {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

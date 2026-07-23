@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import {
@@ -23,6 +23,7 @@ import {
 } from "../../utils/launchFlags.js";
 import { formatServicePrice, getAvailableServices, getServiceBookingAmount, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
 import { buildAssetUrl } from "../../config/api.js";
+import PortfolioLightbox from "../../components/ui/PortfolioLightbox.jsx";
 
 function formatMoney(value) {
   return `UGX ${Number(value || 0).toLocaleString()}`;
@@ -276,7 +277,8 @@ export default function BookingModal({
   };
   const [showAllTimes, setShowAllTimes] = useState(false);
   const [showAllWork, setShowAllWork] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState("");
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
+  const lightboxReturnRef = useRef(null);
   const [showServicePicker, setShowServicePicker] = useState(false);
   const [tutorDetails, setTutorDetails] = useState({
     subject: "",
@@ -285,6 +287,31 @@ export default function BookingModal({
     duration: "",
     notes: "",
   });
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.body?.dataset) return undefined;
+    const isOpen = Boolean(show && barber);
+    if (isOpen) {
+      document.body.dataset.quelessBookingOpen = "true";
+    } else {
+      delete document.body.dataset.quelessBookingOpen;
+    }
+
+    const handleNativeBack = () => {
+      if (!isOpen) return;
+      if (step > 0) setStep((current) => Math.max(0, current - 1));
+      else onClose?.();
+    };
+
+    window.addEventListener("queless:native-back", handleNativeBack);
+    return () => {
+      window.removeEventListener("queless:native-back", handleNativeBack);
+      if (document.body?.dataset?.quelessBookingOpen === "true") {
+        delete document.body.dataset.quelessBookingOpen;
+      }
+    };
+  }, [barber, onClose, show, step]);
+
   if (!show || !barber) return null;
 
   const services = getBarberServices(barber);
@@ -357,6 +384,11 @@ export default function BookingModal({
   const directionsUrl = buildDirectionsUrl(barber);
   const workImages = getPortfolioImages(barber);
   const visibleWork = showAllWork ? workImages : workImages.slice(0, 3);
+  const workLightboxItems = workImages.map((src, index) => ({
+    src,
+    alt: `${barber.business_name || "Provider"} recent work ${index + 1}`,
+    title: `Recent work ${index + 1}`,
+  }));
   const rating = Number(barber.rating || 0);
   const ratingLabel = rating > 0 ? rating.toFixed(1) : "New";
   const reviewCount = Number(barber.reviewCount || 0);
@@ -639,7 +671,16 @@ export default function BookingModal({
                       </div>
                       <div className="bk-work-grid">
                         {visibleWork.map((src, index) => (
-                          <button type="button" key={`${src}-${index}`} className="bk-work-thumb" onClick={() => setLightboxImage(src)}>
+                          <button
+                            type="button"
+                            key={`${src}-${index}`}
+                            className="bk-work-thumb"
+                            onClick={(event) => {
+                              lightboxReturnRef.current = event.currentTarget;
+                              setLightboxIndex(index);
+                            }}
+                            data-testid="booking-portfolio-thumbnail"
+                          >
                             <img src={src} alt="Recent work" loading="lazy" />
                           </button>
                         ))}
@@ -897,11 +938,14 @@ export default function BookingModal({
         </div>
       </div>
 
-      {lightboxImage ? (
-        <button type="button" className="bk-lightbox" onClick={() => setLightboxImage("")} aria-label="Close image">
-          <img src={lightboxImage} alt="Recent work" />
-        </button>
-      ) : null}
+      <PortfolioLightbox
+        items={workLightboxItems}
+        activeIndex={lightboxIndex}
+        onIndexChange={setLightboxIndex}
+        onClose={() => setLightboxIndex(-1)}
+        returnFocusRef={lightboxReturnRef}
+        label={`${barber.business_name || "Provider"} recent work image viewer`}
+      />
     </>
   );
 }

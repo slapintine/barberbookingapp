@@ -362,3 +362,10 @@ export function getAvailableServices(services = []) {
     .map(normalizeServiceForBooking)
     .filter((service) => service.is_available !== false && Number(service.is_available) !== 0);
 }
+
+export function getStableSelectedServiceId(services = [], selectedServiceId = "") {
+  const available = getAvailableServices(services);
+  if (!available.length) return "";
+  const current = available.find((service) => String(service.id) === String(selectedServiceId));
+  return current?.id ?? available[0].id;
+}

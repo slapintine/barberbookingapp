@@ -22,6 +22,23 @@ export default function QuoteRequestModal({ show, provider, initialServiceId = "
     setServiceId(requested ? String(requested.id) : String(services[0]?.id || ""));
   }, [initialServiceId, services, show]);
 
+  useEffect(() => {
+    if (!show || !provider) return undefined;
+    if (typeof document !== "undefined") {
+      document.body.dataset.quelessQuoteRequestOpen = "true";
+    }
+    const handleNativeBack = () => {
+      onClose?.();
+    };
+    window.addEventListener("queless:native-back", handleNativeBack);
+    return () => {
+      window.removeEventListener("queless:native-back", handleNativeBack);
+      if (typeof document !== "undefined") {
+        delete document.body.dataset.quelessQuoteRequestOpen;
+      }
+    };
+  }, [onClose, provider, show]);
+
   if (!show || !provider) return null;
 
   const selectedService = services.find((service) => String(service.id) === String(serviceId)) || services[0];

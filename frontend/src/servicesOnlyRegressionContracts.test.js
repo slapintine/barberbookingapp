@@ -114,33 +114,45 @@ test("logged-out booking return uses safe pending intents instead of external re
 test("quote request UI only submits quote-enabled services", () => {
   const quoteModal = source("./features/bookings/QuoteRequestModal.jsx");
   const profile = source("./features/barbers/BarberProfileSheet.jsx");
+  const serviceModal = source("./components/ui/ServiceDetailsModal.jsx");
   const app = source("./App.jsx");
 
   assert.match(quoteModal, /quoteServices = services\.filter/);
   assert.match(quoteModal, /initialServiceId/);
   assert.match(app, /setQuoteInitialServiceId\(service\?\.id \|\| ""\)/);
   assert.doesNotMatch(profile, /onRequestQuote\?\.\(service\) \|\| onOpenChat/);
-  assert.match(profile, /selectedServiceIsQuote/);
-  assert.match(profile, /<FiTag \/> Request quote/);
+  assert.match(serviceModal, /const quoteOnly = active \? isQuoteService\(service\) : false/);
+  assert.match(serviceModal, /<FiTag \/> Request Quote/);
+  assert.match(serviceModal, /onRequestQuote\?\.\(service\)/);
   assert.doesNotMatch(profile, /<FiCalendar \/> Book Service/);
 });
 
 test("portfolio viewer and service details are real accessible overlays", () => {
   const profile = source("./features/barbers/BarberProfileSheet.jsx");
-  const css = source("./styles/provider-profile.css");
+  const serviceModal = source("./components/ui/ServiceDetailsModal.jsx");
+  const serviceModalCss = source("./components/ui/ServiceDetailsModal.css");
+  const viewer = source("./components/ui/PortfolioLightbox.jsx");
+  const viewerCss = source("./components/ui/PortfolioLightbox.css");
 
-  assert.match(profile, /role="dialog" aria-modal="true" aria-label="Portfolio image viewer"/);
-  assert.match(profile, /aria-label="Close image viewer"/);
-  assert.match(profile, /aria-label="Previous image"/);
-  assert.match(profile, /aria-label="Next image"/);
-  assert.match(profile, /event\.key === "Escape"/);
-  assert.match(profile, /event\.key === "ArrowLeft"/);
-  assert.match(profile, /event\.key === "ArrowRight"/);
-  assert.match(profile, /document\.body\.style\.overflow = "hidden"/);
-  assert.match(profile, /role="dialog" aria-modal="true" aria-labelledby="pps-service-detail-title"/);
-  assert.match(css, /\.pps-lightbox\s*\{[\s\S]*env\(safe-area-inset-top/);
-  assert.match(css, /\.pps-lightbox img\s*\{[\s\S]*object-fit: contain;/);
-  assert.match(css, /\.pps-service-detail\s*\{[\s\S]*max-height: min\(86dvh, 760px\);/);
+  assert.match(profile, /<PortfolioLightbox/);
+  assert.match(profile, /<ServiceDetailsModal/);
+  assert.match(viewer, /role="dialog"/);
+  assert.match(viewer, /aria-modal="true"/);
+  assert.match(viewer, /aria-label="Close image viewer"/);
+  assert.match(viewer, /aria-label="Previous portfolio image"/);
+  assert.match(viewer, /aria-label="Next portfolio image"/);
+  assert.match(viewer, /event\.key === "Escape"/);
+  assert.match(viewer, /event\.key === "ArrowLeft"/);
+  assert.match(viewer, /event\.key === "ArrowRight"/);
+  assert.match(viewer, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(serviceModal, /role="dialog"/);
+  assert.match(serviceModal, /aria-modal="true"/);
+  assert.match(serviceModal, /aria-labelledby="ql-service-details-title"/);
+  assert.match(serviceModal, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(viewerCss, /\.ql-portfolio-lightbox\s*\{[\s\S]*env\(safe-area-inset-top/);
+  assert.match(viewerCss, /\.ql-portfolio-lightbox__image\s*\{[\s\S]*object-fit: contain;/);
+  assert.match(serviceModalCss, /\.ql-service-details\s*\{[\s\S]*env\(safe-area-inset-top/);
+  assert.match(serviceModalCss, /\.ql-service-details__image\s*\{[\s\S]*object-fit: contain;/);
 });
 
 test("unverified providers never receive completed verification claims", () => {
