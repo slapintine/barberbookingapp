@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import dotenv from "dotenv";
 
 const backendRoot = path.resolve(process.cwd());
 const packagePath = path.join(backendRoot, "package.json");
@@ -9,6 +10,20 @@ const lockPath = path.join(backendRoot, "package-lock.json");
 const requiredFiles = [packagePath, lockPath];
 const failures = [];
 const warnings = [];
+
+const explicitEnvPath = process.env.DOTENV_CONFIG_PATH || process.env.ENV_FILE || "";
+const productionEnvPath = path.join(backendRoot, ".env.production");
+const defaultEnvPath = path.join(backendRoot, ".env");
+const resolvedExplicitEnvPath = explicitEnvPath ? path.resolve(backendRoot, explicitEnvPath) : "";
+const envPath =
+  (resolvedExplicitEnvPath && fs.existsSync(resolvedExplicitEnvPath) ? resolvedExplicitEnvPath : "") ||
+  (process.env.NODE_ENV === "production" && fs.existsSync(productionEnvPath) && fs.statSync(productionEnvPath).size > 0
+    ? productionEnvPath
+    : defaultEnvPath);
+
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+}
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -106,9 +121,6 @@ function checkGlibc() {
 }
 
 function checkEnvPresence() {
-  const explicit = process.env.DOTENV_CONFIG_PATH || process.env.ENV_FILE || "";
-  const envPath = explicit ? path.resolve(backendRoot, explicit) : path.join(backendRoot, ".env.production");
-
   if (process.env.NODE_ENV === "production" && !fs.existsSync(envPath)) {
     addFailure(`Production env file is missing: ${envPath}`);
   } else if (fs.existsSync(envPath)) {
