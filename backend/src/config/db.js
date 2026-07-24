@@ -1,17 +1,18 @@
-import sqlite3 from "sqlite3";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
 
-sqlite3.verbose();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "../../");
 
-function createSqliteDb() {
+async function createSqliteDb() {
+  const sqlite3 = await import("sqlite3");
+  const sqlite = sqlite3.default || sqlite3;
+  sqlite.verbose();
+
   const resolvedDbPath = path.resolve(projectRoot, env.dbPath);
   const dbDir = path.dirname(resolvedDbPath);
 
@@ -19,7 +20,7 @@ function createSqliteDb() {
     fs.mkdirSync(dbDir, { recursive: true });
   }
 
-  const db = new sqlite3.Database(resolvedDbPath, (err) => {
+  const db = new sqlite.Database(resolvedDbPath, (err) => {
     if (err) {
       logger.fatal({ err, dbPath: resolvedDbPath }, "Failed to connect to SQLite database");
     } else {
@@ -166,7 +167,7 @@ async function createPostgresDb() {
   return db;
 }
 
-const db = env.dbClient === "postgres" ? await createPostgresDb() : createSqliteDb();
+const db = env.dbClient === "postgres" ? await createPostgresDb() : await createSqliteDb();
 
 export function isPostgres() {
   return db.client === "postgres";

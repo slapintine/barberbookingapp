@@ -26,8 +26,7 @@ Build commands before switching Nginx:
 
 ```bash
 cd /var/www/queless.org/current
-npm install
-npm --prefix backend install
+npm --prefix backend ci --omit=dev
 npm --prefix frontend install
 cp frontend/.env.production.example frontend/.env.production
 npm run verify:launch
@@ -318,8 +317,7 @@ Run these on your local machine before pushing or copying code to the VPS:
 
 ```bash
 cd barber-booking-app
-npm install
-npm --prefix backend install
+npm --prefix backend ci --omit=dev
 npm --prefix frontend install
 npm run backend:check
 npm run frontend:build
@@ -380,10 +378,14 @@ git pull
 
 ```bash
 cd /var/www/queless.org/current
-npm install
-npm --prefix backend install
+npm --prefix backend ci --omit=dev
 npm --prefix frontend install
 ```
+
+Production backend dependency installs are backend-only. See
+`deploy/BACKEND_PRODUCTION_INSTALL.md` for the preflight, audit, PM2 restart,
+health-check, and rollback sequence. Do not run a root repository `npm install`
+as part of backend deployment.
 
 #### 5. Create production env files
 
@@ -524,8 +526,8 @@ When you push a new version:
 cd /var/www/queless.org/current
 git status --short --branch
 git pull
-npm install
-npm --prefix backend install
+npm --prefix backend ci --omit=dev
+npm --prefix backend run preflight:production
 npm --prefix frontend install
 npm run backend:db:migrate
 npm run frontend:build

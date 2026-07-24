@@ -15,20 +15,5 @@
     "test": "npm run backend:test && npm run frontend:test",
     "check": "npm run backend:check && npm run frontend:build",
     "verify:launch": "node scripts/launchVerification.cjs"
-  },
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "cors": "^2.8.6",
-    "csv-parser": "^3.2.0",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "leaflet": "^1.9.4",
-    "multer": "^2.1.1",
-    "react-icons": "^5.6.0",
-    "react-leaflet": "^5.0.0",
-    "sqlite3": "^6.0.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
   }
 }
