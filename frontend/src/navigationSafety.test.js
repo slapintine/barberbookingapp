@@ -131,16 +131,20 @@ test("Android app locks MainActivity to upright portrait without staging network
   const manifest = fs.readFileSync(new URL("./../android/app/src/main/AndroidManifest.xml", import.meta.url), "utf8");
   const mainActivity = fs.readFileSync(new URL("./../android/app/src/main/java/org/queless/app/MainActivity.java", import.meta.url), "utf8");
   const assetDir = new URL("./../android/app/src/main/assets/public/assets/", import.meta.url);
-  const bundledSources = fs
-    .readdirSync(assetDir)
-    .filter((name) => name.endsWith(".js"))
-    .map((name) => fs.readFileSync(new URL(name, assetDir), "utf8"))
-    .join("\n");
+  const sourceConfig = fs.readFileSync(new URL("./config/api.js", import.meta.url), "utf8");
+  const bundledSources = fs.existsSync(assetDir)
+    ? fs
+      .readdirSync(assetDir)
+      .filter((name) => name.endsWith(".js"))
+      .map((name) => fs.readFileSync(new URL(name, assetDir), "utf8"))
+      .join("\n")
+    : "";
 
   assert.match(manifest, /android:name="\.MainActivity"[\s\S]*android:screenOrientation="portrait"/);
   assert.doesNotMatch(manifest, /screenOrientation="(?:sensor|fullSensor|landscape|reverseLandscape|userLandscape)"/);
   assert.doesNotMatch(mainActivity, /setRequestedOrientation|SCREEN_ORIENTATION|OrientationEventListener/);
   assert.doesNotMatch(manifest, /usesCleartextTraffic/);
+  assert.doesNotMatch(sourceConfig, /127\.0\.0\.1:5055/);
   assert.doesNotMatch(bundledSources, /127\.0\.0\.1:5055/);
 });
 
