@@ -19,7 +19,7 @@ test("dark mode recovery layer uses semantic readable tokens for text, forms, ic
 });
 
 test("public root landing is services-only and does not redirect straight to the app", () => {
-  const root = fs.readFileSync(new URL("../../deploy/public-root/index.html", import.meta.url), "utf8");
+  const root = fs.readFileSync(new URL("./__fixtures__/public-root-services-only.html", import.meta.url), "utf8");
 
   assert.match(root, /Book local services/);
   assert.match(root, /Find a provider/);

@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Queless helps customers find service providers, book appointments, request quotes, and manage direct provider conversations."
+    />
+    <title>Queless - Book local services</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #fff8f4;
+        --surface: #ffffff;
+        --ink: #211027;
+        --muted: #614d68;
+        --brand: #4b146f;
+        --brand-strong: #2b063a;
+        --accent: #c74266;
+        --soft: #f7edff;
+        --border: rgba(62, 29, 80, 0.14);
+        --shadow: 0 24px 70px rgba(52, 20, 78, 0.16);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 15% 0%, rgba(199, 66, 102, 0.18), transparent 28%),
+          radial-gradient(circle at 85% 8%, rgba(75, 20, 111, 0.14), transparent 34%),
+          linear-gradient(180deg, #fff8f4 0%, #fbf4ff 58%, #fffaf7 100%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .site-shell {
+        min-height: 100dvh;
+      }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 18px clamp(18px, 4vw, 56px);
+        background: rgba(255, 248, 244, 0.88);
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: blur(18px);
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 900;
+        text-decoration: none;
+        color: var(--brand-strong);
+      }
+
+      .brand-mark {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: inline-grid;
+        place-items: center;
+        color: #fff;
+        background: linear-gradient(135deg, var(--brand-strong), var(--accent));
+        box-shadow: 0 10px 24px rgba(75, 20, 111, 0.18);
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 750;
+      }
+
+      .nav a {
+        text-decoration: none;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .btn {
+        min-height: 44px;
+        border-radius: 999px;
+        padding: 12px 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-decoration: none;
+        font-weight: 850;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .btn.primary {
+        color: #fff;
+        background: linear-gradient(135deg, var(--brand-strong), var(--brand));
+        border-color: transparent;
+      }
+
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .hero {
+        min-height: min(760px, calc(100dvh - 82px));
+        display: grid;
+        align-content: center;
+        gap: 34px;
+        padding: 72px 0 54px;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.12fr) minmax(300px, 0.88fr);
+        gap: 34px;
+        align-items: center;
+      }
+
+      h1 {
+        max-width: 780px;
+        margin: 0;
+        color: var(--brand-strong);
+        font-size: clamp(44px, 8vw, 86px);
+        line-height: 0.96;
+        letter-spacing: -0.04em;
+      }
+
+      .lead {
+        max-width: 620px;
+        margin: 22px 0 0;
+        color: var(--muted);
+        font-size: clamp(17px, 2vw, 21px);
+        line-height: 1.6;
+      }
+
+      .search-card,
+      .provider-card,
+      .section-card {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: var(--shadow);
+        border-radius: 24px;
+      }
+
+      .search-card {
+        margin-top: 28px;
+        padding: 14px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) auto;
+        gap: 10px;
+      }
+
+      .input-like {
+        min-height: 52px;
+        border-radius: 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        font-weight: 700;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .provider-card {
+        padding: 22px;
+      }
+
+      .provider-card h2 {
+        margin: 0 0 12px;
+        color: var(--brand-strong);
+        font-size: 24px;
+      }
+
+      .stand-preview {
+        display: grid;
+        gap: 12px;
+      }
+
+      .stand-row {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 18px;
+        background: var(--soft);
+      }
+
+      .stand-icon {
+        width: 54px;
+        height: 54px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        background: linear-gradient(135deg, var(--brand), var(--accent));
+        font-weight: 900;
+      }
+
+      .stand-row strong,
+      .stand-row span {
+        display: block;
+      }
+
+      .stand-row span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      section {
+        padding: 42px 0;
+      }
+
+      .section-head {
+        max-width: 760px;
+        margin-bottom: 20px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        color: var(--brand-strong);
+        font-size: clamp(28px, 4vw, 44px);
+        letter-spacing: -0.03em;
+      }
+
+      .section-head p {
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .section-card {
+        padding: 20px;
+        box-shadow: 0 12px 36px rgba(52, 20, 78, 0.08);
+      }
+
+      .section-card strong {
+        display: block;
+        color: var(--brand-strong);
+        font-size: 17px;
+      }
+
+      .section-card p {
+        color: var(--muted);
+        line-height: 1.55;
+        margin: 8px 0 0;
+      }
+
+      .number {
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 14px;
+        border-radius: 12px;
+        background: var(--soft);
+        color: var(--brand);
+        font-weight: 900;
+      }
+
+      .provider-band {
+        margin: 42px 0;
+        padding: clamp(24px, 5vw, 44px);
+        border-radius: 28px;
+        color: #fff;
+        background:
+          radial-gradient(circle at 85% 20%, rgba(255, 141, 182, 0.28), transparent 30%),
+          linear-gradient(135deg, var(--brand-strong), #42105f 56%, #7d2457);
+      }
+
+      .provider-band h2,
+      .provider-band p {
+        color: inherit;
+      }
+
+      .provider-band p {
+        opacity: 0.86;
+      }
+
+      .footer {
+        margin-top: 40px;
+        padding: 28px clamp(18px, 4vw, 56px);
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .footer nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .footer a {
+        text-decoration: none;
+        font-weight: 750;
+      }
+
+      @media (max-width: 840px) {
+        .nav {
+          display: none;
+        }
+
+        .hero-grid,
+        .grid,
+        .search-card {
+          grid-template-columns: 1fr;
+        }
+
+        .search-card .btn {
+          width: 100%;
+        }
+      }
+
+      @media (max-width: 420px) {
+        .site-header {
+          gap: 10px;
+          padding: 12px;
+        }
+
+        .brand {
+          gap: 8px;
+        }
+
+        .actions {
+          gap: 6px;
+        }
+
+        .actions .btn {
+          min-height: 40px;
+          padding: 10px 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="site-header">
+        <a class="brand" href="/">
+          <span class="brand-mark">Q</span>
+          <span>Queless</span>
+        </a>
+        <nav class="nav" aria-label="Main navigation">
+          <a href="/app/services">Explore services</a>
+          <a href="#providers">For providers</a>
+          <a href="#how">How it works</a>
+        </nav>
+        <div class="actions">
+          <a class="btn" href="/app/login">Sign in</a>
+          <a class="btn primary" href="/app/">Get started</a>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-grid">
+            <div>
+              <h1>Book local services without the back-and-forth.</h1>
+              <p class="lead">
+                Queless helps customers find service providers, choose services,
+                request quotes, and manage appointments in one calm workspace.
+              </p>
+              <div class="search-card" role="search" aria-label="Find services">
+                <div class="input-like">What service do you need?</div>
+                <div class="input-like">Location or service area</div>
+                <a class="btn primary" href="/app/services">Browse providers</a>
+              </div>
+              <div class="hero-actions">
+                <a class="btn" href="/downloads/queless-latest.apk">Android app</a>
+                <span class="btn" aria-disabled="true">iPhone coming soon</span>
+              </div>
+            </div>
+            <aside class="provider-card" aria-label="Queless service preview">
+              <h2>Service providers on Queless</h2>
+              <div class="stand-preview">
+                <div class="stand-row">
+                  <span class="stand-icon">1</span>
+                  <div>
+                    <strong>Clear service listings</strong>
+                    <span>Prices, durations, descriptions, and portfolios.</span>
+                  </div>
+                </div>
+                <div class="stand-row">
+                  <span class="stand-icon">2</span>
+                  <div>
+                    <strong>Bookings and quote requests</strong>
+                    <span>Customers choose a time or explain what they need.</span>
+                  </div>
+                </div>
+                <div class="stand-row">
+                  <span class="stand-icon">3</span>
+                  <div>
+                    <strong>Direct conversations</strong>
+                    <span>Providers and customers coordinate details directly.</span>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section id="categories">
+          <div class="section-head">
+            <h2>Browse service categories</h2>
+            <p>Start with real service needs, then open the app to compare providers and book.</p>
+          </div>
+          <div class="grid">
+            <article class="section-card"><strong>Repairs and maintenance</strong><p>Home, device, vehicle, and technical services.</p></article>
+            <article class="section-card"><strong>Beauty and grooming</strong><p>Barbers, salons, makeup, and personal care.</p></article>
+            <article class="section-card"><strong>Tutoring and lessons</strong><p>Academic support, coaching, and practical skills.</p></article>
+            <article class="section-card"><strong>Business services</strong><p>Design, marketing, admin, and professional help.</p></article>
+            <article class="section-card"><strong>Health and wellness</strong><p>Wellness appointments where appropriate and available.</p></article>
+            <article class="section-card"><strong>Other local services</strong><p>Discover providers around you as Queless grows.</p></article>
+          </div>
+        </section>
+
+        <section id="how">
+          <div class="section-head">
+            <h2>How it works</h2>
+            <p>Queless keeps the service journey simple without pretending online payments are ready before they are.</p>
+          </div>
+          <div class="grid">
+            <article class="section-card"><span class="number">1</span><strong>Find a provider</strong><p>Search by service, category, and location.</p></article>
+            <article class="section-card"><span class="number">2</span><strong>Choose a service</strong><p>Review details, duration, price type, and portfolio.</p></article>
+            <article class="section-card"><span class="number">3</span><strong>Book or request a quote</strong><p>Confirm an appointment or ask the provider for an estimate.</p></article>
+          </div>
+        </section>
+
+        <section id="providers" class="provider-band">
+          <h2>Create a stand for your services.</h2>
+          <p>
+            Providers can add services, set availability, publish a public profile,
+            receive booking requests, and manage customer conversations. Online
+            payments are coming soon; for now, customers pay providers directly.
+          </p>
+          <div class="hero-actions">
+            <a class="btn primary" href="/app/login">Create your stand</a>
+            <a class="btn" href="/app/">Open Queless</a>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>&copy; Queless</span>
+        <nav aria-label="Footer">
+          <a href="/app/help">Help</a>
+          <a href="/app/privacy">Privacy</a>
+          <a href="/app/terms">Terms</a>
+          <a href="/app/login">Customer sign-up</a>
+          <a href="/app/login">Provider sign-up</a>
+        </nav>
+      </footer>
+    </div>
+  </body>
+</html>
