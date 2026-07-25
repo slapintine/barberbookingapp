@@ -94,6 +94,35 @@ test("service discovery map does not expose a multi-service marker override", ()
   assert.doesNotMatch(discoveryCss, /data-marker-icon="multi"/);
 });
 
+test("service discovery marker contract uses a pointed pin anchored at the tip", () => {
+  const marker = source("./components/service-discovery/ServiceMapMarker.jsx");
+  const markerCss = source("./components/service-discovery/ServiceMapMarker.css");
+  const mapCore = source("./components/service-discovery/mapCore.jsx");
+
+  assert.match(marker, /SERVICE_MAP_MARKER_CONTRACT/);
+  assert.match(marker, /width:\s*46/);
+  assert.match(marker, /height:\s*58/);
+  assert.match(marker, /iconAnchor:\s*\[23,\s*58\]/);
+  assert.match(marker, /popupAnchor:\s*\[0,\s*-54\]/);
+  assert.match(marker, /<span className="service-map-marker__tail" \/>/);
+  assert.match(markerCss, /\.service-map-marker__bubble\s*\{[\s\S]*border-radius:\s*999px;/);
+  assert.match(markerCss, /\.service-map-marker__tail\s*\{[\s\S]*rotate\(45deg\)/);
+  assert.match(markerCss, /\.service-map-marker__icon\s*\{[\s\S]*18\.5px/);
+  assert.match(mapCore, /iconAnchor:\s*SERVICE_MAP_MARKER_CONTRACT\.iconAnchor/);
+  assert.match(mapCore, /popupAnchor:\s*SERVICE_MAP_MARKER_CONTRACT\.popupAnchor/);
+});
+
+test("desktop app shell does not force non-auth routes into a phone-width frame", () => {
+  const css = source("./App.css");
+
+  assert.match(css, /@media \(min-width: 768px\)[\s\S]*\.app-wrap-v4:not\(\.app-auth-v4\)/);
+  assert.match(css, /\.phone-frame-v4:not\(\.phone-frame-auth-v4\)\s*\{[\s\S]*width:\s*100vw !important;/);
+  assert.match(css, /\.phone-frame-v4:not\(\.phone-frame-auth-v4\)\s*\{[\s\S]*max-width:\s*none !important;/);
+  assert.match(css, /\.phone-frame-v4:not\(\.phone-frame-auth-v4\)\s*\{[\s\S]*height:\s*100dvh !important;/);
+  assert.match(css, /\.screen-v4:not\(\.screen-auth-v4\)\s*\{[\s\S]*width:\s*100% !important;/);
+  assert.match(css, /@media \(max-width: 360px\)/);
+});
+
 test("structured booking details remain supported without exposing the old raw validation message", () => {
   const app = source("./App.jsx");
   const bookingModal = source("./features/bookings/BookingModal.jsx");

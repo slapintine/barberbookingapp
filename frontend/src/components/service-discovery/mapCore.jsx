@@ -15,7 +15,7 @@ import {
   isProviderVerified,
   isPublicServiceProvider,
 } from "../../utils/providerDiscovery.js";
-import { renderServiceClusterHtml, renderServiceMarkerHtml } from "./ServiceMapMarker.jsx";
+import { SERVICE_MAP_MARKER_CONTRACT, renderServiceClusterHtml, renderServiceMarkerHtml } from "./ServiceMapMarker.jsx";
 
 export const KAMPALA_CENTER = [0.3476, 32.5825];
 export const GAYAZA_CENTER = [0.4516, 32.6089];
@@ -35,8 +35,9 @@ export function getServicePinIcon(iconType, selected = false, status = {}) {
       new L.DivIcon({
         className: "queless-map-pin-wrap",
         html: renderServiceMarkerHtml(iconType || "default", selected, status),
-        iconSize: [46, 58],
-        iconAnchor: [23, 58],
+        iconSize: [SERVICE_MAP_MARKER_CONTRACT.width, SERVICE_MAP_MARKER_CONTRACT.height],
+        iconAnchor: SERVICE_MAP_MARKER_CONTRACT.iconAnchor,
+        popupAnchor: SERVICE_MAP_MARKER_CONTRACT.popupAnchor,
       })
     );
   }

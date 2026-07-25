@@ -284,6 +284,47 @@
   }
 }
 
+/* Desktop web app layout contract.
+   Older mobile-polish layers deliberately render the native-style customer app
+   inside a 390-430px phone shell. That shell is correct for Android and small
+   mobile browsers, but it must not constrain laptop/desktop web routes such as
+   /app/map. Keep auth on its own redesign and let non-auth app screens use the
+   available viewport from tablet width upward. */
+@media (min-width: 768px) {
+  .app-wrap-v4:not(.app-auth-v4) {
+    width: 100vw !important;
+    min-height: 100dvh !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .phone-frame-v4:not(.phone-frame-auth-v4) {
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+
+  .screen-v4:not(.screen-auth-v4) {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100dvh !important;
+  }
+
+  .phone-frame-v4:not(.phone-frame-auth-v4) .qmd {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+  }
+}
+
 @media (max-width: 360px) {
   .booking-list-v4 > .simple-card-v4 .booking-badge-v4,
   .booking-list-v4 > .simple-card-v4 .mini-action-btn-v4 {

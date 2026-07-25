@@ -2,6 +2,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { getCategoryDef, CATEGORY_FALLBACK } from "../../utils/categoryRegistry.jsx";
 import { normalizeMapIconType } from "../../utils/mapIconCategories.js";
 
+export const SERVICE_MAP_MARKER_CONTRACT = Object.freeze({
+  width: 46,
+  height: 58,
+  iconAnchor: [23, 58],
+  popupAnchor: [0, -54],
+  bubbleSize: 42,
+  tailSize: 18,
+  iconSize: 18.5,
+});
+
 export function getCategoryIconComponent(iconType = "default") {
   const resolvedType = normalizeMapIconType(iconType) || "default";
   return getCategoryDef(resolvedType).Icon || CATEGORY_FALLBACK.Icon;
