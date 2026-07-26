@@ -563,8 +563,8 @@ body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page {
   }
 
   .phone-frame-v4.phone-frame-auth-v4 {
-    width: min(100%, 430px) !important;
-    max-width: 430px !important;
+    width: 100% !important;
+    max-width: 760px !important;
     min-height: auto !important;
     border-radius: 38px !important;
     overflow: hidden !important;
@@ -599,17 +599,90 @@ body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page {
 
   .lineup-auth-page,
   .screen-v4.screen-auth-v4 .lineup-auth-page {
-    width: 100vw !important;
-    max-width: 100vw !important;
+    width: 100% !important;
+    max-width: 100% !important;
     padding-left: 20px !important;
     padding-right: 20px !important;
     padding-bottom: calc(34px + env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
   }
 
   .lineup-auth-shell,
   .screen-v4.screen-auth-v4 .lineup-auth-shell {
-    width: calc(100vw - 40px) !important;
-    max-width: calc(100vw - 40px) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .lineup-auth-card,
+  .screen-v4.screen-auth-v4 .lineup-auth-card,
+  .lineup-auth-form,
+  .screen-v4.screen-auth-v4 .lineup-auth-form,
+  .lineup-auth-field,
+  .screen-v4.screen-auth-v4 .lineup-auth-field {
+    min-width: 0 !important;
+  }
+
+  .lineup-auth-row,
+  .screen-v4.screen-auth-v4 .lineup-auth-row {
+    flex-wrap: wrap !important;
+  }
+
+  .lineup-auth-check,
+  .lineup-auth-link,
+  .screen-v4.screen-auth-v4 .lineup-auth-check,
+  .screen-v4.screen-auth-v4 .lineup-auth-link {
+    white-space: normal !important;
+  }
+}
+
+@media (min-width: 900px) {
+  .app-wrap-v4.app-auth-v4 {
+    padding: 32px !important;
+  }
+
+  .phone-frame-v4.phone-frame-auth-v4 {
+    width: min(100%, 1040px) !important;
+    max-width: 1040px !important;
+    border-radius: 36px !important;
+  }
+
+  .lineup-auth-page,
+  .screen-v4.screen-auth-v4 .lineup-auth-page {
+    min-height: min(760px, calc(100dvh - 64px)) !important;
+    padding: 48px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .lineup-auth-shell,
+  .screen-v4.screen-auth-v4 .lineup-auth-shell {
+    width: min(100%, 920px) !important;
+    max-width: 920px !important;
+    display: grid !important;
+    grid-template-columns: minmax(260px, 360px) minmax(360px, 430px) !important;
+    align-items: center !important;
+    gap: 48px !important;
+  }
+
+  .lineup-auth-hero {
+    justify-items: start !important;
+    text-align: left !important;
+  }
+
+  .lineup-auth-brand,
+  .screen-v4.screen-auth-v4 .lineup-auth-brand {
+    justify-content: flex-start !important;
+  }
+
+  .lineup-auth-header,
+  .screen-v4.screen-auth-v4 .lineup-auth-header {
+    text-align: left !important;
+  }
+
+  .lineup-auth-card,
+  .screen-v4.screen-auth-v4 .lineup-auth-card {
+    max-width: 430px !important;
   }
 }
 
