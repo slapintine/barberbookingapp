@@ -15,10 +15,14 @@ const expectedPackageName = "org.queless.app.localqa";
 const buildMode = "local-qa";
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const resolvedCommand =
+    process.platform === "win32" && ["npm", "npx"].includes(command)
+      ? `${command}.cmd`
+      : command;
+  const result = spawnSync(resolvedCommand, args, {
     cwd: options.cwd || repoRoot,
     env: options.env || process.env,
-    shell: process.platform === "win32",
+    shell: false,
     encoding: "utf8",
     stdio: options.capture ? "pipe" : "inherit",
   });
