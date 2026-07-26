@@ -1616,7 +1616,7 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
           </label>
           <label>
             <span>Message</span>
-            <textarea value={announcementDraft.body} onChange={(event) => setAnnouncementDraft((prev) => ({ ...prev, body: event.target.value }))} maxLength={1000} rows={4} placeholder="Share an operational update, policy change, or marketplace announcement." />
+            <textarea value={announcementDraft.body} onChange={(event) => setAnnouncementDraft((prev) => ({ ...prev, body: event.target.value }))} maxLength={1000} rows={4} placeholder="Share an operational update, policy change, or service announcement." />
           </label>
           <button type="submit" className="admin-primary-v17" disabled={announcementSending}>
             {announcementSending ? "Sending..." : "Send announcement"}
@@ -1704,13 +1704,13 @@ export default function AdminPanel({ currentUser, initialSection = "dashboard", 
 
   const renderCategories = () => (
     <div className="admin-view-v17">
-      <PageIntro icon={FiLayers} title="Category Management" text="View marketplace categories, provider counts, featured status, and Tutor / Lessons support." />
+      <PageIntro icon={FiLayers} title="Category Management" text="View service categories, provider counts, featured status, and Tutor / Lessons support." />
       <AdminTable
         rows={categoryRows}
         getKey={(row) => row.id}
         emptyTitle="No categories found"
         columns={[
-          { key: "name", label: "Category", render: (row) => <AccountCell title={row.name} subtitle={row.name === "Tutor / Lessons" ? "Education icon: BookOpen" : "Marketplace category"} /> },
+          { key: "name", label: "Category", render: (row) => <AccountCell title={row.name} subtitle={row.name === "Tutor / Lessons" ? "Education icon: BookOpen" : "Service category"} /> },
           { key: "providers", label: "Providers", render: (row) => row.providers },
           { key: "featured", label: "Featured", render: (row) => row.featured ? "Yes" : "No" },
           { key: "status", label: "Status", render: (row) => <span className={badgeClass(row.status)}>{row.status}</span> },

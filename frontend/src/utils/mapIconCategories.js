@@ -52,8 +52,8 @@ export const MAP_ICON_OPTIONS = [
     svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.3 4.6s4.15 4.5 4.15 7.65a4.15 4.15 0 0 1-8.3 0c0-3.15 4.15-7.65 4.15-7.65Z"/><path d="m17.9 14.8.65 1.65 1.65.65-1.65.65-.65 1.65-.65-1.65-1.65-.65 1.65-.65.65-1.65Z"/></svg>',
   },
   {
-    id: "delivery-errands",
-    label: "Delivery & Errands",
+    id: "errands-local-help",
+    label: "Errands & Local Help",
     svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.2 5.2 5 11.5l6 1.7 1.7 6 6.5-14Z"/><path d="m11.2 13 3.4-3.4"/></svg>',
   },
   { id: "barber", label: "Barber", svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 5.4 18.5 16.7"/><path d="M18.5 5.4 7.2 16.7"/><circle cx="6" cy="4.6" r="1.7"/><circle cx="6" cy="17.4" r="1.7"/><path d="M12.6 11.2h4.7"/></svg>' },
@@ -137,7 +137,7 @@ export function getMapIconTypeForCategory(category = "") {
   if (key.includes("agriculture")) return "agriculture-services";
   if (key.includes("security")) return "security-services";
   if (key.includes("business") || key.includes("briefcase")) return "business-services";
-  if (key.includes("delivery") || key.includes("errand")) return "delivery-errands";
+  if (key.includes("errand") || key.includes("local-help")) return "errands-local-help";
   if (key.includes("home")) return "home-services";
   return "default";
 }

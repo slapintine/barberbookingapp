@@ -1,5 +1,5 @@
 import { all, get, run, transaction } from "../db/query.js";
-import { MARKETPLACE_CATEGORIES } from "../data/marketplaceCategories.js";
+import { SERVICE_DISCOVERY_CATEGORIES } from "../data/serviceCategories.js";
 import { publicBusinessParams, publicBusinessWhere } from "../services/businessVisibility.js";
 import { withCanonicalProviderFields } from "../services/providerResponse.js";
 
@@ -102,7 +102,7 @@ function normalizeService(row = {}) {
 
 export async function getCategories(req, res, next) {
   try {
-    res.json({ success: true, categories: MARKETPLACE_CATEGORIES });
+    res.json({ success: true, categories: SERVICE_DISCOVERY_CATEGORIES });
   } catch (error) {
     next(error);
   }

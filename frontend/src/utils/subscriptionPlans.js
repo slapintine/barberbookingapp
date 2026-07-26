@@ -78,7 +78,7 @@ export const PROVIDER_PLANS = [
       "AI offer generator & reply assistant",
       "AI service description helper",
       "Weekly business report & health score",
-      "Service area, delivery & mobile service",
+      "Service area & mobile service",
       "Largest photo allowance",
       "'Recommended by Queless' eligibility (after verification)",
       "VIP support",

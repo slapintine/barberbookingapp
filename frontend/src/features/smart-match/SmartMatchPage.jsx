@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiArrowLeft, FiCheck, FiCheckCircle, FiCreditCard, FiHelpCircle, FiHome, FiLock, FiMap, FiMapPin, FiMessageSquare, FiSearch, FiShield, FiStar, FiX, FiZap } from "react-icons/fi";
 import { findSmartMatches } from "../../api/smartMatchApi.js";
-import { getProviderTier, isProviderOpenNow, isProviderVerified } from "../../utils/marketplaceServices.js";
+import { getProviderTier, isProviderOpenNow, isProviderVerified } from "../../utils/providerDiscovery.js";
 import logo from "../../assets/queless-logo-full.png";
 import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
 import { reverseGeocodeCoordinates } from "../../utils/locationUtils.js";

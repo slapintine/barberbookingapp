@@ -1,9 +1,9 @@
 import { FiGrid } from "react-icons/fi";
-import { MARKETPLACE_CATEGORIES } from "../utils/serviceCatalog.js";
+import { SERVICE_DISCOVERY_CATEGORIES } from "../utils/serviceCatalog.js";
 import { getCategoryDef } from "../utils/categoryRegistry.jsx";
 
 export default function CategoriesPage({ selectedCategory, setSelectedCategory, onOpenCategory }) {
-  const categories = Array.isArray(MARKETPLACE_CATEGORIES) ? MARKETPLACE_CATEGORIES.filter((item) => item.active) : [];
+  const categories = Array.isArray(SERVICE_DISCOVERY_CATEGORIES) ? SERVICE_DISCOVERY_CATEGORIES.filter((item) => item.active) : [];
 
   return (
     <div className="content-v4 app-page-v4 queless-utility-page">

@@ -121,7 +121,7 @@ test("admin subscription route rejects a non-numeric id param", async () => {
 });
 
 test("support request rejects HTML/script in the message", async () => {
-  const res = await req("/api/marketplace/support-requests", {
+  const res = await req("/api/support-requests", {
     token: customerToken,
     body: { contact: "help@example.test", message: "<script>steal()</script> please help me with this" },
   });
@@ -132,9 +132,23 @@ test("support request rejects HTML/script in the message", async () => {
 });
 
 test("support request rejects a too-short message", async () => {
-  const res = await req("/api/marketplace/support-requests", {
+  const res = await req("/api/support-requests", {
     token: customerToken,
     body: { contact: "help@example.test", message: "hi" },
+  });
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, "VALIDATION_ERROR");
+});
+
+test("stand upsert rejects legacy product and delivery fields", async () => {
+  const res = await req("/api/barbers/register", {
+    token: customerToken,
+    body: {
+      business_name: "Validation Test Services",
+      location: "Kampala",
+      marketplace_mode: "product",
+      delivery_available: true,
+    },
   });
   assert.equal(res.status, 400);
   assert.equal((await res.json()).code, "VALIDATION_ERROR");

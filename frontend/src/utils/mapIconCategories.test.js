@@ -12,8 +12,8 @@ test("category helpers can suggest icons without controlling the registration wi
   assert.equal(getMapIconTypeForSelectedCategories(["Repairs & Maintenance"]), "repairs-maintenance");
 
   assert.equal(getMapIconTypeForSelectedCategories(["Health & Fitness"]), "health-fitness");
-  assert.equal(getMapIconTypeForSelectedCategories(["Health & Fitness", "Delivery & Errands"]), "multi");
-  assert.equal(getMapIconTypeForSelectedCategories(["Delivery & Errands"]), "delivery-errands");
+  assert.equal(getMapIconTypeForSelectedCategories(["Health & Fitness", "Errands & Local Help"]), "multi");
+  assert.equal(getMapIconTypeForSelectedCategories(["Errands & Local Help"]), "errands-local-help");
 });
 
 test("maps every signup category to a distinct provider map icon", () => {
@@ -29,5 +29,5 @@ test("maps every signup category to a distinct provider map icon", () => {
   assert.equal(getMapIconTypeForCategory("Repairs & Maintenance"), "repairs-maintenance");
   assert.equal(getMapIconTypeForCategory("Business Services"), "business-services");
   assert.equal(getMapIconTypeForCategory("Cleaning Services"), "cleaning-services");
-  assert.equal(getMapIconTypeForCategory("Delivery & Errands"), "delivery-errands");
+  assert.equal(getMapIconTypeForCategory("Errands & Local Help"), "errands-local-help");
 });

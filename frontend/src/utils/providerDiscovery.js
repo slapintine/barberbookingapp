@@ -60,7 +60,7 @@ function isVerificationApproved(value) {
   return ["approved", "verified", "complete", "completed"].includes(status);
 }
 
-export function isPublicMarketplaceProvider(provider = {}) {
+export function isPublicServiceProvider(provider = {}) {
   // Treat missing/unknown plan as FREE — a provider without an explicit plan is still a free provider.
   const rawPlan = normalizeProviderPlan(provider?.subscription?.tier || provider?.subscription_tier || provider?.subscription_plan);
   const plan = rawPlan || "FREE";
@@ -179,7 +179,7 @@ export function categoryMatches(service = {}, category = "") {
 
 export function buildCategoryServices(providers = [], category = "") {
   return (Array.isArray(providers) ? providers : []).flatMap((provider) => {
-    if (!isPublicMarketplaceProvider(provider)) return [];
+    if (!isPublicServiceProvider(provider)) return [];
     const services = Array.isArray(provider?.services) ? provider.services : [];
     const providerMatchesCategory =
       !category ||

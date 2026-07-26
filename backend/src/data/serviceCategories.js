@@ -1,4 +1,4 @@
-export const MARKETPLACE_CATEGORIES = [
+export const SERVICE_DISCOVERY_CATEGORIES = [
   {
     id: "barber",
     icon: "scissors",
@@ -96,10 +96,10 @@ export const MARKETPLACE_CATEGORIES = [
     active: true,
   },
   {
-    id: "delivery-errands",
+    id: "errands-local-help",
     icon: "navigation",
-    name: "Delivery & Errands",
-    description: "Courier runs, shopping help, errands, pickup, delivery, and personal tasks.",
+    name: "Errands & Local Help",
+    description: "Errand support, personal assistance, document runs, pickup help, and local tasks.",
     image: "https://images.unsplash.com/photo-1617347454431-f49d7ff5c3b1?auto=format&fit=crop&w=900&q=80",
     active: true,
   },
@@ -108,11 +108,11 @@ export const MARKETPLACE_CATEGORIES = [
   { id: "consulting-services", icon: "briefcase", name: "Consulting Services", description: "Business, operations, strategy, career, and specialist advisory services.", image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "accounting-tax", icon: "briefcase", name: "Accounting & Tax", description: "Bookkeeping, tax filing, payroll, audit prep, and financial records.", image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "legal-services", icon: "briefcase", name: "Legal Services", description: "Contracts, company registration, compliance, and legal consultations.", image: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=900&q=80", active: true },
-  { id: "design-branding", icon: "sparkles", name: "Design & Branding", description: "Logos, brand identity, graphics, product design, and visual assets.", image: "https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=900&q=80", active: true },
+  { id: "design-branding", icon: "sparkles", name: "Design & Branding", description: "Logos, brand identity, graphics, creative direction, and visual assets.", image: "https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "writing-translation", icon: "book", name: "Writing & Translation", description: "Copywriting, editing, documents, translation, and transcription.", image: "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "catering-food-services", icon: "sparkles", name: "Catering & Food Services", description: "Catering, meal prep, cakes, private chefs, and food vendors.", image: "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=900&q=80", active: true },
-  { id: "laundry-services", icon: "droplet", name: "Laundry Services", description: "Wash, dry cleaning, ironing, pickup, delivery, and fabric care.", image: "https://images.unsplash.com/photo-1517677208171-0bc6724a3e60?auto=format&fit=crop&w=900&q=80", active: true },
-  { id: "moving-transport", icon: "truck", name: "Moving & Transport", description: "House moves, deliveries, truck hire, boda support, and logistics.", image: "https://images.unsplash.com/photo-1600518464441-9306b00c4b43?auto=format&fit=crop&w=900&q=80", active: true },
+  { id: "laundry-services", icon: "droplet", name: "Laundry Services", description: "Wash, dry cleaning, ironing, garment care, and fabric care.", image: "https://images.unsplash.com/photo-1517677208171-0bc6724a3e60?auto=format&fit=crop&w=900&q=80", active: true },
+  { id: "moving-transport", icon: "truck", name: "Moving & Transport", description: "House moves, truck hire, boda support, hauling help, and transport services.", image: "https://images.unsplash.com/photo-1600518464441-9306b00c4b43?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "real-estate-services", icon: "home", name: "Real Estate Services", description: "Property agents, viewings, management, valuation, and rentals.", image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "construction-renovation", icon: "tool", name: "Construction & Renovation", description: "Building, remodeling, painting, roofing, masonry, and site work.", image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80", active: true },
   { id: "electrical-services", icon: "tool", name: "Electrical Services", description: "Wiring, lighting, appliance power, solar, and electrical repairs.", image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=900&q=80", active: true },

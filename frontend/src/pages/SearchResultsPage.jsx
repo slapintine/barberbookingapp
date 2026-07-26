@@ -12,7 +12,7 @@ import {
 import { buildInitialsAvatar } from "../utils/providerImage.js";
 import { getCategoryDef } from "../utils/categoryRegistry.jsx";
 import VerificationBadge from "../components/ui/VerificationBadge.jsx";
-import { buildCategoryServices } from "../utils/marketplaceServices.js";
+import { buildCategoryServices } from "../utils/providerDiscovery.js";
 
 const FILTERS = ["All", "Barber", "Beauty", "Salon", "Spa", "Cleaning Services", "Home Services", "Repairs & Maintenance", "Tutor / Lessons"];
 

@@ -1,5 +1,5 @@
 import { publicBusinessParams, publicBusinessWhere } from "./businessVisibility.js";
-import { MARKETPLACE_CATEGORIES } from "../data/marketplaceCategories.js";
+import { SERVICE_DISCOVERY_CATEGORIES } from "../data/serviceCategories.js";
 
 export const SMART_MATCH_WEIGHTS = {
   serviceMatch: 35,
@@ -58,7 +58,7 @@ const SERVICE_ALIASES = {
   "consulting-services": ["consulting", "consultant", "business strategy", "operations", "career advisory", "specialist advisory"],
   "accounting-tax": ["accounting", "tax", "bookkeeping", "payroll", "audit", "financial records"],
   "legal-services": ["legal", "lawyer", "contract", "company registration", "compliance", "legal consultation"],
-  "design-branding": ["design", "branding", "logo", "brand identity", "graphics", "product design"],
+  "design-branding": ["design", "branding", "logo", "brand identity", "graphics", "visual design"],
   "writing-translation": ["writing", "translation", "copywriting", "editing", "transcription", "documents"],
   "printing-stationery": ["printing", "stationery", "photocopying", "business documents"],
   "it-support": ["it support", "computer setup", "troubleshooting", "networking", "cybersecurity", "computer repair"],
@@ -67,10 +67,10 @@ const SERVICE_ALIASES = {
   "laundry-services": ["laundry", "dry cleaning", "ironing", "wash and fold", "fabric care"],
   "cleaning-services": ["cleaning", "cleaner", "deep clean", "fumigation", "sanitation"],
   "catering-food-services": ["catering", "food", "meal prep", "cake", "private chef", "food vendor"],
-  "delivery-errands": ["delivery", "errand", "courier", "pickup", "shopping", "runner"],
+  "errands-local-help": ["errand", "courier", "pickup help", "personal assistant", "runner"],
 };
 
-const CATEGORY_BY_ID = new Map(MARKETPLACE_CATEGORIES.map((category) => [category.id, category]));
+const CATEGORY_BY_ID = new Map(SERVICE_DISCOVERY_CATEGORIES.map((category) => [category.id, category]));
 
 function normalize(value = "") {
   return String(value || "")
@@ -88,7 +88,7 @@ function slugifyCategory(value = "") {
 function getCategoryByInput(value = "") {
   const clean = normalize(value);
   const slug = slugifyCategory(value);
-  return MARKETPLACE_CATEGORIES.find((category) =>
+  return SERVICE_DISCOVERY_CATEGORIES.find((category) =>
     category.id === slug ||
     normalize(category.name) === clean ||
     slugifyCategory(category.name) === slug

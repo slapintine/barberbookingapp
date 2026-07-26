@@ -1,5 +1,5 @@
 // Shared Leaflet map primitives used by both the mobile map overlay
-// (MarketplaceMapOverlay) and the desktop dashboard (MapDashboard).
+// (ProviderDiscoveryMapOverlay) and the desktop dashboard (MapDashboard).
 // Markers, clustering, distance + search helpers, and the user pin all live
 // here so the two layouts stay visually and behaviourally consistent.
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,8 +13,8 @@ import {
   isOwnProvider,
   isProviderOpenNow,
   isProviderVerified,
-  isPublicMarketplaceProvider,
-} from "../../utils/marketplaceServices.js";
+  isPublicServiceProvider,
+} from "../../utils/providerDiscovery.js";
 import { renderServiceClusterHtml, renderServiceMarkerHtml } from "./ServiceMapMarker.jsx";
 
 export const KAMPALA_CENTER = [0.3476, 32.5825];
@@ -109,7 +109,7 @@ export function isProviderVisibleOnMap(provider = {}) {
   const longitude = Number(provider.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
   if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return false;
-  return isPublicMarketplaceProvider(provider);
+  return isPublicServiceProvider(provider);
 }
 
 function providerMatchesMapCategory(provider = {}, category = "") {

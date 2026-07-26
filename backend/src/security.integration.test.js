@@ -129,8 +129,8 @@ test.after(async () => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("guest public marketplace route loads without auth", async () => {
-  const response = await request("/api/marketplace/categories");
+test("guest public service-discovery route loads without auth", async () => {
+  const response = await request("/api/categories");
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.success, true);
@@ -138,7 +138,7 @@ test("guest public marketplace route loads without auth", async () => {
 });
 
 test("public provider discovery does not expose contact or owner ids", async () => {
-  const response = await request("/api/marketplace/providers");
+  const response = await request("/api/providers");
   assert.equal(response.status, 200);
   const body = await response.json();
   const provider = body.providers.find((item) => item.id === fixtures.businessOne.id);

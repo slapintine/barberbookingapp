@@ -17,7 +17,7 @@ import {
   verifyBookingPaymentRequest,
 } from "./api/bookingsApi.js";
 import { createMessage, getMessages } from "./api/chatApi.js";
-import { createQuoteRequest, getMyQuoteRequests } from "./api/marketplaceApi.js";
+import { createQuoteRequest, getMyQuoteRequests } from "./api/quoteRequestsApi.js";
 import { addFavorite, getFavorites as getFavoriteRows, removeFavorite } from "./api/favoritesApi.js";
 import { getNotifications, markNotificationReadRequest } from "./api/notificationsApi.js";
 import { getProfile, saveProfileRequest } from "./api/profilesApi.js";
@@ -38,7 +38,7 @@ import AccountMenu from "./components/ui/AccountMenu.jsx";
 import BottomNav from "./components/ui/BottomNav.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import PaymentFlowModal from "./components/payments/PaymentFlowModal.jsx";
-import MarketplaceMapOverlay from "./components/marketplace/MarketplaceMapOverlay.jsx";
+import ProviderDiscoveryMapOverlay from "./components/service-discovery/ProviderDiscoveryMapOverlay.jsx";
 import ProviderProfileSkeleton from "./features/barbers/ProviderProfileSkeleton.jsx";
 import OverlayErrorBoundary from "./components/OverlayErrorBoundary.jsx";
 import PageErrorBoundary from "./components/PageErrorBoundary.jsx";
@@ -72,7 +72,7 @@ import {
   serviceMatchesCategory,
 } from "./utils/serviceCatalog.js";
 import { DEFAULT_CUSTOMER_SUBSCRIPTION_STATE, isCustomerPremiumActive } from "./utils/customerPremium.js";
-import { isPublicMarketplaceProvider } from "./utils/marketplaceServices.js";
+import { isPublicServiceProvider } from "./utils/providerDiscovery.js";
 import { CUSTOMER_PREMIUM_PLAN } from "./utils/subscriptionPlans.js";
 import {
   MOBILE_MONEY_COMING_SOON_MESSAGE,
@@ -307,7 +307,7 @@ function hasProviderAccess(subscription) {
 }
 
 function isPublicProvider(barber) {
-  return isPublicMarketplaceProvider(barber);
+  return isPublicServiceProvider(barber);
 }
 
 const FILTERS = ["All", "Top Rated", "Nearby", "Open Now", "Customer Location", "Verified", "Featured"];
@@ -1331,8 +1331,8 @@ function App() {
       }
       setShowRegisterBarber(true);
     };
-    window.addEventListener("marketplace:become-provider", openProviderSignup);
-    return () => window.removeEventListener("marketplace:become-provider", openProviderSignup);
+    window.addEventListener("queless:become-provider", openProviderSignup);
+    return () => window.removeEventListener("queless:become-provider", openProviderSignup);
   }, [effectiveIsBarber]);
 
   useEffect(() => {
@@ -4743,7 +4743,7 @@ const updateBarberStand = async (payload) => {
     setActiveTab("categoryServices");
   };
 
-  const openMarketplaceMap = (category = selectedCategory || "All") => {
+  const openServiceMap = (category = selectedCategory || "All") => {
     setMapState({
       show: true,
       category: category || "All",
@@ -4752,7 +4752,7 @@ const updateBarberStand = async (payload) => {
     window.history.pushState({}, "", appPath(MAP_PATH));
   };
 
-  const closeMarketplaceMap = () => {
+  const closeServiceMap = () => {
     setMapState((prev) => ({ ...prev, show: false }));
     const returnTab = mapState.returnView && mapState.returnView !== "map" ? mapState.returnView : "home";
     setActiveTab(returnTab);
@@ -4900,7 +4900,7 @@ const updateBarberStand = async (payload) => {
             locationLabel={locationLabel}
               locationLoading={locationLoading}
               onOpenCategory={openCategoryServices}
-              onOpenMap={openMarketplaceMap}
+              onOpenMap={openServiceMap}
               onSearchSubmit={openSearchResults}
               onOpenSmartMatch={openSmartMatch}
               smartMatchPremiumActive={canUseSmartMatch}
@@ -4935,7 +4935,7 @@ const updateBarberStand = async (payload) => {
             providers={enrichedBarbers.filter(isPublicProvider)}
             onBack={() => setActiveTab(previousMobileView === "categoryServices" ? "home" : previousMobileView || "home")}
             onOpenProvider={openProviderProfile}
-            onOpenMap={openMarketplaceMap}
+            onOpenMap={openServiceMap}
             onOpenSmartMatch={openSmartMatch}
             onSearchSubmit={openSearchResults}
             smartMatchPremiumActive={canUseSmartMatch}
@@ -4953,7 +4953,7 @@ const updateBarberStand = async (payload) => {
             onBack={() => setActiveTab(previousMobileView === "searchResults" ? "home" : previousMobileView || "home")}
             onOpenProvider={openProviderProfile}
             onOpenCategory={openCategoryServices}
-            onOpenMap={openMarketplaceMap}
+            onOpenMap={openServiceMap}
             onOpenSmartMatch={openSmartMatch}
             smartMatchPremiumActive={canUseSmartMatch}
             smartMatchUpsellVisible={smartMatchUpsellVisible}
@@ -5152,7 +5152,7 @@ const updateBarberStand = async (payload) => {
             }
           }}
           onViewOnMap={() => {
-            openMarketplaceMap(myBarberProfile?.business_type || "All");
+            openServiceMap(myBarberProfile?.business_type || "All");
           }}
           getBookingsForCalendar={getBookingsForCalendar}
           dateValueToDate={dateValueToDate}
@@ -5215,7 +5215,7 @@ const updateBarberStand = async (payload) => {
                 targetName: provider?.business_name || provider?.name,
               })
             }
-            onViewOnMap={(provider) => openMarketplaceMap(provider?.business_type || "All")}
+            onViewOnMap={(provider) => openServiceMap(provider?.business_type || "All")}
           />
         </div>
       )}
@@ -5281,7 +5281,7 @@ const updateBarberStand = async (payload) => {
         currentUser={currentUser}
         unreadMessages={unreadMessages}
         unreadNotifications={unreadNotifications.length}
-        onOpenMap={() => openMarketplaceMap("All")}
+        onOpenMap={() => openServiceMap("All")}
         onOpenNotifications={() => {
           setShowNotifications((value) => !value);
           setShowAccountMenu(false);
@@ -5291,7 +5291,7 @@ const updateBarberStand = async (payload) => {
       />
       )}
 
-      <MarketplaceMapOverlay
+      <ProviderDiscoveryMapOverlay
         show={mapState.show}
         theme={theme}
         setTheme={setTheme}
@@ -5308,7 +5308,7 @@ const updateBarberStand = async (payload) => {
         myStand={myBarberProfile}
         favorites={favorites}
         unreadCount={unreadNotifications.length}
-        onClose={closeMarketplaceMap}
+        onClose={closeServiceMap}
         onOpenMenu={() => {
           setShowAccountMenu(true);
           setShowNotifications(false);
@@ -5406,7 +5406,7 @@ const updateBarberStand = async (payload) => {
         }}
         onViewOnMap={() => {
           setShowBarberProfile(false);
-          openMarketplaceMap(myBarberProfile?.business_type || "All");
+          openServiceMap(myBarberProfile?.business_type || "All");
         }}
       />
       </Suspense>

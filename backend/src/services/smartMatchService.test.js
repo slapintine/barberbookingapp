@@ -13,7 +13,7 @@ test("Smart Match category matching supports Tutor aliases", () => {
   assert.equal(categoryMatches({ business_type: "Cleaning Services", service_name: "Deep cleaning" }, "Tutor / Lessons"), false);
 });
 
-test("Smart Match normalizes marketplace categories and legacy service keys", () => {
+test("Smart Match normalizes service categories and legacy service keys", () => {
   assert.equal(normalizeCategoryKey("Plumbing Services"), "plumbing-services");
   assert.equal(normalizeCategoryKey("plumbing"), "plumbing-services");
   assert.equal(categoryMatches({ business_type: "Home Services", service_name: "Pipe leak repair" }, "plumbing-services"), true);

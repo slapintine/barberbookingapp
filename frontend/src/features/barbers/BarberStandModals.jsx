@@ -1391,7 +1391,7 @@ function BarberStandFormModal({ show, title, form, setForm, onClose, onSubmit, r
                     />
                     <span>
                       <strong>I can serve customers at their location</strong>
-                      <small>Useful for mobile providers, home services, repairs, and delivery-based work.</small>
+                      <small>Useful for mobile providers, home services, repairs, and appointment-based work.</small>
                     </span>
                   </label>
                 </div>
