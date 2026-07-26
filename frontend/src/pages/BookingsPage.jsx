@@ -1,11 +1,64 @@
 import { useMemo, useState } from "react";
-import { FiCalendar, FiCheckCircle, FiInbox, FiMapPin, FiScissors, FiXCircle } from "react-icons/fi";
+import { FiCalendar, FiCheckCircle, FiInbox, FiMapPin, FiNavigation, FiScissors, FiXCircle } from "react-icons/fi";
 import { FaStar } from "react-icons/fa";
 import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
 import RequestCard from "../components/ui/RequestCard.jsx";
 
 const ACTIVE_STATUSES = new Set(["pending", "confirmed"]);
-const CANCELLED_STATUSES = new Set(["cancelled", "canceled", "rejected", "declined"]);
+const CANCELLED_STATUSES = new Set(["cancelled", "canceled", "rejected", "declined", "no_show"]);
+const LIVE_ACTIONS = [
+  { value: "expected", label: "Customer expected" },
+  { value: "arrived", label: "Customer arrived" },
+  { value: "ready", label: "Ready for customer" },
+  { value: "service_started", label: "Service started" },
+  { value: "running_late", label: "Running late" },
+  { value: "service_completed", label: "Service completed" },
+  { value: "no_show", label: "Customer did not arrive" },
+  { value: "booking_cancelled", label: "Booking cancelled" },
+];
+const DELAY_OPTIONS = [
+  { value: 0, label: "On time" },
+  { value: 10, label: "10 minutes late" },
+  { value: 15, label: "15 minutes late" },
+  { value: 30, label: "30 minutes late" },
+  { value: "custom", label: "Custom delay" },
+];
+
+function formatShortTime(value, fallback = "") {
+  const [hoursRaw, minutesRaw] = String(value || "").split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return fallback || String(value || "");
+  const suffix = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${String(minutes).padStart(2, "0")} ${suffix}`;
+}
+
+function formatEstimatedStart(booking, formatTimeLabel) {
+  const timeLabel = formatShortTime(booking.estimatedStartTime, booking.timeLabel || formatTimeLabel(booking.time));
+  if (booking.estimatedStartDate && booking.dateValue && booking.estimatedStartDate !== booking.dateValue) {
+    return `${booking.estimatedStartDate} ${timeLabel}`;
+  }
+  return timeLabel;
+}
+
+function liveStatusMessage(booking) {
+  const liveStatus = String(booking.liveStatus || "expected");
+  if (liveStatus === "ready") return "Your provider is ready for you.";
+  if (liveStatus === "running_late") return `The provider is running approximately ${booking.delayMinutes || 0} minutes late.`;
+  if (liveStatus === "arrived") return "The provider has marked you as arrived.";
+  if (liveStatus === "service_started") return "Service has started.";
+  if (liveStatus === "service_completed") return "Service completed.";
+  if (liveStatus === "no_show") return "This booking was marked as customer did not arrive.";
+  return booking.liveStatusLabel || "Customer expected";
+}
+
+function leaveNowMessage(booking) {
+  if (String(booking.status || "").toLowerCase() !== "confirmed") return "";
+  if (!booking.location) return "";
+  if (String(booking.liveStatus || "") === "ready") return "It may be a good time to leave now.";
+  return "";
+}
 
 function TabEmptyState({ icon, title, text, actionLabel, onAction }) {
   return (
@@ -26,9 +79,9 @@ export default function BookingsPage({
   role,
   bookings,
   quoteRequests = [],
-  completeBooking,
   approveBooking,
   rejectBooking,
+  updateLiveBookingStatus,
   rescheduleBooking,
   cancelBooking,
   confirmCashPayment,
@@ -53,6 +106,8 @@ export default function BookingsPage({
   const [rescheduleDraft, setRescheduleDraft] = useState({ date: "", time: "" });
   const [rescheduleError, setRescheduleError] = useState("");
   const [rescheduling, setRescheduling] = useState(false);
+  const [liveDrafts, setLiveDrafts] = useState({});
+  const [liveUpdatingId, setLiveUpdatingId] = useState("");
 
   const isBarberView = role === "barber" && myBarberProfile;
   const visibleBookings = isBarberView
@@ -131,6 +186,120 @@ export default function BookingsPage({
     }
   };
 
+  const getLiveDraft = (booking) => liveDrafts[booking.id] || {
+    liveStatus: booking.liveStatus || "expected",
+    delay: Number(booking.delayMinutes || 0),
+    customDelay: Number(booking.delayMinutes || 0) || 5,
+  };
+
+  const setLiveDraftValue = (booking, patch) => {
+    setLiveDrafts((current) => ({
+      ...current,
+      [booking.id]: {
+        ...getLiveDraft(booking),
+        ...patch,
+      },
+    }));
+  };
+
+  const submitLiveUpdate = async (booking, nextStatus) => {
+    const draft = getLiveDraft(booking);
+    const liveStatus = nextStatus || draft.liveStatus || "expected";
+    const delay = draft.delay === "custom" ? draft.customDelay : draft.delay;
+    const effectiveDelay = liveStatus === "running_late" ? Number(delay || 0) : 0;
+    setLiveUpdatingId(String(booking.id));
+    try {
+      await updateLiveBookingStatus?.(booking.id, {
+        live_status: liveStatus,
+        delay_minutes: effectiveDelay,
+        idempotencyKey: `${booking.id}-${liveStatus}-${effectiveDelay}-${Date.now()}`,
+      });
+    } finally {
+      setLiveUpdatingId("");
+    }
+  };
+
+  const renderLiveStatusPanel = (booking) => {
+    if (!["confirmed", "completed", "no_show"].includes(String(booking.status || "").toLowerCase())) return null;
+    const draft = getLiveDraft(booking);
+    const queueValue = Number.isInteger(Number(booking.customersAhead)) ? Number(booking.customersAhead) : null;
+    const startLabel = formatEstimatedStart(booking, formatTimeLabel);
+    const leaveNow = leaveNowMessage(booking);
+
+    return (
+      <div className="booking-live-panel-v1">
+        <div className="booking-live-grid-v1">
+          <div><span>Confirmed time</span><strong>{booking.timeLabel || formatTimeLabel(booking.time)}</strong></div>
+          <div><span>Current status</span><strong>{booking.liveStatusLabel || "Customer expected"}</strong></div>
+          <div><span>Estimated start</span><strong>{startLabel}</strong></div>
+          <div><span>Approximate delay</span><strong>{Number(booking.delayMinutes || 0) > 0 ? `${booking.delayMinutes} minutes` : "On time"}</strong></div>
+        </div>
+        {queueValue !== null ? (
+          <div className="booking-live-note-v1">
+            {queueValue === 1 ? "One customer is currently ahead of you." : `${queueValue} customers are currently ahead of you.`}
+          </div>
+        ) : null}
+        {!isBarberView ? (
+          <>
+            <div className="booking-live-note-v1">{liveStatusMessage(booking)}</div>
+            {leaveNow ? <div className="booking-live-note-v1 ready"><FiNavigation /> {leaveNow}</div> : null}
+            {booking.location ? <div className="booking-live-note-v1"><FiMapPin /> {booking.location}</div> : null}
+          </>
+        ) : null}
+
+        {isBarberView && String(booking.status || "").toLowerCase() === "confirmed" ? (
+          <div className="booking-live-provider-v1">
+            <label>
+              Status
+              <select
+                className="input-v4"
+                value={draft.liveStatus}
+                onChange={(event) => setLiveDraftValue(booking, { liveStatus: event.target.value })}
+              >
+                {LIVE_ACTIONS.map((action) => (
+                  <option key={action.value} value={action.value}>{action.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Delay
+              <select
+                className="input-v4"
+                value={draft.delay}
+                onChange={(event) => setLiveDraftValue(booking, { delay: event.target.value === "custom" ? "custom" : Number(event.target.value) })}
+              >
+                {DELAY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            {draft.delay === "custom" ? (
+              <label>
+                Minutes
+                <input
+                  className="input-v4"
+                  type="number"
+                  min="0"
+                  max="240"
+                  value={draft.customDelay}
+                  onChange={(event) => setLiveDraftValue(booking, { customDelay: event.target.value })}
+                />
+              </label>
+            ) : null}
+            <button
+              type="button"
+              className="mini-action-btn-v4 success"
+              disabled={liveUpdatingId === String(booking.id)}
+              onClick={() => submitLiveUpdate(booking)}
+            >
+              {liveUpdatingId === String(booking.id) ? "Updating..." : "Update"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderBookingCard = (booking) => (
     <div
       key={booking.id}
@@ -155,6 +324,7 @@ export default function BookingsPage({
       <div className="booking-meta-v4">
         Payment: {getPaymentMethodLabel(booking.paymentMethod)} · {booking.paymentStatus || "unpaid"}
       </div>
+      {renderLiveStatusPanel(booking)}
       <div className="inline-actions-v4">
         <span className={`booking-badge-v4 status-${booking.status || "pending"}`}>{booking.status}</span>
         {isBarberView && booking.status === "pending" && (
@@ -164,7 +334,7 @@ export default function BookingsPage({
           </>
         )}
         {isBarberView && booking.status === "confirmed" && (
-          <button type="button" className="mini-action-btn-v4 success" onClick={() => completeBooking(booking.id)}>Mark done</button>
+          <button type="button" className="mini-action-btn-v4 success" onClick={() => submitLiveUpdate(booking, "service_completed")}>Mark done</button>
         )}
         {["pending", "confirmed"].includes(booking.status) && (
           <button type="button" className="mini-action-btn-v4" onClick={() => openReschedule(booking)}>Reschedule</button>

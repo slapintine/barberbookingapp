@@ -2843,3 +2843,81 @@
 @media (max-width: 400px) {
   .bk-step:not(.is-current) .bk-step-label { display: none; }
 }
+.booking-live-panel-v1 {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(93, 18, 55, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 246, 238, 0.76);
+  color: var(--text-primary, #3a1027);
+}
+
+.booking-live-grid-v1 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.booking-live-grid-v1 div,
+.booking-live-provider-v1 label {
+  min-width: 0;
+}
+
+.booking-live-grid-v1 span,
+.booking-live-provider-v1 label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted, #765060);
+}
+
+.booking-live-grid-v1 strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.94rem;
+  color: var(--text-primary, #3a1027);
+  overflow-wrap: anywhere;
+}
+
+.booking-live-note-v1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: var(--text-primary, #3a1027);
+}
+
+.booking-live-note-v1.ready {
+  font-weight: 700;
+  color: #7a1f52;
+}
+
+.booking-live-provider-v1 {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(130px, 1fr) minmax(92px, 0.7fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.dark .booking-live-panel-v1 {
+  background: rgba(58, 16, 39, 0.52);
+  border-color: rgba(246, 193, 207, 0.2);
+  color: #fff3f6;
+}
+
+.dark .booking-live-grid-v1 span,
+.dark .booking-live-provider-v1 label {
+  color: #f4cbd7;
+}
+
+.dark .booking-live-grid-v1 strong,
+.dark .booking-live-note-v1 {
+  color: #fff8fa;
+}
+
+@media (max-width: 640px) {
+  .booking-live-provider-v1 {
+    grid-template-columns: 1fr;
+  }
+}

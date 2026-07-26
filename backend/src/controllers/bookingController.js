@@ -164,6 +164,186 @@ function addBookingEvent(bookingId, actorUserId, eventType, eventNote = "") {
   ).catch(() => {});
 }
 
+export const LIVE_BOOKING_STATUSES = Object.freeze({
+  expected: {
+    label: "Customer expected",
+    notification: false,
+    terminal: false,
+    allowedFrom: ["", "expected", "running_late"],
+  },
+  arrived: {
+    label: "Customer arrived",
+    notification: false,
+    terminal: false,
+    allowedFrom: ["", "expected", "running_late", "arrived"],
+  },
+  ready: {
+    label: "Ready for customer",
+    notification: true,
+    terminal: false,
+    allowedFrom: ["", "expected", "running_late", "arrived", "ready"],
+  },
+  service_started: {
+    label: "Service started",
+    notification: false,
+    terminal: false,
+    allowedFrom: ["", "expected", "running_late", "arrived", "ready", "service_started"],
+  },
+  running_late: {
+    label: "Running late",
+    notification: true,
+    terminal: false,
+    allowedFrom: ["", "expected", "running_late", "arrived", "ready"],
+  },
+  service_completed: {
+    label: "Service completed",
+    notification: false,
+    terminal: true,
+    lifecycleStatus: "completed",
+    allowedFrom: ["", "expected", "running_late", "arrived", "ready", "service_started", "service_completed"],
+  },
+  no_show: {
+    label: "Customer did not arrive",
+    notification: true,
+    terminal: true,
+    lifecycleStatus: "no_show",
+    allowedFrom: ["", "expected", "running_late", "ready", "no_show"],
+  },
+  booking_cancelled: {
+    label: "Booking cancelled",
+    notification: true,
+    terminal: true,
+    lifecycleStatus: "cancelled",
+    allowedFrom: ["", "expected", "running_late", "arrived", "ready", "booking_cancelled"],
+  },
+});
+
+const LIVE_STATUS_ALIASES = Object.freeze({
+  customer_expected: "expected",
+  customer_arrived: "arrived",
+  ready_for_customer: "ready",
+  started: "service_started",
+  completed: "service_completed",
+  customer_did_not_arrive: "no_show",
+  did_not_arrive: "no_show",
+  cancelled: "booking_cancelled",
+  canceled: "booking_cancelled",
+});
+
+export function normalizeLiveBookingStatus(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return LIVE_STATUS_ALIASES[raw] || raw;
+}
+
+export function normalizeDelayMinutes(value) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw || raw === "on_time" || raw === "on time") return 0;
+  const parsed = Number.parseInt(raw.replace(/[^0-9-]/g, ""), 10);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(Math.max(parsed, 0), 240);
+}
+
+function addDaysToDate(dateString, daysToAdd = 0) {
+  const [year, month, day] = String(dateString || "").split("-").map(Number);
+  if (!year || !month || !day || !Number.isFinite(daysToAdd)) return dateString || "";
+  const date = new Date(Date.UTC(year, month - 1, day + daysToAdd));
+  return date.toISOString().slice(0, 10);
+}
+
+function addMinutesToBookingTime(time, minutesToAdd = 0) {
+  const rawTotal = toMinutes(time) + Number(minutesToAdd || 0);
+  const safeTotal = Math.max(0, rawTotal);
+  const dayOffset = Math.floor(safeTotal / 1440);
+  const localMinutes = safeTotal % 1440;
+  const hours = Math.floor(localMinutes / 60);
+  const minutes = localMinutes % 60;
+  return {
+    time: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+    dayOffset,
+  };
+}
+
+function addMinutesToTime(time, minutesToAdd = 0) {
+  return addMinutesToBookingTime(time, minutesToAdd).time;
+}
+
+export function getLiveStatusTransition({ booking = {}, liveStatus }) {
+  const next = normalizeLiveBookingStatus(liveStatus);
+  const config = LIVE_BOOKING_STATUSES[next];
+  if (!config) {
+    return { ok: false, message: "Invalid live booking status." };
+  }
+
+  const lifecycle = String(booking.status || "").toLowerCase();
+  if (["completed", "cancelled", "rejected", "no_show"].includes(lifecycle)) {
+    return { ok: false, message: "This booking is already closed." };
+  }
+  if (lifecycle !== "confirmed") {
+    return { ok: false, message: "Live updates are only available for confirmed bookings." };
+  }
+
+  const current = normalizeLiveBookingStatus(booking.live_status || "");
+  if (!config.allowedFrom.includes(current)) {
+    return { ok: false, message: "This live booking status cannot follow the current status." };
+  }
+
+  return {
+    ok: true,
+    liveStatus: next,
+    lifecycleStatus: config.lifecycleStatus || lifecycle,
+    label: config.label,
+    notification: config.notification,
+  };
+}
+
+function safeJson(value) {
+  try {
+    return JSON.parse(value || "{}");
+  } catch {
+    return {};
+  }
+}
+
+async function getBookingEvents(bookingId, client = { all }) {
+  return client.all(
+    `SELECT id, actor_user_id, event_type, event_note, idempotency_key, created_at
+     FROM booking_events
+     WHERE booking_id = ?
+     ORDER BY id ASC`,
+    [bookingId]
+  ).catch(() => []);
+}
+
+async function getCustomersAhead(booking, client = { all }) {
+  if (!booking?.barber_id || !booking?.booking_date || !booking?.booking_time) return null;
+  const params = [
+    booking.barber_id,
+    booking.booking_date,
+    normalizeTimeInput(booking.booking_time),
+  ];
+  const teamFilter = booking.team_member_id ? "AND team_member_id = ?" : "AND team_member_id IS NULL";
+  if (booking.team_member_id) params.push(booking.team_member_id);
+  params.push(booking.id);
+
+  const rows = await client.all(
+    `SELECT id
+     FROM bookings
+     WHERE barber_id = ?
+       AND booking_date = ?
+       AND booking_time < ?
+       ${teamFilter}
+       AND id <> ?
+       AND status = 'confirmed'
+       AND COALESCE(live_status, '') NOT IN ('service_completed', 'no_show', 'booking_cancelled')
+     ORDER BY booking_time ASC`,
+    params
+  ).catch(() => []);
+  return rows.length;
+}
+
 /* ================= TIME ================= */
 
 function normalizeTimeInput(time) {
@@ -536,7 +716,7 @@ function canTransitionBooking({ booking, status, isBarberOwner, isCustomer }) {
     return ["confirmed", "rejected", "cancelled"].includes(status);
   }
   if (current === "confirmed") {
-    return ["completed", "cancelled"].includes(status);
+    return ["completed", "cancelled", "no_show"].includes(status);
   }
 
   return false;
@@ -552,6 +732,26 @@ async function mapBookingRow(row) {
   const customerUser = await getUsernameByUserId(row.customer_user_id);
   const customerProfile = await getCustomerProfileByUserId(row.customer_user_id);
   const barberOwner = barber?.owner_user_id ? await getUsernameByUserId(barber.owner_user_id) : null;
+  const delayMinutes = normalizeDelayMinutes(row.delay_minutes);
+  const estimatedStart = addMinutesToBookingTime(row.booking_time, delayMinutes);
+  const estimatedStartTime = row.estimated_start_time || estimatedStart.time;
+  const estimatedStartDate = addDaysToDate(row.booking_date, estimatedStart.dayOffset);
+  const liveStatus = normalizeLiveBookingStatus(row.live_status || "");
+  const liveStatusConfig = LIVE_BOOKING_STATUSES[liveStatus] || null;
+  const events = await getBookingEvents(row.id);
+  const liveStatusHistory = events
+    .filter((event) => String(event.event_type || "") === "live_status_changed")
+    .map((event) => ({
+      id: event.id,
+      actor_user_id: event.actor_user_id,
+      event_type: event.event_type,
+      created_at: event.created_at,
+      idempotency_key: event.idempotency_key || "",
+      ...safeJson(event.event_note),
+    }));
+  const customersAhead = String(row.status || "").toLowerCase() === "confirmed"
+    ? await getCustomersAhead(row)
+    : null;
 
   return {
     ...row,
@@ -578,6 +778,17 @@ async function mapBookingRow(row) {
     payment_customer_phone: row.payment_customer_phone || "",
     commission_amount: Number(row.commission_amount || 0),
     barber_amount: Number(row.barber_amount || 0),
+    live_status: liveStatus || "expected",
+    live_status_label: liveStatusConfig?.label || "Customer expected",
+    delay_minutes: delayMinutes,
+    estimated_start_time: estimatedStartTime,
+    estimated_start_date: estimatedStartDate,
+    customers_ahead: customersAhead,
+    provider_ready_at: row.provider_ready_at || null,
+    service_started_at: row.service_started_at || null,
+    service_completed_at: row.service_completed_at || null,
+    live_status_updated_at: row.live_status_updated_at || null,
+    live_status_history: liveStatusHistory,
   };
 }
 
@@ -1593,16 +1804,22 @@ export async function updateBookingStatus(req, res, next) {
   try {
     const bookingId = req.params.id;
     const status = String(req.body.status || "").toLowerCase();
+    const liveStatusInput = req.body.live_status || req.body.liveStatus || "";
+    const hasLiveStatus = Boolean(String(liveStatusInput || "").trim());
+    const delayMinutes = normalizeDelayMinutes(req.body.delay_minutes ?? req.body.delayMinutes ?? req.body.delay ?? 0);
+    const idempotencyKey = String(req.body.idempotency_key || req.body.idempotencyKey || req.get("Idempotency-Key") || "")
+      .trim()
+      .slice(0, 120);
 
-    const allowed = ["pending", "confirmed", "completed", "cancelled", "rejected"];
-    if (!allowed.includes(String(status))) {
+    const allowed = ["pending", "confirmed", "completed", "cancelled", "rejected", "no_show"];
+    if (!hasLiveStatus && !allowed.includes(String(status))) {
       return res.status(400).json({
         success: false,
         message: "Invalid booking status."
       });
     }
 
-    const { booking, mappedBooking, refunded, releasedToAvailable } = await transaction(async (client) => {
+    const { booking, mappedBooking, refunded, releasedToAvailable, liveUpdate, duplicate } = await transaction(async (client) => {
       const booking = await getBookingById(bookingId, client);
       if (!booking) {
         throw httpError(404, "Booking not found.");
@@ -1614,6 +1831,158 @@ export async function updateBookingStatus(req, res, next) {
 
       if (!isBarberOwner && !isCustomer) {
         throw httpError(403, "Not allowed to update this booking.");
+      }
+
+      if (hasLiveStatus) {
+        if (!isBarberOwner) {
+          throw httpError(403, "Only the provider can update live appointment status.");
+        }
+
+        const transition = getLiveStatusTransition({ booking, liveStatus: liveStatusInput });
+        if (!transition.ok) throw httpError(400, transition.message);
+        const effectiveDelayMinutes = transition.liveStatus === "running_late" ? delayMinutes : 0;
+
+        if (
+          normalizeLiveBookingStatus(booking.live_status || "") === transition.liveStatus &&
+          normalizeDelayMinutes(booking.delay_minutes) === effectiveDelayMinutes
+        ) {
+          return {
+            booking,
+            mappedBooking: await mapBookingRow(booking),
+            refunded: false,
+            releasedToAvailable: false,
+            liveUpdate: transition,
+            duplicate: true,
+          };
+        }
+
+        if (idempotencyKey) {
+          const existingEvent = await client.get(
+            `SELECT id, event_note FROM booking_events
+             WHERE booking_id = ? AND idempotency_key = ?
+             LIMIT 1`,
+            [bookingId, idempotencyKey]
+          ).catch(() => null);
+          if (existingEvent) {
+            const previousNote = safeJson(existingEvent.event_note);
+            if (
+              normalizeLiveBookingStatus(previousNote.live_status || "") !== transition.liveStatus ||
+              normalizeDelayMinutes(previousNote.delay_minutes) !== effectiveDelayMinutes
+            ) {
+              throw httpError(409, "This idempotency key was already used for a different live status update.");
+            }
+            const currentBooking = await getBookingById(bookingId, client);
+            return {
+              booking,
+              mappedBooking: await mapBookingRow(currentBooking),
+              refunded: false,
+              releasedToAvailable: false,
+              liveUpdate: transition,
+              duplicate: true,
+            };
+          }
+        }
+
+        const estimatedStartTime = addMinutesToTime(booking.booking_time, effectiveDelayMinutes);
+        let refunded = false;
+        let releasedToAvailable = false;
+        if (
+          transition.lifecycleStatus === "cancelled" &&
+          booking.payment_method === "wallet" &&
+          booking.payment_status === "paid"
+        ) {
+          refunded = await refundWalletPayment({
+            fromUserId: booking.customer_user_id,
+            barberId: booking.barber_id,
+            bookingId: booking.id,
+            amount: Number(booking.price || 0),
+            client,
+          });
+        }
+
+        if (
+          transition.lifecycleStatus === "cancelled" &&
+          ["mtn_mobile_money", "airtel_money"].includes(String(booking.payment_method || "")) &&
+          booking.payment_status === "paid" &&
+          booking.status !== "completed"
+        ) {
+          await reversePendingBarberShare({
+            client,
+            barberId: booking.barber_id,
+            bookingId: booking.id,
+            amount: Number(booking.barber_amount || 0),
+            reference: booking.payment_reference || `booking-${booking.id}-cancelled`,
+          }).catch(() => false);
+        }
+
+        if (
+          transition.lifecycleStatus === "completed" &&
+          ["mtn_mobile_money", "airtel_money", "wallet"].includes(String(booking.payment_method || "")) &&
+          booking.payment_status === "paid" &&
+          booking.status !== "completed"
+        ) {
+          releasedToAvailable = await settlePendingBarberShare({
+            client,
+            barberId: booking.barber_id,
+            bookingId: booking.id,
+            amount: Number(booking.barber_amount || 0),
+            reference: booking.payment_reference || `booking-${booking.id}-completed`,
+          });
+        }
+
+        const nowColumn = transition.liveStatus === "ready"
+          ? ", provider_ready_at = COALESCE(provider_ready_at, CURRENT_TIMESTAMP)"
+          : transition.liveStatus === "service_started"
+          ? ", service_started_at = COALESCE(service_started_at, CURRENT_TIMESTAMP)"
+          : transition.liveStatus === "service_completed"
+          ? ", service_completed_at = COALESCE(service_completed_at, CURRENT_TIMESTAMP)"
+          : "";
+
+        await client.run(
+          `UPDATE bookings
+           SET status = ?,
+               live_status = ?,
+               delay_minutes = ?,
+               estimated_start_time = ?,
+               payment_status = CASE
+                 WHEN ? = 1 THEN 'refunded'
+                 ELSE payment_status
+               END,
+               live_status_updated_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+               ${nowColumn}
+           WHERE id = ?`,
+          [transition.lifecycleStatus, transition.liveStatus, effectiveDelayMinutes, estimatedStartTime, refunded ? 1 : 0, bookingId]
+        );
+
+        await client.run(
+          `INSERT INTO booking_events (booking_id, actor_user_id, event_type, event_note, idempotency_key)
+           VALUES (?, ?, 'live_status_changed', ?, ?)`,
+          [
+            bookingId,
+            req.user.id,
+            JSON.stringify({
+              live_status: transition.liveStatus,
+              label: transition.label,
+              delay_minutes: effectiveDelayMinutes,
+              estimated_start_time: estimatedStartTime,
+              previous_live_status: normalizeLiveBookingStatus(booking.live_status || ""),
+              previous_status: booking.status,
+              status: transition.lifecycleStatus,
+            }),
+            idempotencyKey,
+          ]
+        );
+
+        const updated = await getBookingById(bookingId, client);
+        return {
+          booking,
+          mappedBooking: await mapBookingRow(updated),
+          refunded,
+          releasedToAvailable,
+          liveUpdate: transition,
+          duplicate: false,
+        };
       }
 
       if (!canTransitionBooking({ booking, status, isBarberOwner, isCustomer })) {
@@ -1695,6 +2064,8 @@ export async function updateBookingStatus(req, res, next) {
         mappedBooking: await mapBookingRow(updated),
         refunded,
         releasedToAvailable,
+        liveUpdate: null,
+        duplicate: false,
       };
     });
 
@@ -1702,7 +2073,34 @@ export async function updateBookingStatus(req, res, next) {
     const isBarberOwner = myBarber && Number(myBarber.id) === Number(booking.barber_id);
     const barberForNotify = isBarberOwner ? null : await getBarberById(booking.barber_id);
     const notifyUserId = isBarberOwner ? booking.customer_user_id : barberForNotify?.owner_user_id || null;
-    if (notifyUserId) {
+    if (notifyUserId && !duplicate) {
+      if (liveUpdate?.notification) {
+        const title = liveUpdate.liveStatus === "ready"
+          ? "Provider ready"
+          : liveUpdate.liveStatus === "running_late"
+          ? "Provider running late"
+          : liveUpdate.liveStatus === "no_show"
+          ? "Booking marked as missed"
+          : liveUpdate.liveStatus === "booking_cancelled"
+          ? "Booking cancelled"
+          : "Booking updated";
+        const body = liveUpdate.liveStatus === "ready"
+          ? "Your provider is ready for you."
+          : liveUpdate.liveStatus === "running_late"
+          ? `The provider is running approximately ${mappedBooking.delay_minutes || 0} minutes late.`
+          : liveUpdate.liveStatus === "no_show"
+          ? "This booking was marked as customer did not arrive."
+          : liveUpdate.liveStatus === "booking_cancelled"
+          ? "This booking was cancelled by the provider."
+          : `Booking status changed to ${liveUpdate.label}.`;
+        await sendBookingNotification({
+          booking: mappedBooking,
+          recipientUserId: notifyUserId,
+          title,
+          body,
+          status: liveUpdate.liveStatus,
+        }).catch(() => {});
+      } else if (!liveUpdate) {
       await addNotification(notifyUserId, {
         title: "Booking updated",
         type: "booking",
@@ -1739,12 +2137,16 @@ export async function updateBookingStatus(req, res, next) {
           pushResult,
         });
       }
+      }
     }
 
-    await logAudit(req.user.id, `Updated booking #${bookingId} to ${status}`);
+    await logAudit(req.user.id, hasLiveStatus
+      ? `Updated booking #${bookingId} live status to ${mappedBooking.live_status}${duplicate ? " (duplicate ignored)" : ""}`
+      : `Updated booking #${bookingId} to ${status}`);
 
     return res.status(200).json({
       success: true,
+      duplicate,
       booking: serializeBookingForViewer(mappedBooking, req.user)
     });
   } catch (error) {

@@ -1576,7 +1576,7 @@ export function EditBarberModal({ show, barber, profile = {}, onClose, onSubmit 
       setForm={setForm}
       onClose={onClose}
       onSubmit={onSubmit}
-      profile={{ ...profile, ...barber, subscription: barber.subscription || profile.subscription }}
+      profile={{ ...profile, ...(barber || {}), subscription: barber?.subscription || profile.subscription }}
     />
   );
 }

@@ -26,10 +26,17 @@ export function verifyBookingPaymentRequest(bookingId) {
   });
 }
 
-export function updateBookingStatusRequest(bookingId, status) {
+export function updateBookingStatusRequest(bookingId, status, options = {}) {
+  const body = typeof status === "object" && status !== null
+    ? status
+    : { status, ...options };
+  const headers = {};
+  const idempotencyKey = body.idempotencyKey || body.idempotency_key;
+  if (idempotencyKey) headers["Idempotency-Key"] = String(idempotencyKey);
   return apiFetch(`/api/bookings/${bookingId}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ status }),
+    headers,
+    body: JSON.stringify(body),
   });
 }
 

@@ -78,6 +78,8 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_schedule_barber_day ON barber_schedule(barber_id, day_of_week)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_team_members_barber_id ON barber_team_members(barber_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_booking_events_booking_id ON booking_events(booking_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_bookings_live_status ON bookings(barber_id, booking_date, live_status)`).catch(() => {});
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_booking_events_idempotency_present ON booking_events(booking_id, idempotency_key) WHERE idempotency_key <> ''`).catch(() => {});
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_transactions_wallet_id ON wallet_transactions(wallet_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_transactions_booking_id ON wallet_transactions(booking_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_user_id ON withdrawal_requests(user_id)`);
@@ -611,6 +613,46 @@ async function migrateExistingSchema() {
     "bookings",
     "booking_details_json",
     `booking_details_json TEXT DEFAULT '{}'`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "live_status",
+    `live_status TEXT NOT NULL DEFAULT 'expected'`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "delay_minutes",
+    `delay_minutes INTEGER NOT NULL DEFAULT 0`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "estimated_start_time",
+    `estimated_start_time TEXT DEFAULT ''`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "live_status_updated_at",
+    `live_status_updated_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "provider_ready_at",
+    `provider_ready_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "service_started_at",
+    `service_started_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "service_completed_at",
+    `service_completed_at TEXT DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "booking_events",
+    "idempotency_key",
+    `idempotency_key TEXT DEFAULT ''`
   );
 
   await addColumnIfMissing(
@@ -1167,6 +1209,13 @@ export async function initDb() {
         booking_location_type TEXT NOT NULL DEFAULT 'provider_location',
         booking_address TEXT DEFAULT '',
         booking_details_json TEXT DEFAULT '{}',
+        live_status TEXT NOT NULL DEFAULT 'expected',
+        delay_minutes INTEGER NOT NULL DEFAULT 0,
+        estimated_start_time TEXT DEFAULT '',
+        live_status_updated_at TEXT DEFAULT NULL,
+        provider_ready_at TEXT DEFAULT NULL,
+        service_started_at TEXT DEFAULT NULL,
+        service_completed_at TEXT DEFAULT NULL,
         team_member_id INTEGER DEFAULT NULL,
         cancelled_by TEXT DEFAULT NULL,
         cancellation_reason TEXT DEFAULT '',
@@ -1185,6 +1234,7 @@ export async function initDb() {
         actor_user_id INTEGER NOT NULL,
         event_type TEXT NOT NULL,
         event_note TEXT DEFAULT '',
+        idempotency_key TEXT DEFAULT '',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
         FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE

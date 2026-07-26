@@ -26,11 +26,17 @@ export function errorHandler(err, req, res, next) {
     "request failed"
   );
 
-  res.status(statusCode).json({
+  const body = {
     success: false,
     message: publicMessage,
     requestId: req?.id,
-  });
+  };
+
+  if (statusCode < 500 && err?.code && !isSqliteConstraint) {
+    body.code = String(err.code).slice(0, 80);
+  }
+
+  res.status(statusCode).json(body);
 }
 
 function envSafeProduction() {

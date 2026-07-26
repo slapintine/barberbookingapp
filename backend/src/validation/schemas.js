@@ -138,6 +138,13 @@ export const schemas = {
     params: Joi.object({ id: id.required() }).unknown(true),
     body: Joi.object({
       status: Joi.string().max(40).optional(),
+      live_status: Joi.string().max(60).optional(),
+      liveStatus: Joi.string().max(60).optional(),
+      delay_minutes: Joi.alternatives(Joi.number().integer().min(0).max(240), Joi.string().max(40)).optional(),
+      delayMinutes: Joi.alternatives(Joi.number().integer().min(0).max(240), Joi.string().max(40)).optional(),
+      delay: Joi.alternatives(Joi.number().integer().min(0).max(240), Joi.string().max(40)).optional(),
+      idempotency_key: Joi.string().max(120).optional().allow(""),
+      idempotencyKey: Joi.string().max(120).optional().allow(""),
     }).unknown(true),
   },
 

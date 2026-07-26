@@ -716,6 +716,17 @@ function mapServerBooking(item) {
     timeLabel: formatTimeLabel(item.booking_time),
     price: item.price,
     status: item.status,
+    liveStatus: item.live_status || item.liveStatus || "expected",
+    liveStatusLabel: item.live_status_label || item.liveStatusLabel || "Customer expected",
+    liveStatusUpdatedAt: item.live_status_updated_at || item.liveStatusUpdatedAt || null,
+    delayMinutes: Number(item.delay_minutes ?? item.delayMinutes ?? 0),
+    estimatedStartTime: item.estimated_start_time || item.estimatedStartTime || "",
+    estimatedStartDate: item.estimated_start_date || item.estimatedStartDate || item.booking_date || item.date || "",
+    customersAhead: item.customers_ahead ?? item.customersAhead ?? null,
+    providerReadyAt: item.provider_ready_at || item.providerReadyAt || null,
+    serviceStartedAt: item.service_started_at || item.serviceStartedAt || null,
+    serviceCompletedAt: item.service_completed_at || item.serviceCompletedAt || null,
+    liveStatusHistory: Array.isArray(item.live_status_history) ? item.live_status_history : [],
     paymentMethod: item.payment_method || item.paymentMethod || "cash",
     paymentStatus: item.payment_status || item.paymentStatus || "unpaid",
     paymentProvider: item.payment_provider || item.paymentProvider || item.payment_method || "",
@@ -3356,12 +3367,12 @@ const updateBarberStand = async (payload) => {
   };
 
 
-  const updateBookingStatus = async (bookingId, status) => {
+  const updateBookingStatus = async (bookingId, status, options = {}) => {
     const existingBooking = bookings.find((item) => String(item.id) === String(bookingId));
     if (!existingBooking) return;
 
     try {
-      const data = await updateBookingStatusRequest(bookingId, status);
+      const data = await updateBookingStatusRequest(bookingId, status, options);
 
       const updatedBooking = data?.booking
         ? mapServerBooking({
@@ -3371,7 +3382,7 @@ const updateBarberStand = async (payload) => {
             customer_username: existingBooking.customerUsername,
             customer_full_name: existingBooking.customerName,
           })
-        : { ...existingBooking, status };
+        : { ...existingBooking, ...(typeof status === "string" ? { status } : status) };
 
       setBookings((prev) =>
         prev.map((item) => (String(item.id) === String(bookingId) ? updatedBooking : item))
@@ -3386,10 +3397,18 @@ const updateBarberStand = async (payload) => {
 
       notifyBookingUpdate(updatedBooking);
       vibrate([10, 20, 10]);
-      showSystemToast("Booking updated", `Status changed to ${status}.`, "booking");
+      showSystemToast(
+        "Booking updated",
+        updatedBooking.liveStatusLabel
+          ? `Status changed to ${updatedBooking.liveStatusLabel}.`
+          : `Status changed to ${typeof status === "string" ? status : "updated"}.`,
+        "booking"
+      );
       fetchNotifications();
+      return updatedBooking;
     } catch (error) {
       setGlobalError(error.message || "Could not update booking.");
+      throw error;
     }
   };
 
@@ -4972,6 +4991,7 @@ const updateBarberStand = async (payload) => {
           completeBooking={(id) => updateBookingStatus(id, "completed")}
           approveBooking={(id) => updateBookingStatus(id, "confirmed")}
           rejectBooking={(id) => updateBookingStatus(id, "rejected")}
+          updateLiveBookingStatus={(id, payload) => updateBookingStatus(id, payload)}
           rescheduleBooking={rescheduleBooking}
           cancelBooking={cancelBooking}
           confirmCashPayment={confirmCashPayment}
