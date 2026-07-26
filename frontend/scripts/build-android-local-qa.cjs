@@ -36,9 +36,13 @@ const env = {
 };
 
 function run(command, args) {
-  const result = spawnSync(command, args, {
+  const resolvedCommand =
+    process.platform === "win32" && ["npm", "npx"].includes(command)
+      ? `${command}.cmd`
+      : command;
+  const result = spawnSync(resolvedCommand, args, {
     env,
-    shell: process.platform === "win32",
+    shell: false,
     stdio: "inherit",
   });
   if (result.status !== 0) process.exit(result.status || 1);
