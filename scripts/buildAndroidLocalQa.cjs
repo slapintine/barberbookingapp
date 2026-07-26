@@ -15,17 +15,22 @@ const expectedPackageName = "org.queless.app.localqa";
 const buildMode = "local-qa";
 
 function run(command, args, options = {}) {
-  const resolvedCommand =
-    process.platform === "win32" && ["npm", "npx"].includes(command)
-      ? `${command}.cmd`
-      : command;
-  const result = spawnSync(resolvedCommand, args, {
+  const runViaCmd =
+    process.platform === "win32" &&
+    (["npm", "npx"].includes(command) || String(command).toLowerCase().endsWith(".bat"));
+  const resolvedCommand = runViaCmd ? process.env.ComSpec || "cmd.exe" : command;
+  const resolvedArgs = runViaCmd ? ["/d", "/s", "/c", command, ...args] : args;
+  const result = spawnSync(resolvedCommand, resolvedArgs, {
     cwd: options.cwd || repoRoot,
     env: options.env || process.env,
     shell: false,
     encoding: "utf8",
     stdio: options.capture ? "pipe" : "inherit",
   });
+  if (result.error) {
+    console.error(`Failed to run ${command}: ${result.error.message}`);
+    process.exit(1);
+  }
   if (result.status !== 0) {
     if (options.capture) {
       process.stderr.write(result.stderr || result.stdout || "");
