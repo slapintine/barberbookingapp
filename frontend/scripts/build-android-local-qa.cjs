@@ -36,15 +36,20 @@ const env = {
 };
 
 function run(command, args) {
-  const resolvedCommand =
-    process.platform === "win32" && ["npm", "npx"].includes(command)
-      ? `${command}.cmd`
-      : command;
-  const result = spawnSync(resolvedCommand, args, {
+  const runViaCmd =
+    process.platform === "win32" &&
+    (["npm", "npx"].includes(command) || String(command).toLowerCase().endsWith(".bat"));
+  const resolvedCommand = runViaCmd ? process.env.ComSpec || "cmd.exe" : command;
+  const resolvedArgs = runViaCmd ? ["/d", "/s", "/c", command, ...args] : args;
+  const result = spawnSync(resolvedCommand, resolvedArgs, {
     env,
     shell: false,
     stdio: "inherit",
   });
+  if (result.error) {
+    console.error(`Failed to run ${command}: ${result.error.message}`);
+    process.exit(1);
+  }
   if (result.status !== 0) process.exit(result.status || 1);
 }
 
