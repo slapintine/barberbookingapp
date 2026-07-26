@@ -10,7 +10,7 @@ const HOW_IT_WORKS = [
 ];
 
 const PRICING = [
-  { title: "Customer Free", price: "Free", text: "Browse, save providers, request quotes, and book services." },
+  { title: "Free", price: "Free", text: "Browse, save providers, request quotes, and book services." },
   { title: "Customer Premium", price: `UGX ${CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month`, text: "Unlock Smart Match recommendations for faster provider discovery." },
   { title: "Provider Free", price: "UGX 0/month", text: "Start listing services and receiving booking requests." },
   { title: "Provider Premium", price: "UGX 12,000/month", text: "Grow visibility with stronger profile and booking tools." },

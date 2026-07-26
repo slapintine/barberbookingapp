@@ -235,7 +235,7 @@ export function getProviderPlan(tier) {
   return PROVIDER_PLANS.find((plan) => plan.tier === normalized || plan.id === String(tier || "").toLowerCase()) || null;
 }
 
-export function formatPlanName(tier, fallback = "No active plan") {
+export function formatPlanName(tier, fallback = "Free") {
   return getProviderPlan(tier)?.name || fallback;
 }
 
@@ -244,7 +244,7 @@ export function formatPlanName(tier, fallback = "No active plan") {
  * screens so a provider's plan is never confused with the separate
  * "Customer Premium" plan.
  */
-export function formatProviderPlanName(tier, fallback = "No active plan") {
+export function formatProviderPlanName(tier, fallback = "Free Provider") {
   const plan = getProviderPlan(tier);
   return plan ? `${plan.name} Provider` : fallback;
 }

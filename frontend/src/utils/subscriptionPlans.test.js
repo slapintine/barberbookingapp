@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  formatPlanName,
   formatProviderPlanName,
   getPlanFeatures,
   getPlanUpgradeCta,
@@ -114,8 +115,18 @@ test("provider plan labels and upgrade CTAs are plan-aware", () => {
   assert.equal(formatProviderPlanName("PREMIUM"), "Premium Provider");
   assert.equal(formatProviderPlanName("PLATINUM"), "Platinum Provider");
   assert.equal(formatProviderPlanName("FREE"), "Free Provider");
+  assert.equal(formatProviderPlanName(""), "Free Provider");
+  assert.equal(formatProviderPlanName(null), "Free Provider");
   assert.equal(getPlanUpgradeCta("PLATINUM"), "Upgrade to Platinum");
   assert.equal(getPlanUpgradeCta("PREMIUM"), "Upgrade to Premium");
+});
+
+test("missing provider plan displays as Free without changing paid tiers", () => {
+  assert.equal(formatPlanName(""), "Free");
+  assert.equal(formatPlanName(null), "Free");
+  assert.equal(formatPlanName(undefined), "Free");
+  assert.equal(formatPlanName("PREMIUM"), "Premium");
+  assert.equal(formatPlanName("PLATINUM"), "Platinum");
 });
 
 test("plan comparison prices and feature order remain launch-ready", () => {

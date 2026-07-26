@@ -329,7 +329,7 @@ export default function ReportsScreen({ barber, reviews = [], bookings = [], sub
         <section className="simple-card-v4 reports-upgrade-wall-v11">
           <FiLock />
           <div>
-            <div className="panel-title-v4">{plan.isExpired ? "Trial expired" : "No active plan"}</div>
+            <div className="panel-title-v4">{plan.isExpired ? "Trial expired" : "Free"}</div>
             <div className="profile-sub-v4">Choose a plan to activate your business and unlock Business Insights.</div>
           </div>
           <div className="reports-plan-grid-v11">

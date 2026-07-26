@@ -610,7 +610,7 @@ function buildSubscriptionMetadata(barber, latestSubscription) {
   if (!tierCode) {
     return {
       tier: "LOCKED",
-      name: "No active plan",
+      name: "Free",
       price: 0,
       status: "none",
       expires_at: null,

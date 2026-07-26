@@ -250,7 +250,7 @@ const DEFAULT_WALLET_STATE = {
 
 const DEFAULT_SUBSCRIPTION_STATE = {
   tier: "LOCKED",
-  name: "No active plan",
+  name: "Free",
   price: 0,
   status: "none",
   is_trial: false,
@@ -2353,7 +2353,7 @@ const fetchBarbers = async () => {
         : {
             ...DEFAULT_SUBSCRIPTION_STATE,
             tier: "LOCKED",
-            name: "No active plan",
+            name: "Free",
             status: "pending_payment",
           });
       if (!isAdmin) {

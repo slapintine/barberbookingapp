@@ -176,9 +176,9 @@ export default function DashboardPage({
         <div className="simple-card-v4 dashboard-plan-card-v9">
           <div>
             <div className="panel-title-v4">Plan & features</div>
-            <div className="profile-sub-v4">{hasValidPlan ? currentPlanLabel : "No plan selected yet"}</div>
+            <div className="profile-sub-v4">{hasValidPlan ? currentPlanLabel : "Free"}</div>
           </div>
-          <span className="booking-badge-v4 status-pending">{hasValidPlan ? currentPlan : "No plan"}</span>
+          <span className="booking-badge-v4 status-pending">{hasValidPlan ? currentPlan : "Free"}</span>
         </div>
       </div>
     );
@@ -203,8 +203,8 @@ export default function DashboardPage({
             <div className="profile-sub-v4">{currentPlanLabel} plan · {planVisibilityLabel}</div>
           ) : (
             <div className="plan-warning-card">
-              <h3>No plan selected</h3>
-              <p>Choose a provider plan to unlock visibility features.</p>
+              <h3>Free</h3>
+              <p>Choose a paid provider plan to unlock more visibility features.</p>
               <button type="button" className="mini-action-btn-v4 success" onClick={() => onOpenUpgradePlan?.("FREE")}>Choose Plan</button>
             </div>
           )}
@@ -262,7 +262,7 @@ export default function DashboardPage({
           <div className="panel-title-v4">Plan & features</div>
           <div className="profile-sub-v4">{thisWeekCount} bookings this week · {completedPayments.length} completed payments</div>
         </div>
-        <span className="booking-badge-v4 status-confirmed">{hasValidPlan ? currentPlan : "No plan"}</span>
+        <span className="booking-badge-v4 status-confirmed">{hasValidPlan ? currentPlan : "Free"}</span>
       </div>
 
       <div className={`dashboard-plan-experience-v15 ${isPlatinum ? "platinum" : isPremium ? "premium" : "free"}`}>

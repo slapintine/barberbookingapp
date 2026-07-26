@@ -357,7 +357,7 @@ export default function ProfilePage({
   const subscriptionFeatures = subscriptionState?.features || {};
   const subscriptionPlans = PROVIDER_PLANS;
   const currentPlan = String(subscriptionState?.tier || "").toUpperCase();
-  const currentPlanLabel = formatPlanName(currentPlan, "No active plan");
+  const currentPlanLabel = formatPlanName(currentPlan, "Free");
   const hasActivePlan = ["FREE", "PREMIUM", "PLATINUM"].includes(currentPlan);
   const pendingProviderTier = formatPlanName(pendingSubscriptionPayment?.tier, pendingSubscriptionPayment?.tier || "Selected plan");
   const businessStatus = String(myBarberProfile?.business_status || myBarberProfile?.active_status || "").toLowerCase();
@@ -654,7 +654,7 @@ export default function ProfilePage({
       {!isProviderAccount ? (
         <div className="simple-card-v4">
           <div className="panel-title-v4">Get ready for your first booking</div>
-          <div className="profile-sub-v4">Complete your profile, set your area, browse categories, and save providers you trust. Customer Free stays available; Premium is only for Smart Match.</div>
+          <div className="profile-sub-v4">Complete your profile, set your area, browse categories, and save providers you trust. Free stays available; Premium is only for Smart Match.</div>
           <div className="profile-review-list-v4 space-top">
             {profileCompletionItems.map((item) => (
               <div key={item.label} className="profile-review-card-v4">

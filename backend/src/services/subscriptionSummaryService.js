@@ -83,11 +83,11 @@ async function getPendingProviderPayment(barberId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function resolveCustomerDisplayName(sub) {
-  if (!sub) return "Customer Account";
+  if (!sub) return "Free";
   if (isActiveCustomerPremium(sub)) return "Premium Customer";
   const status = String(sub.status || "").toLowerCase();
-  if (status === "pending") return "Customer Account"; // pending payment
-  return "Customer Account";
+  if (status === "pending") return "Free"; // pending payment
+  return "Free";
 }
 
 function resolveProviderDisplayName(tier, status) {
@@ -96,7 +96,7 @@ function resolveProviderDisplayName(tier, status) {
   if (s !== "active" && s !== "trialing") return null; // no active provider plan
   if (t === "PLATINUM") return "Platinum Provider";
   if (t === "PREMIUM") return "Premium Provider";
-  if (t === "FREE") return "Provider Account";
+  if (t === "FREE") return "Free";
   return null;
 }
 
@@ -235,7 +235,7 @@ export async function buildSubscriptionSummary(userId) {
   } else {
     badges.push({
       key: "customer_free",
-      label: "Customer Account",
+      label: "Free",
       scope: "customer",
       tier: "free",
       status: "free",
@@ -255,7 +255,7 @@ export async function buildSubscriptionSummary(userId) {
   } else if (providerBarber && !providerActive) {
     badges.push({
       key: "provider_inactive",
-      label: "Provider Account",
+      label: "Free",
       scope: "provider",
       tier: "free",
       status: latestProviderSub?.status || "none",

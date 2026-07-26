@@ -717,7 +717,7 @@ export async function runAdminAccessTest(req, res, next) {
         success: true,
         result: {
           selectedBusiness: business.business_name,
-          providerPlan: subscription?.tier || business.subscription_tier || "None",
+          providerPlan: subscription?.tier || business.subscription_tier || "FREE",
           subscriptionStatus: subscription?.status || business.subscription_status || "inactive",
           featureTested: "Provider Coach",
           expectedAccess: allowed ? "allowed" : "blocked",

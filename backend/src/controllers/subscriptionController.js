@@ -172,7 +172,7 @@ function mapSubscription(subscription, barber) {
   if (!baseTier || (!trialActive && !paidActive)) {
     return {
       tier: "LOCKED",
-      name: "No active plan",
+      name: "Free",
       price: 0,
       status: status === "expired" || status === "trial_expired" ? "expired" : "none",
       started_at: null,
