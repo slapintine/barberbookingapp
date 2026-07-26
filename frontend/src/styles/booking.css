@@ -2894,10 +2894,17 @@
 
 .booking-live-provider-v1 {
   display: grid;
-  grid-template-columns: minmax(150px, 1.2fr) minmax(130px, 1fr) minmax(92px, 0.7fr) auto;
+  grid-template-columns: minmax(160px, 1fr) minmax(130px, 0.8fr) minmax(92px, 0.7fr) auto;
   gap: 10px;
   align-items: end;
   margin-top: 12px;
+}
+
+.booking-live-actions-v1 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .dark .booking-live-panel-v1 {

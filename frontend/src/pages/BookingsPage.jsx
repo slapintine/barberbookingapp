@@ -2,27 +2,11 @@ import { useMemo, useState } from "react";
 import { FiCalendar, FiCheckCircle, FiInbox, FiMapPin, FiNavigation, FiScissors, FiXCircle } from "react-icons/fi";
 import { FaStar } from "react-icons/fa";
 import { getPaymentMethodLabel } from "../utils/paymentLabels.js";
+import { LIVE_DELAY_OPTIONS, getProviderLiveStatusActions } from "../utils/bookingLiveStatusUi.js";
 import RequestCard from "../components/ui/RequestCard.jsx";
 
 const ACTIVE_STATUSES = new Set(["pending", "confirmed"]);
 const CANCELLED_STATUSES = new Set(["cancelled", "canceled", "rejected", "declined", "no_show"]);
-const LIVE_ACTIONS = [
-  { value: "expected", label: "Customer expected" },
-  { value: "arrived", label: "Customer arrived" },
-  { value: "ready", label: "Ready for customer" },
-  { value: "service_started", label: "Service started" },
-  { value: "running_late", label: "Running late" },
-  { value: "service_completed", label: "Service completed" },
-  { value: "no_show", label: "Customer did not arrive" },
-  { value: "booking_cancelled", label: "Booking cancelled" },
-];
-const DELAY_OPTIONS = [
-  { value: 0, label: "On time" },
-  { value: 10, label: "10 minutes late" },
-  { value: 15, label: "15 minutes late" },
-  { value: 30, label: "30 minutes late" },
-  { value: "custom", label: "Custom delay" },
-];
 
 function formatShortTime(value, fallback = "") {
   const [hoursRaw, minutesRaw] = String(value || "").split(":");
@@ -225,6 +209,8 @@ export default function BookingsPage({
     const queueValue = Number.isInteger(Number(booking.customersAhead)) ? Number(booking.customersAhead) : null;
     const startLabel = formatEstimatedStart(booking, formatTimeLabel);
     const leaveNow = leaveNowMessage(booking);
+    const providerActions = isBarberView ? getProviderLiveStatusActions(booking) : [];
+    const canUpdateDelay = providerActions.some((action) => action.value === "running_late");
 
     return (
       <div className="booking-live-panel-v1">
@@ -249,51 +235,63 @@ export default function BookingsPage({
 
         {isBarberView && String(booking.status || "").toLowerCase() === "confirmed" ? (
           <div className="booking-live-provider-v1">
-            <label>
-              Status
-              <select
-                className="input-v4"
-                value={draft.liveStatus}
-                onChange={(event) => setLiveDraftValue(booking, { liveStatus: event.target.value })}
-              >
-                {LIVE_ACTIONS.map((action) => (
-                  <option key={action.value} value={action.value}>{action.label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Delay
-              <select
-                className="input-v4"
-                value={draft.delay}
-                onChange={(event) => setLiveDraftValue(booking, { delay: event.target.value === "custom" ? "custom" : Number(event.target.value) })}
-              >
-                {DELAY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            {draft.delay === "custom" ? (
-              <label>
-                Minutes
-                <input
-                  className="input-v4"
-                  type="number"
-                  min="0"
-                  max="240"
-                  value={draft.customDelay}
-                  onChange={(event) => setLiveDraftValue(booking, { customDelay: event.target.value })}
-                />
-              </label>
+            {providerActions.length ? (
+              <div className="booking-live-actions-v1">
+                {providerActions
+                  .filter((action) => action.value !== "running_late")
+                  .map((action) => (
+                    <button
+                      key={action.value}
+                      type="button"
+                      className="mini-action-btn-v4 success"
+                      disabled={liveUpdatingId === String(booking.id)}
+                      onClick={() => submitLiveUpdate(booking, action.value)}
+                    >
+                      {liveUpdatingId === String(booking.id) ? "Updating..." : action.label}
+                    </button>
+                  ))}
+              </div>
             ) : null}
-            <button
-              type="button"
-              className="mini-action-btn-v4 success"
-              disabled={liveUpdatingId === String(booking.id)}
-              onClick={() => submitLiveUpdate(booking)}
-            >
-              {liveUpdatingId === String(booking.id) ? "Updating..." : "Update"}
-            </button>
+            {canUpdateDelay ? (
+              <>
+                <label>
+                  Delay
+                  <select
+                    className="input-v4"
+                    value={draft.delay}
+                    onChange={(event) => setLiveDraftValue(booking, { delay: event.target.value === "custom" ? "custom" : Number(event.target.value) })}
+                  >
+                    {LIVE_DELAY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                {draft.delay === "custom" ? (
+                  <label>
+                    Minutes
+                    <input
+                      className="input-v4"
+                      type="number"
+                      min="0"
+                      max="240"
+                      value={draft.customDelay}
+                      onChange={(event) => setLiveDraftValue(booking, { customDelay: event.target.value })}
+                    />
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  className="mini-action-btn-v4"
+                  disabled={liveUpdatingId === String(booking.id)}
+                  onClick={() => submitLiveUpdate(booking, "running_late")}
+                >
+                  {liveUpdatingId === String(booking.id) ? "Updating..." : "Running late"}
+                </button>
+              </>
+            ) : null}
+            {!providerActions.length ? (
+              <div className="booking-live-note-v1">No further live status actions are available for this booking.</div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -332,9 +330,6 @@ export default function BookingsPage({
             <button type="button" className="mini-action-btn-v4 success" onClick={() => approveBooking(booking.id)}>Approve</button>
             <button type="button" className="mini-action-btn-v4 danger" onClick={() => rejectBooking(booking.id)}>Reject</button>
           </>
-        )}
-        {isBarberView && booking.status === "confirmed" && (
-          <button type="button" className="mini-action-btn-v4 success" onClick={() => submitLiveUpdate(booking, "service_completed")}>Mark done</button>
         )}
         {["pending", "confirmed"].includes(booking.status) && (
           <button type="button" className="mini-action-btn-v4" onClick={() => openReschedule(booking)}>Reschedule</button>
