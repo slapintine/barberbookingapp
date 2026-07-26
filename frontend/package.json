@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "npm run build:web",
     "build:web": "cross-env VITE_BASE_PATH=/app/ VITE_ENABLE_PAYMENTS=false VITE_ENABLE_SMS=false vite build",
-    "build:android": "cross-env VITE_BASE_PATH=./ VITE_API_URL=https://queless.org/api VITE_ENABLE_PAYMENTS=false VITE_ENABLE_SMS=false vite build",
+    "build:android": "node scripts/refuse-shell-frontend-build.cjs",
     "build:android:local-qa": "node scripts/build-android-local-qa.cjs",
     "assets:android": "capacitor-assets generate --android --assetPath resources --iconBackgroundColor=#2B063A --iconBackgroundColorDark=#180222 --splashBackgroundColor=#FFF8F5 --splashBackgroundColorDark=#FFF8F5 --logoSplashScale=0.18",
     "lint": "eslint .",
