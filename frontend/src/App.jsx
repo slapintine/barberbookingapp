@@ -44,7 +44,7 @@ import OverlayErrorBoundary from "./components/OverlayErrorBoundary.jsx";
 import PageErrorBoundary from "./components/PageErrorBoundary.jsx";
 import { NotificationSheet, NotificationToast } from "./features/notifications/Notifications.jsx";
 import { apiFetch, getAuthToken, getRefreshToken, SOCKET_URL } from "./config/api.js";
-import { listenForForegroundNotifications } from "./pushNotifications.js";
+import { disableFirebaseNotifications, listenForForegroundNotifications } from "./pushNotifications.js";
 import { getMtnReadiness, getMtnUnavailableMessage } from "./utils/paymentReadiness.js";
 import useAutoScrollToBottom from "./hooks/useAutoScrollToBottom.js";
 import useAvailableTimeSlots from "./hooks/useAvailableTimeSlots.js";
@@ -1252,6 +1252,7 @@ function App() {
   const typingTimeoutRef = useRef(null);
   const chatThreadRef = useRef(null);
   const notificationAudioRef = useRef(null);
+  const nativePushOpenRef = useRef({ username: "", open: null });
   const bookingFetchInFlightRef = useRef(null);
   const bookingRefreshStateRef = useRef({
     lastFetchedAt: 0,
@@ -4082,7 +4083,9 @@ const updateBarberStand = async (payload) => {
   };
 
   const logout = (message = "") => {
+    const authMessage = typeof message === "string" ? message : "";
     const refreshToken = getRefreshToken();
+    disableFirebaseNotifications().catch(() => {});
     if (refreshToken) logoutUser(refreshToken).catch(() => {});
     if (socketRef.current) {
       socketRef.current.disconnect();
@@ -4113,8 +4116,8 @@ const updateBarberStand = async (payload) => {
     setShowAccountMenu(false);
     clearAuthMessages();
     window.history.replaceState({}, "", appPath(LOGIN_PATH));
-    if (message) {
-      setAuthError(message);
+    if (authMessage) {
+      setAuthError(authMessage);
     }
   };
 
@@ -4504,6 +4507,33 @@ const updateBarberStand = async (payload) => {
 
     setActiveTab("bookings");
   };
+
+  useEffect(() => {
+    nativePushOpenRef.current = {
+      username: currentUser?.username || "",
+      open: handleNotificationOpen,
+      append: appendNotificationSafely,
+    };
+  });
+
+  useEffect(() => {
+    const handleNativePushOpen = (event) => {
+      const username = nativePushOpenRef.current.username;
+      const open = nativePushOpenRef.current.open;
+      const append = nativePushOpenRef.current.append;
+      if (!username || typeof open !== "function") return;
+      const incoming = mapServerNotification({
+        ...(event?.detail || {}),
+        user: username,
+        read: false,
+      });
+      if (typeof append === "function") append(incoming);
+      open(incoming);
+    };
+
+    window.addEventListener("queless:push-open", handleNativePushOpen);
+    return () => window.removeEventListener("queless:push-open", handleNativePushOpen);
+  }, []);
 
   const handleAccountMenuNavigate = (target) => {
     setMapState((prev) => ({ ...prev, show: false }));

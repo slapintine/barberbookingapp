@@ -78,6 +78,25 @@ export async function unregisterNotificationToken({ userId, token }) {
   );
 }
 
+export async function getNotificationTokenStatus({ userId, token }) {
+  const cleanedToken = compactString(token, 4096);
+  if (!userId || !cleanedToken) return { registered: false };
+  const row = await get(
+    `SELECT id, platform, browser, device_label, updated_at, last_used_at
+       FROM notification_tokens
+      WHERE user_id = ? AND token = ?`,
+    [userId, cleanedToken]
+  );
+  return {
+    registered: Boolean(row?.id),
+    platform: row?.platform || "",
+    browser: row?.browser || "",
+    deviceLabel: row?.device_label || "",
+    updatedAt: row?.updated_at || "",
+    lastUsedAt: row?.last_used_at || "",
+  };
+}
+
 export async function deleteNotificationTokens(tokens = []) {
   const uniqueTokens = [...new Set(tokens.filter(Boolean))];
   await Promise.all(

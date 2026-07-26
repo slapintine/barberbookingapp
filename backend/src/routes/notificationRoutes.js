@@ -5,6 +5,7 @@ import {
   markNotificationRead
 } from "../controllers/notificationController.js";
 import {
+  getTokenStatus,
   registerToken,
   sendTestNotification,
   unregisterToken,
@@ -16,6 +17,7 @@ const router = express.Router();
 
 router.get("/me", protect, getMyNotifications);
 router.post("/register-token", protect, validateRequest(schemas.notificationRegister), registerToken);
+router.post("/token-status", protect, validateRequest(schemas.notificationUnregister), getTokenStatus);
 router.post("/unregister-token", protect, validateRequest(schemas.notificationUnregister), unregisterToken);
 router.post("/test", protect, sendTestNotification);
 router.patch("/:id/read", protect, markNotificationRead);

@@ -9,3 +9,10 @@ export function markNotificationReadRequest(notificationId) {
     method: "PATCH",
   });
 }
+
+export function getNotificationTokenStatusRequest(token) {
+  return apiFetch("/api/notifications/token-status", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
