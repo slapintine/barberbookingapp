@@ -4,6 +4,7 @@ import {
   getLiveStatusTransition,
   normalizeDelayMinutes,
   normalizeLiveBookingStatus,
+  shouldNotifyLiveStatusChange,
 } from "../controllers/bookingController.js";
 
 test("live status transition rules protect inactive and terminal bookings", () => {
@@ -36,4 +37,19 @@ test("live status aliases and delay normalization are bounded", () => {
   assert.equal(normalizeDelayMinutes("on time"), 0);
   assert.equal(normalizeDelayMinutes("-20"), 0);
   assert.equal(normalizeDelayMinutes("9999 minutes"), 240);
+});
+
+test("live status notifications ignore cleared running-late delays", () => {
+  assert.equal(
+    shouldNotifyLiveStatusChange({ liveStatus: "running_late", notification: true }, { delay_minutes: 15 }),
+    true
+  );
+  assert.equal(
+    shouldNotifyLiveStatusChange({ liveStatus: "running_late", notification: true }, { delay_minutes: 0 }),
+    false
+  );
+  assert.equal(
+    shouldNotifyLiveStatusChange({ liveStatus: "ready", notification: true }, { delay_minutes: 0 }),
+    true
+  );
 });

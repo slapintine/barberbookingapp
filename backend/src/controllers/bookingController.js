@@ -246,6 +246,14 @@ export function normalizeDelayMinutes(value) {
   return Math.min(Math.max(parsed, 0), 240);
 }
 
+export function shouldNotifyLiveStatusChange(liveUpdate, booking = {}) {
+  if (!liveUpdate?.notification) return false;
+  if (liveUpdate.liveStatus === "running_late" && normalizeDelayMinutes(booking.delay_minutes) <= 0) {
+    return false;
+  }
+  return true;
+}
+
 function addDaysToDate(dateString, daysToAdd = 0) {
   const [year, month, day] = String(dateString || "").split("-").map(Number);
   if (!year || !month || !day || !Number.isFinite(daysToAdd)) return dateString || "";
@@ -2074,7 +2082,7 @@ export async function updateBookingStatus(req, res, next) {
     const barberForNotify = isBarberOwner ? null : await getBarberById(booking.barber_id);
     const notifyUserId = isBarberOwner ? booking.customer_user_id : barberForNotify?.owner_user_id || null;
     if (notifyUserId && !duplicate) {
-      if (liveUpdate?.notification) {
+      if (shouldNotifyLiveStatusChange(liveUpdate, mappedBooking)) {
         const title = liveUpdate.liveStatus === "ready"
           ? "Provider ready"
           : liveUpdate.liveStatus === "running_late"
