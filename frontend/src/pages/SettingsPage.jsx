@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { FiEye, FiEyeOff, FiLock, FiSave, FiShield, FiUser } from "react-icons/fi";
 
+const LOCAL_QA_BUILD_LABEL = String(import.meta.env.VITE_LOCAL_QA_BUILD_LABEL || "").trim();
+
 function isStrongPassword(value) {
   const text = String(value || "");
   return text.length >= 8 && /[A-Za-z]/.test(text) && /\d/.test(text);
@@ -172,6 +174,9 @@ export default function SettingsPage({
       <button type="button" className="primary-btn-v4 settings-save-v6" onClick={handleSubmit} disabled={accountLoading}>
         <FiSave /> {accountLoading ? "Saving..." : "Save settings"}
       </button>
+      {LOCAL_QA_BUILD_LABEL ? (
+        <div className="field-hint-v7">{LOCAL_QA_BUILD_LABEL}</div>
+      ) : null}
     </div>
   );
 }
