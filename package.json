@@ -11,9 +11,10 @@
     "frontend:build": "npm --prefix frontend run build",
     "frontend:preview": "npm --prefix frontend run preview",
     "frontend:test": "npm --prefix frontend run test",
+    "website:verify": "node scripts/verifyPublicWebsite.cjs",
     "backend:test": "npm --prefix backend run test",
     "test": "npm run backend:test && npm run frontend:test",
-    "check": "npm run backend:check && npm run frontend:build",
+    "check": "npm run backend:check && npm run frontend:build && npm run website:verify",
     "verify:launch": "node scripts/launchVerification.cjs",
     "android:local-qa": "node scripts/buildAndroidLocalQa.cjs"
   },

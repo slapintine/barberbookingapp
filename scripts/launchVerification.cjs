@@ -24,6 +24,10 @@ const steps = [
     command: [npmCommand, ["run", "frontend:build"]],
   },
   {
+    name: "Public website verification",
+    command: [npmCommand, ["run", "website:verify"]],
+  },
+  {
     name: "Provider publication audit",
     command: [npmCommand, ["--prefix", "backend", "run", "audit:provider-readiness"]],
   },
