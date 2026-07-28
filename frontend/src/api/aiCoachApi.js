@@ -9,6 +9,10 @@ export function getProviderCoachQuestions() {
   return apiFetch("/api/provider/coach/questions");
 }
 
+export function getProviderCoachDailyBriefing() {
+  return apiFetch("/api/provider/coach/daily-briefing");
+}
+
 export function requestProviderCoachAdvice(questionId, businessId) {
   return apiFetch("/api/provider/coach/advice", {
     method: "POST",

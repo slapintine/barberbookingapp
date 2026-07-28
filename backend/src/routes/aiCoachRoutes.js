@@ -1,5 +1,5 @@
 import express from "express";
-import { getAiCoachInsights, getMyCoachInsights, getProviderCoachQuestionList, postProviderCoachAdvice } from "../controllers/aiCoachController.js";
+import { getAiCoachInsights, getMyCoachInsights, getProviderCoachDailyBriefing, getProviderCoachQuestionList, postProviderCoachAdvice } from "../controllers/aiCoachController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireBusinessOwner } from "../middleware/businessAccessMiddleware.js";
 import { aiCoachRateLimiter } from "../middleware/securityMiddleware.js";
@@ -11,6 +11,7 @@ const router = express.Router();
 
 // Owner-based routes (no businessId param needed — uses JWT user)
 router.get("/insights", protect, getMyCoachInsights);
+router.get("/daily-briefing", protect, getProviderCoachDailyBriefing);
 router.get("/questions", protect, getProviderCoachQuestionList);
 router.post("/advice", protect, aiCoachRateLimiter, validateRequest(schemas.coachAdvice), postProviderCoachAdvice);
 

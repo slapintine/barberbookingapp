@@ -2,9 +2,11 @@ import {
   createProviderCoachAdvice,
   getAiCoachInsightsForBusiness,
   getOwnedAiCoachBusiness,
+  getProviderCoachChatContext,
   getProviderCoachAccess,
   getProviderCoachQuestions,
 } from "../services/aiCoachService.js";
+import { buildProviderDailyBriefing } from "../services/assistantFoundationService.js";
 import { getProviderCoachPlan, getLatestProviderSubscription } from "../services/providerSubscriptionAccess.js";
 
 export async function getAiCoachInsights(req, res, next) {
@@ -93,6 +95,36 @@ export async function getProviderCoachQuestionList(req, res, next) {
       businessFound: true,
       businessId: business.id,
       ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getProviderCoachDailyBriefing(req, res, next) {
+  try {
+    let business;
+    try {
+      business = await getOwnedAiCoachBusiness(req.user?.id, req.query?.businessId || req.params?.businessId);
+    } catch (err) {
+      if (err.statusCode === 404) {
+        return res.json({
+          success: true,
+          businessFound: false,
+          briefing: null,
+          message: "Create or save your stand first so Coach can prepare a daily briefing.",
+        });
+      }
+      throw err;
+    }
+
+    const context = await getProviderCoachChatContext(business);
+    const briefing = buildProviderDailyBriefing(context);
+    res.json({
+      success: true,
+      businessFound: true,
+      businessId: business.id,
+      briefing,
     });
   } catch (error) {
     next(error);

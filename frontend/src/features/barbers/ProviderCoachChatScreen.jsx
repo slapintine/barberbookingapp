@@ -8,7 +8,7 @@ import {
   FiStar,
   FiZap,
 } from "react-icons/fi";
-import { sendProviderCoachMessage } from "../../api/aiCoachApi.js";
+import { getProviderCoachDailyBriefing, sendProviderCoachMessage } from "../../api/aiCoachApi.js";
 import "./ProviderCoachChatScreen.css";
 
 const PROMPTS = [
@@ -100,6 +100,7 @@ export default function ProviderCoachChatScreen({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [briefingState, setBriefingState] = useState({ loading: false, data: null, error: "" });
   const [lastQuestion, setLastQuestion] = useState("");
   const messageListRef = useRef(null);
   const inputRef = useRef(null);
@@ -111,6 +112,31 @@ export default function ProviderCoachChatScreen({
     setMessages(readStoredMessages(barber?.id));
     setDraft("");
     setError("");
+    setBriefingState({ loading: false, data: null, error: "" });
+  }, [barber?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!barber?.id) return () => { cancelled = true; };
+    setBriefingState({ loading: true, data: null, error: "" });
+    getProviderCoachDailyBriefing()
+      .then((result) => {
+        if (cancelled) return;
+        setBriefingState({
+          loading: false,
+          data: result?.briefing || null,
+          error: "",
+        });
+      })
+      .catch((requestError) => {
+        if (cancelled) return;
+        setBriefingState({
+          loading: false,
+          data: null,
+          error: getFriendlyCoachError(requestError),
+        });
+      });
+    return () => { cancelled = true; };
   }, [barber?.id]);
 
   useEffect(() => {
@@ -205,6 +231,32 @@ export default function ProviderCoachChatScreen({
       </div>
 
       <section className="provider-coach-message-list" ref={messageListRef} aria-live="polite">
+        <div className="provider-coach-briefing-card" aria-label="Provider Coach daily briefing">
+          <div className="provider-coach-briefing-head">
+            <strong>Today's briefing</strong>
+            <span>{briefingState.data?.profileCompleteness ? `${briefingState.data.profileCompleteness}% profile` : planLabel}</span>
+          </div>
+          {briefingState.loading ? (
+            <p>Reading your stand signals...</p>
+          ) : briefingState.error ? (
+            <p>{briefingState.error}</p>
+          ) : briefingState.data?.items?.length ? (
+            <div className="provider-coach-briefing-list">
+              {briefingState.data.items.map((item) => (
+                <article key={item.id} className={`provider-coach-briefing-item severity-${item.severity || "low"}`}>
+                  <strong>{item.title}</strong>
+                  <span>{item.body}</span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p>Coach will show practical recommendations here as your stand data grows.</p>
+          )}
+          {briefingState.data?.dataLimits?.revenueAvailable === false ? (
+            <small>Revenue insights are not shown because Queless does not have reliable revenue data for this stand yet.</small>
+          ) : null}
+        </div>
+
         <div className="provider-coach-prompt-area">
           <strong>Try asking</strong>
           <div className="provider-coach-prompt-chips">

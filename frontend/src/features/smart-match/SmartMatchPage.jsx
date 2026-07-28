@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiArrowLeft, FiCheck, FiCheckCircle, FiCreditCard, FiHelpCircle, FiHome, FiLock, FiMap, FiMapPin, FiMessageSquare, FiSearch, FiShield, FiStar, FiX, FiZap } from "react-icons/fi";
-import { findSmartMatches } from "../../api/smartMatchApi.js";
+import { findSmartMatches, parseSmartMatchPrompt } from "../../api/smartMatchApi.js";
+import { mergeAssistantSession, readAssistantSession, writeAssistantSession } from "../assistants/assistantSession.js";
 import { getProviderTier, isProviderOpenNow, isProviderVerified } from "../../utils/providerDiscovery.js";
 import logo from "../../assets/queless-logo-full.png";
 import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
@@ -41,17 +42,13 @@ function customerSubscriptionMessageClass(message) {
 }
 
 function readStoredDraft(initial, fallbackLocation) {
-  try {
-    const parsed = JSON.parse(sessionStorage.getItem(SMART_MATCH_SESSION_KEY) || "null");
-    if (parsed && typeof parsed === "object") {
-      return {
-        ...initialSmartMatchState,
-        ...parsed,
-        selectedService: getServiceByKey(parsed.selectedService?.key || parsed.selectedService) || null,
-      };
-    }
-  } catch {
-    sessionStorage.removeItem(SMART_MATCH_SESSION_KEY);
+  const parsed = readAssistantSession(SMART_MATCH_SESSION_KEY, null);
+  if (parsed && typeof parsed === "object") {
+    return {
+      ...initialSmartMatchState,
+      ...parsed,
+      selectedService: getServiceByKey(parsed.selectedService?.key || parsed.selectedService) || null,
+    };
   }
   return normalizeInitialSmartMatch(initial, fallbackLocation);
 }
@@ -390,6 +387,9 @@ export default function SmartMatchPage({
   const [locationMessageEntry, setLocationMessageEntry] = useState({ key: "", value: "" });
   const [showHelp, setShowHelp] = useState(false);
   const [sortMode, setSortMode] = useState("best");
+  const [assistantPrompt, setAssistantPrompt] = useState("");
+  const [assistantParsing, setAssistantParsing] = useState(false);
+  const [assistantMessage, setAssistantMessage] = useState("");
   const cacheRef = useRef(new Map());
   const premiumActive = isCustomerPremiumActive(customerSubscription);
   const state = stateEntry.key === draftKey ? stateEntry.value : readStoredDraft(initial, locationLabel);
@@ -420,7 +420,7 @@ export default function SmartMatchPage({
       selectedAddress: state.selectedAddress,
       userCoordinates: state.userCoordinates,
     };
-    sessionStorage.setItem(SMART_MATCH_SESSION_KEY, JSON.stringify(draft));
+    writeAssistantSession(SMART_MATCH_SESSION_KEY, mergeAssistantSession(draft, { assistantSurface: "smart_match" }));
   }, [premiumActive, state]);
 
   const localProviderById = useMemo(() => {
@@ -555,6 +555,46 @@ export default function SmartMatchPage({
     }
   };
 
+  const applyAssistantPrompt = async () => {
+    const message = assistantPrompt.trim();
+    if (!message || assistantParsing) return;
+    setAssistantParsing(true);
+    setAssistantMessage("");
+    try {
+      const parsed = await parseSmartMatchPrompt({
+        message,
+        context: {
+          serviceKey: state.selectedService?.key || "",
+          when: state.selectedWhen || "",
+          preferredDate: state.preferredDate || "",
+          preferredTime: state.preferredTime || "",
+          budgetMax: state.budgetMax || "",
+          locationType: state.selectedLocationType || "",
+          address: state.selectedAddress || "",
+          notes: state.notes || "",
+        },
+      });
+      const entities = parsed?.entities || {};
+      const service = entities.serviceKey ? getServiceByKey(entities.serviceKey) : null;
+      updateState({
+        selectedService: service || state.selectedService,
+        selectedWhen: entities.when || state.selectedWhen || "today",
+        preferredDate: entities.preferredDate || state.preferredDate,
+        preferredTime: entities.preferredTime || state.preferredTime,
+        budgetMax: entities.budgetMax ? String(entities.budgetMax) : state.budgetMax,
+        selectedLocationType: entities.locationType || state.selectedLocationType || (entities.address ? "enter_address" : null),
+        selectedAddress: entities.address || state.selectedAddress,
+        notes: entities.notes || state.notes,
+      });
+      const missing = Array.isArray(parsed?.missing) ? parsed.missing : [];
+      setAssistantMessage(missing.length ? `Got it. Please confirm ${missing.join(", ")} before we match.` : "Got it. I filled the matching preferences I could read.");
+    } catch (error) {
+      setAssistantMessage(error?.status === 401 ? "Please log in again before using Smart Match." : "I could not read that request. You can still choose the details below.");
+    } finally {
+      setAssistantParsing(false);
+    }
+  };
+
   const goNext = () => {
     if (!canContinue || state.loading) return;
     if (state.step === "where") {
@@ -637,6 +677,23 @@ export default function SmartMatchPage({
             <div className="smart-match-title">
               <h1>What do you need?</h1>
               <p>Pick the category that's closest to what you need help with.</p>
+            </div>
+            <div className="smart-match-assistant-prompt" aria-label="Smart Match assistant prompt">
+              <label htmlFor="smart-match-assistant-text">Tell Smart Match in your own words</label>
+              <div>
+                <textarea
+                  id="smart-match-assistant-text"
+                  value={assistantPrompt}
+                  onChange={(event) => setAssistantPrompt(event.target.value.slice(0, 500))}
+                  placeholder="Example: I need beauty services near Ntinda today at 3:30 under UGX 30,000"
+                  rows={2}
+                  disabled={assistantParsing}
+                />
+                <button type="button" onClick={applyAssistantPrompt} disabled={!assistantPrompt.trim() || assistantParsing}>
+                  {assistantParsing ? "Reading..." : "Fill details"}
+                </button>
+              </div>
+              {assistantMessage ? <small role="status">{assistantMessage}</small> : null}
             </div>
             <div className="smart-match-category-grid">
               {SERVICE_CATEGORIES.map((item) => {

@@ -1,4 +1,5 @@
 import { findSmartMatches, normalizeCategoryKey } from "../services/smartMatchService.js";
+import { parseSmartMatchPrompt } from "../services/assistantFoundationService.js";
 
 const VALID_WHEN = new Set(["now", "today", "this_week"]);
 const VALID_LOCATION_TYPES = new Set(["use_current_location", "enter_address"]);
@@ -76,6 +77,19 @@ export async function smartMatch(req, res, next) {
 
     const result = await findSmartMatches(validation.value);
     res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function parseSmartMatch(req, res, next) {
+  try {
+    const message = String(req.body?.message || req.body?.text || "").trim();
+    if (!message) {
+      return res.status(400).json({ success: false, message: "Tell Smart Match what service you need." });
+    }
+    const parsed = parseSmartMatchPrompt(message, req.body?.context || {});
+    return res.json({ success: true, ...parsed });
   } catch (error) {
     next(error);
   }

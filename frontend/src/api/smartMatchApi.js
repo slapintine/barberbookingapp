@@ -6,3 +6,10 @@ export function findSmartMatches(payload) {
     body: JSON.stringify(payload || {}),
   });
 }
+
+export function parseSmartMatchPrompt(payload) {
+  return apiFetch("/api/smart-match/parse", {
+    method: "POST",
+    body: JSON.stringify(payload || {}),
+  });
+}

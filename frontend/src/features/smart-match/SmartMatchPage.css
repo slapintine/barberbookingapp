@@ -211,6 +211,63 @@
   overflow-wrap: break-word;
 }
 
+.smart-match-assistant-prompt {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1px solid var(--queless-border);
+  border-radius: 16px;
+  background: rgba(255, 248, 245, 0.84);
+  box-shadow: 0 12px 28px rgba(43, 18, 76, 0.08);
+}
+
+.smart-match-assistant-prompt label {
+  color: var(--queless-text);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.smart-match-assistant-prompt > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.smart-match-assistant-prompt textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid rgba(82, 43, 91, 0.2);
+  border-radius: 14px;
+  padding: 0.72rem;
+  background: #fff8f5;
+  color: var(--queless-text);
+  font: inherit;
+}
+
+.smart-match-assistant-prompt button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0.7rem 0.9rem;
+  background: linear-gradient(135deg, var(--queless-midnight), var(--queless-plum));
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.smart-match-assistant-prompt button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.smart-match-assistant-prompt small {
+  color: var(--queless-muted);
+  font-weight: 760;
+  line-height: 1.35;
+}
+
 .smart-match-card,
 .smart-match-tile,
 .smart-match-option,
