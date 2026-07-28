@@ -174,3 +174,44 @@ test("Smart Match does not use provider base price as matched service price", ()
   assert.equal(match.priceMax, 0);
   assert.doesNotMatch(match.reasons.join(" | "), /Within your selected price range/);
 });
+
+test("Smart Match explanations use customer evidence only when present", () => {
+  const baseRow = {
+    id: 47,
+    business_name: "Repeat Beauty",
+    business_type: "Beauty",
+    service_id: 804,
+    service_name: "Makeup",
+    category: "Beauty",
+    pricing_type: "fixed",
+    price_extra: 30000,
+    duration_minutes: 60,
+    schedule_is_open: 1,
+    schedule_start: "08:00",
+    schedule_end: "18:00",
+    rating: 4.9,
+    total_reviews: 60,
+  };
+  const criteria = {
+    serviceKey: "beauty",
+    serviceLabel: "Beauty",
+    when: "today",
+    time: "10:00",
+    budgetMax: 50000,
+    minimumRating: 4.5,
+  };
+
+  const ordinary = scoreProvider(baseRow, criteria);
+  const saved = scoreProvider({ ...baseRow, is_favourite: 1, previously_booked: 1 }, criteria);
+  const ordinaryCodes = ordinary.explanations.map((item) => item.code);
+  const savedCodes = saved.explanations.map((item) => item.code);
+
+  assert.equal(saved.isFavourite, true);
+  assert.equal(saved.previouslyBooked, true);
+  assert.equal(savedCodes.includes("customer.favourite"), true);
+  assert.equal(savedCodes.includes("customer.previous_booking"), true);
+  assert.equal(ordinaryCodes.includes("customer.favourite"), false);
+  assert.equal(ordinaryCodes.includes("customer.previous_booking"), false);
+  assert.doesNotMatch(saved.reasons.join(" | "), /Best provider|Perfect match|Guaranteed quality|Most trusted|Fast response/i);
+  assert.equal(saved.badges.includes("Fast response"), false);
+});

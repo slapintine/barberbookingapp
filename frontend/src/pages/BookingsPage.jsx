@@ -82,6 +82,7 @@ export default function BookingsPage({
   onOpenRequestConversation,
   onViewProviderStand,
   onBookAgain,
+  onCreateEarlierSlotAlert,
 }) {
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [ratings, setRatings] = useState({});
@@ -92,6 +93,8 @@ export default function BookingsPage({
   const [rescheduling, setRescheduling] = useState(false);
   const [liveDrafts, setLiveDrafts] = useState({});
   const [liveUpdatingId, setLiveUpdatingId] = useState("");
+  const [slotAlertMessage, setSlotAlertMessage] = useState({});
+  const [slotAlertSubmittingId, setSlotAlertSubmittingId] = useState("");
 
   const isBarberView = role === "barber" && myBarberProfile;
   const visibleBookings = isBarberView
@@ -167,6 +170,26 @@ export default function BookingsPage({
       setRescheduleError(error?.message || "Could not reschedule this booking.");
     } finally {
       setRescheduling(false);
+    }
+  };
+
+  const createEarlierAlert = async (booking) => {
+    if (!onCreateEarlierSlotAlert || slotAlertSubmittingId) return;
+    setSlotAlertSubmittingId(String(booking.id));
+    setSlotAlertMessage((prev) => ({ ...prev, [booking.id]: "" }));
+    try {
+      await onCreateEarlierSlotAlert(booking);
+      setSlotAlertMessage((prev) => ({
+        ...prev,
+        [booking.id]: "Earlier-slot alert saved. Queless will show in-app alerts only when a real opening is found.",
+      }));
+    } catch (error) {
+      setSlotAlertMessage((prev) => ({
+        ...prev,
+        [booking.id]: error?.userMessage || error?.message || "We could not save that alert right now.",
+      }));
+    } finally {
+      setSlotAlertSubmittingId("");
     }
   };
 
@@ -430,6 +453,20 @@ export default function BookingsPage({
           <button type="button" className="mini-action-btn-v4 success" onClick={() => onBookAgain(booking)}>
             <FiCalendar /> Book again
           </button>
+        </div>
+      ) : null}
+
+      {!isBarberView && String(booking.status || "").toLowerCase() === "confirmed" && onCreateEarlierSlotAlert ? (
+        <div className="inline-actions-v4">
+          <button
+            type="button"
+            className="mini-action-btn-v4"
+            disabled={slotAlertSubmittingId === String(booking.id)}
+            onClick={() => createEarlierAlert(booking)}
+          >
+            <FiCalendar /> {slotAlertSubmittingId === String(booking.id) ? "Saving alert..." : "Earlier slot alert"}
+          </button>
+          {slotAlertMessage[booking.id] ? <span className="profile-sub-v4">{slotAlertMessage[booking.id]}</span> : null}
         </div>
       ) : null}
     </div>

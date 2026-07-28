@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getActiveCustomerPremiumSubscription, isActiveCustomerPremium, mapCustomerSubscription } from "./customerSubscriptionService.js";
+import { buildCustomerEntitlementSnapshot, CUSTOMER_ENTITLEMENTS } from "./entitlementService.js";
 import { isActiveProviderPlatinum } from "./providerSubscriptionAccess.js";
 
 test("customer Premium requires active paid Premium subscription", () => {
@@ -19,6 +20,30 @@ test("free customer state does not unlock Smart Match", () => {
   const mapped = mapCustomerSubscription(null);
   assert.equal(mapped.tier, "FREE");
   assert.equal(mapped.features.smartMatch, false);
+});
+
+test("customer entitlement snapshot keeps Free limited and Premium expanded", () => {
+  const free = buildCustomerEntitlementSnapshot(null);
+  assert.equal(free.plan, "FREE");
+  assert.equal(free.entitlements[CUSTOMER_ENTITLEMENTS.SMART_MATCH_PREVIEW], true);
+  assert.equal(free.entitlements[CUSTOMER_ENTITLEMENTS.SMART_MATCH_FULL], false);
+  assert.equal(free.entitlements[CUSTOMER_ENTITLEMENTS.PROVIDER_COMPARE], false);
+  assert.equal(free.entitlements[CUSTOMER_ENTITLEMENTS.FAVOURITES_BASIC], true);
+  assert.equal(free.entitlements[CUSTOMER_ENTITLEMENTS.FAVOURITES_EXPANDED], false);
+  assert.equal(free.entitlements[CUSTOMER_ENTITLEMENTS.SMART_REBOOKING], false);
+  assert.equal(free.entitlements[CUSTOMER_ENTITLEMENTS.EARLIER_SLOT_ALERTS], false);
+  assert.equal(free.limits.favourites, 3);
+  assert.equal(free.limits.comparisonProviders, 0);
+
+  const premium = buildCustomerEntitlementSnapshot({ id: 1 });
+  assert.equal(premium.plan, "PREMIUM");
+  assert.equal(premium.entitlements[CUSTOMER_ENTITLEMENTS.SMART_MATCH_FULL], true);
+  assert.equal(premium.entitlements[CUSTOMER_ENTITLEMENTS.PROVIDER_COMPARE], true);
+  assert.equal(premium.entitlements[CUSTOMER_ENTITLEMENTS.FAVOURITES_EXPANDED], true);
+  assert.equal(premium.entitlements[CUSTOMER_ENTITLEMENTS.SMART_REBOOKING], true);
+  assert.equal(premium.entitlements[CUSTOMER_ENTITLEMENTS.EARLIER_SLOT_ALERTS], true);
+  assert.equal(premium.limits.favourites > free.limits.favourites, true);
+  assert.equal(premium.limits.comparisonProviders, 3);
 });
 
 test("customer Premium lookup tolerates omitted database client", async () => {

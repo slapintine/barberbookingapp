@@ -17,6 +17,25 @@ const PAID_STATUSES = new Set(["paid", "successful"]);
 const ACTIVE_STATUSES = new Set(["active", "trialing"]);
 const PLATINUM_REVIEW_BLOCK_LIMIT = 10;
 
+export const CUSTOMER_ENTITLEMENTS = Object.freeze({
+  SMART_MATCH_PREVIEW: "customer.smart_match.preview",
+  SMART_MATCH_FULL: "customer.smart_match.full",
+  PROVIDER_COMPARE: "customer.provider_compare",
+  FAVOURITES_BASIC: "customer.favourites.basic",
+  FAVOURITES_EXPANDED: "customer.favourites.expanded",
+  SMART_REBOOKING: "customer.smart_rebooking",
+  EARLIER_SLOT_ALERTS: "customer.earlier_slot_alerts",
+  ADVANCED_REMINDERS: "customer.advanced_reminders",
+  PRIORITY_SUPPORT: "customer.priority_support",
+});
+
+export const CUSTOMER_PLAN_LIMITS = Object.freeze({
+  FREE_FAVOURITES: 3,
+  PREMIUM_FAVOURITES: 50,
+  COMPARISON_PROVIDERS: 3,
+  EARLIER_SLOT_ALERTS: 10,
+});
+
 function isFuture(value, now = new Date()) {
   if (!value) return false;
   const d = new Date(value);
@@ -80,10 +99,54 @@ export async function canUseSmartMatch(userId) {
   return Boolean(sub);
 }
 
-export async function getCustomerEntitlements(userId) {
-  const sub = await getActiveCustomerPremiumSubscription(userId);
-  const premium = Boolean(sub);
+export function buildCustomerEntitlementSnapshot(subscription = null) {
+  const premium = Boolean(subscription);
+  const entitlements = {
+    [CUSTOMER_ENTITLEMENTS.SMART_MATCH_PREVIEW]: true,
+    [CUSTOMER_ENTITLEMENTS.SMART_MATCH_FULL]: premium,
+    [CUSTOMER_ENTITLEMENTS.PROVIDER_COMPARE]: premium,
+    [CUSTOMER_ENTITLEMENTS.FAVOURITES_BASIC]: true,
+    [CUSTOMER_ENTITLEMENTS.FAVOURITES_EXPANDED]: premium,
+    [CUSTOMER_ENTITLEMENTS.SMART_REBOOKING]: premium,
+    [CUSTOMER_ENTITLEMENTS.EARLIER_SLOT_ALERTS]: premium,
+    [CUSTOMER_ENTITLEMENTS.ADVANCED_REMINDERS]: premium,
+    [CUSTOMER_ENTITLEMENTS.PRIORITY_SUPPORT]: premium,
+  };
+
   return {
+    plan: premium ? "PREMIUM" : "FREE",
+    premium,
+    entitlements,
+    limits: {
+      favourites: premium ? CUSTOMER_PLAN_LIMITS.PREMIUM_FAVOURITES : CUSTOMER_PLAN_LIMITS.FREE_FAVOURITES,
+      comparisonProviders: premium ? CUSTOMER_PLAN_LIMITS.COMPARISON_PROVIDERS : 0,
+      earlierSlotAlerts: premium ? CUSTOMER_PLAN_LIMITS.EARLIER_SLOT_ALERTS : 0,
+    },
+  };
+}
+
+export async function getCustomerEntitlementSnapshot(userId, client = null) {
+  const sub = await getActiveCustomerPremiumSubscription(userId, client);
+  return buildCustomerEntitlementSnapshot(sub);
+}
+
+export async function assertCustomerEntitlement(userId, entitlementKey, client = null) {
+  const snapshot = await getCustomerEntitlementSnapshot(userId, client);
+  if (snapshot.entitlements?.[entitlementKey]) return snapshot;
+  const error = new Error("Customer Premium is required for this feature.");
+  error.statusCode = 403;
+  error.code = "CUSTOMER_PREMIUM_REQUIRED";
+  error.entitlement = entitlementKey;
+  throw error;
+}
+
+export async function getCustomerEntitlements(userId) {
+  const snapshot = await getCustomerEntitlementSnapshot(userId);
+  const premium = snapshot.premium;
+  return {
+    ...snapshot.entitlements,
+    plan: snapshot.plan,
+    limits: snapshot.limits,
     smartMatch: premium,
     rankedRecommendations: premium,
     budgetMatching: premium,

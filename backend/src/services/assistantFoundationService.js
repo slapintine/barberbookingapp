@@ -15,8 +15,8 @@ const PROVIDER_ACTIONS = new Set([
 
 const TIME_WORDS = [
   { pattern: /\b(now|asap|urgent|immediately)\b/i, when: "now" },
-  { pattern: /\b(today|this afternoon|this evening|this morning)\b/i, when: "today" },
-  { pattern: /\b(this week|weekend|next few days)\b/i, when: "this_week" },
+  { pattern: /\b(today|tomorrow|this afternoon|this evening|this morning)\b/i, when: "today" },
+  { pattern: /\b(this week|next week|weekend|this saturday|next saturday|next few days)\b/i, when: "this_week" },
 ];
 
 function compact(value = "", limit = 500) {
@@ -32,21 +32,59 @@ function parseBudget(text) {
 
 function parseTime(text) {
   const value = String(text || "");
-  const match = value.match(/\b([01]?\d|2[0-3])(?::([0-5]\d))?\s*(am|pm)?\b/i);
+  if (/\bmorning\b/i.test(value)) return "09:00";
+  if (/\bafternoon\b/i.test(value)) return "15:00";
+  if (/\bevening\b/i.test(value)) return "18:00";
+  const match = value.match(/\b([01]?\d|2[0-3])(?::([0-5]\d))\s*(am|pm)?\b|\b([1-9]|1[0-2])\s*(am|pm)\b/i);
   if (!match) return "";
-  let hour = Number(match[1]);
+  let hour = Number(match[1] || match[4]);
   const minute = match[2] ? Number(match[2]) : 0;
-  const meridiem = String(match[3] || "").toLowerCase();
+  const meridiem = String(match[3] || match[5] || "").toLowerCase();
   if (meridiem === "pm" && hour < 12) hour += 12;
   if (meridiem === "am" && hour === 12) hour = 0;
   if (hour > 23 || minute > 59) return "";
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function parseDate(text) {
+function formatDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function nextWeekday(baseDate, weekday) {
+  const date = new Date(baseDate);
+  const delta = (weekday + 7 - date.getDay()) % 7 || 7;
+  date.setDate(date.getDate() + delta);
+  return date;
+}
+
+function parseDate(text, currentDate = new Date()) {
+  const value = String(text || "");
   const explicit = String(text || "").match(/\b(20\d{2}-\d{2}-\d{2})\b/);
   if (explicit) return explicit[1];
+  const base = Number.isFinite(new Date(currentDate).getTime()) ? new Date(currentDate) : new Date();
+  if (/\btomorrow\b/i.test(value)) {
+    const date = new Date(base);
+    date.setDate(date.getDate() + 1);
+    return formatDate(date);
+  }
+  if (/\b(?:this\s+)?saturday\b/i.test(value)) return formatDate(nextWeekday(base, 6));
+  if (/\bnext week\b/i.test(value)) {
+    const date = new Date(base);
+    date.setDate(date.getDate() + 7);
+    return formatDate(date);
+  }
   return "";
+}
+
+function parseMinimumRating(text) {
+  const value = String(text || "");
+  const explicit = value.match(/\b([1-5](?:\.\d)?)\s*(?:\+|stars?|rating)\b/i);
+  if (explicit) {
+    const rating = Number(explicit[1]);
+    return rating >= 1 && rating <= 5 ? rating : null;
+  }
+  if (/\b(highly rated|top rated|best rated|strong rating|good reviews)\b/i.test(value)) return 4.5;
+  return null;
 }
 
 function parseWhen(text) {
@@ -78,8 +116,9 @@ export function parseSmartMatchPrompt(message = "", previous = {}) {
   const when = parseWhen(text) || previous.when || "";
   const budgetMax = parseBudget(text) ?? previous.budgetMax ?? null;
   const preferredTime = parseTime(text) || previous.preferredTime || "";
-  const preferredDate = parseDate(text) || previous.preferredDate || "";
+  const preferredDate = parseDate(text, previous.currentDate) || previous.preferredDate || "";
   const address = parseLocation(text) || previous.address || "";
+  const minimumRating = parseMinimumRating(text) ?? previous.minimumRating ?? "";
   const notes = text ? text.slice(0, 300) : compact(previous.notes, 300);
   const entities = {
     serviceKey: serviceLabel ? serviceKey : "",
@@ -87,6 +126,7 @@ export function parseSmartMatchPrompt(message = "", previous = {}) {
     when,
     preferredDate,
     preferredTime,
+    minimumRating,
     budgetMax,
     locationType: address ? "enter_address" : previous.locationType || "",
     address,

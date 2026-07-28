@@ -1186,6 +1186,43 @@ export async function initDb() {
         FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE
       )
     `);
+    await run(`CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_favorites_barber ON favorites(barber_id)`);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS customer_slot_alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_user_id INTEGER NOT NULL,
+        existing_booking_id INTEGER DEFAULT NULL,
+        provider_id INTEGER NOT NULL,
+        service_id INTEGER NOT NULL,
+        desired_start_date TEXT NOT NULL,
+        desired_end_date TEXT NOT NULL,
+        preferred_time_start TEXT NOT NULL,
+        preferred_time_end TEXT NOT NULL,
+        current_booking_date TEXT DEFAULT NULL,
+        current_booking_time TEXT DEFAULT NULL,
+        notification_preference TEXT NOT NULL DEFAULT 'in_app',
+        status TEXT NOT NULL DEFAULT 'active',
+        expires_at TEXT NOT NULL,
+        last_evaluated_at TEXT DEFAULT NULL,
+        matched_slot_id TEXT DEFAULT NULL,
+        candidate_time TEXT DEFAULT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (existing_booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+        FOREIGN KEY (provider_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (service_id) REFERENCES barber_services(id) ON DELETE CASCADE
+      )
+    `);
+    await run(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_customer_slot_alert
+      ON customer_slot_alerts(customer_user_id, provider_id, service_id, desired_start_date, desired_end_date, preferred_time_start, preferred_time_end)
+      WHERE status = 'active'
+    `);
+    await run(`CREATE INDEX IF NOT EXISTS idx_customer_slot_alerts_user_status ON customer_slot_alerts(customer_user_id, status)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_customer_slot_alerts_provider_service ON customer_slot_alerts(provider_id, service_id, status)`);
 
     await run(`
       CREATE TABLE IF NOT EXISTS bookings (

@@ -29,6 +29,7 @@ import {
   startCustomerSubscriptionUpgrade,
   verifyCustomerSubscriptionUpgrade,
 } from "./api/customerSubscriptionsApi.js";
+import { createEarlierSlotAlert, getRebookingOptions } from "./api/customerPremiumApi.js";
 import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
 import { normalizeProviderData } from "./utils/providerData.js";
 import { buildStandDraftUpdatePayload } from "./utils/standDraftPayload.js";
@@ -711,6 +712,7 @@ function mapServerBooking(item) {
     bookingLocationType: item.booking_location_type || item.bookingLocationType || "provider_location",
     bookingAddress: item.booking_address || item.bookingAddress || item.location || "",
     service: item.service_name,
+    serviceId: item.service_id ?? item.serviceId ?? null,
     date: item.booking_date,
     dateValue: item.booking_date,
     time: formatTo24Hour(item.booking_time),
@@ -742,6 +744,21 @@ function mapServerBooking(item) {
     cancelledBy: item.cancelled_by || null,
     cancellationReason: item.cancellation_reason || "",
   };
+}
+
+function getUgandaDateValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Kampala",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function mapServerNotification(item) {
@@ -2133,12 +2150,11 @@ const fetchBarbers = async () => {
     if (!getAuthToken()) return;
     try {
       const data = await getFavoriteRows();
-      const ids = Array.isArray(data)
-        ? data.flatMap((item) => {
+      const rows = Array.isArray(data) ? data : Array.isArray(data?.favorites) ? data.favorites : [];
+      const ids = rows.flatMap((item) => {
             const id = Number(item.barber_id ?? item.barberId ?? item.id);
             return id ? [id] : [];
-          })
-        : [];
+          });
       setFavorites(ids);
       writeStored("favorites", username, ids);
     } catch (error) {
@@ -2921,6 +2937,7 @@ const fetchBarbers = async () => {
   const toggleFavorite = async (barberId) => {
     if (!currentUser?.username) return;
     const id = Number(barberId);
+    if (!id) return;
     const isFav = favorites.includes(id);
 
     try {
@@ -3438,6 +3455,77 @@ const updateBarberStand = async (payload) => {
       setGlobalError(error.message || "Could not update booking.");
       throw error;
     }
+  };
+
+  const openSmartRebooking = async (booking) => {
+    if (!currentUser?.username) return;
+    try {
+      const data = await getRebookingOptions();
+      const options = Array.isArray(data?.options) ? data.options : [];
+      const option = options.find((item) => String(item.bookingId) === String(booking?.id));
+      if (!option) {
+        setGlobalError("Smart rebooking is available for completed Customer Premium bookings.");
+        return;
+      }
+      if (!option.providerAvailable || !option.serviceAvailable || !option.currentService) {
+        setGlobalError(option.unavailableReason || "This service is not currently available for rebooking.");
+        setSmartMatchInitial({
+          service: option.previousServiceName || booking?.service || "",
+          notes: "Find a similar provider for this rebooking.",
+        });
+        setActiveTab("smartMatch");
+        return;
+      }
+      const provider = barbers.find((item) => String(item.id) === String(option.providerId));
+      if (!provider) {
+        setGlobalError("This provider is no longer available.");
+        return;
+      }
+      openSmartMatchBooking(
+        {
+          providerId: option.providerId,
+          serviceId: option.currentService.serviceId,
+          serviceName: option.currentService.serviceName,
+          priceMin: option.currentService.priceMin,
+          priceMax: option.currentService.priceMax,
+          priceLabel: option.currentService.priceLabel,
+          pricingType: option.currentService.pricingType,
+          durationMinutes: option.currentService.durationMinutes,
+          notes: option.notesPreview || "",
+          preferences: {
+            source: "smart_rebooking",
+            previousBookingId: option.bookingId,
+          },
+        },
+        provider
+      );
+    } catch (error) {
+      setGlobalError(error?.status === 403 ? "Smart rebooking is included with Customer Premium." : error?.userMessage || "We could not start smart rebooking right now.");
+    }
+  };
+
+  const createBookingEarlierSlotAlert = async (booking) => {
+    const providerId = Number(booking?.barberId || 0);
+    const serviceId = Number(booking?.serviceId || 0);
+    const bookingDate = String(booking?.dateValue || booking?.date || "").slice(0, 10);
+    const bookingTime = String(booking?.time || "").slice(0, 5);
+    if (!providerId || !serviceId || !bookingDate) {
+      throw new Error("This booking does not have enough service information for an earlier-slot alert.");
+    }
+    const today = getUgandaDateValue();
+    const desiredStartDate = today <= bookingDate ? today : bookingDate;
+    return createEarlierSlotAlert({
+      existingBookingId: booking.id,
+      providerId,
+      serviceId,
+      desiredStartDate,
+      desiredEndDate: bookingDate,
+      preferredStartTime: "08:00",
+      preferredEndTime: bookingTime && bookingTime > "08:00" ? bookingTime : "20:00",
+      currentBookingDate: bookingDate,
+      currentBookingTime: bookingTime,
+      notificationPreference: "in_app",
+    });
   };
 
   const verifyCurrentBookingPayment = async (bookingId = pendingBookingPayment?.bookingId, silent = false) => {
@@ -5112,14 +5200,8 @@ const updateBarberStand = async (payload) => {
           formatTimeLabel={formatTimeLabel}
           focusBookingId={focusedBookingId}
           onReportBooking={(_booking, topic) => openSupportFlow(topic)}
-          onBookAgain={(booking) => {
-            const barber = barbers.find((item) => String(item.id) === String(booking?.barberId));
-            if (!barber) {
-              setGlobalError("This provider is no longer available.");
-              return;
-            }
-            openProviderProfile(barber);
-          }}
+          onBookAgain={openSmartRebooking}
+          onCreateEarlierSlotAlert={createBookingEarlierSlotAlert}
         />
         </div>
       )}
@@ -5317,6 +5399,8 @@ const updateBarberStand = async (payload) => {
               openProviderProfile(provider);
             }}
             onBookMatch={openSmartMatchBooking}
+            favorites={favorites}
+            onToggleFavorite={toggleFavorite}
             onAsk={(provider) =>
               openConversation({
                 barber: provider,

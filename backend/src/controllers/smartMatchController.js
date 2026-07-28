@@ -1,4 +1,4 @@
-import { findSmartMatches, normalizeCategoryKey } from "../services/smartMatchService.js";
+import { compareSmartMatchProviders, findSmartMatches, normalizeCategoryKey } from "../services/smartMatchService.js";
 import { parseSmartMatchPrompt } from "../services/assistantFoundationService.js";
 
 const VALID_WHEN = new Set(["now", "today", "this_week"]);
@@ -75,8 +75,28 @@ export async function smartMatch(req, res, next) {
       return res.status(400).json({ success: false, message: validation.error });
     }
 
-    const result = await findSmartMatches(validation.value);
+    const result = await findSmartMatches({ ...validation.value, customerUserId: req.user?.id });
     res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function compareSmartMatch(req, res, next) {
+  try {
+    const validation = validateSmartMatchBody(req.body?.criteria || req.body || {});
+    if (validation.error) {
+      return res.status(400).json({ success: false, message: validation.error });
+    }
+    const providerIds = Array.isArray(req.body?.providerIds) ? req.body.providerIds : [];
+    if (!providerIds.length || providerIds.length > 3) {
+      return res.status(400).json({ success: false, message: "Choose one to three providers to compare." });
+    }
+    const result = await compareSmartMatchProviders(
+      { ...validation.value, customerUserId: req.user?.id },
+      providerIds
+    );
+    return res.json({ success: true, ...result });
   } catch (error) {
     next(error);
   }

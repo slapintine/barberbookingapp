@@ -8,6 +8,8 @@ export const SMART_MATCH_WEIGHTS = {
   rating: 10,
   reviewsConfidence: 5,
   availability: 10,
+  favourite: 3,
+  previousBooking: 4,
 };
 
 export const SMART_MATCH_REASON_CODES = {
@@ -275,27 +277,43 @@ function labelAvailability(row, when = "today") {
 
 function buildBadges({ score, distanceKm, row, when }) {
   const badges = [];
-  if (score >= 85) badges.push("Top Match");
+  if (score >= 85) badges.push("Strong fit");
   if (Number.isFinite(Number(distanceKm)) && Number(distanceKm) <= 2) badges.push("Closest");
   if (when === "now" && calculateTimingScore(row, "now") >= SMART_MATCH_WEIGHTS.timingFit) badges.push("Available now");
   if (when === "today") badges.push("Available today");
   if (Number(row.rating || 0) >= 4.7) badges.push("Highly rated");
-  if (Number(row.total_reviews || 0) >= 10) badges.push("Fast response");
+  if (Number(row.total_reviews || 0) >= 10) badges.push("Review support");
   return [...new Set(badges)].slice(0, 5);
 }
 
-function buildReasons({ row, serviceLabel, distanceKm, when, requestedTime, price, budgetMax, minimumRating }) {
-  const reasons = [`Offers ${serviceLabel} services`];
-  if (Number.isFinite(Number(distanceKm))) reasons.push(`${Number(distanceKm).toFixed(1)} km away`);
-  if (requestedTime && requestedTimeFits(row, requestedTime)) reasons.push("Available near your preferred time");
-  if (hasKnownPrice(price) && priceFitsBudget(price, budgetMax) && Number(budgetMax) > 0) reasons.push("Within your selected price range");
-  if (Number(row.rating || 0) >= 4.7) reasons.push("Highly rated by customers");
-  if (Number(minimumRating) > 0 && Number(row.rating || 0) >= Number(minimumRating)) reasons.push("Meets your rating preference");
-  if (Number(row.total_reviews || 0) >= 50) reasons.push("Strong review history");
-  if (when === "now") reasons.push("Likely to fit urgent timing");
-  if (when === "today") reasons.push("Likely to fit same-day timing");
-  if (when === "this_week") reasons.push("More availability this week");
-  return reasons.slice(0, 5);
+function reason(code, text, evidence = {}) {
+  return { code, text, evidence };
+}
+
+function buildExplanations({ row, serviceLabel, distanceKm, when, requestedTime, price, budgetMax, minimumRating }) {
+  const explanations = [reason("service.offered", `Offers ${serviceLabel} services`, { serviceName: row.service_name || "" })];
+  if (Number.isFinite(Number(distanceKm))) {
+    explanations.push(reason("location.distance", `${Number(distanceKm).toFixed(1)} km away`, { distanceKm: Number(distanceKm) }));
+  }
+  if (requestedTime && requestedTimeFits(row, requestedTime)) {
+    explanations.push(reason("availability.near_time", "Available near your preferred time", { requestedTime }));
+  }
+  if (hasKnownPrice(price) && priceFitsBudget(price, budgetMax) && Number(budgetMax) > 0) {
+    explanations.push(reason("price.within_budget", "Within your selected price range", { budgetMax: Number(budgetMax), price }));
+  }
+  if (row.is_favourite) explanations.push(reason("customer.favourite", "Saved by you", { favourite: true }));
+  if (row.previously_booked) explanations.push(reason("customer.previous_booking", "You've booked this provider before", { previousBooking: true }));
+  if (Number(row.rating || 0) >= 4.7) {
+    explanations.push(reason("rating.high", "Highly rated by customers", { rating: Number(row.rating || 0) }));
+  }
+  if (Number(minimumRating) > 0 && Number(row.rating || 0) >= Number(minimumRating)) {
+    explanations.push(reason("rating.preference_met", "Meets your rating preference", { minimumRating: Number(minimumRating), rating: Number(row.rating || 0) }));
+  }
+  if (Number(row.total_reviews || 0) >= 50) explanations.push(reason("reviews.strong", "Strong review support", { reviews: Number(row.total_reviews || 0) }));
+  if (when === "now") explanations.push(reason("timing.urgent", "Likely to fit urgent timing", { when }));
+  if (when === "today") explanations.push(reason("timing.same_day", "Likely to fit same-day timing", { when }));
+  if (when === "this_week") explanations.push(reason("timing.week", "More availability this week", { when }));
+  return explanations.slice(0, 6);
 }
 
 function hasRequestedCoordinates(criteria = {}) {
@@ -409,7 +427,7 @@ export function scoreProvider(row, criteria = {}) {
     time: requestedTime,
     date: requestedDate,
     budgetMax: criteria.budgetMax,
-  });
+  }) + (row.is_favourite ? SMART_MATCH_WEIGHTS.favourite : 0) + (row.previously_booked ? SMART_MATCH_WEIGHTS.previousBooking : 0);
   const timingExact =
     requestedTime
       ? requestedTimeFits(row, requestedTime)
@@ -418,6 +436,7 @@ export function scoreProvider(row, criteria = {}) {
       : true;
   const rating = Number(row.rating || 0);
   const meetsRatingPreference = !Number(criteria.minimumRating) || rating === 0 || rating >= Number(criteria.minimumRating);
+  const explanations = buildExplanations({ row, serviceLabel, distanceKm, when: criteria.when, requestedTime, price, budgetMax: criteria.budgetMax, minimumRating: criteria.minimumRating });
   return {
     providerId: String(row.id),
     businessId: row.id,
@@ -434,12 +453,15 @@ export function scoreProvider(row, criteria = {}) {
     availabilityLabel: labelAvailability(row, criteria.when),
     requestedDate,
     requestedTime,
-    score,
+    score: Math.min(100, score),
     timingExact,
     budgetCompatible: hasKnownPrice(price) ? priceFitsBudget(price, criteria.budgetMax) : true,
     meetsRatingPreference,
     badges: buildBadges({ score, distanceKm, row, when: criteria.when }),
-    reasons: buildReasons({ row, serviceLabel, distanceKm, when: criteria.when, requestedTime, price, budgetMax: criteria.budgetMax, minimumRating: criteria.minimumRating }),
+    explanations,
+    reasons: explanations.map((item) => item.text),
+    isFavourite: Boolean(row.is_favourite),
+    previouslyBooked: Boolean(row.previously_booked),
     imageUrl: row.image || "",
     priceMin: price.min,
     priceMax: price.max,
@@ -517,7 +539,24 @@ export async function findSmartMatches(criteria = {}) {
     [dayOfWeek ?? -1, ...publicBusinessParams(now)]
   );
 
-  const serviceRows = rows.filter((row) => categoryMatches(row, serviceKey));
+  const customerUserId = Number(criteria.customerUserId || 0);
+  let favouriteProviderIds = new Set();
+  let previousProviderIds = new Set();
+  if (Number.isInteger(customerUserId) && customerUserId > 0) {
+    const [favourites, previous] = await Promise.all([
+      all(`SELECT barber_id FROM favorites WHERE user_id = ?`, [customerUserId]),
+      all(`SELECT DISTINCT barber_id FROM bookings WHERE customer_user_id = ? AND LOWER(status) = 'completed'`, [customerUserId]),
+    ]);
+    favouriteProviderIds = new Set(favourites.map((item) => String(item.barber_id)));
+    previousProviderIds = new Set(previous.map((item) => String(item.barber_id)));
+  }
+  const annotatedRows = rows.map((row) => ({
+    ...row,
+    is_favourite: favouriteProviderIds.has(String(row.id)),
+    previously_booked: previousProviderIds.has(String(row.id)),
+  }));
+
+  const serviceRows = annotatedRows.filter((row) => categoryMatches(row, serviceKey));
   const scored = serviceRows
     .map((row) => scoreProvider(row, { ...criteria, serviceKey, when }))
     .filter(Boolean);
@@ -560,5 +599,16 @@ export async function findSmartMatches(criteria = {}) {
     nearestDistanceKm: null,
     suggestions: [],
     message: "Ranked using your service, timing, and location choices.",
+  };
+}
+
+export async function compareSmartMatchProviders(criteria = {}, providerIds = []) {
+  const allowedIds = [...new Set((providerIds || []).map((id) => String(id)).filter(Boolean))].slice(0, 3);
+  if (!allowedIds.length) return { comparisons: [], message: "Choose providers to compare." };
+  const result = await findSmartMatches(criteria);
+  const byProvider = new Map((result.matches || []).map((match) => [String(match.providerId), match]));
+  return {
+    comparisons: allowedIds.map((id) => byProvider.get(id)).filter(Boolean),
+    message: "Comparison uses the matched service, current price, duration, rating, location, and customer relationship signals.",
   };
 }

@@ -9,7 +9,7 @@ import {
   getProviders,
   getServiceListings,
 } from "../controllers/serviceDiscoveryController.js";
-import { parseSmartMatch, smartMatch } from "../controllers/smartMatchController.js";
+import { compareSmartMatch, parseSmartMatch, smartMatch } from "../controllers/smartMatchController.js";
 import { requireRole } from "../middleware/roleMiddleware.js";
 import { requireCustomerPremium } from "../middleware/customerPremiumMiddleware.js";
 import { searchRateLimiter, smartMatchRateLimiter, supportRateLimiter } from "../middleware/securityMiddleware.js";
@@ -24,6 +24,7 @@ router.get("/service-listings", searchRateLimiter, getServiceListings);
 router.post("/smart-match/parse", protect, requireRole("customer"), smartMatchRateLimiter, parseSmartMatch);
 router.post("/smart-match", protect, requireRole("customer"), requireCustomerPremium, smartMatchRateLimiter, smartMatch);
 router.post("/smart-match/search", protect, requireRole("customer"), requireCustomerPremium, smartMatchRateLimiter, smartMatch);
+router.post("/smart-match/compare", protect, requireRole("customer"), requireCustomerPremium, smartMatchRateLimiter, compareSmartMatch);
 router.get("/quote-requests/me", protect, getMyQuoteRequests);
 router.post("/quote-requests", protect, requireRole("customer"), supportRateLimiter, validateRequest(schemas.quoteRequest), createQuoteRequest);
 router.get("/support-requests/me", protect, getMySupportRequests);

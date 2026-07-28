@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FiArrowLeft, FiCheck, FiCheckCircle, FiCreditCard, FiHelpCircle, FiHome, FiLock, FiMap, FiMapPin, FiMessageSquare, FiSearch, FiShield, FiStar, FiX, FiZap } from "react-icons/fi";
 import { findSmartMatches, parseSmartMatchPrompt } from "../../api/smartMatchApi.js";
 import { mergeAssistantSession, readAssistantSession, writeAssistantSession } from "../assistants/assistantSession.js";
-import { getProviderTier, isProviderOpenNow, isProviderVerified } from "../../utils/providerDiscovery.js";
+import { isProviderOpenNow, isProviderVerified } from "../../utils/providerDiscovery.js";
 import logo from "../../assets/queless-logo-full.png";
 import { isCustomerPremiumActive } from "../../utils/customerPremium.js";
 import { reverseGeocodeCoordinates } from "../../utils/locationUtils.js";
@@ -170,10 +170,24 @@ function buildNoMatchCopy(state = {}) {
   }
 }
 
-function NoMatchResults({ state, onChangeLocation, onTryAnotherService, onOpenProvider }) {
+function NoMatchResults({ state, onChangeLocation, onTryAnotherService, onOpenProvider, onRecovery }) {
   const copy = buildNoMatchCopy(state);
   const nearest = state.nearestProvider || null;
   const provider = nearest?.provider || null;
+  const actions = [];
+  if (state.reasonCode === "NO_TIME_MATCH") {
+    actions.push({ key: "date", label: "Change date", patch: { step: "when", preferredDate: "", preferredTime: "" } });
+    actions.push({ key: "time", label: "Widen time choice", patch: { step: "when", selectedWhen: "this_week", preferredTime: "" } });
+  }
+  if (state.reasonCode === "NO_NEARBY_PROVIDERS" || state.reasonCode === "LOCATION_MISSING") {
+    actions.push({ key: "location", label: "Expand location", patch: { step: "where", selectedLocationType: "enter_address" } });
+  }
+  if (state.reasonCode === "FILTERS_TOO_NARROW" || state.budgetMax) {
+    actions.push({ key: "budget", label: "Remove budget limit", patch: { step: "when", budgetMax: "" } });
+  }
+  if (state.reasonCode === "FILTERS_TOO_NARROW" || state.minimumRating) {
+    actions.push({ key: "rating", label: "Any rating", patch: { step: "when", minimumRating: "" } });
+  }
   return (
     <div className="smart-match-no-match-card">
       <span className="smart-match-no-match-icon"><FiSearch /></span>
@@ -191,6 +205,11 @@ function NoMatchResults({ state, onChangeLocation, onTryAnotherService, onOpenPr
         <button type="button" className="smart-match-secondary-button compact" onClick={onTryAnotherService}>
           Try another service
         </button>
+        {actions.map((action) => (
+          <button key={action.key} type="button" className="smart-match-secondary-button compact" onClick={() => onRecovery?.(action.patch)}>
+            {action.label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -203,7 +222,6 @@ const SMART_MATCH_SORTS = [
   { key: "rated", label: "Top rated" },
   { key: "available", label: "Available now" },
   { key: "budget", label: "Budget" },
-  { key: "premium", label: "Premium" },
 ];
 
 function providerHasHours(provider) {
@@ -213,11 +231,6 @@ function providerHasHours(provider) {
 function providerPriceFrom(provider) {
   const value = Number(provider?.price_from || 0);
   return value > 0 ? value : Number.POSITIVE_INFINITY;
-}
-
-function providerTierRank(provider) {
-  const tier = String(getProviderTier(provider || {}) || "").toUpperCase();
-  return tier === "PLATINUM" ? 0 : tier === "PREMIUM" ? 1 : 2;
 }
 
 /** Sort the existing matches client-side. Default keeps the backend relevance order. */
@@ -234,8 +247,6 @@ function sortMatches(matches, mode, providerById) {
       return list.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
     case "budget":
       return list.sort((a, b) => providerPriceFrom(resolve(a)) - providerPriceFrom(resolve(b)));
-    case "premium":
-      return list.sort((a, b) => providerTierRank(resolve(a)) - providerTierRank(resolve(b)));
     case "available":
       return list.sort((a, b) => {
         const openRank = (match) => {
@@ -260,9 +271,6 @@ function getMatchChips(match, provider) {
   if (Number.isFinite(distance) && distance <= 3) chips.push({ icon: "pin", label: "Nearby" });
   if (Number.isFinite(rating) && rating >= 4.5) chips.push({ icon: "star", label: "Highly rated" });
   if (isProviderVerified(provider || {})) chips.push({ icon: "shield", label: "Verified" });
-  const tier = String(getProviderTier(provider || {}) || "").toUpperCase();
-  if (tier === "PLATINUM") chips.push({ icon: "zap", label: "Platinum" });
-  else if (tier === "PREMIUM") chips.push({ icon: "zap", label: "Premium" });
   if (provider?.home_service_enabled === 1 || provider?.home_service_enabled === true) {
     chips.push({ icon: "home", label: "Home service" });
   }
@@ -365,6 +373,52 @@ function MatchProviderCard({ match, provider, state, onOpenProvider, onBookMatch
   );
 }
 
+function ComparisonPanel({ matches, selectedIds, providerById, state, onToggleCompare, onBookMatch, onOpenProvider }) {
+  const selected = matches.filter((match) => selectedIds.includes(String(match.providerId || match.businessId || "")));
+  if (!selected.length) return null;
+  return (
+    <section className="smart-match-comparison-panel" aria-label="Provider comparison">
+      <div className="smart-match-comparison-head">
+        <strong>Compare providers</strong>
+        <span>{selected.length}/3 selected</span>
+      </div>
+      <div className="smart-match-comparison-grid">
+        {selected.map((match) => {
+          const provider = providerById?.get?.(String(match.providerId || match.businessId || "")) || match.provider || null;
+          const duration = Number(match.durationMinutes || 0);
+          return (
+            <article key={`compare-${match.providerId || match.businessId}`} className="smart-match-compare-card">
+              <button type="button" className="smart-match-compare-remove" onClick={() => onToggleCompare(match)}>Remove</button>
+              <strong>{match.businessName || provider?.business_name || "Queless provider"}</strong>
+              <span>{match.serviceName || match.serviceLabel || "Matched service"}</span>
+              <dl>
+                <div><dt>Price</dt><dd>{formatMatchPrice(match)}</dd></div>
+                <div><dt>Duration</dt><dd>{duration > 0 ? `${duration} min` : "Unknown"}</dd></div>
+                <div><dt>Rating</dt><dd>{Number(match.rating) > 0 ? `${Number(match.rating).toFixed(1)} (${Number(match.reviewsCount || 0)})` : "New"}</dd></div>
+                <div><dt>Distance</dt><dd>{Number.isFinite(Number(match.distanceKm)) ? `${Number(match.distanceKm).toFixed(1)} km` : "Not available"}</dd></div>
+                <div><dt>Payment</dt><dd>{Array.isArray(match.paymentOptions) ? match.paymentOptions.join(", ") : "Ask provider"}</dd></div>
+              </dl>
+              <ul>
+                {(match.explanations || match.reasons || []).slice(0, 4).map((item) => (
+                  <li key={item.code || item}>{item.text || item}</li>
+                ))}
+              </ul>
+              <div className="smart-match-compare-actions">
+                <button type="button" onClick={() => provider ? onBookMatch?.(buildSmartMatchBookingContext(match, provider, state), provider) : null} disabled={!provider}>
+                  Book this provider
+                </button>
+                <button type="button" onClick={() => provider ? onOpenProvider?.(provider) : null} disabled={!provider}>
+                  View stand
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function SmartMatchPage({
   initial = {},
   providers = [],
@@ -381,6 +435,8 @@ export default function SmartMatchPage({
   onContinueManualSearch,
   onAsk,
   onViewOnMap,
+  favorites = [],
+  onToggleFavorite,
 }) {
   const draftKey = `${locationLabel}|${JSON.stringify(initial || {})}`;
   const [stateEntry, setStateEntry] = useState(() => ({ key: draftKey, value: readStoredDraft(initial, locationLabel) }));
@@ -390,6 +446,7 @@ export default function SmartMatchPage({
   const [assistantPrompt, setAssistantPrompt] = useState("");
   const [assistantParsing, setAssistantParsing] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState("");
+  const [comparisonIds, setComparisonIds] = useState([]);
   const cacheRef = useRef(new Map());
   const premiumActive = isCustomerPremiumActive(customerSubscription);
   const state = stateEntry.key === draftKey ? stateEntry.value : readStoredDraft(initial, locationLabel);
@@ -582,6 +639,7 @@ export default function SmartMatchPage({
         preferredDate: entities.preferredDate || state.preferredDate,
         preferredTime: entities.preferredTime || state.preferredTime,
         budgetMax: entities.budgetMax ? String(entities.budgetMax) : state.budgetMax,
+        minimumRating: entities.minimumRating ? String(entities.minimumRating) : state.minimumRating,
         selectedLocationType: entities.locationType || state.selectedLocationType || (entities.address ? "enter_address" : null),
         selectedAddress: entities.address || state.selectedAddress,
         notes: entities.notes || state.notes,
@@ -609,6 +667,16 @@ export default function SmartMatchPage({
     () => sortMatches(matches, sortMode, localProviderById),
     [matches, sortMode, localProviderById]
   );
+
+  const toggleCompare = (match) => {
+    const id = String(match.providerId || match.businessId || "");
+    if (!id) return;
+    setComparisonIds((current) => {
+      if (current.includes(id)) return current.filter((item) => item !== id);
+      if (current.length >= 3) return current;
+      return [...current, id];
+    });
+  };
 
   return (
     <div className="smart-match-page">
@@ -833,6 +901,17 @@ export default function SmartMatchPage({
                 <span>We ranked providers based on service fit, distance, availability, rating, and reliability.</span>
               </div>
             ) : null}
+            {matches.length ? (
+              <ComparisonPanel
+                matches={displayedMatches}
+                selectedIds={comparisonIds}
+                providerById={localProviderById}
+                state={state}
+                onToggleCompare={toggleCompare}
+                onBookMatch={onBookMatch}
+                onOpenProvider={onOpenProvider}
+              />
+            ) : null}
             {matches.length > 1 ? (
               <div className="smart-match-filter-row" role="group" aria-label="Sort matches">
                 {SMART_MATCH_SORTS.map((option) => (
@@ -853,16 +932,34 @@ export default function SmartMatchPage({
                 {displayedMatches.map((match) => {
                   const provider = localProviderById?.get?.(String(match.providerId || match.businessId || "")) || match.provider || null;
                   return (
-                    <MatchProviderCard
-                      key={`${match.providerId || match.businessId}-${match.serviceId || match.serviceName}`}
-                      match={match}
-                      provider={provider}
-                      state={state}
-                      onOpenProvider={onOpenProvider}
-                      onBookMatch={onBookMatch}
-                      onAsk={onAsk}
-                      onViewOnMap={onViewOnMap}
-                    />
+                    <div className="smart-match-result-stack" key={`${match.providerId || match.businessId}-${match.serviceId || match.serviceName}`}>
+                      <MatchProviderCard
+                        match={match}
+                        provider={provider}
+                        state={state}
+                        onOpenProvider={onOpenProvider}
+                        onBookMatch={onBookMatch}
+                        onAsk={onAsk}
+                        onViewOnMap={onViewOnMap}
+                      />
+                      <div className="smart-match-result-secondary-actions">
+                      <button
+                        type="button"
+                        className={comparisonIds.includes(String(match.providerId || match.businessId || "")) ? "is-active" : ""}
+                        onClick={() => toggleCompare(match)}
+                        disabled={!comparisonIds.includes(String(match.providerId || match.businessId || "")) && comparisonIds.length >= 3}
+                      >
+                        {comparisonIds.includes(String(match.providerId || match.businessId || "")) ? "In comparison" : "Compare"}
+                      </button>
+                      <button
+                        type="button"
+                        className={(favorites || []).includes(Number(match.providerId || match.businessId)) || match.isFavourite ? "is-active" : ""}
+                        onClick={() => onToggleFavorite?.(match.providerId || match.businessId)}
+                      >
+                        {(favorites || []).includes(Number(match.providerId || match.businessId)) || match.isFavourite ? "Saved" : "Save"}
+                      </button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -872,6 +969,7 @@ export default function SmartMatchPage({
                 onChangeLocation={() => updateState({ step: "where" })}
                 onTryAnotherService={() => updateState({ step: "need" })}
                 onOpenProvider={onOpenProvider}
+                onRecovery={(patch) => updateState(patch)}
               />
             )}
           </section>
