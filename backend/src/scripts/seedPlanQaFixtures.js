@@ -13,7 +13,11 @@ if (!allowQaSeed) {
   process.exit(1);
 }
 
-const PASSWORD = "PlanQa123";
+const PASSWORD = String(process.env.QA_SEED_PASSWORD || "").trim();
+if (!PASSWORD || PASSWORD.length < 10) {
+  console.error("Set QA_SEED_PASSWORD to a local-only password of at least 10 characters. The seed script does not commit or print QA passwords.");
+  process.exit(1);
+}
 const now = new Date();
 
 const FIXTURE_CUSTOMER = {
@@ -71,6 +75,13 @@ const PROVIDERS = [
     averagePrice: 26000,
     ratingSeed: [5, 5, 5, 4, 5],
   },
+];
+
+const PLATINUM_STAFF = [
+  { username: "qa_platinum_manager", fullName: "QA Platinum Manager", email: "qa.platinum.manager@queless.test", role: "manager" },
+  { username: "qa_platinum_scheduler", fullName: "QA Platinum Scheduler", email: "qa.platinum.scheduler@queless.test", role: "scheduler" },
+  { username: "qa_platinum_pro", fullName: "QA Platinum Professional", email: "qa.platinum.pro@queless.test", role: "service_professional" },
+  { username: "qa_platinum_analyst", fullName: "QA Platinum Analyst", email: "qa.platinum.analyst@queless.test", role: "view_only_analyst" },
 ];
 
 function normalizeEmail(value) {
@@ -256,6 +267,99 @@ async function seedSubscription(barberId, provider) {
   );
 }
 
+async function seedPlatinumOperations(barberId) {
+  const services = await new Promise((resolve, reject) => {
+    db.all(`SELECT id FROM barber_services WHERE barber_id = ? ORDER BY id ASC LIMIT 4`, [barberId], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+  await run(`DELETE FROM provider_locations WHERE barber_id = ?`, [barberId]);
+  await run(`DELETE FROM barber_team_members WHERE barber_id = ?`, [barberId]);
+  const branchRows = [
+    { name: "QA Platinum Central Branch", area: "Kampala", address: "QA Plot 10, Kampala" },
+    { name: "QA Platinum Wakiso Branch", area: "Wakiso", address: "QA Plot 22, Wakiso" },
+  ];
+  const branches = [];
+  for (const [index, branch] of branchRows.entries()) {
+    const result = await run(
+      `INSERT INTO provider_locations (barber_id, name, address, area, city, is_primary, is_active, booking_instructions)
+       VALUES (?, ?, ?, ?, 'Uganda', ?, 1, ?)`,
+      [barberId, branch.name, branch.address, branch.area, index === 0 ? 1 : 0, "QA local branch instructions."]
+    );
+    branches.push({ ...branch, id: result.lastID });
+    for (let day = 1; day <= 6; day += 1) {
+      await run(
+        `INSERT INTO provider_location_schedule (barber_id, location_id, day_of_week, is_open, start_time, end_time)
+         VALUES (?, ?, ?, 1, ?, ?)
+         ON CONFLICT(location_id, day_of_week) DO UPDATE SET is_open = 1, start_time = excluded.start_time, end_time = excluded.end_time`,
+        [barberId, result.lastID, day, index === 0 ? "08:00" : "10:00", index === 0 ? "19:00" : "18:00"]
+      );
+    }
+  }
+
+  const staffSummary = [];
+  for (const [index, staff] of PLATINUM_STAFF.entries()) {
+    const userId = await upsertUser({
+      username: staff.username,
+      role: "customer",
+      fullName: staff.fullName,
+      email: staff.email,
+      phone: `+25670020${String(index + 1).padStart(4, "0")}`,
+    });
+    const result = await run(
+      `INSERT INTO barber_team_members (barber_id, user_id, name, display_name, email, role, title, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [barberId, userId, staff.fullName, staff.fullName, staff.email, staff.role, staff.role.replace(/_/g, " ")]
+    );
+    const staffId = result.lastID;
+    staffSummary.push({ username: staff.username, role: staff.role, staffId });
+    const branch = branches[index % branches.length];
+    await run(
+      `INSERT INTO staff_location_assignments (barber_id, staff_id, location_id, is_active)
+       VALUES (?, ?, ?, 1)
+       ON CONFLICT(barber_id, staff_id, location_id) DO UPDATE SET is_active = 1`,
+      [barberId, staffId, branch.id]
+    );
+    for (const service of services.filter((_, serviceIndex) => serviceIndex % PLATINUM_STAFF.length === index % PLATINUM_STAFF.length || index < 2)) {
+      await run(
+        `INSERT INTO staff_service_assignments (barber_id, staff_id, service_id, is_active)
+         VALUES (?, ?, ?, 1)
+         ON CONFLICT(barber_id, staff_id, service_id) DO UPDATE SET is_active = 1`,
+        [barberId, staffId, service.id]
+      );
+    }
+    for (let day = 1; day <= 5; day += 1) {
+      await run(
+        `INSERT INTO staff_schedules (barber_id, staff_id, day_of_week, is_available, start_time, end_time, transition_minutes)
+         VALUES (?, ?, ?, 1, ?, ?, 10)
+         ON CONFLICT(barber_id, staff_id, day_of_week) DO UPDATE SET is_available = 1, start_time = excluded.start_time, end_time = excluded.end_time, transition_minutes = 10`,
+        [barberId, staffId, day, index === 2 ? "10:00" : "09:00", index === 2 ? "16:00" : "18:00"]
+      );
+    }
+  }
+  const bookings = await new Promise((resolve, reject) => {
+    db.all(`SELECT id FROM bookings WHERE barber_id = ? ORDER BY booking_date DESC, id DESC LIMIT 6`, [barberId], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+  for (const [index, booking] of bookings.entries()) {
+    const staff = staffSummary[index % staffSummary.length];
+    const branch = branches[index % branches.length];
+    if (index < 4) {
+      await run(
+        `UPDATE bookings
+         SET assigned_staff_id = ?, team_member_id = ?, provider_location_id = ?,
+             provider_location_snapshot = ?
+         WHERE id = ? AND barber_id = ?`,
+        [staff.staffId, staff.staffId, branch.id, JSON.stringify({ name: branch.name, area: branch.area }), booking.id, barberId]
+      );
+    }
+  }
+  return { branches, staffSummary };
+}
+
 async function seedBookingsAndReviews(barberId, customerUserIds, provider) {
   await run(`DELETE FROM reviews WHERE barber_id = ?`, [barberId]);
   await run(`DELETE FROM bookings WHERE barber_id = ?`, [barberId]);
@@ -370,13 +474,14 @@ async function seedProvider(provider, customerUserIds) {
   await seedSchedule(barberId);
   await seedSubscription(barberId, provider);
   await seedBookingsAndReviews(barberId, customerUserIds, provider);
+  const operations = provider.tier === "PLATINUM" ? await seedPlatinumOperations(barberId) : null;
   await run(
     `INSERT INTO subscription_events (user_id, business_id, event_type, plan_id, status, metadata)
      VALUES (?, ?, 'qa_seeded', ?, 'active', ?)`,
     [ownerUserId, barberId, provider.tier.toLowerCase(), JSON.stringify({ serviceCount: provider.serviceCount, photoCount: provider.photoCount })]
   );
 
-  return { username: provider.username, password: PASSWORD, tier: provider.tier, barberId };
+  return { username: provider.username, tier: provider.tier, barberId, operations };
 }
 
 async function main() {
@@ -407,9 +512,11 @@ async function main() {
 
   console.log("Seeded Queless plan QA fixtures:");
   console.table([
-    { username: FIXTURE_CUSTOMER.username, password: PASSWORD, role: "customer", tier: "" },
-    ...seeded.map((item) => ({ username: item.username, password: item.password, role: "provider", tier: item.tier, barberId: item.barberId })),
+    { username: FIXTURE_CUSTOMER.username, role: "customer", tier: "" },
+    ...seeded.map((item) => ({ username: item.username, role: "provider", tier: item.tier, barberId: item.barberId })),
+    ...PLATINUM_STAFF.map((item) => ({ username: item.username, role: item.role, tier: "PLATINUM staff" })),
   ]);
+  console.log("Use the local-only QA_SEED_PASSWORD value you supplied. It is not printed by this script.");
 }
 
 main()
