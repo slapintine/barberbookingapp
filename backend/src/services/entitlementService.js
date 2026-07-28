@@ -36,6 +36,36 @@ export const CUSTOMER_PLAN_LIMITS = Object.freeze({
   EARLIER_SLOT_ALERTS: 10,
 });
 
+export const PROVIDER_ENTITLEMENTS = Object.freeze({
+  BASIC_PROFILE: "provider.basic_profile",
+  RECEIVE_BOOKINGS: "provider.receive_bookings",
+  BASIC_SCHEDULE: "provider.basic_schedule",
+  BASIC_ANALYTICS: "provider.basic_analytics",
+  PORTFOLIO_BASIC: "provider.portfolio.basic",
+  PORTFOLIO_EXPANDED: "provider.portfolio.expanded",
+  ASSISTANT_PREVIEW: "provider.assistant.preview",
+  ASSISTANT_FULL: "provider.assistant.full",
+  AUTOMATED_REMINDERS: "provider.automated_reminders",
+  SMART_SCHEDULE: "provider.smart_schedule",
+  CANCELLATION_INSIGHTS: "provider.cancellation_insights",
+  REVENUE_ANALYTICS: "provider.revenue_analytics",
+  RETENTION_TOOLS: "provider.retention_tools",
+  PROMOTIONS: "provider.promotions",
+  PROFILE_ASSISTANT: "provider.profile_assistant",
+  RESPONSE_ASSISTANT: "provider.response_assistant",
+  PRIORITY_SUPPORT: "provider.priority_support",
+  STAFF_MANAGEMENT: "provider.staff_management",
+  MULTIPLE_LOCATIONS: "provider.multiple_locations",
+  BRANCH_ANALYTICS: "provider.branch_analytics",
+  ADVANCED_EXPORTS: "provider.advanced_exports",
+  ADVANCED_ASSISTANT: "provider.advanced_assistant",
+});
+
+export const PROVIDER_PLAN_LIMITS = Object.freeze({
+  PREMIUM_ACTIVE_PROMOTIONS: 10,
+  PREMIUM_RETENTION_RECIPIENTS: 10,
+});
+
 function isFuture(value, now = new Date()) {
   if (!value) return false;
   const d = new Date(value);
@@ -166,6 +196,64 @@ export async function getProviderTier(userId) {
   return normalizeProviderTier(sub.tier);
 }
 
+export function buildProviderEntitlementSnapshot(subscription = null) {
+  const tier = subscription && isActiveProviderSubscription(subscription)
+    ? normalizeProviderTier(subscription.tier)
+    : "FREE";
+  const premium = tier === "PREMIUM" || tier === "PLATINUM";
+
+  const entitlements = {
+    [PROVIDER_ENTITLEMENTS.BASIC_PROFILE]: true,
+    [PROVIDER_ENTITLEMENTS.RECEIVE_BOOKINGS]: true,
+    [PROVIDER_ENTITLEMENTS.BASIC_SCHEDULE]: true,
+    [PROVIDER_ENTITLEMENTS.BASIC_ANALYTICS]: true,
+    [PROVIDER_ENTITLEMENTS.PORTFOLIO_BASIC]: true,
+    [PROVIDER_ENTITLEMENTS.PORTFOLIO_EXPANDED]: premium,
+    [PROVIDER_ENTITLEMENTS.ASSISTANT_PREVIEW]: true,
+    [PROVIDER_ENTITLEMENTS.ASSISTANT_FULL]: premium,
+    [PROVIDER_ENTITLEMENTS.AUTOMATED_REMINDERS]: premium,
+    [PROVIDER_ENTITLEMENTS.SMART_SCHEDULE]: premium,
+    [PROVIDER_ENTITLEMENTS.CANCELLATION_INSIGHTS]: premium,
+    [PROVIDER_ENTITLEMENTS.REVENUE_ANALYTICS]: premium,
+    [PROVIDER_ENTITLEMENTS.RETENTION_TOOLS]: premium,
+    [PROVIDER_ENTITLEMENTS.PROMOTIONS]: premium,
+    [PROVIDER_ENTITLEMENTS.PROFILE_ASSISTANT]: premium,
+    [PROVIDER_ENTITLEMENTS.RESPONSE_ASSISTANT]: premium,
+    [PROVIDER_ENTITLEMENTS.PRIORITY_SUPPORT]: premium,
+    [PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT]: false,
+    [PROVIDER_ENTITLEMENTS.MULTIPLE_LOCATIONS]: false,
+    [PROVIDER_ENTITLEMENTS.BRANCH_ANALYTICS]: false,
+    [PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS]: false,
+    [PROVIDER_ENTITLEMENTS.ADVANCED_ASSISTANT]: false,
+  };
+
+  return {
+    tier,
+    premium,
+    platinum: tier === "PLATINUM",
+    entitlements,
+    limits: {
+      activePromotions: premium ? PROVIDER_PLAN_LIMITS.PREMIUM_ACTIVE_PROMOTIONS : 0,
+      retentionRecipients: premium ? PROVIDER_PLAN_LIMITS.PREMIUM_RETENTION_RECIPIENTS : 0,
+    },
+  };
+}
+
+export async function getProviderEntitlementSnapshot(userId, client = null) {
+  const sub = await getActiveProviderSubscription(userId, client);
+  return buildProviderEntitlementSnapshot(sub);
+}
+
+export async function assertProviderEntitlement(userId, entitlementKey, client = null) {
+  const snapshot = await getProviderEntitlementSnapshot(userId, client);
+  if (snapshot.entitlements?.[entitlementKey]) return snapshot;
+  const error = new Error("Provider Premium is required for this feature.");
+  error.statusCode = 403;
+  error.code = "PROVIDER_PREMIUM_REQUIRED";
+  error.entitlement = entitlementKey;
+  throw error;
+}
+
 export async function canAccessProviderAnalytics(userId) {
   const tier = await getProviderTier(userId);
   return tier === "PREMIUM" || tier === "PLATINUM";
@@ -220,14 +308,15 @@ export async function getRemainingBlockedReviewSlots(userId) {
 }
 
 export async function getProviderEntitlements(userId) {
-  const sub = await getActiveProviderSubscription(userId);
-  const tier = sub && isActiveProviderSubscription(sub) ? normalizeProviderTier(sub.tier) : null;
-
-  const isPremium = tier === "PREMIUM" || tier === "PLATINUM";
-  const isPlatinum = tier === "PLATINUM";
+  const snapshot = await getProviderEntitlementSnapshot(userId);
+  const tier = snapshot.tier;
+  const isPremium = snapshot.premium;
+  const isPlatinum = snapshot.platinum;
 
   return {
-    tier: tier || "NONE",
+    ...snapshot.entitlements,
+    tier,
+    limits: snapshot.limits,
     advancedAnalytics: isPremium,
     aiBusinessCoach: isPremium,
     reviewInsights: isPremium,

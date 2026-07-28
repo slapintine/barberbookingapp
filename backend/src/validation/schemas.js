@@ -380,6 +380,38 @@ export const schemas = {
   earlierSlotAlertDelete: {
     params: Joi.object({ id: id.required() }).unknown(true),
   },
+  providerPromotionCreate: {
+    body: Joi.object({
+      serviceId: optionalId,
+      service_id: optionalId,
+      title: safeText(120, { allowEmpty: false }).required(),
+      description: safeText(800),
+      discountType: Joi.string().valid("fixed", "percentage").optional(),
+      discount_type: Joi.string().valid("fixed", "percentage").optional(),
+      discountValue: Joi.number().positive().max(1_000_000_000).optional(),
+      discount_value: Joi.number().positive().max(1_000_000_000).optional(),
+      startDate: isoDateOnly.optional(),
+      start_date: isoDateOnly.optional(),
+      endDate: isoDateOnly.optional(),
+      end_date: isoDateOnly.optional(),
+      usageLimit: Joi.number().integer().min(0).max(100000).optional().allow(null, ""),
+      usage_limit: Joi.number().integer().min(0).max(100000).optional().allow(null, ""),
+      perCustomerLimit: Joi.number().integer().min(0).max(1000).optional().allow(null, ""),
+      per_customer_limit: Joi.number().integer().min(0).max(1000).optional().allow(null, ""),
+      eligibleCustomerGroup: Joi.string().max(80).optional().allow(""),
+      eligible_customer_group: Joi.string().max(80).optional().allow(""),
+      confirm: Joi.boolean().optional(),
+    }).unknown(true),
+  },
+  providerResponseDraft: {
+    body: Joi.object({
+      message: safeText(2000),
+      serviceId: optionalId,
+      service_id: optionalId,
+      bookingId: optionalId,
+      booking_id: optionalId,
+    }).unknown(true),
+  },
   scheduleUpdate: {
     body: Joi.object({
       schedule: Joi.array().max(31).optional(),

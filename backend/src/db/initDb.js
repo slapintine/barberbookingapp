@@ -144,6 +144,9 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_admin_audit_log_action ON admin_audit_log(action_type, target_type, created_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_provider_coach_usage_daily ON provider_coach_usage(barber_id, usage_date)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_provider_coach_usage_user ON provider_coach_usage(user_id, created_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_provider_promotions_barber_status ON provider_promotions(barber_id, status, start_date, end_date)`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_provider_promotions_service ON provider_promotions(service_id, status)`).catch(() => {});
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_provider_active_promotion_title ON provider_promotions(barber_id, service_id, title) WHERE status = 'active'`).catch(() => {});
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_insert`);
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_update`);
   await run(`
@@ -1690,6 +1693,33 @@ export async function initDb() {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS provider_promotions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        service_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        discount_type TEXT NOT NULL,
+        discount_value REAL NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        usage_limit INTEGER DEFAULT NULL,
+        per_customer_limit INTEGER DEFAULT NULL,
+        eligible_customer_group TEXT DEFAULT 'all',
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_by_user_id INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (service_id) REFERENCES barber_services(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CHECK (discount_type IN ('fixed', 'percentage')),
+        CHECK (discount_value > 0),
+        CHECK (status IN ('draft', 'active', 'paused', 'expired', 'cancelled'))
       )
     `);
 

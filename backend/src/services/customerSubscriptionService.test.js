@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getActiveCustomerPremiumSubscription, isActiveCustomerPremium, mapCustomerSubscription } from "./customerSubscriptionService.js";
-import { buildCustomerEntitlementSnapshot, CUSTOMER_ENTITLEMENTS } from "./entitlementService.js";
+import {
+  buildCustomerEntitlementSnapshot,
+  buildProviderEntitlementSnapshot,
+  CUSTOMER_ENTITLEMENTS,
+  PROVIDER_ENTITLEMENTS,
+} from "./entitlementService.js";
 import { isActiveProviderPlatinum } from "./providerSubscriptionAccess.js";
 
 test("customer Premium requires active paid Premium subscription", () => {
@@ -61,4 +66,47 @@ test("provider Platinum check is separate from customer Premium", () => {
   assert.equal(isActiveProviderPlatinum({}, { tier: "PLATINUM", status: "active", payment_status: "paid", is_active: 0, expires_at: future }), true);
   assert.equal(isActiveProviderPlatinum({}, { tier: "PLATINUM", status: "active", payment_status: "paid", is_active: 1, expires_at: past }), false);
   assert.equal(isActiveProviderPlatinum({}, { tier: "PLATINUM", status: "trialing", payment_status: "trial", trial_status: "active", expires_at: future }), true);
+});
+
+test("provider entitlement snapshot keeps Free basic and Premium value features separate from Platinum", () => {
+  const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const free = buildProviderEntitlementSnapshot(null);
+  assert.equal(free.tier, "FREE");
+  assert.equal(free.entitlements[PROVIDER_ENTITLEMENTS.BASIC_PROFILE], true);
+  assert.equal(free.entitlements[PROVIDER_ENTITLEMENTS.RECEIVE_BOOKINGS], true);
+  assert.equal(free.entitlements[PROVIDER_ENTITLEMENTS.ASSISTANT_PREVIEW], true);
+  assert.equal(free.entitlements[PROVIDER_ENTITLEMENTS.REVENUE_ANALYTICS], false);
+  assert.equal(free.entitlements[PROVIDER_ENTITLEMENTS.PROMOTIONS], false);
+  assert.equal(free.entitlements[PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT], false);
+  assert.equal(free.limits.activePromotions, 0);
+
+  const premium = buildProviderEntitlementSnapshot({
+    tier: "PREMIUM",
+    status: "active",
+    payment_status: "paid",
+    is_active: 1,
+    expires_at: future,
+  });
+  assert.equal(premium.tier, "PREMIUM");
+  assert.equal(premium.entitlements[PROVIDER_ENTITLEMENTS.ASSISTANT_FULL], true);
+  assert.equal(premium.entitlements[PROVIDER_ENTITLEMENTS.SMART_SCHEDULE], true);
+  assert.equal(premium.entitlements[PROVIDER_ENTITLEMENTS.REVENUE_ANALYTICS], true);
+  assert.equal(premium.entitlements[PROVIDER_ENTITLEMENTS.RETENTION_TOOLS], true);
+  assert.equal(premium.entitlements[PROVIDER_ENTITLEMENTS.PROMOTIONS], true);
+  assert.equal(premium.entitlements[PROVIDER_ENTITLEMENTS.RESPONSE_ASSISTANT], true);
+  assert.equal(premium.entitlements[PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT], false);
+  assert.equal(premium.entitlements[PROVIDER_ENTITLEMENTS.MULTIPLE_LOCATIONS], false);
+  assert.equal(premium.limits.activePromotions > free.limits.activePromotions, true);
+
+  const platinum = buildProviderEntitlementSnapshot({
+    tier: "PLATINUM",
+    status: "active",
+    payment_status: "paid",
+    is_active: 1,
+    expires_at: future,
+  });
+  assert.equal(platinum.tier, "PLATINUM");
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.REVENUE_ANALYTICS], true);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT], false);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS], false);
 });

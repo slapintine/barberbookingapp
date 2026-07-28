@@ -9,6 +9,7 @@ import {
   FiZap,
 } from "react-icons/fi";
 import { getProviderCoachDailyBriefing, sendProviderCoachMessage } from "../../api/aiCoachApi.js";
+import { getProviderPremiumDashboard } from "../../api/providerPremiumApi.js";
 import "./ProviderCoachChatScreen.css";
 
 const PROMPTS = [
@@ -101,6 +102,7 @@ export default function ProviderCoachChatScreen({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [briefingState, setBriefingState] = useState({ loading: false, data: null, error: "" });
+  const [premiumState, setPremiumState] = useState({ loading: false, data: null, error: "" });
   const [lastQuestion, setLastQuestion] = useState("");
   const messageListRef = useRef(null);
   const inputRef = useRef(null);
@@ -113,28 +115,23 @@ export default function ProviderCoachChatScreen({
     setDraft("");
     setError("");
     setBriefingState({ loading: false, data: null, error: "" });
+    setPremiumState({ loading: false, data: null, error: "" });
   }, [barber?.id]);
 
   useEffect(() => {
     let cancelled = false;
     if (!barber?.id) return () => { cancelled = true; };
     setBriefingState({ loading: true, data: null, error: "" });
-    getProviderCoachDailyBriefing()
-      .then((result) => {
+    setPremiumState({ loading: true, data: null, error: "" });
+    Promise.allSettled([getProviderCoachDailyBriefing(), getProviderPremiumDashboard()])
+      .then(([briefingResult, premiumResult]) => {
         if (cancelled) return;
-        setBriefingState({
-          loading: false,
-          data: result?.briefing || null,
-          error: "",
-        });
-      })
-      .catch((requestError) => {
-        if (cancelled) return;
-        setBriefingState({
-          loading: false,
-          data: null,
-          error: getFriendlyCoachError(requestError),
-        });
+        setBriefingState(briefingResult.status === "fulfilled"
+          ? { loading: false, data: briefingResult.value?.briefing || null, error: "" }
+          : { loading: false, data: null, error: getFriendlyCoachError(briefingResult.reason) });
+        setPremiumState(premiumResult.status === "fulfilled"
+          ? { loading: false, data: premiumResult.value || null, error: "" }
+          : { loading: false, data: null, error: getFriendlyCoachError(premiumResult.reason) });
       });
     return () => { cancelled = true; };
   }, [barber?.id]);
@@ -255,6 +252,59 @@ export default function ProviderCoachChatScreen({
           {briefingState.data?.dataLimits?.revenueAvailable === false ? (
             <small>Revenue insights are not shown because Queless does not have reliable revenue data for this stand yet.</small>
           ) : null}
+        </div>
+
+        <div className="provider-coach-premium-card" aria-label="Provider Premium tools">
+          <div className="provider-coach-briefing-head">
+            <strong>Premium tools</strong>
+            <span>{premiumState.data?.access === "premium" ? "Active" : "Preview"}</span>
+          </div>
+          {premiumState.loading ? (
+            <p>Checking your Premium tools...</p>
+          ) : premiumState.error ? (
+            <p>{premiumState.error}</p>
+          ) : premiumState.data ? (
+            <>
+              <div className="provider-coach-premium-grid">
+                <div>
+                  <strong>{premiumState.data.analytics?.completedBookings ?? 0}</strong>
+                  <span>completed bookings</span>
+                </div>
+                <div>
+                  <strong>{premiumState.data.analytics?.quoteBookings ?? 0}</strong>
+                  <span>quote or unknown price</span>
+                </div>
+                <div>
+                  <strong>{premiumState.data.scheduleSuggestions?.length ?? 0}</strong>
+                  <span>schedule suggestions</span>
+                </div>
+                <div>
+                  <strong>{premiumState.data.retention?.returningCustomers ?? 0}</strong>
+                  <span>returning customers</span>
+                </div>
+              </div>
+              {premiumState.data.access !== "premium" ? (
+                <small>Upgrade to Provider Premium for detailed analytics, retention tools, promotions, profile guidance, and response drafts.</small>
+              ) : (
+                <div className="provider-coach-premium-list">
+                  {(premiumState.data.scheduleSuggestions || []).slice(0, 2).map((item) => (
+                    <article key={`${item.code}-${item.title}`}>
+                      <strong>{item.title}</strong>
+                      <span>{item.body}</span>
+                    </article>
+                  ))}
+                  {(premiumState.data.profileGuidance?.missing || []).slice(0, 2).map((item) => (
+                    <article key={item.field}>
+                      <strong>{item.field}</strong>
+                      <span>{item.why}</span>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p>Provider Premium tools will appear here after your stand is saved.</p>
+          )}
         </div>
 
         <div className="provider-coach-prompt-area">
