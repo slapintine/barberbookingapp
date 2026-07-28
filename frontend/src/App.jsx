@@ -107,6 +107,7 @@ const QuoteRequestModal = lazy(() => import("./features/bookings/QuoteRequestMod
 const ChatSheet = lazy(() => import("./features/chat/ChatSheet.jsx"));
 const ReportsScreen = lazy(() => import("./features/barbers/ReportsScreen.jsx"));
 const ProviderCoachChatScreen = lazy(() => import("./features/barbers/ProviderCoachChatScreen.jsx"));
+const ProviderPlatinumConsole = lazy(() => import("./features/barbers/ProviderPlatinumConsole.jsx"));
 const SmartMatchPage = lazy(() => import("./features/smart-match/SmartMatchPage.jsx"));
 const TrialUpgradeScreen = lazy(() => import("./features/barbers/TrialUpgradeScreen.jsx"));
 const RegisterBarberModal = lazy(() =>
@@ -327,6 +328,7 @@ const INBOX_PATH = "/inbox";
 const DASHBOARD_PATH = "/dashboard";
 const REPORTS_PATH = "/reports";
 const AI_COACH_PATH = "/provider/ai-coach";
+const PLATINUM_OPERATIONS_PATH = "/provider/platinum";
 const PROFILE_PATH = "/profile";
 const LOGIN_PATH = "/login";
 const SIGNUP_PATH = "/signup";
@@ -438,6 +440,7 @@ function getTabFromPath(pathname, user) {
   if (normalized === DASHBOARD_PATH) return userIsAdmin(user) ? "admin" : "dashboard";
   if (normalized === REPORTS_PATH) return userIsAdmin(user) ? "adminReports" : "reports";
   if (normalized === AI_COACH_PATH) return userIsAdmin(user) ? "adminReports" : "aiCoach";
+  if (normalized === PLATINUM_OPERATIONS_PATH) return userIsAdmin(user) ? "adminReports" : "platinum";
   if (normalized === PROFILE_PATH) return "profile";
   return "home";
 }
@@ -464,7 +467,7 @@ function getPostLoginTab(pathname, user = {}) {
   if ((requestedTab === "admin" || requestedTab === "adminReports" || requestedTab === "adminSms") && !userIsAdmin(user)) {
     return getDefaultTabForUser(user);
   }
-  if ((requestedTab === "reports" || requestedTab === "aiCoach") && !userIsProvider(user)) return getDefaultTabForUser(user);
+  if ((requestedTab === "reports" || requestedTab === "aiCoach" || requestedTab === "platinum") && !userIsProvider(user)) return getDefaultTabForUser(user);
   return requestedTab || getDefaultTabForUser(user);
 }
 
@@ -1451,6 +1454,8 @@ function App() {
           ? REPORTS_PATH
           : activeTab === "aiCoach"
           ? AI_COACH_PATH
+          : activeTab === "platinum"
+          ? PLATINUM_OPERATIONS_PATH
           : activeTab === "profile"
           ? PROFILE_PATH
           : activeTab === "help"
@@ -4665,7 +4670,7 @@ const updateBarberStand = async (payload) => {
       return;
     }
 
-    if ((target === "dashboard" || target === "reports" || target === "aiCoach") && !effectiveIsBarber) {
+    if ((target === "dashboard" || target === "reports" || target === "aiCoach" || target === "platinum") && !effectiveIsBarber) {
       setActiveTab("profile");
       return;
     }
@@ -5333,6 +5338,7 @@ const updateBarberStand = async (payload) => {
           }}
           onOpenReports={() => setActiveTab("reports")}
           onOpenAiCoach={() => setActiveTab("aiCoach")}
+          onOpenPlatinumConsole={() => setActiveTab("platinum")}
           onOpenUpgradePlan={openUpgradePlan}
           onPublishStand={publishBarberStand}
           onViewPublicStand={() => {
@@ -5377,6 +5383,15 @@ const updateBarberStand = async (payload) => {
               setSelectedBarber(myBarberProfile);
               setShowEditBarber(true);
             }}
+          />
+        </div>
+      )}
+
+      {effectiveIsBarber && activeTab === "platinum" && (
+        <div className="tab-scene-v5">
+          <ProviderPlatinumConsole
+            onBack={() => setActiveTab("dashboard")}
+            onUpgradePlan={openUpgradePlan}
           />
         </div>
       )}

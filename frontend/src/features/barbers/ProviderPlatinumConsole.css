@@ -1,0 +1,214 @@
+.platinum-console {
+  color: #321127;
+}
+
+.platinum-console-hero,
+.platinum-console-locked,
+.platinum-console-wide-card,
+.platinum-console-form,
+.platinum-console-card-list article,
+.platinum-console-grid article {
+  border: 1px solid rgba(108, 31, 124, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 250, 246, 0.96);
+  box-shadow: 0 12px 28px rgba(72, 20, 72, 0.07);
+}
+
+.platinum-console-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  margin-bottom: 14px;
+}
+
+.platinum-console-kicker {
+  display: inline-flex;
+  color: #8a2f78;
+  font-weight: 800;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.platinum-console h1,
+.platinum-console h2,
+.platinum-console p {
+  margin: 0;
+}
+
+.platinum-console h1 {
+  margin-top: 6px;
+  font-size: clamp(1.55rem, 3vw, 2.35rem);
+  letter-spacing: 0;
+}
+
+.platinum-console h2 {
+  font-size: 1rem;
+}
+
+.platinum-console-hero p,
+.platinum-console-wide-card p,
+.platinum-console-card-list span,
+.platinum-console-card-list small,
+.platinum-console-grid span {
+  color: #69445c;
+}
+
+.platinum-console-hero-actions,
+.platinum-console-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.platinum-console-tabs {
+  margin: 10px 0 14px;
+}
+
+.platinum-console-tabs button {
+  min-height: 42px;
+  border: 1px solid rgba(108, 31, 124, 0.18);
+  background: #fff7f2;
+  color: #4d173d;
+  border-radius: 8px;
+  padding: 9px 12px;
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  font-weight: 750;
+}
+
+.platinum-console-tabs button.active {
+  background: #6c1f7c;
+  color: #fffaf6;
+}
+
+.platinum-console-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.platinum-console-grid article,
+.platinum-console-wide-card,
+.platinum-console-form,
+.platinum-console-card-list article,
+.platinum-console-locked {
+  padding: 16px;
+}
+
+.platinum-console-grid article strong {
+  display: block;
+  font-size: 1.35rem;
+}
+
+.platinum-console-wide-card {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+
+.platinum-console-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.platinum-console-form {
+  display: grid;
+  gap: 10px;
+}
+
+.platinum-console-form input,
+.platinum-console-form select,
+.platinum-console-form textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(108, 31, 124, 0.18);
+  border-radius: 8px;
+  background: #fff;
+  color: #321127;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.platinum-console-form textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.platinum-console-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #4d173d;
+}
+
+.platinum-console-card-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.platinum-console-card-list article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.platinum-console-card-list strong,
+.platinum-console-card-list span,
+.platinum-console-card-list small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.platinum-console-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(108, 31, 124, 0.16);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  background: #fff2ee;
+  color: #4d173d;
+}
+
+.platinum-console-message.success {
+  background: #fbf4ff;
+}
+
+.platinum-console-locked {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+@media (max-width: 760px) {
+  .platinum-console {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .platinum-console-hero {
+    display: grid;
+    padding: 16px;
+  }
+
+  .platinum-console-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .platinum-console-tabs button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .platinum-console-grid,
+  .platinum-console-card-list {
+    grid-template-columns: 1fr;
+  }
+}

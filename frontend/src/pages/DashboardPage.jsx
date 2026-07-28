@@ -1,4 +1,4 @@
-import { FiAward, FiBell, FiCalendar, FiClock, FiEdit2, FiEye, FiMap, FiMapPin, FiScissors, FiShield, FiStar, FiTrendingUp, FiUpload, FiZap } from "react-icons/fi";
+import { FiAward, FiBell, FiBriefcase, FiCalendar, FiClock, FiEdit2, FiEye, FiMap, FiMapPin, FiScissors, FiShield, FiStar, FiTrendingUp, FiUpload, FiZap } from "react-icons/fi";
 import { lazy } from "react";
 import { PAYMENTS_ENABLED } from "../utils/launchFlags.js";
 import { getPaymentMethodLabel, isOnlinePaymentMethod } from "../utils/paymentLabels.js";
@@ -22,6 +22,7 @@ export default function DashboardPage({
   onOpenManageStand,
   onOpenReports,
   onOpenAiCoach,
+  onOpenPlatinumConsole,
   onOpenUpgradePlan,
   onPublishStand,
   onViewPublicStand,
@@ -229,6 +230,9 @@ export default function DashboardPage({
           </button>
           <button type="button" className={isPlatinum ? "primary-btn-v4 compact-btn-v4" : "secondary-btn-v4 compact-btn-v4"} onClick={isPlatinum ? onOpenAiCoach : () => onOpenUpgradePlan?.("PLATINUM")}>
             <FiZap /> {isPlatinum ? "Open Coach" : "Unlock with Platinum"}
+          </button>
+          <button type="button" className={isPlatinum ? "primary-btn-v4 compact-btn-v4" : "secondary-btn-v4 compact-btn-v4"} onClick={isPlatinum ? onOpenPlatinumConsole : () => onOpenUpgradePlan?.("PLATINUM")}>
+            <FiBriefcase /> {isPlatinum ? "Operations" : "Platinum Ops"}
           </button>
           <button type="button" className="primary-btn-v4 compact-btn-v4" onClick={() => onOpenUpgradePlan?.(currentPlan)}>
             <FiTrendingUp /> Upgrade Plan
