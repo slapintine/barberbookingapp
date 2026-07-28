@@ -10,6 +10,7 @@ import {
 } from "react-icons/fi";
 import { getProviderCoachDailyBriefing, sendProviderCoachMessage } from "../../api/aiCoachApi.js";
 import { getProviderPremiumDashboard } from "../../api/providerPremiumApi.js";
+import { getProviderPlatinumDashboard } from "../../api/providerPlatinumApi.js";
 import "./ProviderCoachChatScreen.css";
 
 const PROMPTS = [
@@ -103,6 +104,7 @@ export default function ProviderCoachChatScreen({
   const [error, setError] = useState("");
   const [briefingState, setBriefingState] = useState({ loading: false, data: null, error: "" });
   const [premiumState, setPremiumState] = useState({ loading: false, data: null, error: "" });
+  const [platinumState, setPlatinumState] = useState({ loading: false, data: null, error: "" });
   const [lastQuestion, setLastQuestion] = useState("");
   const messageListRef = useRef(null);
   const inputRef = useRef(null);
@@ -116,6 +118,7 @@ export default function ProviderCoachChatScreen({
     setError("");
     setBriefingState({ loading: false, data: null, error: "" });
     setPremiumState({ loading: false, data: null, error: "" });
+    setPlatinumState({ loading: false, data: null, error: "" });
   }, [barber?.id]);
 
   useEffect(() => {
@@ -123,8 +126,9 @@ export default function ProviderCoachChatScreen({
     if (!barber?.id) return () => { cancelled = true; };
     setBriefingState({ loading: true, data: null, error: "" });
     setPremiumState({ loading: true, data: null, error: "" });
-    Promise.allSettled([getProviderCoachDailyBriefing(), getProviderPremiumDashboard()])
-      .then(([briefingResult, premiumResult]) => {
+    setPlatinumState({ loading: true, data: null, error: "" });
+    Promise.allSettled([getProviderCoachDailyBriefing(), getProviderPremiumDashboard(), getProviderPlatinumDashboard()])
+      .then(([briefingResult, premiumResult, platinumResult]) => {
         if (cancelled) return;
         setBriefingState(briefingResult.status === "fulfilled"
           ? { loading: false, data: briefingResult.value?.briefing || null, error: "" }
@@ -132,6 +136,9 @@ export default function ProviderCoachChatScreen({
         setPremiumState(premiumResult.status === "fulfilled"
           ? { loading: false, data: premiumResult.value || null, error: "" }
           : { loading: false, data: null, error: getFriendlyCoachError(premiumResult.reason) });
+        setPlatinumState(platinumResult.status === "fulfilled"
+          ? { loading: false, data: platinumResult.value || null, error: "" }
+          : { loading: false, data: null, error: platinumResult.reason?.status === 403 ? "Provider Platinum unlocks team, branch, report, export, and advanced assistant tools." : getFriendlyCoachError(platinumResult.reason) });
       });
     return () => { cancelled = true; };
   }, [barber?.id]);
@@ -304,6 +311,48 @@ export default function ProviderCoachChatScreen({
             </>
           ) : (
             <p>Provider Premium tools will appear here after your stand is saved.</p>
+          )}
+        </div>
+
+        <div className="provider-coach-premium-card provider-coach-platinum-card" aria-label="Provider Platinum operations">
+          <div className="provider-coach-briefing-head">
+            <strong>Platinum operations</strong>
+            <span>{platinumState.data?.plan === "PLATINUM" ? "Active" : "Locked"}</span>
+          </div>
+          {platinumState.loading ? (
+            <p>Checking team and branch tools...</p>
+          ) : platinumState.data ? (
+            <>
+              <div className="provider-coach-premium-grid">
+                <div>
+                  <strong>{platinumState.data.staff?.length ?? 0}</strong>
+                  <span>staff profiles</span>
+                </div>
+                <div>
+                  <strong>{platinumState.data.branches?.length ?? 0}</strong>
+                  <span>branches</span>
+                </div>
+                <div>
+                  <strong>{platinumState.data.insights?.length ?? 0}</strong>
+                  <span>operations insights</span>
+                </div>
+                <div>
+                  <strong>{platinumState.data.exports?.length ?? 0}</strong>
+                  <span>recent exports</span>
+                </div>
+              </div>
+              <div className="provider-coach-premium-list">
+                {(platinumState.data.insights || []).slice(0, 2).map((item) => (
+                  <article key={`${item.code}-${item.title}`}>
+                    <strong>{item.title}</strong>
+                    <span>{item.body}</span>
+                  </article>
+                ))}
+              </div>
+              <small>Staff assignments, branch reports, exports and advanced assistant actions require confirmation. No booking is moved automatically.</small>
+            </>
+          ) : (
+            <p>{platinumState.error || "Provider Platinum unlocks staff, branch, report, export, and advanced assistant tools."}</p>
           )}
         </div>
 

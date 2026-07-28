@@ -107,6 +107,14 @@ test("provider entitlement snapshot keeps Free basic and Premium value features 
   });
   assert.equal(platinum.tier, "PLATINUM");
   assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.REVENUE_ANALYTICS], true);
-  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT], false);
-  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS], false);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT], true);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS], true);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.STAFF_SCHEDULES], true);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.STAFF_ASSIGNMENT], true);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.MULTIPLE_LOCATIONS], true);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.BRANCH_ANALYTICS], true);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS], true);
+  assert.equal(platinum.entitlements[PROVIDER_ENTITLEMENTS.ADVANCED_ASSISTANT], true);
+  assert.equal(platinum.limits.staffMembers > 0, true);
+  assert.equal(platinum.limits.branches > 1, true);
 });

@@ -55,15 +55,29 @@ export const PROVIDER_ENTITLEMENTS = Object.freeze({
   RESPONSE_ASSISTANT: "provider.response_assistant",
   PRIORITY_SUPPORT: "provider.priority_support",
   STAFF_MANAGEMENT: "provider.staff_management",
+  STAFF_ACCOUNTS: "provider.staff_accounts",
+  STAFF_SCHEDULES: "provider.staff_schedules",
+  STAFF_ASSIGNMENT: "provider.staff_assignment",
+  STAFF_SERVICE_ASSIGNMENT: "provider.staff_service_assignment",
   MULTIPLE_LOCATIONS: "provider.multiple_locations",
+  BRANCH_MANAGEMENT: "provider.branch_management",
+  BRANCH_SCHEDULES: "provider.branch_schedules",
   BRANCH_ANALYTICS: "provider.branch_analytics",
+  ADVANCED_REPORTS: "provider.advanced_reports",
   ADVANCED_EXPORTS: "provider.advanced_exports",
   ADVANCED_ASSISTANT: "provider.advanced_assistant",
+  CROSS_STAFF_OPTIMIZATION: "provider.cross_staff_optimization",
+  CROSS_BRANCH_INSIGHTS: "provider.cross_branch_insights",
+  HIGHER_OPERATIONAL_LIMITS: "provider.higher_operational_limits",
 });
 
 export const PROVIDER_PLAN_LIMITS = Object.freeze({
   PREMIUM_ACTIVE_PROMOTIONS: 10,
   PREMIUM_RETENTION_RECIPIENTS: 10,
+  PLATINUM_STAFF_MEMBERS: 25,
+  PLATINUM_BRANCHES: 5,
+  PLATINUM_REPORT_EXPORT_ROWS: 5000,
+  PLATINUM_ACTIVE_INVITATIONS: 25,
 });
 
 function isFuture(value, now = new Date()) {
@@ -201,6 +215,7 @@ export function buildProviderEntitlementSnapshot(subscription = null) {
     ? normalizeProviderTier(subscription.tier)
     : "FREE";
   const premium = tier === "PREMIUM" || tier === "PLATINUM";
+  const platinum = tier === "PLATINUM";
 
   const entitlements = {
     [PROVIDER_ENTITLEMENTS.BASIC_PROFILE]: true,
@@ -220,21 +235,35 @@ export function buildProviderEntitlementSnapshot(subscription = null) {
     [PROVIDER_ENTITLEMENTS.PROFILE_ASSISTANT]: premium,
     [PROVIDER_ENTITLEMENTS.RESPONSE_ASSISTANT]: premium,
     [PROVIDER_ENTITLEMENTS.PRIORITY_SUPPORT]: premium,
-    [PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT]: false,
-    [PROVIDER_ENTITLEMENTS.MULTIPLE_LOCATIONS]: false,
-    [PROVIDER_ENTITLEMENTS.BRANCH_ANALYTICS]: false,
-    [PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS]: false,
-    [PROVIDER_ENTITLEMENTS.ADVANCED_ASSISTANT]: false,
+    [PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT]: platinum,
+    [PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS]: platinum,
+    [PROVIDER_ENTITLEMENTS.STAFF_SCHEDULES]: platinum,
+    [PROVIDER_ENTITLEMENTS.STAFF_ASSIGNMENT]: platinum,
+    [PROVIDER_ENTITLEMENTS.STAFF_SERVICE_ASSIGNMENT]: platinum,
+    [PROVIDER_ENTITLEMENTS.MULTIPLE_LOCATIONS]: platinum,
+    [PROVIDER_ENTITLEMENTS.BRANCH_MANAGEMENT]: platinum,
+    [PROVIDER_ENTITLEMENTS.BRANCH_SCHEDULES]: platinum,
+    [PROVIDER_ENTITLEMENTS.BRANCH_ANALYTICS]: platinum,
+    [PROVIDER_ENTITLEMENTS.ADVANCED_REPORTS]: platinum,
+    [PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS]: platinum,
+    [PROVIDER_ENTITLEMENTS.ADVANCED_ASSISTANT]: platinum,
+    [PROVIDER_ENTITLEMENTS.CROSS_STAFF_OPTIMIZATION]: platinum,
+    [PROVIDER_ENTITLEMENTS.CROSS_BRANCH_INSIGHTS]: platinum,
+    [PROVIDER_ENTITLEMENTS.HIGHER_OPERATIONAL_LIMITS]: platinum,
   };
 
   return {
     tier,
     premium,
-    platinum: tier === "PLATINUM",
+    platinum,
     entitlements,
     limits: {
       activePromotions: premium ? PROVIDER_PLAN_LIMITS.PREMIUM_ACTIVE_PROMOTIONS : 0,
       retentionRecipients: premium ? PROVIDER_PLAN_LIMITS.PREMIUM_RETENTION_RECIPIENTS : 0,
+      staffMembers: platinum ? PROVIDER_PLAN_LIMITS.PLATINUM_STAFF_MEMBERS : 0,
+      branches: platinum ? PROVIDER_PLAN_LIMITS.PLATINUM_BRANCHES : 1,
+      reportExportRows: platinum ? PROVIDER_PLAN_LIMITS.PLATINUM_REPORT_EXPORT_ROWS : 0,
+      activeInvitations: platinum ? PROVIDER_PLAN_LIMITS.PLATINUM_ACTIVE_INVITATIONS : 0,
     },
   };
 }
@@ -247,9 +276,26 @@ export async function getProviderEntitlementSnapshot(userId, client = null) {
 export async function assertProviderEntitlement(userId, entitlementKey, client = null) {
   const snapshot = await getProviderEntitlementSnapshot(userId, client);
   if (snapshot.entitlements?.[entitlementKey]) return snapshot;
-  const error = new Error("Provider Premium is required for this feature.");
+  const requiresPlatinum = [
+    PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT,
+    PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS,
+    PROVIDER_ENTITLEMENTS.STAFF_SCHEDULES,
+    PROVIDER_ENTITLEMENTS.STAFF_ASSIGNMENT,
+    PROVIDER_ENTITLEMENTS.STAFF_SERVICE_ASSIGNMENT,
+    PROVIDER_ENTITLEMENTS.MULTIPLE_LOCATIONS,
+    PROVIDER_ENTITLEMENTS.BRANCH_MANAGEMENT,
+    PROVIDER_ENTITLEMENTS.BRANCH_SCHEDULES,
+    PROVIDER_ENTITLEMENTS.BRANCH_ANALYTICS,
+    PROVIDER_ENTITLEMENTS.ADVANCED_REPORTS,
+    PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS,
+    PROVIDER_ENTITLEMENTS.ADVANCED_ASSISTANT,
+    PROVIDER_ENTITLEMENTS.CROSS_STAFF_OPTIMIZATION,
+    PROVIDER_ENTITLEMENTS.CROSS_BRANCH_INSIGHTS,
+    PROVIDER_ENTITLEMENTS.HIGHER_OPERATIONAL_LIMITS,
+  ].includes(entitlementKey);
+  const error = new Error(requiresPlatinum ? "Provider Platinum is required for this feature." : "Provider Premium is required for this feature.");
   error.statusCode = 403;
-  error.code = "PROVIDER_PREMIUM_REQUIRED";
+  error.code = requiresPlatinum ? "PROVIDER_PLATINUM_REQUIRED" : "PROVIDER_PREMIUM_REQUIRED";
   error.entitlement = entitlementKey;
   throw error;
 }

@@ -147,6 +147,15 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_provider_promotions_barber_status ON provider_promotions(barber_id, status, start_date, end_date)`).catch(() => {});
   await run(`CREATE INDEX IF NOT EXISTS idx_provider_promotions_service ON provider_promotions(service_id, status)`).catch(() => {});
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_provider_active_promotion_title ON provider_promotions(barber_id, service_id, title) WHERE status = 'active'`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_provider_locations_barber_status ON provider_locations(barber_id, is_active, is_primary)`).catch(() => {});
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_provider_primary_location ON provider_locations(barber_id) WHERE is_primary = 1`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_staff_service_assignments_staff ON staff_service_assignments(staff_id, is_active)`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_staff_location_assignments_staff ON staff_location_assignments(staff_id, is_active)`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_staff_schedules_staff_day ON staff_schedules(staff_id, day_of_week)`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_staff_time_off_staff_date ON staff_time_off(staff_id, start_date, end_date, status)`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_bookings_staff_branch ON bookings(barber_id, assigned_staff_id, provider_location_id, booking_date)`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_provider_export_audit_barber ON provider_export_audit(barber_id, actor_user_id, created_at)`).catch(() => {});
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_pending_staff_invitation ON provider_staff_invitations(barber_id, staff_email) WHERE status = 'pending'`).catch(() => {});
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_insert`);
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_update`);
   await run(`
@@ -556,6 +565,21 @@ async function migrateExistingSchema() {
     "bookings",
     "updated_at",
     `updated_at TEXT DEFAULT CURRENT_TIMESTAMP`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "assigned_staff_id",
+    `assigned_staff_id INTEGER DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "provider_location_id",
+    `provider_location_id INTEGER DEFAULT NULL`
+  );
+  await addColumnIfMissing(
+    "bookings",
+    "provider_location_snapshot",
+    `provider_location_snapshot TEXT DEFAULT '{}'`
   );
   await addColumnIfMissing(
     "bookings",
@@ -1075,6 +1099,12 @@ export async function initDb() {
     await addColumnIfMissing("barbers", "verification_submitted_at", `verification_submitted_at TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "verification_reviewed_at", `verification_reviewed_at TEXT DEFAULT NULL`);
     await addColumnIfMissing("barbers", "verification_reviewed_by", `verification_reviewed_by INTEGER DEFAULT NULL`);
+    await addColumnIfMissing("barber_team_members", "display_name", `display_name TEXT DEFAULT ''`);
+    await addColumnIfMissing("barber_team_members", "email", `email TEXT DEFAULT ''`);
+    await addColumnIfMissing("barber_team_members", "phone", `phone TEXT DEFAULT ''`);
+    await addColumnIfMissing("barber_team_members", "role", `role TEXT NOT NULL DEFAULT 'service_professional'`);
+    await addColumnIfMissing("barber_team_members", "user_id", `user_id INTEGER DEFAULT NULL`);
+    await addColumnIfMissing("barber_team_members", "notification_preferences", `notification_preferences TEXT DEFAULT '{}'`);
 
     // Provider verification / moderation system
     await addColumnIfMissing("barbers", "review_status", `review_status TEXT NOT NULL DEFAULT 'pending_review'`);
@@ -1152,13 +1182,20 @@ export async function initDb() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         barber_id INTEGER NOT NULL,
         name TEXT NOT NULL,
+        display_name TEXT DEFAULT '',
+        email TEXT DEFAULT '',
+        phone TEXT DEFAULT '',
+        role TEXT NOT NULL DEFAULT 'service_professional',
+        user_id INTEGER DEFAULT NULL,
         title TEXT DEFAULT 'Barber',
         bio TEXT DEFAULT '',
         image TEXT DEFAULT '',
         specialties TEXT DEFAULT '',
+        notification_preferences TEXT DEFAULT '{}',
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE
       )
     `);
@@ -1187,6 +1224,189 @@ export async function initDb() {
         UNIQUE(user_id, barber_id),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE
+      )
+    `);
+    await run(`UPDATE barber_team_members SET display_name = name WHERE COALESCE(display_name, '') = ''`).catch(() => {});
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS provider_locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        address TEXT DEFAULT '',
+        area TEXT DEFAULT '',
+        city TEXT DEFAULT '',
+        latitude REAL DEFAULT NULL,
+        longitude REAL DEFAULT NULL,
+        contact_phone TEXT DEFAULT '',
+        booking_instructions TEXT DEFAULT '',
+        is_primary INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE
+      )
+    `);
+    await run(`
+      INSERT INTO provider_locations
+        (barber_id, name, address, area, city, latitude, longitude, contact_phone, booking_instructions, is_primary, is_active, created_at, updated_at)
+      SELECT b.id,
+             CASE WHEN COALESCE(TRIM(b.business_name), '') <> '' THEN b.business_name || ' main location' ELSE 'Main location' END,
+             COALESCE(b.location, ''),
+             COALESCE(b.location, ''),
+             '',
+             b.latitude,
+             b.longitude,
+             COALESCE(b.business_phone, ''),
+             'Primary location copied from the provider stand.',
+             1,
+             1,
+             CURRENT_TIMESTAMP,
+             CURRENT_TIMESTAMP
+      FROM barbers b
+      WHERE NOT EXISTS (SELECT 1 FROM provider_locations pl WHERE pl.barber_id = b.id)
+    `).catch(() => {});
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS provider_location_schedule (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        location_id INTEGER NOT NULL,
+        day_of_week INTEGER NOT NULL,
+        is_open INTEGER NOT NULL DEFAULT 1,
+        start_time TEXT DEFAULT '08:00',
+        end_time TEXT DEFAULT '20:00',
+        break_start TEXT DEFAULT NULL,
+        break_end TEXT DEFAULT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(location_id, day_of_week),
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (location_id) REFERENCES provider_locations(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS staff_service_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        staff_id INTEGER NOT NULL,
+        service_id INTEGER NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(barber_id, staff_id, service_id),
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (staff_id) REFERENCES barber_team_members(id) ON DELETE CASCADE,
+        FOREIGN KEY (service_id) REFERENCES barber_services(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS staff_location_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        staff_id INTEGER NOT NULL,
+        location_id INTEGER NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(barber_id, staff_id, location_id),
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (staff_id) REFERENCES barber_team_members(id) ON DELETE CASCADE,
+        FOREIGN KEY (location_id) REFERENCES provider_locations(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS staff_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        staff_id INTEGER NOT NULL,
+        day_of_week INTEGER NOT NULL,
+        is_available INTEGER NOT NULL DEFAULT 1,
+        start_time TEXT NOT NULL DEFAULT '08:00',
+        end_time TEXT NOT NULL DEFAULT '18:00',
+        break_start TEXT DEFAULT NULL,
+        break_end TEXT DEFAULT NULL,
+        transition_minutes INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(barber_id, staff_id, day_of_week),
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (staff_id) REFERENCES barber_team_members(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS staff_time_off (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        staff_id INTEGER NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        start_time TEXT DEFAULT NULL,
+        end_time TEXT DEFAULT NULL,
+        reason TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (staff_id) REFERENCES barber_team_members(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS provider_staff_invitations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        staff_email TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'service_professional',
+        token_hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        expires_at TEXT NOT NULL,
+        accepted_at TEXT DEFAULT NULL,
+        revoked_at TEXT DEFAULT NULL,
+        created_by_user_id INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS booking_assignment_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        booking_id INTEGER NOT NULL,
+        barber_id INTEGER NOT NULL,
+        staff_id INTEGER DEFAULT NULL,
+        location_id INTEGER DEFAULT NULL,
+        actor_user_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        previous_staff_id INTEGER DEFAULT NULL,
+        metadata TEXT DEFAULT '{}',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (staff_id) REFERENCES barber_team_members(id) ON DELETE SET NULL,
+        FOREIGN KEY (location_id) REFERENCES provider_locations(id) ON DELETE SET NULL,
+        FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS provider_export_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barber_id INTEGER NOT NULL,
+        actor_user_id INTEGER NOT NULL,
+        export_type TEXT NOT NULL,
+        filters_json TEXT DEFAULT '{}',
+        row_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'completed',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
     await run(`CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)`);
@@ -1257,13 +1477,18 @@ export async function initDb() {
         service_started_at TEXT DEFAULT NULL,
         service_completed_at TEXT DEFAULT NULL,
         team_member_id INTEGER DEFAULT NULL,
+        assigned_staff_id INTEGER DEFAULT NULL,
+        provider_location_id INTEGER DEFAULT NULL,
+        provider_location_snapshot TEXT DEFAULT '{}',
         cancelled_by TEXT DEFAULT NULL,
         cancellation_reason TEXT DEFAULT '',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (barber_id) REFERENCES barbers(id) ON DELETE CASCADE,
         FOREIGN KEY (customer_user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (team_member_id) REFERENCES barber_team_members(id) ON DELETE SET NULL
+        FOREIGN KEY (team_member_id) REFERENCES barber_team_members(id) ON DELETE SET NULL,
+        FOREIGN KEY (assigned_staff_id) REFERENCES barber_team_members(id) ON DELETE SET NULL,
+        FOREIGN KEY (provider_location_id) REFERENCES provider_locations(id) ON DELETE SET NULL
       )
     `);
 

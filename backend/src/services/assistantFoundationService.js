@@ -15,6 +15,10 @@ const PROVIDER_ACTIONS = new Set([
   "provider_coach.suggest_schedule",
   "provider_coach.draft_response",
   "provider_coach.draft_promotion",
+  "provider_coach.staff_availability",
+  "provider_coach.branch_insights",
+  "provider_coach.assignment_review",
+  "provider_coach.report_export",
 ]);
 
 const TIME_WORDS = [
@@ -108,8 +112,8 @@ export function getAssistantAction(actionKey, role = "") {
   return {
     key,
     allowed: set.has(key),
-    requiresConfirmation: key.endsWith("start_booking") || key.endsWith("draft_promotion"),
-    writesData: key.endsWith("start_booking") || key.endsWith("draft_promotion"),
+    requiresConfirmation: key.endsWith("start_booking") || key.endsWith("draft_promotion") || key.endsWith("assignment_review") || key.endsWith("report_export"),
+    writesData: key.endsWith("start_booking") || key.endsWith("draft_promotion") || key.endsWith("assignment_review") || key.endsWith("report_export"),
   };
 }
 

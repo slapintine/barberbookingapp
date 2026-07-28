@@ -162,6 +162,11 @@
   box-shadow: 0 10px 26px rgba(72, 20, 72, 0.06);
 }
 
+.provider-coach-platinum-card {
+  border-color: rgba(108, 31, 124, 0.16);
+  background: linear-gradient(135deg, rgba(255, 246, 244, 0.98), rgba(249, 238, 247, 0.92));
+}
+
 .provider-coach-premium-card p,
 .provider-coach-premium-card small {
   margin: 0;
