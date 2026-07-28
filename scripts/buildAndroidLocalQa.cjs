@@ -146,7 +146,7 @@ if (trackedDirty && process.env.QUELESS_ALLOW_DIRTY_ANDROID_QA !== "1") {
 
 const buildEnv = {
   ...process.env,
-  VITE_BASE_PATH: "./",
+  VITE_BASE_PATH: "/",
   VITE_API_URL: apiUrl,
   VITE_ENABLE_PAYMENTS: "false",
   VITE_ENABLE_SMS: "false",

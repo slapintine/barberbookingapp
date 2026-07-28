@@ -190,6 +190,7 @@
   .platinum-console {
     padding-left: 12px;
     padding-right: 12px;
+    padding-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
   }
 
   .platinum-console-hero {
