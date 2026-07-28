@@ -506,7 +506,20 @@ export const schemas = {
       name: safeText(120),
       email: Joi.string().trim().email().max(254).required(),
       role: Joi.string().max(80).optional().allow(""),
+      branchIds: Joi.array().items(id).max(25).optional(),
+      branch_ids: Joi.array().items(id).max(25).optional(),
+      serviceIds: Joi.array().items(id).max(100).optional(),
+      service_ids: Joi.array().items(id).max(100).optional(),
     }).unknown(true),
+  },
+  providerPlatinumInvitationAccept: {
+    body: Joi.object({
+      token: Joi.string().trim().min(20).max(200).required(),
+      action: Joi.string().valid("accept", "decline").optional(),
+    }).unknown(true),
+  },
+  providerPlatinumInvitationDelete: {
+    params: Joi.object({ id: id.required() }).unknown(true),
   },
   providerPlatinumReportQuery: {
     query: Joi.object({

@@ -4,10 +4,12 @@ import {
   getProviderPlatinumDashboardController,
   getProviderPlatinumEntitlements,
   getProviderPlatinumReport,
+  deleteProviderPlatinumInvitation,
   postProviderPlatinumAssistant,
   postProviderPlatinumBookingAssignment,
   postProviderPlatinumBranch,
   postProviderPlatinumExport,
+  postProviderPlatinumInvitationAccept,
   postProviderPlatinumInvitation,
   postProviderPlatinumStaff,
   postProviderPlatinumStaffBranch,
@@ -15,13 +17,12 @@ import {
   putProviderPlatinumStaffSchedule,
 } from "../controllers/providerPlatinumOperationsController.js";
 import { protect } from "../middleware/authMiddleware.js";
-import { requireRole } from "../middleware/roleMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { schemas } from "../validation/schemas.js";
 
 const router = express.Router();
 
-router.use(protect, requireRole("barber"));
+router.use(protect);
 
 router.get("/entitlements", getProviderPlatinumEntitlements);
 router.get("/dashboard", getProviderPlatinumDashboardController);
@@ -33,6 +34,8 @@ router.post("/staff-branches", validateRequest(schemas.providerPlatinumStaffBran
 router.put("/staff-schedules", validateRequest(schemas.providerPlatinumStaffScheduleUpsert), putProviderPlatinumStaffSchedule);
 router.post("/booking-assignments", validateRequest(schemas.providerPlatinumBookingAssignment), postProviderPlatinumBookingAssignment);
 router.post("/invitations", validateRequest(schemas.providerPlatinumInvitationCreate), postProviderPlatinumInvitation);
+router.post("/invitations/accept", validateRequest(schemas.providerPlatinumInvitationAccept), postProviderPlatinumInvitationAccept);
+router.delete("/invitations/:id", validateRequest(schemas.providerPlatinumInvitationDelete), deleteProviderPlatinumInvitation);
 router.get("/reports", validateRequest(schemas.providerPlatinumReportQuery), getProviderPlatinumReport);
 router.post("/exports", validateRequest(schemas.providerPlatinumExportCreate), postProviderPlatinumExport);
 router.post("/assistant", validateRequest(schemas.providerPlatinumAssistant), postProviderPlatinumAssistant);

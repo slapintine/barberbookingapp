@@ -156,6 +156,8 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_bookings_staff_branch ON bookings(barber_id, assigned_staff_id, provider_location_id, booking_date)`).catch(() => {});
   await run(`CREATE INDEX IF NOT EXISTS idx_provider_export_audit_barber ON provider_export_audit(barber_id, actor_user_id, created_at)`).catch(() => {});
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_pending_staff_invitation ON provider_staff_invitations(barber_id, staff_email) WHERE status = 'pending'`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_provider_staff_invitations_token_status ON provider_staff_invitations(token_hash, status, expires_at)`).catch(() => {});
+  await run(`CREATE INDEX IF NOT EXISTS idx_barber_team_members_user_active ON barber_team_members(user_id, barber_id, is_active)`).catch(() => {});
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_insert`);
   await run(`DROP TRIGGER IF EXISTS reject_invalid_active_barber_update`);
   await run(`
@@ -1105,6 +1107,10 @@ export async function initDb() {
     await addColumnIfMissing("barber_team_members", "role", `role TEXT NOT NULL DEFAULT 'service_professional'`);
     await addColumnIfMissing("barber_team_members", "user_id", `user_id INTEGER DEFAULT NULL`);
     await addColumnIfMissing("barber_team_members", "notification_preferences", `notification_preferences TEXT DEFAULT '{}'`);
+    await addColumnIfMissing("provider_staff_invitations", "metadata_json", `metadata_json TEXT DEFAULT '{}'`);
+    await addColumnIfMissing("provider_staff_invitations", "accepted_by_user_id", `accepted_by_user_id INTEGER DEFAULT NULL`);
+    await addColumnIfMissing("provider_staff_invitations", "accepted_staff_id", `accepted_staff_id INTEGER DEFAULT NULL`);
+    await addColumnIfMissing("provider_staff_invitations", "declined_at", `declined_at TEXT DEFAULT NULL`);
 
     // Provider verification / moderation system
     await addColumnIfMissing("barbers", "review_status", `review_status TEXT NOT NULL DEFAULT 'pending_review'`);
@@ -1366,7 +1372,11 @@ export async function initDb() {
         status TEXT NOT NULL DEFAULT 'pending',
         expires_at TEXT NOT NULL,
         accepted_at TEXT DEFAULT NULL,
+        accepted_by_user_id INTEGER DEFAULT NULL,
+        accepted_staff_id INTEGER DEFAULT NULL,
         revoked_at TEXT DEFAULT NULL,
+        declined_at TEXT DEFAULT NULL,
+        metadata_json TEXT DEFAULT '{}',
         created_by_user_id INTEGER NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,

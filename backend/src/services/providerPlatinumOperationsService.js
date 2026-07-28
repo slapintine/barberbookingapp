@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { all, get, run, transaction } from "../db/query.js";
-import { getOwnedAiCoachBusiness } from "./aiCoachService.js";
-import { PROVIDER_ENTITLEMENTS, assertProviderEntitlement, getProviderEntitlementSnapshot } from "./entitlementService.js";
+import { PROVIDER_ENTITLEMENTS } from "./entitlementService.js";
+import { resolveProviderMembershipContext, getProviderRolePermissions } from "./providerMembershipService.js";
 
 export const STAFF_ROLES = Object.freeze({
   OWNER: "owner",
@@ -14,6 +14,10 @@ export const STAFF_ROLES = Object.freeze({
 export const PLATINUM_REPORT_TYPES = Object.freeze(["bookings", "revenue", "branches", "staff", "services", "cancellations"]);
 const ACTIVE_BOOKING_STATUSES = new Set(["payment_pending", "pending", "confirmed", "arrived", "ready", "service_started"]);
 const TERMINAL_BOOKING_STATUSES = new Set(["completed", "cancelled", "canceled", "rejected", "no_show"]);
+const EXPORT_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const EXPORT_LIMIT_MAX = 3;
+const MAX_EXPORT_DAYS = 366;
+const exportRateBuckets = new Map();
 
 function httpError(statusCode, message, code = "") {
   const error = new Error(message);
@@ -79,6 +83,27 @@ function auditPayload(value = {}) {
   return JSON.stringify(value).slice(0, 4000);
 }
 
+function hashInvitationToken(token = "") {
+  return crypto.createHash("sha256").update(String(token || "").trim()).digest("hex");
+}
+
+function daysBetween(start, end) {
+  const from = new Date(`${start}T00:00:00+03:00`).getTime();
+  const to = new Date(`${end}T00:00:00+03:00`).getTime();
+  return Math.floor((to - from) / 86400000) + 1;
+}
+
+function enforceExportRateLimit(userId, businessId) {
+  const key = `${businessId}:${userId}`;
+  const now = Date.now();
+  const bucket = (exportRateBuckets.get(key) || []).filter((timestamp) => now - timestamp < EXPORT_LIMIT_WINDOW_MS);
+  if (bucket.length >= EXPORT_LIMIT_MAX) {
+    throw httpError(429, "Too many exports requested. Please wait before exporting again.", "EXPORT_RATE_LIMITED");
+  }
+  bucket.push(now);
+  exportRateBuckets.set(key, bucket);
+}
+
 export function normalizeStaffRole(value = "") {
   const role = clean(value, 80).toLowerCase().replace(/\s+/g, "_").replace(/-/g, "_");
   if (role === "receptionist") return STAFF_ROLES.SCHEDULER;
@@ -88,16 +113,7 @@ export function normalizeStaffRole(value = "") {
 
 export function rolePermissions(roleValue = STAFF_ROLES.PROFESSIONAL) {
   const role = normalizeStaffRole(roleValue);
-  return {
-    role,
-    managePlan: role === STAFF_ROLES.OWNER,
-    manageStaff: [STAFF_ROLES.OWNER, STAFF_ROLES.MANAGER].includes(role),
-    manageBranches: [STAFF_ROLES.OWNER, STAFF_ROLES.MANAGER].includes(role),
-    manageBookings: [STAFF_ROLES.OWNER, STAFF_ROLES.MANAGER, STAFF_ROLES.SCHEDULER].includes(role),
-    updateOwnBookingStatus: [STAFF_ROLES.OWNER, STAFF_ROLES.MANAGER, STAFF_ROLES.SCHEDULER, STAFF_ROLES.PROFESSIONAL].includes(role),
-    viewAnalytics: [STAFF_ROLES.OWNER, STAFF_ROLES.MANAGER, STAFF_ROLES.ANALYST].includes(role),
-    exportReports: [STAFF_ROLES.OWNER, STAFF_ROLES.ANALYST].includes(role),
-  };
+  return getProviderRolePermissions(role, { exportReports: [STAFF_ROLES.OWNER, STAFF_ROLES.ANALYST].includes(role) });
 }
 
 export function protectCsvCell(value = "") {
@@ -287,10 +303,8 @@ export function buildOperationalInsights({ staff = [], branches = [], serviceAss
   return insights.slice(0, 12);
 }
 
-async function getOwnedBusinessWithPlatinum(userId, entitlement = PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT) {
-  const snapshot = await assertProviderEntitlement(userId, entitlement);
-  const business = await getOwnedAiCoachBusiness(userId);
-  return { business, snapshot };
+async function getOwnedBusinessWithPlatinum(userId, entitlement = PROVIDER_ENTITLEMENTS.STAFF_MANAGEMENT, permission = "") {
+  return resolveProviderMembershipContext(userId, { entitlement, permission });
 }
 
 async function loadOperationsData(businessId) {
@@ -334,12 +348,13 @@ async function ensurePrimaryBranch(business, client = { get, run }) {
 }
 
 export async function getProviderPlatinumDashboard(userId) {
-  const { business, snapshot } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.ADVANCED_REPORTS);
+  const { business, snapshot, role, permissions, membership, scope, isOwner } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.ADVANCED_REPORTS, "viewReports");
   await ensurePrimaryBranch(business);
   const data = await loadOperationsData(business.id);
   return {
     businessId: business.id,
     plan: snapshot.tier,
+    actor: { role, permissions, isOwner, membershipId: membership?.id || null, scope },
     entitlements: snapshot.entitlements,
     limits: snapshot.limits,
     staff: data.staff.map((member) => ({ ...member, permissions: rolePermissions(member.role) })),
@@ -358,7 +373,7 @@ export async function getProviderPlatinumDashboard(userId) {
 }
 
 export async function createStaffProfile(userId, payload = {}) {
-  const { business, snapshot } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS);
+  const { business, snapshot } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS, "manageStaff");
   const staff = validateStaffPayload(payload);
   const current = await get(`SELECT COUNT(*) AS count FROM barber_team_members WHERE barber_id = ? AND COALESCE(is_active, 1) = 1`, [business.id]);
   if (Number(current?.count || 0) >= Number(snapshot.limits.staffMembers || 0)) throw httpError(403, "Provider Platinum staff limit reached.", "STAFF_LIMIT_REACHED");
@@ -376,7 +391,7 @@ export async function createStaffProfile(userId, payload = {}) {
 }
 
 export async function deactivateStaffProfile(userId, staffId) {
-  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS);
+  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS, "manageStaff");
   const id = normalizeId(staffId);
   const staff = await get(`SELECT * FROM barber_team_members WHERE id = ? AND barber_id = ?`, [id, business.id]);
   if (!staff) throw httpError(404, "Staff member not found.");
@@ -386,7 +401,7 @@ export async function deactivateStaffProfile(userId, staffId) {
 }
 
 export async function createBranch(userId, payload = {}) {
-  const { business, snapshot } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.BRANCH_MANAGEMENT);
+  const { business, snapshot } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.BRANCH_MANAGEMENT, "manageBranches");
   const branch = validateBranchPayload(payload);
   const current = await get(`SELECT COUNT(*) AS count FROM provider_locations WHERE barber_id = ? AND COALESCE(is_active, 1) = 1`, [business.id]).catch(() => ({ count: 0 }));
   if (Number(current?.count || 0) >= Number(snapshot.limits.branches || 0)) throw httpError(403, "Provider Platinum branch limit reached.", "BRANCH_LIMIT_REACHED");
@@ -404,7 +419,7 @@ export async function createBranch(userId, payload = {}) {
 }
 
 export async function assignStaffService(userId, { staffId, serviceId } = {}) {
-  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_SERVICE_ASSIGNMENT);
+  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_SERVICE_ASSIGNMENT, "manageStaff");
   const sid = normalizeId(staffId);
   const serviceKey = normalizeId(serviceId);
   const staff = await get(`SELECT * FROM barber_team_members WHERE id = ? AND barber_id = ? AND COALESCE(is_active, 1) = 1`, [sid, business.id]);
@@ -421,7 +436,7 @@ export async function assignStaffService(userId, { staffId, serviceId } = {}) {
 }
 
 export async function assignStaffBranch(userId, { staffId, branchId } = {}) {
-  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ASSIGNMENT);
+  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ASSIGNMENT, "manageStaff");
   const sid = normalizeId(staffId);
   const locationId = normalizeId(branchId);
   const staff = await get(`SELECT * FROM barber_team_members WHERE id = ? AND barber_id = ? AND COALESCE(is_active, 1) = 1`, [sid, business.id]);
@@ -438,7 +453,7 @@ export async function assignStaffBranch(userId, { staffId, branchId } = {}) {
 }
 
 export async function setStaffSchedule(userId, payload = {}) {
-  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_SCHEDULES);
+  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_SCHEDULES, "manageSchedules");
   const staffId = normalizeId(payload.staffId || payload.staff_id);
   const day = Number(payload.dayOfWeek ?? payload.day_of_week);
   const start = normalizeTime(payload.startTime || payload.start_time);
@@ -466,7 +481,7 @@ export async function setStaffSchedule(userId, payload = {}) {
 }
 
 export async function assignBookingToStaff(userId, payload = {}) {
-  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ASSIGNMENT);
+  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ASSIGNMENT, "assignBookings");
   const bookingId = normalizeId(payload.bookingId || payload.booking_id);
   const staffId = normalizeId(payload.staffId || payload.staff_id);
   const branchId = normalizeId(payload.branchId || payload.branch_id);
@@ -505,31 +520,147 @@ export async function assignBookingToStaff(userId, payload = {}) {
 }
 
 export async function createStaffInvitation(userId, payload = {}) {
-  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS);
+  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS, "manageStaff");
   const staff = validateStaffPayload({ ...payload, displayName: payload.displayName || payload.name || payload.email });
+  if (!staff.email) throw httpError(400, "Staff email is required for invitations.");
+  const activeMember = await get(`SELECT id FROM barber_team_members WHERE barber_id = ? AND LOWER(COALESCE(email, '')) = ? AND COALESCE(is_active, 1) = 1`, [business.id, staff.email]).catch(() => null);
+  if (activeMember) throw httpError(409, "That staff member already has active access.", "DUPLICATE_STAFF");
   const existing = await get(
     `SELECT id FROM provider_staff_invitations
      WHERE barber_id = ? AND LOWER(staff_email) = ? AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP`,
     [business.id, staff.email]
   ).catch(() => null);
   if (existing) throw httpError(409, "A pending invitation already exists for that staff email.", "DUPLICATE_INVITATION");
-  const tokenHash = crypto.createHash("sha256").update(crypto.randomBytes(32)).digest("hex");
+  const token = crypto.randomBytes(32).toString("hex");
+  const tokenHash = hashInvitationToken(token);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const metadata = auditPayload({
+    displayName: staff.displayName,
+    branchIds: Array.isArray(payload.branchIds || payload.branch_ids) ? payload.branchIds || payload.branch_ids : [],
+    serviceIds: Array.isArray(payload.serviceIds || payload.service_ids) ? payload.serviceIds || payload.service_ids : [],
+  });
   const result = await run(
-    `INSERT INTO provider_staff_invitations (barber_id, staff_email, role, token_hash, status, expires_at, created_by_user_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    [business.id, staff.email, staff.role, tokenHash, expiresAt, userId]
+    `INSERT INTO provider_staff_invitations (barber_id, staff_email, role, token_hash, status, expires_at, created_by_user_id, metadata_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [business.id, staff.email, staff.role, tokenHash, expiresAt, userId, metadata]
   );
-  return { invitation: { id: result.lastID, staffEmail: staff.email, role: staff.role, status: "pending", expiresAt, delivery: "Email delivery is not claimed. Share through the supported invitation flow when mail is enabled." } };
+  return {
+    invitation: {
+      id: result.lastID,
+      staffEmail: staff.email,
+      role: staff.role,
+      status: "pending",
+      expiresAt,
+      delivery: "Email delivery is not claimed. Share through the supported invitation flow when mail is enabled.",
+      localAcceptanceToken: process.env.NODE_ENV === "production" ? undefined : token,
+    },
+  };
+}
+
+export async function acceptStaffInvitation(userId, { token = "", action = "accept" } = {}) {
+  const rawToken = clean(token, 200);
+  if (!rawToken) throw httpError(400, "Invitation token is required.");
+  const row = await get(
+    `SELECT psi.*, b.business_name, p.email AS user_email
+     FROM provider_staff_invitations psi
+     INNER JOIN barbers b ON b.id = psi.barber_id
+     INNER JOIN profiles p ON p.user_id = ?
+     WHERE psi.token_hash = ?
+     LIMIT 1`,
+    [userId, hashInvitationToken(rawToken)]
+  );
+  if (!row) throw httpError(404, "Invitation not found.");
+  const status = String(row.status || "").toLowerCase();
+  if (status !== "pending") throw httpError(409, "This invitation is no longer active.", "INVITATION_NOT_ACTIVE");
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    await run(`UPDATE provider_staff_invitations SET status = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [row.id]).catch(() => {});
+    throw httpError(410, "This invitation has expired.", "INVITATION_EXPIRED");
+  }
+  if (String(row.user_email || "").trim().toLowerCase() !== String(row.staff_email || "").trim().toLowerCase()) {
+    throw httpError(403, "Sign in with the invited email address to accept this invitation.", "INVITATION_EMAIL_MISMATCH");
+  }
+  if (String(action || "accept").toLowerCase() === "decline") {
+    await run(`UPDATE provider_staff_invitations SET status = 'declined', declined_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [row.id]);
+    return { invitation: { id: row.id, status: "declined", businessName: row.business_name } };
+  }
+
+  const metadata = (() => {
+    try { return JSON.parse(row.metadata_json || "{}"); } catch { return {}; }
+  })();
+  const branchIds = Array.isArray(metadata.branchIds) ? metadata.branchIds.map(normalizeId).filter(Boolean) : [];
+  const serviceIds = Array.isArray(metadata.serviceIds) ? metadata.serviceIds.map(normalizeId).filter(Boolean) : [];
+  const displayName = clean(metadata.displayName || row.staff_email.split("@")[0], 120);
+  const result = await transaction(async (client) => {
+    const existing = await client.get(
+      `SELECT id FROM barber_team_members WHERE barber_id = ? AND user_id = ? AND COALESCE(is_active, 1) = 1`,
+      [row.barber_id, userId]
+    );
+    if (existing) throw httpError(409, "You already have active access to this provider business.", "DUPLICATE_STAFF");
+    const staffResult = await client.run(
+      `INSERT INTO barber_team_members (barber_id, user_id, name, display_name, email, role, title, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [row.barber_id, userId, displayName, displayName, row.staff_email, normalizeStaffRole(row.role), normalizeStaffRole(row.role).replace(/_/g, " ")]
+    );
+    const staffId = staffResult.lastID;
+    for (const branchId of branchIds) {
+      const branch = await client.get(`SELECT id FROM provider_locations WHERE id = ? AND barber_id = ? AND COALESCE(is_active, 1) = 1`, [branchId, row.barber_id]);
+      if (branch) {
+        await client.run(
+          `INSERT INTO staff_location_assignments (barber_id, staff_id, location_id, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           ON CONFLICT(barber_id, staff_id, location_id) DO UPDATE SET is_active = 1, updated_at = CURRENT_TIMESTAMP`,
+          [row.barber_id, staffId, branchId]
+        );
+      }
+    }
+    for (const serviceId of serviceIds) {
+      const service = await client.get(`SELECT id FROM barber_services WHERE id = ? AND barber_id = ? AND COALESCE(is_available, 1) = 1`, [serviceId, row.barber_id]);
+      if (service) {
+        await client.run(
+          `INSERT INTO staff_service_assignments (barber_id, staff_id, service_id, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           ON CONFLICT(barber_id, staff_id, service_id) DO UPDATE SET is_active = 1, updated_at = CURRENT_TIMESTAMP`,
+          [row.barber_id, staffId, serviceId]
+        );
+      }
+    }
+    await client.run(
+      `UPDATE provider_staff_invitations
+       SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP, accepted_by_user_id = ?, accepted_staff_id = ?, token_hash = 'used:' || id, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'pending'`,
+      [userId, staffId, row.id]
+    );
+    return { staffId };
+  });
+  return {
+    invitation: {
+      id: row.id,
+      status: "accepted",
+      businessName: row.business_name,
+      staffId: result.staffId,
+      role: normalizeStaffRole(row.role),
+    },
+  };
+}
+
+export async function revokeStaffInvitation(userId, invitationId) {
+  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.STAFF_ACCOUNTS, "manageStaff");
+  const id = normalizeId(invitationId);
+  const invitation = await get(`SELECT * FROM provider_staff_invitations WHERE id = ? AND barber_id = ?`, [id, business.id]);
+  if (!invitation) throw httpError(404, "Invitation not found.");
+  if (String(invitation.status || "").toLowerCase() !== "pending") throw httpError(409, "Only pending invitations can be revoked.");
+  await run(`UPDATE provider_staff_invitations SET status = 'revoked', revoked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND barber_id = ?`, [id, business.id]);
+  return { invitation: { id, status: "revoked" } };
 }
 
 export async function buildAdvancedReport(userId, { type = "bookings", from = "", to = "", branchId = 0, staffId = 0 } = {}) {
-  const { business, snapshot } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.ADVANCED_REPORTS);
+  const { business, snapshot } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.ADVANCED_REPORTS, "viewReports");
   const reportType = clean(type, 40).toLowerCase();
   if (!PLATINUM_REPORT_TYPES.includes(reportType)) throw httpError(400, "Choose a supported report type.");
   const start = normalizeDate(from);
   const end = normalizeDate(to);
   if (!start || !end || end < start) throw httpError(400, "Choose a valid report date range.");
+  if (daysBetween(start, end) > MAX_EXPORT_DAYS) throw httpError(400, "Reports are limited to one year at a time.", "REPORT_RANGE_TOO_LARGE");
   const data = await loadOperationsData(business.id);
   const rows = data.bookings
     .filter((booking) => bookingDate(booking) >= start && bookingDate(booking) <= end)
@@ -560,8 +691,9 @@ export async function buildAdvancedReport(userId, { type = "bookings", from = ""
 }
 
 export async function createCsvExport(userId, payload = {}) {
+  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS, "exportReports");
+  enforceExportRateLimit(userId, business.id);
   const report = await buildAdvancedReport(userId, payload);
-  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.ADVANCED_EXPORTS);
   const columns = [
     { key: "bookingId", label: "Booking ID" },
     { key: "date", label: "Date" },
@@ -583,7 +715,7 @@ export async function createCsvExport(userId, payload = {}) {
 }
 
 export async function draftAdvancedProviderOperation(userId, { message = "" } = {}) {
-  const { business } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.ADVANCED_ASSISTANT);
+  const { business, permissions } = await getOwnedBusinessWithPlatinum(userId, PROVIDER_ENTITLEMENTS.ADVANCED_ASSISTANT, "useAdvancedAssistant");
   const data = await loadOperationsData(business.id);
   const text = clean(message, 500).toLowerCase();
   const insights = buildOperationalInsights(data);
@@ -596,6 +728,7 @@ export async function draftAdvancedProviderOperation(userId, { message = "" } = 
     intent,
     confirmationRequired: intent === "assignment_review" || intent === "report_export",
     writesData: false,
+    permissions,
     answer: intent === "unsupported"
       ? "I can help with staff schedules, branch gaps, assignment review, and report preparation when enough details are provided."
       : "I found the relevant operations context. Review the suggestions before making any staff, branch, assignment, or export change.",

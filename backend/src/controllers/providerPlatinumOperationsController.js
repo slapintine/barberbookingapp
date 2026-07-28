@@ -6,10 +6,12 @@ import {
   createBranch,
   createCsvExport,
   createStaffInvitation,
+  acceptStaffInvitation,
   createStaffProfile,
   deactivateStaffProfile,
   draftAdvancedProviderOperation,
   getProviderPlatinumDashboard,
+  revokeStaffInvitation,
   setStaffSchedule,
 } from "../services/providerPlatinumOperationsService.js";
 import { getProviderEntitlementSnapshot } from "../services/entitlementService.js";
@@ -99,6 +101,24 @@ export async function postProviderPlatinumInvitation(req, res, next) {
   try {
     const result = await createStaffInvitation(req.user.id, req.body || {});
     res.status(201).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postProviderPlatinumInvitationAccept(req, res, next) {
+  try {
+    const result = await acceptStaffInvitation(req.user.id, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteProviderPlatinumInvitation(req, res, next) {
+  try {
+    const result = await revokeStaffInvitation(req.user.id, req.params.id);
+    res.json({ success: true, ...result });
   } catch (error) {
     next(error);
   }
