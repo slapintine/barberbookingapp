@@ -156,7 +156,7 @@ export function calculateDistanceKm(...args) {
 
 export function resolveServicePrice(row) {
   const pricingType = String(row.pricing_type || "fixed").toLowerCase();
-  const fixed = Number(row.price_extra || row.price_from || 0);
+  const fixed = Number(row.price_extra || 0);
   const min = Number(row.min_price || 0);
   const max = Number(row.max_price || 0);
   const starting = Number(row.starting_price || 0);
@@ -164,6 +164,10 @@ export function resolveServicePrice(row) {
   if (pricingType === "starting_from" && starting > 0) return { min: starting, max: starting };
   if (fixed > 0) return { min: fixed, max: fixed };
   return { min: 0, max: 0 };
+}
+
+function hasKnownPrice(price) {
+  return Number(price?.min || 0) > 0 || Number(price?.max || 0) > 0;
 }
 
 export function calculateAvailabilityScore(row, requestedDate, requestedTime) {
@@ -220,6 +224,42 @@ function calculateTimingScore(row, when = "today") {
   return 10;
 }
 
+function priceFitsBudget(price, budgetMax) {
+  const budget = Number(budgetMax);
+  if (!Number.isFinite(budget) || budget <= 0) return true;
+  const min = Number(price?.min || 0);
+  if (min <= 0) return true;
+  return min <= budget;
+}
+
+function calculateBudgetScore(price, budgetMax) {
+  const budget = Number(budgetMax);
+  if (!Number.isFinite(budget) || budget <= 0) return 0;
+  if (!hasKnownPrice(price)) return 0;
+  if (!priceFitsBudget(price, budget)) return -12;
+  const max = Number(price?.max || price?.min || 0);
+  if (max > 0 && max <= budget) return 8;
+  return 4;
+}
+
+function requestedTimeFits(row, requestedTime) {
+  if (!requestedTime) return true;
+  const isOpen = row.schedule_is_open === null || row.schedule_is_open === undefined ? 1 : Number(row.schedule_is_open);
+  if (!isOpen) return false;
+  const start = String(row.schedule_start || row.availability_start || "08:00").slice(0, 5);
+  const end = String(row.schedule_end || row.availability_end || "20:00").slice(0, 5);
+  return requestedTime >= start && requestedTime <= end;
+}
+
+function formatPriceRange(price) {
+  const min = Number(price?.min || 0);
+  const max = Number(price?.max || 0);
+  if (min <= 0 && max <= 0) return "Quote required";
+  const format = (value) => `UGX ${Number(value).toLocaleString("en-UG")}`;
+  if (max > min) return `${format(min)}-${format(max)}`;
+  return format(min || max);
+}
+
 export function paymentOptions(row) {
   const options = ["Cash"];
   if (Number(row.accepts_wallet || 0) === 1) options.push("Wallet");
@@ -244,10 +284,13 @@ function buildBadges({ score, distanceKm, row, when }) {
   return [...new Set(badges)].slice(0, 5);
 }
 
-function buildReasons({ row, serviceLabel, distanceKm, when }) {
+function buildReasons({ row, serviceLabel, distanceKm, when, requestedTime, price, budgetMax, minimumRating }) {
   const reasons = [`Offers ${serviceLabel} services`];
   if (Number.isFinite(Number(distanceKm))) reasons.push(`${Number(distanceKm).toFixed(1)} km away`);
+  if (requestedTime && requestedTimeFits(row, requestedTime)) reasons.push("Available near your preferred time");
+  if (hasKnownPrice(price) && priceFitsBudget(price, budgetMax) && Number(budgetMax) > 0) reasons.push("Within your selected price range");
   if (Number(row.rating || 0) >= 4.7) reasons.push("Highly rated by customers");
+  if (Number(minimumRating) > 0 && Number(row.rating || 0) >= Number(minimumRating)) reasons.push("Meets your rating preference");
   if (Number(row.total_reviews || 0) >= 50) reasons.push("Strong review history");
   if (when === "now") reasons.push("Likely to fit urgent timing");
   if (when === "today") reasons.push("Likely to fit same-day timing");
@@ -344,7 +387,8 @@ export function calculateSmartMatchScore({ row, price, distanceKm, budgetMin, bu
     calculateRatingScore(row) +
     calculateReviewsScore(row) +
     legacyPreferenceBoost +
-    legacyBudgetBoost
+    legacyBudgetBoost +
+    calculateBudgetScore(price, budgetMax)
   ));
 }
 
@@ -355,16 +399,25 @@ export function scoreProvider(row, criteria = {}) {
   const coordinates = criteria.coordinates || {};
   const distanceKm = calculateDistanceKm(coordinates.lat, coordinates.lng, row.latitude, row.longitude);
   const price = resolveServicePrice(row);
+  const requestedTime = String(criteria.time || criteria.preferredTime || "").slice(0, 5);
+  const requestedDate = criteria.date || criteria.preferredDate || "";
   const score = calculateSmartMatchScore({
     row,
     price,
     distanceKm,
     when: criteria.when || "today",
+    time: requestedTime,
+    date: requestedDate,
+    budgetMax: criteria.budgetMax,
   });
   const timingExact =
-    String(criteria.when || "").toLowerCase() === "now"
+    requestedTime
+      ? requestedTimeFits(row, requestedTime)
+      : String(criteria.when || "").toLowerCase() === "now"
       ? calculateTimingScore(row, "now") >= SMART_MATCH_WEIGHTS.timingFit
       : true;
+  const rating = Number(row.rating || 0);
+  const meetsRatingPreference = !Number(criteria.minimumRating) || rating === 0 || rating >= Number(criteria.minimumRating);
   return {
     providerId: String(row.id),
     businessId: row.id,
@@ -374,18 +427,25 @@ export function scoreProvider(row, criteria = {}) {
     serviceId: row.service_id,
     serviceName: row.service_name,
     category: row.category || row.business_type || "Services",
-    rating: Number(row.rating || 0),
+    rating,
     reviewsCount: Number(row.total_reviews || 0),
     reviews: Number(row.total_reviews || 0),
     distanceKm,
     availabilityLabel: labelAvailability(row, criteria.when),
+    requestedDate,
+    requestedTime,
     score,
     timingExact,
+    budgetCompatible: hasKnownPrice(price) ? priceFitsBudget(price, criteria.budgetMax) : true,
+    meetsRatingPreference,
     badges: buildBadges({ score, distanceKm, row, when: criteria.when }),
-    reasons: buildReasons({ row, serviceLabel, distanceKm, when: criteria.when }),
+    reasons: buildReasons({ row, serviceLabel, distanceKm, when: criteria.when, requestedTime, price, budgetMax: criteria.budgetMax, minimumRating: criteria.minimumRating }),
     imageUrl: row.image || "",
     priceMin: price.min,
     priceMax: price.max,
+    priceLabel: formatPriceRange(price),
+    pricingType: row.pricing_type || "fixed",
+    durationMinutes: Number(row.duration_minutes || 0),
     paymentOptions: paymentOptions(row),
     provider: {
       id: row.id,
@@ -471,8 +531,12 @@ export async function findSmartMatches(criteria = {}) {
   });
 
   const matches = [...bestByProvider.values()]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 12);
+    .sort((a, b) =>
+      Number(b.budgetCompatible) - Number(a.budgetCompatible) ||
+      Number(b.meetsRatingPreference) - Number(a.meetsRatingPreference) ||
+      b.score - a.score
+    )
+    .slice(0, 3);
 
   if (!matches.length) {
     return {

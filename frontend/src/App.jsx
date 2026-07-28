@@ -72,6 +72,7 @@ import {
   serviceMatchesCategory,
 } from "./utils/serviceCatalog.js";
 import { DEFAULT_CUSTOMER_SUBSCRIPTION_STATE, isCustomerPremiumActive } from "./utils/customerPremium.js";
+import { buildSmartMatchBookingContext } from "./features/smart-match/smartMatchContext.js";
 import { isPublicServiceProvider } from "./utils/providerDiscovery.js";
 import { CUSTOMER_PREMIUM_PLAN } from "./utils/subscriptionPlans.js";
 import {
@@ -1253,6 +1254,7 @@ function App() {
   const chatThreadRef = useRef(null);
   const notificationAudioRef = useRef(null);
   const nativePushOpenRef = useRef({ username: "", open: null });
+  const smartMatchBookingContextRef = useRef(null);
   const bookingFetchInFlightRef = useRef(null);
   const bookingRefreshStateRef = useRef({
     lastFetchedAt: 0,
@@ -1853,7 +1855,16 @@ function App() {
     if (!selectedBarber) return;
     const services = getBarberServices(selectedBarber);
     if (services.length) {
-      setSelectedService(services[0].id);
+      const pendingContext = smartMatchBookingContextRef.current;
+      const pendingProviderId = String(pendingContext?.providerId || "");
+      const selectedProviderId = String(selectedBarber.id || "");
+      const preferredService = pendingProviderId === selectedProviderId
+        ? services.find((item) =>
+            String(item.id) === String(pendingContext.serviceId) ||
+            String(item.service_name || item.name || "").toLowerCase() === String(pendingContext.serviceName || "").toLowerCase()
+          )
+        : null;
+      setSelectedService((preferredService || services[0]).id);
     }
     const teamMembers = normalizeTeamMembers(selectedBarber.team_members || selectedBarber.teamMembers || []);
     const activeTeamMembers = teamMembers.filter((item) => Number(item.is_active ?? 1) === 1);
@@ -3289,6 +3300,21 @@ const updateBarberStand = async (payload) => {
       if (normalizedLocationType === "customer_location" && cleanBookingAddress.length < 3) {
         throw new Error("Add your address or use your current location before booking.");
       }
+      const smartMatchContext = smartMatchBookingContextRef.current;
+      const smartMatchBookingDetails =
+        smartMatchContext &&
+        String(smartMatchContext.providerId || "") === String(selectedBarber.id || "") &&
+        String(smartMatchContext.serviceId || "") === String(serviceObj.id || "")
+          ? {
+              source: "smart_match",
+              serviceName: smartMatchContext.serviceName || serviceObj.service_name || "",
+              requestedDate: smartMatchContext.requestedDate || "",
+              requestedTime: smartMatchContext.requestedTime || "",
+              budgetMax: smartMatchContext.preferences?.budgetMax || "",
+              minimumRating: smartMatchContext.preferences?.minimumRating || "",
+              notes: smartMatchContext.notes || "",
+            }
+          : null;
 
       const data = await createBookingRequest({
         barber_id: Number(selectedBarber.id),
@@ -3299,7 +3325,7 @@ const updateBarberStand = async (payload) => {
         booking_address: cleanBookingAddress,
         payment_method: effectivePaymentMethod,
         payment_phone: PAYMENTS_ENABLED ? (mobileMoneyPhone || profile.phone) : profile.phone,
-        booking_details: options.bookingDetails || null,
+        booking_details: options.bookingDetails || smartMatchBookingDetails || null,
         idempotencyKey: makeId(PAYMENTS_ENABLED ? "booking-payment" : "booking"),
         team_member_id: selectedTeamMember?.id || null,
       });
@@ -3358,6 +3384,7 @@ const updateBarberStand = async (payload) => {
       setShowBarberProfile(false);
       setActiveTab(PAYMENTS_ENABLED && data?.payment?.reference ? "bookings" : "bookingConfirmation");
       notifyBookingUpdate(nextBooking);
+      smartMatchBookingContextRef.current = null;
       fetchNotifications();
       fetchWallet();
     } catch (error) {
@@ -4766,6 +4793,57 @@ const updateBarberStand = async (payload) => {
     setActiveTab("smartMatch");
   };
 
+  const openSmartMatchBooking = (context = {}, provider = null) => {
+    const candidateProvider =
+      provider ||
+      barbers.find((item) => String(item.id) === String(context.providerId)) ||
+      enrichedBarbers.find((item) => String(item.id) === String(context.providerId)) ||
+      null;
+    if (!candidateProvider || !isPublicProvider(candidateProvider)) {
+      setGlobalError("This provider is not available for booking right now.");
+      return;
+    }
+
+    const bookingContext = buildSmartMatchBookingContext(context, candidateProvider, {
+      selectedService: { key: context.preferences?.serviceKey || "", label: context.serviceName || "" },
+      selectedWhen: context.preferences?.when || "",
+      preferredDate: context.requestedDate || "",
+      preferredTime: context.requestedTime || "",
+      budgetMax: context.preferences?.budgetMax || "",
+      minimumRating: context.preferences?.minimumRating || "",
+      notes: context.notes || "",
+      selectedLocationType: context.bookingLocationType === "customer_location" ? "enter_address" : "",
+      selectedAddress: context.bookingAddress || "",
+    });
+    smartMatchBookingContextRef.current = bookingContext;
+
+    const services = getBarberServices(candidateProvider);
+    const targetService =
+      services.find((item) =>
+        String(item.id) === String(bookingContext.serviceId) ||
+        String(item.service_name || item.name || "").toLowerCase() === String(bookingContext.serviceName || "").toLowerCase()
+      ) || services[0] || null;
+    if (targetService?.id) setSelectedService(targetService.id);
+
+    const requestedDate = String(bookingContext.requestedDate || "").trim();
+    const requestedTime = String(bookingContext.requestedTime || "").trim().slice(0, 5);
+    if (requestedDate && dateOptions.some((item) => item.value === requestedDate)) setSelectedDate(requestedDate);
+    if (requestedTime) setSelectedTime(requestedTime);
+
+    const locationType = String(targetService?.location_type || "provider_location").toLowerCase();
+    const supportsHome =
+      Number(candidateProvider.home_service_enabled || candidateProvider.homeServiceEnabled || 0) === 1 ||
+      locationType === "customer_location";
+    const requestedCustomerLocation = bookingContext.bookingLocationType === "customer_location" && supportsHome;
+    setBookingLocationType(requestedCustomerLocation ? "customer_location" : "provider_location");
+    setBookingAddress(requestedCustomerLocation ? bookingContext.bookingAddress : "");
+    setSelectedBarber(candidateProvider);
+    setShowBarberProfile(false);
+    setShowQuoteModal(false);
+    setShowChat(false);
+    setShowBookingModal(true);
+  };
+
   const openCategoryServices = (category) => {
     const nextCategory = category || "All";
     setSelectedCategory(nextCategory);
@@ -5238,6 +5316,7 @@ const updateBarberStand = async (payload) => {
             onOpenProvider={(provider) => {
               openProviderProfile(provider);
             }}
+            onBookMatch={openSmartMatchBooking}
             onAsk={(provider) =>
               openConversation({
                 barber: provider,

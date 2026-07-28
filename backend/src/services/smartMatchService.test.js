@@ -6,6 +6,7 @@ import {
   calculateSmartMatchScore,
   categoryMatches,
   normalizeCategoryKey,
+  scoreProvider,
 } from "./smartMatchService.js";
 
 test("Smart Match category matching supports Tutor aliases", () => {
@@ -63,4 +64,113 @@ test("Smart Match score ranks available nearby provider higher", () => {
   });
   assert.equal(good > weak, true);
   assert.equal(calculatePaymentScore(base), 5);
+});
+
+test("Smart Match exposes real booking facts and reasons for the selected service", () => {
+  const match = scoreProvider({
+    id: 44,
+    business_name: "Spark Beauty",
+    business_type: "Beauty",
+    map_icon_type: "beauty",
+    location: "Ntinda",
+    latitude: 0.35,
+    longitude: 32.58,
+    service_id: 801,
+    service_name: "Gel nails",
+    category: "Beauty",
+    pricing_type: "fixed",
+    price_extra: 25000,
+    duration_minutes: 45,
+    schedule_is_open: 1,
+    schedule_start: "08:00",
+    schedule_end: "18:00",
+    rating: 4.8,
+    total_reviews: 12,
+  }, {
+    serviceKey: "beauty",
+    serviceLabel: "Beauty",
+    coordinates: { lat: 0.3476, lng: 32.5825 },
+    when: "today",
+    date: "2026-07-28",
+    time: "15:30",
+    budgetMax: 30000,
+    minimumRating: 4.5,
+  });
+
+  assert.equal(match.serviceId, 801);
+  assert.equal(match.serviceName, "Gel nails");
+  assert.equal(match.durationMinutes, 45);
+  assert.equal(match.priceLabel, "UGX 25,000");
+  assert.equal(match.requestedDate, "2026-07-28");
+  assert.equal(match.requestedTime, "15:30");
+  assert.equal(match.budgetCompatible, true);
+  assert.equal(match.timingExact, true);
+  assert.equal(match.meetsRatingPreference, true);
+  assert.match(match.reasons.join(" | "), /Within your selected price range/);
+  assert.match(match.reasons.join(" | "), /Available near your preferred time/);
+});
+
+test("Smart Match does not claim budget or timing reasons without supporting data", () => {
+  const match = scoreProvider({
+    id: 45,
+    business_name: "Late Premium",
+    business_type: "Beauty",
+    service_id: 802,
+    service_name: "Makeup",
+    category: "Beauty",
+    pricing_type: "fixed",
+    price_extra: 80000,
+    duration_minutes: 60,
+    schedule_is_open: 1,
+    schedule_start: "08:00",
+    schedule_end: "12:00",
+    rating: 0,
+    total_reviews: 0,
+  }, {
+    serviceKey: "beauty",
+    serviceLabel: "Beauty",
+    when: "today",
+    time: "15:30",
+    budgetMax: 30000,
+    minimumRating: 4.5,
+  });
+
+  const reasons = match.reasons.join(" | ");
+  assert.equal(match.budgetCompatible, false);
+  assert.equal(match.timingExact, false);
+  assert.equal(match.meetsRatingPreference, true);
+  assert.doesNotMatch(reasons, /Within your selected price range/);
+  assert.doesNotMatch(reasons, /Available near your preferred time/);
+  assert.doesNotMatch(reasons, /Meets your rating preference/);
+});
+
+test("Smart Match does not use provider base price as matched service price", () => {
+  const match = scoreProvider({
+    id: 46,
+    business_name: "Base Price Stand",
+    business_type: "Beauty",
+    price_from: 25000,
+    service_id: 803,
+    service_name: "Consultation",
+    category: "Beauty",
+    pricing_type: "fixed",
+    price_extra: 0,
+    duration_minutes: 20,
+    schedule_is_open: 1,
+    schedule_start: "08:00",
+    schedule_end: "18:00",
+    rating: 4.8,
+    total_reviews: 12,
+  }, {
+    serviceKey: "beauty",
+    serviceLabel: "Beauty",
+    when: "today",
+    time: "15:30",
+    budgetMax: 30000,
+  });
+
+  assert.equal(match.priceLabel, "Quote required");
+  assert.equal(match.priceMin, 0);
+  assert.equal(match.priceMax, 0);
+  assert.doesNotMatch(match.reasons.join(" | "), /Within your selected price range/);
 });

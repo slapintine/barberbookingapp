@@ -1,10 +1,16 @@
 import { SERVICE_CATEGORIES, WHEN_OPTIONS } from "./smartMatchConstants.js";
 import { getCategoryByName, inferCategoryNameFromText, normalizeCategoryKey } from "../../utils/serviceCatalog.js";
+export { getSmartMatchCriteriaKey as getCriteriaKey, buildSmartMatchBookingContext } from "./smartMatchContext.js";
 
 export const initialSmartMatchState = {
   step: "need",
   selectedService: null,
   selectedWhen: null,
+  preferredDate: "",
+  preferredTime: "",
+  budgetMax: "",
+  minimumRating: "",
+  notes: "",
   selectedLocationType: null,
   selectedAddress: "",
   userCoordinates: null,
@@ -48,6 +54,11 @@ export function normalizeInitialSmartMatch(initial = {}, fallbackLocation = "") 
   return {
     ...initialSmartMatchState,
     selectedService,
+    preferredDate: String(initial.date || initial.preferredDate || "").trim(),
+    preferredTime: String(initial.time || initial.preferredTime || "").trim().slice(0, 5),
+    budgetMax: initial.budgetMax != null ? String(initial.budgetMax) : "",
+    minimumRating: initial.minimumRating != null ? String(initial.minimumRating) : "",
+    notes: String(initial.notes || initial.specialRequest || "").trim(),
     selectedAddress: address,
     userCoordinates: coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng) ? coords : null,
   };
@@ -55,18 +66,9 @@ export function normalizeInitialSmartMatch(initial = {}, fallbackLocation = "") 
 
 export function smartMatchSummary(state = {}) {
   const service = state.selectedService?.label || "Service";
-  const when = getWhenByKey(state.selectedWhen)?.label || "When";
+  const when = state.preferredDate || state.preferredTime
+    ? [state.preferredDate, state.preferredTime].filter(Boolean).join(" at ")
+    : getWhenByKey(state.selectedWhen)?.label || "When";
   const where = state.selectedLocationType === "use_current_location" ? "Current location" : state.selectedAddress || "Address";
   return `${service} \u00B7 ${when} \u00B7 ${where}`;
-}
-
-export function getCriteriaKey(state = {}) {
-  return JSON.stringify({
-    serviceKey: state.selectedService?.key || "",
-    when: state.selectedWhen || "",
-    locationType: state.selectedLocationType || "",
-    address: String(state.selectedAddress || "").trim().toLowerCase(),
-    lat: state.userCoordinates?.lat || "",
-    lng: state.userCoordinates?.lng || "",
-  });
 }

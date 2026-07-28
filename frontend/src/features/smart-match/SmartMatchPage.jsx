@@ -16,6 +16,7 @@ import {
   WHEN_OPTIONS,
 } from "./smartMatchConstants.js";
 import {
+  buildSmartMatchBookingContext,
   getCriteriaKey,
   getServiceByKey,
   getWhenByKey,
@@ -198,7 +199,7 @@ function NoMatchResults({ state, onChangeLocation, onTryAnotherService, onOpenPr
   );
 }
 
-/** Priority sort modes — all sort by REAL fields; ties keep best-match order. */
+/** Priority sort modes: all sort by REAL fields; ties keep best-match order. */
 const SMART_MATCH_SORTS = [
   { key: "best", label: "Best match" },
   { key: "nearest", label: "Nearest" },
@@ -283,12 +284,23 @@ function ChipIcon({ name }) {
   return null;
 }
 
-function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap }) {
+function formatMatchPrice(match = {}) {
+  if (match.priceLabel) return match.priceLabel;
+  const min = Number(match.priceMin || 0);
+  const max = Number(match.priceMax || 0);
+  if (min <= 0 && max <= 0) return "Quote required";
+  const format = (value) => `UGX ${Number(value).toLocaleString("en-UG")}`;
+  if (max > min) return `${format(min)}-${format(max)}`;
+  return format(min || max);
+}
+
+function MatchProviderCard({ match, provider, state, onOpenProvider, onBookMatch, onAsk, onViewOnMap }) {
   const score = Number(match.score || 0);
   const chips = getMatchChips(match, provider);
   const primaryReason = Array.isArray(match.reasons) && match.reasons.length ? match.reasons[0] : "";
   const providerImage = match.imageUrl || provider?.image || "";
   const hasRating = Number(match.rating) > 0;
+  const duration = Number(match.durationMinutes || 0);
   return (
     <article className="smart-match-result-card">
       <div className="smart-match-result-media">
@@ -304,6 +316,12 @@ function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap
           <span><FiStar /> {hasRating ? Number(match.rating).toFixed(1) : "New"} ({Number(match.reviewsCount || match.reviews || 0)})</span>
           <span><FiMapPin /> {Number.isFinite(Number(match.distanceKm)) ? `${Number(match.distanceKm).toFixed(1)} km` : "Nearby"}</span>
         </div>
+        <div className="smart-match-service-facts" aria-label="Matched service details">
+          <span>{formatMatchPrice(match)}</span>
+          {duration > 0 ? <span>{duration} min</span> : null}
+          {match.availabilityLabel ? <span>{match.availabilityLabel}</span> : null}
+          {match.requestedTime ? <span>Near {match.requestedTime}</span> : null}
+        </div>
         {chips.length ? (
           <div className="smart-match-chips">
             {chips.map((chip) => (
@@ -318,10 +336,18 @@ function MatchProviderCard({ match, provider, onOpenProvider, onAsk, onViewOnMap
           <button
             type="button"
             className="smart-match-result-btn primary"
+            onClick={() => (provider ? onBookMatch?.(buildSmartMatchBookingContext(match, provider, state), provider) : null)}
+            disabled={!provider}
+          >
+            Book this
+          </button>
+          <button
+            type="button"
+            className="smart-match-result-btn"
             onClick={() => (provider ? onOpenProvider?.(provider) : null)}
             disabled={!provider}
           >
-            View &amp; Book
+            View stand
           </button>
           <button
             type="button"
@@ -352,6 +378,7 @@ export default function SmartMatchPage({
   pendingCustomerSubscriptionPayment,
   onBack,
   onOpenProvider,
+  onBookMatch,
   onUpgradePremium,
   onVerifyPremium,
   onContinueManualSearch,
@@ -384,6 +411,11 @@ export default function SmartMatchPage({
       step: state.step === "matches" ? "need" : state.step,
       selectedService: state.selectedService,
       selectedWhen: state.selectedWhen,
+      preferredDate: state.preferredDate,
+      preferredTime: state.preferredTime,
+      budgetMax: state.budgetMax,
+      minimumRating: state.minimumRating,
+      notes: state.notes,
       selectedLocationType: state.selectedLocationType,
       selectedAddress: state.selectedAddress,
       userCoordinates: state.userCoordinates,
@@ -488,6 +520,11 @@ export default function SmartMatchPage({
         serviceKey: state.selectedService.key,
         serviceLabel: state.selectedService.label,
         when: state.selectedWhen,
+        date: state.preferredDate,
+        time: state.preferredTime,
+        budgetMax: state.budgetMax,
+        minimumRating: state.minimumRating,
+        notes: state.notes,
         locationType: state.selectedLocationType,
         coordinates: state.userCoordinates,
         address: state.selectedLocationType === "enter_address" ? state.selectedAddress : "",
@@ -556,7 +593,7 @@ export default function SmartMatchPage({
           <aside id="smart-match-help" className="smart-match-help" aria-label="How Smart Match works">
             <strong>How Smart Match works</strong>
             <p>Choose a service, timing, and location. Queless ranks suitable providers using fit, distance, availability, rating, and reliability signals.</p>
-            <span>You stay in control—review a provider before you book.</span>
+            <span>You stay in control: review a provider before you book.</span>
           </aside>
         ) : null}
 
@@ -576,7 +613,7 @@ export default function SmartMatchPage({
                 <span key={item}><FiCheck /> {item}</span>
               ))}
             </div>
-            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX {CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month · Coming Soon</div>
+            <div className="smart-match-price"><FiCreditCard /> Customer Premium: UGX {CUSTOMER_PREMIUM_PLAN.monthlyPrice.toLocaleString("en-UG")}/month - Coming Soon</div>
             <div className="smart-match-subscription-message" role="status">{PAYMENTS_COMING_SOON_MESSAGE}</div>
             {customerSubscriptionMessage ? <div className={customerSubscriptionMessageClass(customerSubscriptionMessage)} role="status">{customerSubscriptionMessage}</div> : null}
           </section>
@@ -588,7 +625,7 @@ export default function SmartMatchPage({
             <span>{state.error}</span>
             <div className="smart-match-error-actions">
               <button type="button" onClick={loadMatches} disabled={state.loading}>
-                {state.loading ? "Trying again…" : "Try again"}
+                {state.loading ? "Trying again..." : "Try again"}
               </button>
               <button type="button" onClick={() => updateState({ step: "where" })}>Review location</button>
             </div>
@@ -635,6 +672,53 @@ export default function SmartMatchPage({
                   </button>
                 );
               })}
+            </div>
+            <div className="smart-match-preferences-grid" aria-label="Optional booking preferences">
+              <label>
+                <span>Preferred date</span>
+                <input
+                  type="date"
+                  value={state.preferredDate}
+                  onChange={(event) => updateState({ preferredDate: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Preferred time</span>
+                <input
+                  type="time"
+                  value={state.preferredTime}
+                  onChange={(event) => updateState({ preferredTime: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Max budget</span>
+                <input
+                  inputMode="numeric"
+                  value={state.budgetMax}
+                  onChange={(event) => updateState({ budgetMax: event.target.value.replace(/[^\d]/g, "") })}
+                  placeholder="UGX"
+                />
+              </label>
+              <label>
+                <span>Rating preference</span>
+                <select
+                  value={state.minimumRating}
+                  onChange={(event) => updateState({ minimumRating: event.target.value })}
+                >
+                  <option value="">Any rating</option>
+                  <option value="4">4.0+</option>
+                  <option value="4.5">4.5+</option>
+                </select>
+              </label>
+              <label className="smart-match-preferences-wide">
+                <span>Notes for the provider</span>
+                <textarea
+                  value={state.notes}
+                  onChange={(event) => updateState({ notes: event.target.value })}
+                  placeholder="Optional details, access notes, or service preferences"
+                  rows={3}
+                />
+              </label>
             </div>
           </section>
         ) : null}
@@ -716,7 +800,9 @@ export default function SmartMatchPage({
                       key={`${match.providerId || match.businessId}-${match.serviceId || match.serviceName}`}
                       match={match}
                       provider={provider}
+                      state={state}
                       onOpenProvider={onOpenProvider}
+                      onBookMatch={onBookMatch}
                       onAsk={onAsk}
                       onViewOnMap={onViewOnMap}
                     />
