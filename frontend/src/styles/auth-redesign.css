@@ -607,6 +607,21 @@ body[data-theme="dark"] .screen-v4.screen-auth-v4 .lineup-auth-page {
     overflow-x: hidden !important;
   }
 
+  html.queless-native-android .app-wrap-v4.app-auth-v4,
+  html.queless-native-android .phone-frame-v4.phone-frame-auth-v4,
+  html.queless-native-android .screen-v4.screen-auth-v4 {
+    height: 100dvh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  html.queless-native-android .lineup-auth-page,
+  html.queless-native-android .screen-v4.screen-auth-v4 .lineup-auth-page {
+    min-height: 100dvh !important;
+    padding-bottom: calc(340px + env(safe-area-inset-bottom, 0px)) !important;
+    overflow-y: visible !important;
+  }
+
   .lineup-auth-shell,
   .screen-v4.screen-auth-v4 .lineup-auth-shell {
     width: 100% !important;

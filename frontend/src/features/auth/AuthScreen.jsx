@@ -135,6 +135,33 @@ export default function AuthScreen(props) {
     if (authError || authSuccess) clearAuthMessages();
   };
 
+  const submitAuthAction = () => {
+    if (authLoading) return;
+    if (isReset) {
+      handlePasswordReset();
+      return;
+    }
+    if (isLogin) {
+      handleLogin({ rememberMe });
+      return;
+    }
+    handleRegister();
+  };
+
+  const handleUsernameKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    if (isLogin && passwordRef?.current) {
+      event.preventDefault();
+      passwordRef.current.focus();
+    }
+  };
+
+  const handlePasswordKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submitAuthAction();
+  };
+
   return (
     <main className="lineup-auth-page" data-auth-mode={authMode}>
       <div className="lineup-auth-ambient" aria-hidden="true" />
@@ -180,8 +207,10 @@ export default function AuthScreen(props) {
               <input
                 ref={usernameRef}
                 autoComplete="username"
+                enterKeyHint={isLogin ? "next" : "done"}
                 placeholder={isLogin ? "Enter your username or email" : "Choose a username"}
                 onInput={handleAuthInput}
+                onKeyDown={handleUsernameKeyDown}
               />
             </label>
           )}
@@ -208,8 +237,10 @@ export default function AuthScreen(props) {
                 ref={passwordRef}
                 type={isReset ? "text" : showPassword ? "text" : "password"}
                 autoComplete={isLogin ? "current-password" : isReset ? "one-time-code" : "new-password"}
+                enterKeyHint={isLogin ? "go" : isSignup ? "next" : "done"}
                 placeholder={isReset ? "Verification code" : isLogin ? "Enter your password" : "Create a password"}
                 onInput={handleAuthInput}
+                onKeyDown={handlePasswordKeyDown}
               />
 
               {!isReset && (
@@ -324,7 +355,7 @@ export default function AuthScreen(props) {
             type="button"
             className="lineup-auth-submit"
             disabled={authLoading}
-            onClick={isReset ? handlePasswordReset : isLogin ? () => handleLogin({ rememberMe }) : handleRegister}
+            onClick={submitAuthAction}
           >
             <span>
               {authLoading
