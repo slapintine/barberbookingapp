@@ -59,3 +59,25 @@ test("authoritative Android shell keeps production and local-QA identities separ
   assert.match(buildGradle, /versionName\s+"1\.0\.7"/);
   assert.match(localQaStrings, /Queless Local QA/);
 });
+
+test("authoritative Android shell matches the real app system-bar presentation", () => {
+  const repoRoot = path.resolve(process.cwd(), "..");
+  const styles = fs.readFileSync(
+    path.join(repoRoot, "android", "android", "app", "src", "main", "res", "values", "styles.xml"),
+    "utf8"
+  );
+  const mainActivity = fs.readFileSync(
+    path.join(repoRoot, "android", "android", "app", "src", "main", "java", "org", "queless", "app", "MainActivity.java"),
+    "utf8"
+  );
+
+  assert.match(styles, /<item name="android:statusBarColor">#2B063A<\/item>/);
+  assert.match(styles, /<item name="android:navigationBarColor">#24102F<\/item>/);
+  assert.match(styles, /<item name="android:windowLightStatusBar">false<\/item>/);
+  assert.match(styles, /<item name="android:windowLightNavigationBar">false<\/item>/);
+  assert.match(mainActivity, /WindowCompat\.setDecorFitsSystemWindows\(window,\s*true\)/);
+  assert.match(mainActivity, /window\.setStatusBarColor\(Color\.parseColor\("#2B063A"\)\)/);
+  assert.match(mainActivity, /window\.setNavigationBarColor\(Color\.parseColor\("#24102F"\)\)/);
+  assert.match(mainActivity, /controller\.setAppearanceLightStatusBars\(false\)/);
+  assert.match(mainActivity, /controller\.setAppearanceLightNavigationBars\(false\)/);
+});

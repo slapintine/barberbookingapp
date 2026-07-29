@@ -26,6 +26,7 @@ public class MainActivity extends BridgeActivity {
 
   private void applySystemBarContrast() {
     Window window = getWindow();
+    WindowCompat.setDecorFitsSystemWindows(window, true);
     window.setStatusBarColor(Color.parseColor("#2B063A"));
     window.setNavigationBarColor(Color.parseColor("#24102F"));
 
