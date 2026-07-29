@@ -64,6 +64,8 @@ export function buildSmartMatchProvider(match = {}, provider = {}) {
     ...provider,
     id: providerId,
     business_name: provider.business_name || match.businessName || "Queless provider",
+    username: "",
+    email: "",
     ownerUsername: "",
     owner_username: "",
     owner_email: "",

@@ -91,7 +91,7 @@ test("Smart Match builds booking-capable provider data from lean match results",
         longitude: 32.5825,
       },
     },
-    { id: 15, ownerUsername: "qa_platinum_provider", owner_email: "qa.platinum@queless.test" }
+    { id: 15, username: "qa_platinum_provider", email: "qa.platinum@queless.test", ownerUsername: "qa_platinum_provider", owner_email: "qa.platinum@queless.test" }
   );
 
   assert.equal(provider.id, "15");
@@ -101,6 +101,8 @@ test("Smart Match builds booking-capable provider data from lean match results",
   assert.equal(provider.is_demo, 0);
   assert.equal(provider.ownerUsername, "");
   assert.equal(provider.owner_email, "");
+  assert.equal(provider.username, "");
+  assert.equal(provider.email, "");
   assert.equal(provider.services.length, 1);
   assert.equal(provider.services[0].service_name, "Signature service 1");
   assert.equal(provider.services[0].price_extra, 26000);
