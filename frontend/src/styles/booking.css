@@ -1005,8 +1005,21 @@
 .booking-confirm-primary {
   border: 0;
   color: #fff;
+  -webkit-text-fill-color: #fff;
   background: linear-gradient(135deg, #3a078c 0%, #4f08b5 50%, #310071 100%);
   box-shadow: 0 16px 28px rgba(58, 7, 140, 0.2);
+}
+
+.booking-confirm-primary:hover,
+.booking-confirm-primary:focus-visible,
+.booking-confirm-primary:active {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+
+.booking-confirm-primary svg {
+  color: currentColor;
+  stroke: currentColor;
 }
 
 .booking-confirm-secondary {
@@ -2452,6 +2465,7 @@
   border-radius: 16px;
   background: var(--bk-primary);
   color: #fff;
+  -webkit-text-fill-color: #fff;
   font: inherit;
   font-size: 15px;
   font-weight: 900;
@@ -2465,11 +2479,27 @@
 
 .bk-cta-primary:hover {
   background: var(--bk-primary-hover);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+
+.bk-cta-primary:focus-visible,
+.bk-cta-primary:active {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+
+.bk-cta-primary svg,
+.bk-cta-primary [aria-hidden="true"] {
+  color: currentColor;
+  stroke: currentColor;
 }
 
 .bk-cta-primary.is-disabled,
 .bk-cta-primary:disabled {
-  opacity: 0.5;
+  background: color-mix(in srgb, var(--bk-primary) 58%, #fbe4d8);
+  color: rgba(255, 255, 255, 0.82);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.82);
   box-shadow: none;
   cursor: not-allowed;
 }

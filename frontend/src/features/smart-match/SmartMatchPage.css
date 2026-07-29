@@ -894,16 +894,23 @@
 .smart-match-primary-button {
   background: linear-gradient(135deg, var(--queless-midnight), var(--queless-plum), var(--queless-rose-plum));
   color: #fff;
+  -webkit-text-fill-color: #fff;
   border: none;
   box-shadow: 0 8px 18px rgba(43, 18, 76, 0.22);
 }
 
+.smart-match-primary-button:hover,
+.smart-match-primary-button:focus-visible,
 .smart-match-primary-button:active {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
   transform: translateY(1px) scale(0.99);
 }
 
 .smart-match-primary-button:disabled {
-  opacity: 0.45;
+  background: linear-gradient(135deg, rgba(43, 18, 76, 0.58), rgba(82, 43, 91, 0.58), rgba(133, 79, 108, 0.58));
+  color: rgba(255, 255, 255, 0.82);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.82);
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -1098,15 +1105,34 @@
   justify-content: center;
   border: 0;
   color: #fff;
+  -webkit-text-fill-color: #fff;
   background: linear-gradient(135deg, #2b003d, #5b0b3b);
 }
-.smart-match-result-btn.primary:hover { filter: brightness(1.08); }
+.smart-match-result-btn.primary:hover,
+.smart-match-result-btn.primary:focus-visible,
+.smart-match-result-btn.primary:active {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  filter: brightness(1.08);
+}
 
 .smart-match-result-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
   filter: none;
+}
+
+.smart-match-result-btn.primary:disabled {
+  background: linear-gradient(135deg, rgba(43, 0, 61, 0.58), rgba(91, 11, 59, 0.58));
+  color: rgba(255, 255, 255, 0.82);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.82);
+}
+
+.smart-match-primary-button svg,
+.smart-match-result-btn.primary svg {
+  color: currentColor;
+  stroke: currentColor;
 }
 
 .smart-match-result-secondary-actions,
