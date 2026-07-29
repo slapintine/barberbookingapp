@@ -70,6 +70,8 @@ test("authoritative Android shell matches the real app system-bar presentation",
     path.join(repoRoot, "android", "android", "app", "src", "main", "java", "org", "queless", "app", "MainActivity.java"),
     "utf8"
   );
+  const appSource = fs.readFileSync(path.join(repoRoot, "frontend", "src", "App.jsx"), "utf8");
+  const baseCss = fs.readFileSync(path.join(repoRoot, "frontend", "src", "styles", "base.css"), "utf8");
 
   assert.match(styles, /<item name="android:statusBarColor">#2B063A<\/item>/);
   assert.match(styles, /<item name="android:navigationBarColor">#24102F<\/item>/);
@@ -85,4 +87,7 @@ test("authoritative Android shell matches the real app system-bar presentation",
   assert.match(mainActivity, /window\.setNavigationBarColor\(Color\.parseColor\("#24102F"\)\)/);
   assert.match(mainActivity, /controller\.setAppearanceLightStatusBars\(false\)/);
   assert.match(mainActivity, /controller\.setAppearanceLightNavigationBars\(false\)/);
+  assert.match(appSource, /classList\.toggle\("queless-native-android"/);
+  assert.match(baseCss, /html\.queless-native-android body::before/);
+  assert.match(baseCss, /padding-top:\s*env\(safe-area-inset-top,\s*0px\)/);
 });

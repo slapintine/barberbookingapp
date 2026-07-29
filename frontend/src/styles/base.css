@@ -10,6 +10,31 @@ body {
   overflow-x: hidden;
 }
 
+html.queless-native-android {
+  background: #2B063A;
+}
+
+html.queless-native-android body {
+  background: #2B063A;
+}
+
+html.queless-native-android body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: #2B063A;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+html.queless-native-android #root {
+  padding-top: env(safe-area-inset-top, 0px);
+  background: #2B063A;
+}
+
 body[data-lineup-theme="dark"] {
   background: linear-gradient(180deg, #18051f 0%, #2b124c 60%, #522b5b 100%);
 }

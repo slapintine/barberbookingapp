@@ -206,6 +206,14 @@ function saveStoredUsers(users) {
   );
 }
 
+function syncNativeAndroidChromeClass() {
+  if (typeof document === "undefined" || typeof window === "undefined") return;
+  const capacitor = window.Capacitor;
+  const isNativeAndroid =
+    Boolean(capacitor?.isNativePlatform?.()) && String(capacitor?.getPlatform?.() || "").toLowerCase() === "android";
+  document.documentElement.classList.toggle("queless-native-android", isNativeAndroid);
+}
+
 function getStoredBarbers() {
   const saved = readStored("barbers", "global", []);
   return Array.isArray(saved) && saved.length ? saved.map(normalizeBarber) : [];
@@ -1033,6 +1041,10 @@ function clearAuthSession() {
 }
 
 function App() {
+  useEffect(() => {
+    syncNativeAndroidChromeClass();
+  }, []);
+
   const [screen, setScreen] = useState(() => getScreenFromPath(window.location.pathname, Boolean(getAuthToken())));
   const [authMode, setAuthMode] = useState(() => getAuthModeFromPath(window.location.pathname));
   const [theme, setTheme] = useTheme();
