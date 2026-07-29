@@ -30,6 +30,7 @@ import {
   verifyCustomerSubscriptionUpgrade,
 } from "./api/customerSubscriptionsApi.js";
 import { createEarlierSlotAlert, getRebookingOptions } from "./api/customerPremiumApi.js";
+import { buildSmartMatchProvider } from "./features/smart-match/smartMatchUtils.js";
 import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
 import { normalizeProviderData } from "./utils/providerData.js";
 import { buildStandDraftUpdatePayload } from "./utils/standDraftPayload.js";
@@ -3514,7 +3515,26 @@ const updateBarberStand = async (payload) => {
             previousBookingId: option.bookingId,
           },
         },
-        provider
+        buildSmartMatchProvider(
+          {
+            providerId: option.providerId,
+            businessName: provider.business_name || option.providerName || booking?.barberName,
+            serviceId: option.currentService.serviceId,
+            serviceName: option.currentService.serviceName,
+            serviceKey: option.currentService.serviceKey || option.previousServiceName || booking?.service,
+            serviceLabel: option.currentService.serviceName,
+            priceMin: option.currentService.priceMin,
+            priceMax: option.currentService.priceMax,
+            pricingType: option.currentService.pricingType,
+            durationMinutes: option.currentService.durationMinutes,
+            provider: {
+              location: provider.location || booking?.location || "",
+              latitude: provider.latitude,
+              longitude: provider.longitude,
+            },
+          },
+          provider
+        )
       );
     } catch (error) {
       setGlobalError(error?.status === 403 ? "Smart rebooking is included with Customer Premium." : error?.userMessage || "We could not start smart rebooking right now.");

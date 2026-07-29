@@ -36,3 +36,11 @@ test("plan QA fixtures seed distinct Free and Customer Premium accounts", () => 
   assert.ok(seedScript.includes("qa_customer_${PREMIUM_CUSTOMER_INDEX}"));
   assert.match(seedScript, /tier: "FREE"/);
 });
+
+test("plan QA bookings retain service identity for rebooking and earlier-slot alerts", () => {
+  assert.match(seedScript, /SELECT id, service_name, duration_minutes FROM barber_services/);
+  assert.match(seedScript, /status === "confirmed" \? isoDate\(confirmedIndex \+ 1\)/);
+  assert.match(seedScript, /service_id: service\.id \|\| null/);
+  assert.match(seedScript, /serviceId: service\.id \|\| null/);
+  assert.match(seedScript, /booking_details_json/);
+});

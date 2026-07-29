@@ -747,6 +747,13 @@ async function mapBookingRow(row) {
   const liveStatus = normalizeLiveBookingStatus(row.live_status || "");
   const liveStatusConfig = LIVE_BOOKING_STATUSES[liveStatus] || null;
   const events = await getBookingEvents(row.id);
+  const bookingDetails = (() => {
+    try {
+      return JSON.parse(row.booking_details_json || "{}");
+    } catch {
+      return {};
+    }
+  })();
   const liveStatusHistory = events
     .filter((event) => String(event.event_type || "") === "live_status_changed")
     .map((event) => ({
@@ -767,13 +774,8 @@ async function mapBookingRow(row) {
     location: barber?.location || "",
     booking_location_type: row.booking_location_type || "provider_location",
     booking_address: row.booking_address || barber?.location || "",
-    booking_details: (() => {
-      try {
-        return JSON.parse(row.booking_details_json || "{}");
-      } catch {
-        return {};
-      }
-    })(),
+    booking_details: bookingDetails,
+    service_id: row.service_id ?? bookingDetails.service_id ?? bookingDetails.serviceId ?? null,
     barber_owner_username: barberOwner?.username || "",
     barber_username: barberOwner?.username || "",
     team_member_id: row.team_member_id || null,

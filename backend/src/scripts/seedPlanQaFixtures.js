@@ -388,6 +388,12 @@ async function seedPlatinumOperations(barberId) {
 async function seedBookingsAndReviews(barberId, customerUserIds, provider) {
   await run(`DELETE FROM reviews WHERE barber_id = ?`, [barberId]);
   await run(`DELETE FROM bookings WHERE barber_id = ?`, [barberId]);
+  const services = await new Promise((resolve, reject) => {
+    db.all(`SELECT id, service_name, duration_minutes FROM barber_services WHERE barber_id = ? ORDER BY id ASC`, [barberId], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
 
   const totalBookings = provider.completed + provider.cancelled + 3;
   const reviewRatings = [...provider.ratingSeed];
@@ -399,24 +405,36 @@ async function seedBookingsAndReviews(barberId, customerUserIds, provider) {
     const isCancelled = index >= provider.completed && index < provider.completed + provider.cancelled;
     const status = isCompleted ? "completed" : isCancelled ? "cancelled" : "confirmed";
     const price = provider.averagePrice + (index % 4) * 2500;
-    const bookingDate = isoDate(-index - 1);
+    const confirmedIndex = index - provider.completed - provider.cancelled;
+    const bookingDate = status === "confirmed" ? isoDate(confirmedIndex + 1) : isoDate(-index - 1);
     const paymentMethod = index % 3 === 0 ? "cash" : "mtn_mobile_money";
     const paymentStatus = isCompleted ? "paid" : isCancelled ? "cancelled" : "unpaid";
     const barberAmount = isCompleted ? price : 0;
     const customerUserId = customerUserIds[index % customerUserIds.length];
+    const service = services[index % Math.max(services.length, 1)] || {};
+    const serviceName = service.service_name || `QA service ${index + 1}`;
+    const serviceDuration = Number(service.duration_minutes || 45);
+    const bookingDetailsJson = JSON.stringify({
+      service_id: service.id || null,
+      serviceId: service.id || null,
+      service_name: serviceName,
+      serviceName,
+      source: "qa_plan_seed",
+    });
 
     const bookingResult = await run(
       `INSERT INTO bookings
        (barber_id, customer_user_id, service_name, booking_date, booking_time, price, service_duration_minutes,
-        status, payment_method, payment_status, paid_at, payment_reference, payment_provider, commission_amount, barber_amount, cancelled_by, cancellation_reason)
-       VALUES (?, ?, ?, ?, ?, ?, 45, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        status, payment_method, payment_status, paid_at, payment_reference, payment_provider, commission_amount, barber_amount, cancelled_by, cancellation_reason, booking_details_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         barberId,
         customerUserId,
-        `QA service ${index + 1}`,
+        serviceName,
         bookingDate,
         `${String(9 + (index % 7)).padStart(2, "0")}:00`,
         price,
+        serviceDuration,
         status,
         paymentMethod,
         paymentStatus,
@@ -427,6 +445,7 @@ async function seedBookingsAndReviews(barberId, customerUserIds, provider) {
         barberAmount,
         isCancelled ? "customer" : null,
         isCancelled ? "QA cancellation for dashboard testing" : "",
+        bookingDetailsJson,
       ]
     );
 
