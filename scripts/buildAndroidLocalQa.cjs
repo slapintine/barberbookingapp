@@ -5,14 +5,20 @@ const path = require("node:path");
 
 const repoRoot = path.resolve(__dirname, "..");
 const frontendDir = path.join(repoRoot, "frontend");
-const androidFrontendDir = path.resolve(
-  process.env.QUELESS_ANDROID_FRONTEND_DIR ||
-    path.join(repoRoot, "..", "barber-booking-app", "frontend")
-);
+const authoritativeAndroidDir = path.join(repoRoot, "android");
+const androidFrontendDir = path.resolve(process.env.QUELESS_ANDROID_SOURCE_DIR || authoritativeAndroidDir);
 const apiUrl = String(process.env.VITE_ANDROID_QA_API_URL || "http://127.0.0.1:5012/api").trim();
 const expectedBranch = String(process.env.QUELESS_AUTHORITATIVE_BRANCH || "rc/backend-security-foundation").trim();
 const expectedPackageName = "org.queless.app.localqa";
 const buildMode = "local-qa";
+const stalePathPatterns = [
+  /[\\/]AppData[\\/]Local[\\/]Temp[\\/]/i,
+  /[\\/]\.codex/i,
+  /[\\/]barber-booking-app[\\/]/i,
+  /preservation/i,
+  /backup/i,
+  /old/i,
+];
 
 function run(command, args, options = {}) {
   const runViaCmd =
@@ -57,6 +63,10 @@ function readJson(filePath, message) {
   }
 }
 
+function hashString(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
 function listFiles(rootDir) {
   return fs.readdirSync(rootDir, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = path.join(rootDir, entry.name);
@@ -66,8 +76,39 @@ function listFiles(rootDir) {
   });
 }
 
+function hashDirectory(rootDir) {
+  const hash = crypto.createHash("sha256");
+  const files = listFiles(rootDir)
+    .map((filePath) => path.relative(rootDir, filePath).replace(/\\/g, "/"))
+    .filter((relativePath) => !/(^|\/)(build|\.gradle|node_modules)\//.test(relativePath))
+    .sort();
+  for (const relativePath of files) {
+    const filePath = path.join(rootDir, relativePath);
+    hash.update(relativePath);
+    hash.update("\0");
+    hash.update(fs.readFileSync(filePath));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
 function hashFile(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function assertAuthoritativeAndroidShell(shellDir) {
+  const normalizedShell = path.resolve(shellDir);
+  if (normalizedShell !== authoritativeAndroidDir) {
+    console.error("Refusing to build Android local QA from a non-authoritative Android shell.");
+    console.error(`Expected Android source: ${authoritativeAndroidDir}`);
+    console.error(`Received Android source: ${normalizedShell}`);
+    console.error("Do not use sibling repositories, preservation snapshots, deleted app copies, or temporary Android shells.");
+    process.exit(1);
+  }
+  if (stalePathPatterns.some((pattern) => pattern.test(normalizedShell))) {
+    console.error(`Refusing to build from a stale or temporary Android source path: ${normalizedShell}`);
+    process.exit(1);
+  }
 }
 
 function verifyCopiedAssets(sourceDir, targetDir) {
@@ -114,6 +155,7 @@ if (/(^|\.)queless\.org$/i.test(parsedApiUrl.hostname)) {
 }
 
 requireFile(path.join(frontendDir, "package.json"), "Current Queless frontend is missing");
+assertAuthoritativeAndroidShell(androidFrontendDir);
 requireFile(path.join(androidFrontendDir, "capacitor.config.json"), "Capacitor Android frontend shell is missing");
 requireFile(path.join(androidFrontendDir, "android", "gradlew.bat"), "Android Gradle wrapper is missing");
 
@@ -167,11 +209,45 @@ const versionPath = path.join(distDir, "version.json");
 requireFile(path.join(distDir, "index.html"), "Frontend build did not produce index.html");
 requireFile(versionPath, "Frontend build did not produce version.json");
 
+const distFilesBeforeManifest = listFiles(distDir).filter((filePath) => path.basename(filePath) !== "queless-build-manifest.json");
+const frontendOutputHash = hashString(
+  distFilesBeforeManifest
+    .map((filePath) => `${path.relative(distDir, filePath).replace(/\\/g, "/")}:${hashFile(filePath)}`)
+    .sort()
+    .join("\n")
+);
+const routeEvidence = {
+  smartMatch: listFiles(distDir).some((filePath) => fs.readFileSync(filePath).includes("/smart-match")),
+  providerCoach: listFiles(distDir).some((filePath) => fs.readFileSync(filePath).includes("/provider/ai-coach")),
+  providerPlatinum: listFiles(distDir).some((filePath) => fs.readFileSync(filePath).includes("/provider/platinum")),
+};
+if (!routeEvidence.smartMatch || !routeEvidence.providerCoach || !routeEvidence.providerPlatinum) {
+  console.error("Frontend build is missing one or more current Queless routes required for Android local QA.");
+  console.error(JSON.stringify(routeEvidence, null, 2));
+  process.exit(1);
+}
+
 const version = readJson(versionPath, "Could not read frontend build version");
 if (version.version !== commit) {
   console.error(`Frontend build version mismatch. Expected ${commit}, got ${version.version}`);
   process.exit(1);
 }
+
+const buildManifest = {
+  repositoryPath: repoRoot,
+  branch,
+  gitCommit: fullCommit,
+  buildTimestamp: new Date().toISOString(),
+  buildType: buildMode,
+  packageName: expectedPackageName,
+  appVersion: "1.0.7-localqa",
+  versionCode: 8,
+  frontendOutputHash,
+  androidSourcePath: androidFrontendDir,
+  androidSourceHash: hashDirectory(androidFrontendDir),
+  packagedRoutes: ["/login", "/home", "/smart-match", "/provider/ai-coach", "/provider/platinum"],
+};
+fs.writeFileSync(path.join(distDir, "queless-build-manifest.json"), `${JSON.stringify(buildManifest, null, 2)}\n`);
 
 const syncEnv = {
   ...buildEnv,
