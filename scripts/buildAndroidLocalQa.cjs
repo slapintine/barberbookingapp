@@ -20,6 +20,11 @@ const stalePathPatterns = [
   /old/i,
 ];
 
+console.warn("Building Queless Local QA only. This command does not install an APK.");
+console.warn("Local QA is a separate package: org.queless.app.localqa.");
+console.warn("If installed, this installs a separate Queless Local QA application.");
+console.warn("Install only with explicit user approval using npm run android:local-qa:install.");
+
 function run(command, args, options = {}) {
   const runViaCmd =
     process.platform === "win32" &&

@@ -16,7 +16,9 @@
     "test": "npm run backend:test && npm run frontend:test",
     "check": "npm run backend:check && npm run frontend:build && npm run website:verify",
     "verify:launch": "node scripts/launchVerification.cjs",
-    "android:local-qa": "node scripts/buildAndroidLocalQa.cjs"
+    "android:local-qa": "npm run android:local-qa:build",
+    "android:local-qa:build": "node scripts/buildAndroidLocalQa.cjs",
+    "android:local-qa:install": "node scripts/installAndroidLocalQa.cjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

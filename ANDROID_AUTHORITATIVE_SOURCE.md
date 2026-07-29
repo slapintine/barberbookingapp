@@ -9,7 +9,9 @@ The active Queless application in this repository is the only current app source
 - Frontend source: `frontend`
 - Approved Android source path: `android`
 - Approved build script: `scripts/buildAndroidLocalQa.cjs`
-- Approved local-QA build command: `npm run android:local-qa`
+- Approved local-QA build command: `npm run android:local-qa:build`
+- Backward-compatible local-QA build alias: `npm run android:local-qa`
+- Approved local-QA install command: `npm run android:local-qa:install`
 - Local-QA package: `org.queless.app.localqa`
 - Production package: `org.queless.app`
 
@@ -84,6 +86,24 @@ Before installing a local-QA APK, inspect the packaged assets and confirm:
 - Old barber-only dashboards are absent.
 - Product, shop, cart, and physical marketplace flows are absent.
 
-Do not install `org.queless.app.localqa` until these checks pass.
+Do not install `org.queless.app.localqa` until these checks pass and the user explicitly approves installing a second Queless app.
 
 Never uninstall, update, or clear data for `org.queless.app` during local QA.
+
+## Local QA Installation Guard
+
+`npm run android:local-qa` and `npm run android:local-qa:build` build only. They must not install an APK.
+
+Installing Local QA is intentionally separate because it creates a second visible Android application:
+
+- Real user-facing app: `org.queless.app`
+- Testing copy: `org.queless.app.localqa`
+
+Before installing Local QA, Codex or any developer must ask the user for explicit approval and then run:
+
+```powershell
+$env:QUELESS_CONFIRM_LOCALQA_INSTALL="I_UNDERSTAND_THIS_INSTALLS_SEPARATE_LOCAL_QA"
+npm run android:local-qa:install
+```
+
+Visual user-facing verification should use `org.queless.app` unless the user specifically approves Local QA testing. The Local QA package must not be treated as proof of the visible current Queless app on the user's phone.
