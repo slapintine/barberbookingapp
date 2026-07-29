@@ -18,6 +18,7 @@ import {
 } from "./smartMatchConstants.js";
 import {
   buildSmartMatchBookingContext,
+  buildSmartMatchProvider,
   getCriteriaKey,
   getServiceByKey,
   getWhenByKey,
@@ -341,7 +342,7 @@ function MatchProviderCard({ match, provider, state, onOpenProvider, onBookMatch
           <button
             type="button"
             className="smart-match-result-btn primary"
-            onClick={() => (provider ? onBookMatch?.(buildSmartMatchBookingContext(match, provider, state), provider) : null)}
+            onClick={() => (provider ? onBookMatch?.(buildSmartMatchBookingContext(match, provider, state), buildSmartMatchProvider(match, provider)) : null)}
             disabled={!provider}
           >
             Book this
@@ -404,7 +405,7 @@ function ComparisonPanel({ matches, selectedIds, providerById, state, onToggleCo
                 ))}
               </ul>
               <div className="smart-match-compare-actions">
-                <button type="button" onClick={() => provider ? onBookMatch?.(buildSmartMatchBookingContext(match, provider, state), provider) : null} disabled={!provider}>
+                <button type="button" onClick={() => provider ? onBookMatch?.(buildSmartMatchBookingContext(match, provider, state), buildSmartMatchProvider(match, provider)) : null} disabled={!provider}>
                   Book this provider
                 </button>
                 <button type="button" onClick={() => provider ? onOpenProvider?.(provider) : null} disabled={!provider}>

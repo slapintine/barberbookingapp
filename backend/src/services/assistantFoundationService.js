@@ -23,8 +23,8 @@ const PROVIDER_ACTIONS = new Set([
 
 const TIME_WORDS = [
   { pattern: /\b(now|asap|urgent|immediately)\b/i, when: "now" },
-  { pattern: /\b(today|tomorrow|this afternoon|this evening|this morning)\b/i, when: "today" },
-  { pattern: /\b(this week|next week|weekend|this saturday|next saturday|next few days)\b/i, when: "this_week" },
+  { pattern: /\b(today|this afternoon|this evening|this morning)\b/i, when: "today" },
+  { pattern: /\b(tomorrow|this week|next week|weekend|this saturday|next saturday|next few days)\b/i, when: "this_week" },
 ];
 
 function compact(value = "", limit = 500) {
@@ -101,7 +101,7 @@ function parseWhen(text) {
 
 function parseLocation(text) {
   const value = String(text || "");
-  const locationMatch = value.match(/\b(?:near|around|in|at)\s+([a-zA-Z][a-zA-Z0-9\s.'-]{2,60})(?:\s+(?:today|tomorrow|this week|at|by|under|for|with)\b|[,.]|$)/i);
+  const locationMatch = value.match(/\b(?:near|around|in|at)\s+([a-zA-Z][a-zA-Z0-9\s.'-]{2,60}?)(?:\s+(?:today|tomorrow|this week|at|by|under|below|for|with)\b|[,.]|$)/i);
   if (!locationMatch) return "";
   return compact(locationMatch[1], 80);
 }

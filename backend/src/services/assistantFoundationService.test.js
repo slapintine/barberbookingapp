@@ -28,10 +28,11 @@ test("Smart Match assistant parses natural timing, location, budget, and rating 
   );
 
   assert.equal(parsed.entities.serviceKey, "barber");
+  assert.equal(parsed.entities.when, "this_week");
   assert.equal(parsed.entities.preferredDate, "2026-07-29");
   assert.equal(parsed.entities.preferredTime, "09:00");
   assert.equal(parsed.entities.budgetMax, 30000);
-  assert.match(parsed.entities.address, /Nakwero/i);
+  assert.equal(parsed.entities.address, "Nakwero");
 });
 
 test("Smart Match assistant extracts rating preference without inventing unavailable fields", () => {
