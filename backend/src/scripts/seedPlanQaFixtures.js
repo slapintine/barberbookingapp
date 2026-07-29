@@ -27,13 +27,14 @@ const FIXTURE_CUSTOMER = {
   phone: "+256700100000",
 };
 
+const PREMIUM_CUSTOMER_INDEX = 1;
 const EXTRA_CUSTOMER_COUNT = 8;
 
 const PROVIDERS = [
   {
     username: "qa_free_provider",
     tier: "FREE",
-    businessName: "QA Free Starter Studio",
+    businessName: "Nakwero Free Starter Studio",
     fullName: "QA Free Owner",
     email: "qa.free@queless.test",
     phone: "+256700100101",
@@ -48,7 +49,7 @@ const PROVIDERS = [
   {
     username: "qa_premium_provider",
     tier: "PREMIUM",
-    businessName: "QA Premium Growth Studio",
+    businessName: "Nakwero Premium Growth Studio",
     fullName: "QA Premium Owner",
     email: "qa.premium@queless.test",
     phone: "+256700100202",
@@ -63,7 +64,7 @@ const PROVIDERS = [
   {
     username: "qa_platinum_provider",
     tier: "PLATINUM",
-    businessName: "QA Platinum Visibility Studio",
+    businessName: "Nakwero Platinum Visibility Studio",
     fullName: "QA Platinum Owner",
     email: "qa.platinum@queless.test",
     phone: "+256700100303",
@@ -143,7 +144,7 @@ async function upsertUser({ username, role, fullName, email, phone }) {
     email,
     normalizeEmail(email),
     normalizePhone(phone),
-    "Kampala, Uganda",
+    "Nakwero, Wakiso",
     role === "provider" ? "active" : "none",
     userId,
   ];
@@ -176,7 +177,7 @@ async function upsertProviderBusiness(provider, ownerUserId) {
   const params = [
     provider.businessName,
     normalizeBusinessName(provider.businessName),
-    "Kampala, Uganda",
+    "Nakwero, Wakiso",
     0.3476,
     32.5825,
     provider.averagePrice,
@@ -264,6 +265,30 @@ async function seedSubscription(barberId, provider) {
      (barber_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, is_active, payment_reference, provider, started_at, expires_at, activated_at)
      VALUES (?, ?, ?, 'active', 'monthly', ?, 'UGX', 'paid', 1, ?, 'qa_seed', CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP)`,
     [barberId, provider.tier, plan.monthlyPrice, plan.monthlyPrice, `qa-${provider.tier.toLowerCase()}-${barberId}`, getSubscriptionEndDate(now, "monthly")]
+  );
+}
+
+async function seedCustomerPremiumSubscriptions(customerUserIds) {
+  const freeCustomerId = customerUserIds[0];
+  const premiumCustomerId = customerUserIds[PREMIUM_CUSTOMER_INDEX];
+  const expiresAt = getSubscriptionEndDate(now, "monthly");
+  await run(`DELETE FROM customer_subscriptions WHERE user_id IN (?, ?)`, [freeCustomerId, premiumCustomerId]);
+  await run(
+    `INSERT INTO customer_subscriptions
+     (user_id, tier, price, status, billing_cycle, amount_paid, currency, payment_status, payment_reference, provider, metadata, started_at, expires_at, activated_at)
+     VALUES (?, 'PREMIUM', 10000, 'active', 'monthly', 10000, 'UGX', 'paid', ?, 'qa_seed', ?, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP)`,
+    [
+      premiumCustomerId,
+      `qa-customer-premium-${premiumCustomerId}`,
+      JSON.stringify({ source: "qa_plan_seed", role: "customer_premium" }),
+      expiresAt,
+    ]
+  );
+  await run(
+    `UPDATE profiles
+     SET subscription_status = CASE WHEN user_id = ? THEN 'active' ELSE 'none' END
+     WHERE user_id IN (?, ?)`,
+    [premiumCustomerId, freeCustomerId, premiumCustomerId]
   );
 }
 
@@ -504,6 +529,7 @@ async function main() {
       phone: `+25670010${String(index).padStart(4, "0")}`,
     }));
   }
+  await seedCustomerPremiumSubscriptions(customerUserIds);
 
   const seeded = [];
   for (const provider of PROVIDERS) {
@@ -512,7 +538,8 @@ async function main() {
 
   console.log("Seeded Queless plan QA fixtures:");
   console.table([
-    { username: FIXTURE_CUSTOMER.username, role: "customer", tier: "" },
+    { username: FIXTURE_CUSTOMER.username, role: "customer", tier: "FREE" },
+    { username: `qa_customer_${PREMIUM_CUSTOMER_INDEX}`, role: "customer", tier: "CUSTOMER_PREMIUM" },
     ...seeded.map((item) => ({ username: item.username, role: "provider", tier: item.tier, barberId: item.barberId })),
     ...PLATINUM_STAFF.map((item) => ({ username: item.username, role: item.role, tier: "PLATINUM staff" })),
   ]);
