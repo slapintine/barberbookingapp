@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Queless</string>
+    <string name="title_activity_main">Queless</string>
+    <string name="package_name">org.queless.app</string>
+    <string name="custom_url_scheme">org.queless.app</string>
+    <string name="default_notification_channel_id">queless-booking-updates</string>
+</resources>

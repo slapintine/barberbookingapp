@@ -80,7 +80,9 @@ function hashDirectory(rootDir) {
   const hash = crypto.createHash("sha256");
   const files = listFiles(rootDir)
     .map((filePath) => path.relative(rootDir, filePath).replace(/\\/g, "/"))
-    .filter((relativePath) => !/(^|\/)(build|\.gradle|node_modules)\//.test(relativePath))
+    .filter((relativePath) => !/(^|\/)(build|dist|\.gradle|node_modules)\//.test(relativePath))
+    .filter((relativePath) => !/^android\/app\/src\/main\/assets\//.test(relativePath))
+    .filter((relativePath) => !/^android\/app\/src\/main\/res\/xml\/config\.xml$/.test(relativePath))
     .sort();
   for (const relativePath of files) {
     const filePath = path.join(rootDir, relativePath);
@@ -113,6 +115,8 @@ function assertAuthoritativeAndroidShell(shellDir) {
 
 function verifyCopiedAssets(sourceDir, targetDir) {
   const sourceFiles = listFiles(sourceDir);
+  const sourceRelativePaths = new Set(sourceFiles.map((filePath) => path.relative(sourceDir, filePath)));
+  const capacitorGeneratedAssetFiles = new Set(["cordova.js", "cordova_plugins.js"]);
   const mismatches = [];
   for (const sourceFile of sourceFiles) {
     const relativePath = path.relative(sourceDir, sourceFile);
@@ -125,6 +129,13 @@ function verifyCopiedAssets(sourceDir, targetDir) {
     const targetHash = hashFile(targetFile);
     if (sourceHash !== targetHash) {
       mismatches.push(`${relativePath} hash mismatch`);
+    }
+  }
+
+  for (const targetFile of listFiles(targetDir)) {
+    const relativePath = path.relative(targetDir, targetFile);
+    if (!sourceRelativePaths.has(relativePath) && !capacitorGeneratedAssetFiles.has(relativePath.replace(/\\/g, "/"))) {
+      mismatches.push(`${relativePath} is stale or extra in packaged assets`);
     }
   }
 
@@ -158,6 +169,23 @@ requireFile(path.join(frontendDir, "package.json"), "Current Queless frontend is
 assertAuthoritativeAndroidShell(androidFrontendDir);
 requireFile(path.join(androidFrontendDir, "capacitor.config.json"), "Capacitor Android frontend shell is missing");
 requireFile(path.join(androidFrontendDir, "android", "gradlew.bat"), "Android Gradle wrapper is missing");
+
+const capacitorConfig = readJson(path.join(androidFrontendDir, "capacitor.config.json"), "Could not read Capacitor config");
+if (capacitorConfig.appId !== "org.queless.app" || capacitorConfig.appName !== "Queless" || capacitorConfig.webDir !== "dist") {
+  console.error("Capacitor config does not match the approved Queless Android identity.");
+  console.error(JSON.stringify(capacitorConfig, null, 2));
+  process.exit(1);
+}
+
+const appBuildGradle = fs.readFileSync(path.join(androidFrontendDir, "android", "app", "build.gradle"), "utf8");
+if (!/applicationId\s+"org\.queless\.app"/.test(appBuildGradle) || !/applicationIdSuffix\s+"\.localqa"/.test(appBuildGradle)) {
+  console.error("Android Gradle config must keep production and local-QA package IDs separate.");
+  process.exit(1);
+}
+if (!/versionCode\s+8/.test(appBuildGradle) || !/versionName\s+"1\.0\.7"/.test(appBuildGradle)) {
+  console.error("Android Gradle config must keep the approved 1.0.7 / code 8 identity.");
+  process.exit(1);
+}
 
 const actualRepoRoot = path.resolve(run("git", ["rev-parse", "--show-toplevel"], { capture: true }));
 if (actualRepoRoot !== repoRoot) {
@@ -220,10 +248,26 @@ const routeEvidence = {
   smartMatch: listFiles(distDir).some((filePath) => fs.readFileSync(filePath).includes("/smart-match")),
   providerCoach: listFiles(distDir).some((filePath) => fs.readFileSync(filePath).includes("/provider/ai-coach")),
   providerPlatinum: listFiles(distDir).some((filePath) => fs.readFileSync(filePath).includes("/provider/platinum")),
+  login: listFiles(distDir).some((filePath) => fs.readFileSync(filePath).includes("/login")),
 };
-if (!routeEvidence.smartMatch || !routeEvidence.providerCoach || !routeEvidence.providerPlatinum) {
+if (!routeEvidence.smartMatch || !routeEvidence.providerCoach || !routeEvidence.providerPlatinum || !routeEvidence.login) {
   console.error("Frontend build is missing one or more current Queless routes required for Android local QA.");
   console.error(JSON.stringify(routeEvidence, null, 2));
+  process.exit(1);
+}
+const distText = distFilesBeforeManifest
+  .filter((filePath) => /\.(html|js|css|json)$/.test(filePath))
+  .map((filePath) => fs.readFileSync(filePath, "utf8"))
+  .join("\n");
+const oldFlowAbsenceChecks = {
+  noShopRoute: !/[`'"]\/shop[`'"]/.test(distText),
+  noCartRoute: !/[`'"]\/cart[`'"]/.test(distText),
+  noProductsRoute: !/[`'"]\/products[`'"]/.test(distText),
+  noMarketplaceRoute: !/[`'"]\/marketplace[`'"]/.test(distText),
+};
+if (Object.values(oldFlowAbsenceChecks).some((passed) => !passed)) {
+  console.error("Frontend build contains an old product/shop/cart/marketplace route literal.");
+  console.error(JSON.stringify(oldFlowAbsenceChecks, null, 2));
   process.exit(1);
 }
 
@@ -234,17 +278,27 @@ if (version.version !== commit) {
 }
 
 const buildManifest = {
-  repositoryPath: repoRoot,
+  repositoryName: "queless-rc-security",
+  authoritativeRepository: "queless-rc-security",
   branch,
   gitCommit: fullCommit,
   buildTimestamp: new Date().toISOString(),
   buildType: buildMode,
   packageName: expectedPackageName,
+  appName: "Queless Local QA",
   appVersion: "1.0.7-localqa",
   versionCode: 8,
   frontendOutputHash,
-  androidSourcePath: androidFrontendDir,
+  androidSourcePath: "android",
   androidSourceHash: hashDirectory(androidFrontendDir),
+  mainJavaScriptBundleHash: distFilesBeforeManifest
+    .filter((filePath) => /\/assets\/index-[^/]+\.js$/.test(filePath.replace(/\\/g, "/")))
+    .map(hashFile)[0] || null,
+  mainCssBundleHash: distFilesBeforeManifest
+    .filter((filePath) => /\/assets\/index-[^/]+\.css$/.test(filePath.replace(/\\/g, "/")))
+    .map(hashFile)[0] || null,
+  requiredRouteChecks: routeEvidence,
+  oldFlowAbsenceChecks,
   packagedRoutes: ["/login", "/home", "/smart-match", "/provider/ai-coach", "/provider/platinum"],
 };
 fs.writeFileSync(path.join(distDir, "queless-build-manifest.json"), `${JSON.stringify(buildManifest, null, 2)}\n`);

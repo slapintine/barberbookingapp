@@ -29,9 +29,33 @@ test("Android local-QA build packages a manifest for current app verification", 
   const sourceDoc = fs.readFileSync(path.join(repoRoot, "ANDROID_AUTHORITATIVE_SOURCE.md"), "utf8");
 
   assert.match(script, /queless-build-manifest\.json/);
+  assert.match(script, /repositoryName:\s*"queless-rc-security"/);
+  assert.match(script, /androidSourcePath:\s*"android"/);
+  assert.doesNotMatch(script, /repositoryPath:\s*repoRoot/);
   assert.match(script, /"\/smart-match"/);
   assert.match(script, /"\/provider\/ai-coach"/);
   assert.match(script, /"\/provider\/platinum"/);
+  assert.match(script, /oldFlowAbsenceChecks/);
+  assert.match(script, /noShopRoute/);
+  assert.match(script, /noCartRoute/);
   assert.match(sourceDoc, /The active Queless application in this repository is the only current app source/);
   assert.match(sourceDoc, /Temporary Android shells are not authoritative/);
+});
+
+test("authoritative Android shell keeps production and local-QA identities separate", () => {
+  const repoRoot = path.resolve(process.cwd(), "..");
+  const capacitorConfig = fs.readFileSync(path.join(repoRoot, "android", "capacitor.config.json"), "utf8");
+  const buildGradle = fs.readFileSync(path.join(repoRoot, "android", "android", "app", "build.gradle"), "utf8");
+  const localQaStrings = fs.readFileSync(
+    path.join(repoRoot, "android", "android", "app", "src", "debug", "res", "values", "strings.xml"),
+    "utf8"
+  );
+
+  assert.match(capacitorConfig, /"appId":\s*"org\.queless\.app"/);
+  assert.match(capacitorConfig, /"appName":\s*"Queless"/);
+  assert.match(buildGradle, /applicationId\s+"org\.queless\.app"/);
+  assert.match(buildGradle, /applicationIdSuffix\s+"\.localqa"/);
+  assert.match(buildGradle, /versionCode\s+8/);
+  assert.match(buildGradle, /versionName\s+"1\.0\.7"/);
+  assert.match(localQaStrings, /Queless Local QA/);
 });

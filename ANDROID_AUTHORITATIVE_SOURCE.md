@@ -15,7 +15,7 @@ The active Queless application in this repository is the only current app source
 
 The old Queless Android app previously used by Codex has been deleted by the user. It must not be restored, copied, rebuilt, or treated as a fallback source.
 
-At the time this guardrail was added, the authoritative app frontend is present in this repository, but the authoritative in-repository Android shell still has to be created or proven at `android` before any APK build may resume. A failing local-QA Android build is safer than silently packaging stale assets from another worktree.
+The authoritative app frontend is present in this repository, and the authoritative native Capacitor wrapper lives at `android`. It was restored only from this repository's own Android-wrapper history and relocated into the current repository root; generated web assets were not restored as source.
 
 ## Never Use As Source
 
@@ -37,6 +37,8 @@ The Android local-QA build must fail unless:
 - Git repository is this repository.
 - Branch is `rc/backend-security-foundation`.
 - Android source path is exactly `android` inside this repository.
+- Capacitor config uses `org.queless.app`, `Queless`, and `dist`.
+- Debug builds use the `.localqa` application ID suffix.
 - Frontend commit can be identified.
 - Frontend build produces `version.json`.
 - Packaged `version.json` matches the frontend commit.
@@ -44,22 +46,29 @@ The Android local-QA build must fail unless:
 - Current routes are present: `/login`, `/home`, `/smart-match`, `/provider/ai-coach`, `/provider/platinum`.
 - `queless-build-manifest.json` is packaged.
 - Old source paths, preservation snapshots, and temp shells are not referenced.
+- Product, shop, cart, and physical marketplace route literals are absent from packaged production assets.
 
 ## Build Manifest
 
 Local-QA builds must package `queless-build-manifest.json` with:
 
 - Repository path
+- Repository identifier
 - Branch
 - Git commit
 - Build timestamp
 - Build type
 - Package name
+- App name
 - App version
 - Version code
 - Frontend output hash
 - Android source path
 - Android source hash
+- Main JavaScript bundle hash
+- Main CSS bundle hash
+- Required route checks
+- Old-flow absence checks
 - Packaged route list
 
 ## Current UI Checks

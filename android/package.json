@@ -1,0 +1,15 @@
+{
+  "name": "queless-android-shell",
+  "private": true,
+  "version": "1.0.7",
+  "type": "commonjs",
+  "scripts": {
+    "build:android:local-qa": "node scripts/sync-local-qa.cjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/push-notifications": "^8.1.2"
+  }
+}
