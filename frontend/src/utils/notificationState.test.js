@@ -37,6 +37,8 @@ test("supports native Android push with honest user-facing settings states", () 
     new URL("../features/notifications/PushNotificationSettings.jsx", import.meta.url),
     "utf8"
   );
+  const profileStyles = fs.readFileSync(new URL("../styles/home-profile.css", import.meta.url), "utf8");
+  const customerHomeStyles = fs.readFileSync(new URL("../styles/customer-home.css", import.meta.url), "utf8");
   const appSource = fs.readFileSync(new URL("../App.jsx", import.meta.url), "utf8");
 
   assert.match(pushSource, /import\("@capacitor\/push-notifications"\)/);
@@ -66,6 +68,10 @@ test("supports native Android push with honest user-facing settings states", () 
   assert.match(settingsSource, /getNotificationTokenStatusRequest/);
   assert.match(settingsSource, /disableFirebaseNotifications/);
   assert.match(settingsSource, /Your updates are still available under the notification bell|IN_APP_NOTE/);
+  assert.match(profileStyles, /\.push-settings-v1/);
+  assert.match(profileStyles, /\.queless-switch-v1/);
+  assert.match(profileStyles, /\.push-settings-actions-v1/);
+  assert.match(customerHomeStyles, /bottom:\s*calc\(8px \+ var\(--device-safe-bottom/);
 
   assert.match(appSource, /queless:push-open/);
   assert.match(appSource, /handleNativePushOpen/);

@@ -93,6 +93,201 @@
   width: 0;
   height: 0;
 }
+
+/* Phone notification controls: keep the newer native-push controls polished on
+   Android WebView instead of falling back to raw text/switch rendering. */
+.push-settings-v1 {
+  display: grid;
+  gap: 16px;
+}
+
+.push-settings-v1 .settings-section-head-v6 {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.push-settings-v1 .settings-section-head-v6 > svg {
+  width: 56px;
+  height: 56px;
+  padding: 15px;
+  border-radius: 18px;
+  color: #7a1fd1;
+  background: linear-gradient(145deg, rgba(251, 228, 216, 0.92), rgba(245, 213, 226, 0.78));
+  border: 1px solid rgba(82, 43, 91, 0.08);
+}
+
+.push-settings-v1 .settings-section-head-v6 strong {
+  display: block;
+  font-size: 20px;
+  line-height: 1.15;
+  color: #2b0038;
+}
+
+.push-settings-v1 .settings-section-head-v6 span {
+  display: block;
+  margin-top: 4px;
+  color: rgba(43, 0, 56, 0.68);
+  font-size: 15px;
+  line-height: 1.38;
+  font-weight: 700;
+}
+
+.push-master-row-v1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(82, 43, 91, 0.09);
+}
+
+.push-master-row-v1 > div {
+  display: grid;
+  gap: 3px;
+}
+
+.push-master-row-v1 strong {
+  color: #2b0038;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.push-master-row-v1 span {
+  color: rgba(43, 0, 56, 0.62);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.queless-switch-v1 {
+  position: relative;
+  flex: 0 0 auto;
+  width: 58px;
+  height: 34px;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  background: rgba(82, 43, 91, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(82, 43, 91, 0.08);
+}
+
+.queless-switch-v1 span {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #fff8f6;
+  box-shadow: 0 8px 18px rgba(43, 0, 56, 0.20);
+  transition: transform 0.18s ease;
+}
+
+.queless-switch-v1.on {
+  background: linear-gradient(135deg, #522b5b, #8f2cb3);
+}
+
+.queless-switch-v1.on span {
+  transform: translateX(24px);
+}
+
+.queless-switch-v1:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.push-settings-list-v1 {
+  display: grid;
+  gap: 8px;
+}
+
+.push-settings-list-v1 > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  color: rgba(43, 0, 56, 0.76);
+  font-weight: 760;
+}
+
+.push-settings-list-v1 svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: #522b5b;
+}
+
+.push-settings-actions-v1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.push-settings-actions-v1 .secondary-btn-v4,
+.push-settings-actions-v1 .mini-action-btn-v4 {
+  width: 100%;
+  min-height: 48px;
+  justify-content: center;
+  border-radius: 18px;
+  white-space: normal;
+  text-align: center;
+}
+
+.push-settings-v1 .auth-success,
+.push-settings-v1 .auth-error {
+  margin-top: 0;
+  border-radius: 14px;
+  line-height: 1.35;
+}
+
+body[data-theme="dark"] .push-settings-v1 .settings-section-head-v6 strong,
+.app-wrap-v4.dark .push-settings-v1 .settings-section-head-v6 strong,
+body[data-theme="dark"] .push-master-row-v1 strong,
+.app-wrap-v4.dark .push-master-row-v1 strong {
+  color: #fff8f6;
+}
+
+body[data-theme="dark"] .push-settings-v1 .settings-section-head-v6 span,
+.app-wrap-v4.dark .push-settings-v1 .settings-section-head-v6 span,
+body[data-theme="dark"] .push-master-row-v1 span,
+.app-wrap-v4.dark .push-master-row-v1 span,
+body[data-theme="dark"] .push-settings-list-v1 > div,
+.app-wrap-v4.dark .push-settings-list-v1 > div {
+  color: rgba(251, 228, 216, 0.78);
+}
+
+body[data-theme="dark"] .push-master-row-v1,
+.app-wrap-v4.dark .push-master-row-v1 {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(251, 228, 216, 0.10);
+}
+
+@media (min-width: 720px) {
+  .push-settings-actions-v1 {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .push-settings-v1 .settings-section-head-v6 {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .push-settings-v1 .settings-section-head-v6 > svg {
+    width: 46px;
+    height: 46px;
+    padding: 12px;
+    border-radius: 15px;
+  }
+
+  .push-settings-v1 .settings-section-head-v6 strong {
+    font-size: 18px;
+  }
+}
 /* ===== Compact search + filters ===== */
 
 .search-panel-v4 {

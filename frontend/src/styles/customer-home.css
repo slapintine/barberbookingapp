@@ -1125,9 +1125,9 @@ body[data-theme="dark"] .customer-home-premium-cta > span {
 .bottom-nav-v4.queless-bottom-nav {
   left: 12px;
   right: 12px;
-  bottom: 8px;
+  bottom: calc(8px + var(--device-safe-bottom, env(safe-area-inset-bottom, 0px)));
   height: 68px;
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  padding: 6px 8px;
   border: 1px solid rgba(251, 228, 216, 0.1);
   border-radius: 18px;
   background: linear-gradient(135deg, #2b124c, #190019);

@@ -89,5 +89,6 @@ test("authoritative Android shell matches the real app system-bar presentation",
   assert.match(mainActivity, /controller\.setAppearanceLightNavigationBars\(false\)/);
   assert.match(appSource, /classList\.toggle\("queless-native-android"/);
   assert.match(baseCss, /html\.queless-native-android body::before/);
+  assert.match(baseCss, /--device-safe-bottom:\s*max\(env\(safe-area-inset-bottom,\s*0px\),\s*68px\)/);
   assert.match(baseCss, /padding-top:\s*env\(safe-area-inset-top,\s*0px\)/);
 });

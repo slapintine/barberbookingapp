@@ -11,6 +11,7 @@ body {
 }
 
 html.queless-native-android {
+  --device-safe-bottom: max(env(safe-area-inset-bottom, 0px), 68px);
   background: #2B063A;
 }
 
