@@ -76,6 +76,11 @@ test("authoritative Android shell matches the real app system-bar presentation",
   assert.match(styles, /<item name="android:windowLightStatusBar">false<\/item>/);
   assert.match(styles, /<item name="android:windowLightNavigationBar">false<\/item>/);
   assert.match(mainActivity, /WindowCompat\.setDecorFitsSystemWindows\(window,\s*true\)/);
+  assert.match(mainActivity, /getSupportActionBar\(\)\.hide\(\)/);
+  assert.match(mainActivity, /onWindowFocusChanged\(boolean hasFocus\)/);
+  assert.match(mainActivity, /FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS/);
+  assert.match(mainActivity, /SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN/);
+  assert.match(mainActivity, /SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION/);
   assert.match(mainActivity, /window\.setStatusBarColor\(Color\.parseColor\("#2B063A"\)\)/);
   assert.match(mainActivity, /window\.setNavigationBarColor\(Color\.parseColor\("#24102F"\)\)/);
   assert.match(mainActivity, /controller\.setAppearanceLightStatusBars\(false\)/);

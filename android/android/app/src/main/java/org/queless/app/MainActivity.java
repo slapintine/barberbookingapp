@@ -3,7 +3,9 @@ package org.queless.app;
 import android.graphics.Color;
 import android.content.pm.ApplicationInfo;
 import android.os.Bundle;
+import android.view.View;
 import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
@@ -20,15 +22,39 @@ public class MainActivity extends BridgeActivity {
     }
     registerPlugin(QuelessNotificationSettingsPlugin.class);
     super.onCreate(savedInstanceState);
+    if (getSupportActionBar() != null) {
+      getSupportActionBar().hide();
+    }
     applySystemBarContrast();
     installScheduleBackHandler();
+  }
+
+  @Override
+  public void onResume() {
+    super.onResume();
+    applySystemBarContrast();
+  }
+
+  @Override
+  public void onWindowFocusChanged(boolean hasFocus) {
+    super.onWindowFocusChanged(hasFocus);
+    if (hasFocus) {
+      applySystemBarContrast();
+    }
   }
 
   private void applySystemBarContrast() {
     Window window = getWindow();
     WindowCompat.setDecorFitsSystemWindows(window, true);
+    window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
     window.setStatusBarColor(Color.parseColor("#2B063A"));
     window.setNavigationBarColor(Color.parseColor("#24102F"));
+    window.getDecorView().setSystemUiVisibility(
+        window.getDecorView().getSystemUiVisibility()
+            & ~View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            & ~View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            & ~View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
 
     WindowInsetsControllerCompat controller =
         WindowCompat.getInsetsController(window, window.getDecorView());
