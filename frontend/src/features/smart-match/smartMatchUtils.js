@@ -1,6 +1,10 @@
 import { SERVICE_CATEGORIES, WHEN_OPTIONS } from "./smartMatchConstants.js";
 import { getCategoryByName, inferCategoryNameFromText, normalizeCategoryKey } from "../../utils/serviceCatalog.js";
-export { getSmartMatchCriteriaKey as getCriteriaKey, buildSmartMatchBookingContext } from "./smartMatchContext.js";
+export {
+  buildSmartMatchBookingContext,
+  buildSmartMatchProvider,
+  getSmartMatchCriteriaKey as getCriteriaKey,
+} from "./smartMatchContext.js";
 
 export const initialSmartMatchState = {
   step: "need",

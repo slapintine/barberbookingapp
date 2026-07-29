@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import {
   buildSmartMatchBookingContext,
   buildSmartMatchProvider,
   getSmartMatchCriteriaKey,
 } from "./smartMatchContext.js";
+
+const smartMatchUtilsSource = fs.readFileSync(
+  path.resolve("src/features/smart-match/smartMatchUtils.js"),
+  "utf8"
+);
 
 test("Smart Match preserves selected service and booking preferences for handoff", () => {
   const context = buildSmartMatchBookingContext(
@@ -96,4 +103,9 @@ test("Smart Match builds booking-capable provider data from lean match results",
   assert.equal(provider.services[0].service_name, "Signature service 1");
   assert.equal(provider.services[0].price_extra, 26000);
   assert.equal(provider.services[0].duration_minutes, 30);
+});
+
+test("Smart Match utility exports booking-capable provider handoff helper", () => {
+  assert.match(smartMatchUtilsSource, /buildSmartMatchProvider/);
+  assert.match(smartMatchUtilsSource, /from "\.\/smartMatchContext\.js"/);
 });
