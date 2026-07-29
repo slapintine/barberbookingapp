@@ -23,6 +23,7 @@ import {
   isOnlinePaymentMethod,
 } from "../../utils/paymentLabels.js";
 import { formatServicePrice, getAvailableServices, getServiceBookingAmount, normalizeServiceForBooking } from "../../utils/serviceCatalog.js";
+import { getBookingPriceCardParts } from "../../utils/bookingPricing.js";
 
 function formatMoney(value) {
   return `UGX ${Number(value || 0).toLocaleString()}`;
@@ -104,22 +105,6 @@ function getServicePriceState(service) {
     label,
     quoteOnly: pricingType === "quote" || label === "Price unavailable" || (!hasDirectPrice && label !== "Price on consultation"),
   };
-}
-
-function getPriceCardParts(service) {
-  const pricingType = String(service?.pricing_type || service?.pricingType || "fixed").toLowerCase();
-  const state = getServicePriceState(service);
-  if (pricingType === "quote" || state.quoteOnly) {
-    return { top: "Quote", bottom: "required", quote: true };
-  }
-  if (pricingType === "range") {
-    return { top: "UGX", bottom: formatServicePrice(service).replace(/UGX\s?/g, ""), small: true };
-  }
-  if (pricingType === "starting_from") {
-    return { top: "From", bottom: formatServicePrice(service).replace(/From\s?/i, ""), small: true };
-  }
-  const amount = getServiceBookingAmount(service);
-  return { top: "UGX", bottom: Number(amount || 0).toLocaleString() };
 }
 
 function getProviderCoords(barber) {
@@ -324,7 +309,7 @@ export default function BookingModal({
   const priceState = getServicePriceState(serviceObj);
   const isQuoteService = priceState.quoteOnly || String(serviceObj?.pricing_type || "").toLowerCase() === "quote";
   const totalLabel = isQuoteService ? "Quote required" : formatMoney(total);
-  const priceCard = getPriceCardParts(serviceObj);
+  const priceCard = getBookingPriceCardParts(serviceObj, total);
   const teamMembers = Array.isArray(barber.team_members || barber.teamMembers)
     ? (barber.team_members || barber.teamMembers).filter((item) => Number(item?.is_active ?? item?.isActive ?? 1) === 1)
     : [];
