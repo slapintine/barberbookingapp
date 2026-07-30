@@ -19,6 +19,17 @@ test("customer home keeps the real-app benchmark copy for Local QA parity", () =
   assert.match(homeCss, /\.customer-home-search-btn\.smart\s*{[^}]*var\(--qh-secondary\)[^}]*var\(--qh-primary\)/s);
 });
 
+test("customer bookings imports the Queless tab styling", () => {
+  const appCss = fs.readFileSync(path.join(repoRoot, "frontend", "src", "App.css"), "utf8");
+  const bookingsCss = fs.readFileSync(path.join(repoRoot, "frontend", "src", "styles", "bookings-tabs.css"), "utf8");
+  const bookingsPage = fs.readFileSync(path.join(repoRoot, "frontend", "src", "pages", "BookingsPage.jsx"), "utf8");
+
+  assert.match(appCss, /@import "\.\/styles\/bookings-tabs\.css";/);
+  assert.match(bookingsCss, /\.bookings-tabs-v6\s*{/);
+  assert.match(bookingsCss, /\.bookings-tab-v6\.active\s*{[^}]*color:\s*#fff;/s);
+  assert.match(bookingsPage, /className=\{activeTab === tab\.id \? "bookings-tab-v6 active" : "bookings-tab-v6"\}/);
+});
+
 test("Android system bars match the installed real-app visual benchmark", () => {
   const styles = fs.readFileSync(
     path.join(repoRoot, "android", "android", "app", "src", "main", "res", "values", "styles.xml"),
