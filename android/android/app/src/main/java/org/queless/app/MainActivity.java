@@ -58,8 +58,8 @@ public class MainActivity extends BridgeActivity {
 
     WindowInsetsControllerCompat controller =
         WindowCompat.getInsetsController(window, window.getDecorView());
-    controller.setAppearanceLightStatusBars(false);
-    controller.setAppearanceLightNavigationBars(false);
+    controller.setAppearanceLightStatusBars(true);
+    controller.setAppearanceLightNavigationBars(true);
   }
 
   private void installScheduleBackHandler() {

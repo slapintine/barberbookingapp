@@ -3,7 +3,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const repoRoot = path.resolve(__dirname, "..");
-const apkPath = path.join(repoRoot, "android", "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk");
+const gradleBuildDir = process.env.QUELESS_GRADLE_BUILD_DIR ? path.resolve(process.env.QUELESS_GRADLE_BUILD_DIR) : null;
+const apkPath = process.env.QUELESS_LOCALQA_APK_PATH
+  ? path.resolve(process.env.QUELESS_LOCALQA_APK_PATH)
+  : gradleBuildDir
+    ? path.join(gradleBuildDir, "_app", "outputs", "apk", "debug", "app-debug.apk")
+    : path.join(repoRoot, "android", "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk");
 const adbPath = process.env.ADB_EXE || path.join(process.env.LOCALAPPDATA || "", "Android", "Sdk", "platform-tools", "adb.exe");
 const confirmation = "I_UNDERSTAND_THIS_INSTALLS_SEPARATE_LOCAL_QA";
 

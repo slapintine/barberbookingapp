@@ -225,14 +225,7 @@ body[data-theme="dark"] .customer-home-hero {
 }
 
 .customer-home-eyebrow {
-  width: fit-content;
-  padding: 5px 8px;
-  border-radius: 999px;
-  color: var(--qh-secondary);
-  background: rgba(223, 182, 178, 0.38);
-  font-size: 10px;
-  line-height: 1;
-  font-weight: 950;
+  display: none;
 }
 
 body[data-theme="dark"] .customer-home-eyebrow {
@@ -402,7 +395,7 @@ body[data-theme="dark"] .customer-home-location-pill svg {
   width: 46px;
   height: 44px;
   margin-left: 0;
-  background: linear-gradient(135deg, #e24aa5, #6b1f8f);
+  background: linear-gradient(135deg, var(--qh-secondary), var(--qh-primary));
 }
 
 .customer-home-section {

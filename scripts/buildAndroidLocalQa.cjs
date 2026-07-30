@@ -1,6 +1,7 @@
 const { spawnSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const repoRoot = path.resolve(__dirname, "..");
@@ -11,6 +12,9 @@ const apiUrl = String(process.env.VITE_ANDROID_QA_API_URL || "http://127.0.0.1:5
 const expectedBranch = String(process.env.QUELESS_AUTHORITATIVE_BRANCH || "rc/backend-security-foundation").trim();
 const expectedPackageName = "org.queless.app.localqa";
 const buildMode = "local-qa";
+const gradleBuildDir = path.resolve(
+  process.env.QUELESS_GRADLE_BUILD_DIR || path.join(os.tmpdir(), "queless-android-gradle", commitSafeTimestamp())
+);
 const stalePathPatterns = [
   /[\\/]AppData[\\/]Local[\\/]Temp[\\/]/i,
   /[\\/]\.codex/i,
@@ -24,6 +28,10 @@ console.warn("Building Queless Local QA only. This command does not install an A
 console.warn("Local QA is a separate package: org.queless.app.localqa.");
 console.warn("If installed, this installs a separate Queless Local QA application.");
 console.warn("Install only with explicit user approval using npm run android:local-qa:install.");
+
+function commitSafeTimestamp() {
+  return new Date().toISOString().replace(/[^0-9A-Za-z]+/g, "-");
+}
 
 function run(command, args, options = {}) {
   const runViaCmd =
@@ -235,6 +243,7 @@ console.log(`Android shell: ${androidFrontendDir}`);
 console.log(`API target: ${apiUrl}`);
 console.log(`Package name: ${expectedPackageName}`);
 console.log(`Build mode: ${buildMode}`);
+console.log(`Gradle output: ${gradleBuildDir}`);
 run("npm", ["--prefix", "frontend", "run", "build"], { cwd: repoRoot, env: buildEnv });
 
 const distDir = path.join(frontendDir, "dist");
@@ -328,10 +337,10 @@ verifyCopiedAssets(distDir, path.dirname(packagedVersionPath));
 console.log("Assembling org.queless.app.localqa debug APK");
 run(path.join(androidFrontendDir, "android", "gradlew.bat"), ["-p", path.join(androidFrontendDir, "android"), "assembleDebug"], {
   cwd: androidFrontendDir,
-  env: buildEnv,
+  env: { ...buildEnv, QUELESS_GRADLE_BUILD_DIR: gradleBuildDir },
 });
 
-const apkPath = path.join(androidFrontendDir, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk");
+const apkPath = path.join(gradleBuildDir, "_app", "outputs", "apk", "debug", "app-debug.apk");
 requireFile(apkPath, "Android debug APK was not produced");
 
 console.log(`Packaged commit: ${packagedVersion.version}`);

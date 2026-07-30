@@ -17,7 +17,13 @@ buildscript {
 
 apply from: "variables.gradle"
 
+def quelessExternalBuildRoot = System.getenv("QUELESS_GRADLE_BUILD_DIR")
+
 allprojects {
+    if (quelessExternalBuildRoot) {
+        def buildName = project.path == ":" ? "_root" : project.path.replace(":", "_")
+        buildDir = file("${quelessExternalBuildRoot}/${buildName}")
+    }
     repositories {
         google()
         mavenCentral()

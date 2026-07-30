@@ -289,11 +289,10 @@ export default function HomeScreen({
     <main className="content-v4 customer-home" aria-label="Queless customer home">
       <section className="customer-home-hero">
         <div className="customer-home-hero-copy">
-          <span className="customer-home-eyebrow">Trusted local services</span>
           <h1>Find trusted services near you</h1>
           <p>New around here? Discover nearby providers, compare trust signals, and book services without guessing where to go.</p>
           <button type="button" className="customer-home-primary-btn" onClick={submitSearch}>
-            Find Services
+            Find services
             <FiArrowRight aria-hidden="true" />
           </button>
         </div>
@@ -357,7 +356,7 @@ export default function HomeScreen({
 
       <section className="customer-home-section customer-home-providers-section">
         <SectionHeader
-          title="Top Providers"
+          title="Featured service providers"
           onViewAll={() => {
             setSelectedCategory?.("All");
             onOpenCategory?.("All");
@@ -368,7 +367,7 @@ export default function HomeScreen({
           <>
             <div
               className="customer-home-provider-carousel"
-              aria-label="Top providers near you"
+              aria-label="Featured service providers near you"
               ref={carouselRef}
               onScroll={scheduleActiveSlideUpdate}
             >
