@@ -48,7 +48,7 @@ test("login to a non-existent account returns the exact generic, non-enumerating
   const body = await res.json();
   assert.equal(body.code, "INVALID_CREDENTIALS");
   // Exactly the generic message — no hint about whether the account exists.
-  assert.equal(body.message, "Invalid email or password.");
+  assert.equal(body.message, "The email, username, or password is incorrect.");
   assert.ok(!/not found|doesn't exist|no account|create an account/i.test(body.message));
 });
 

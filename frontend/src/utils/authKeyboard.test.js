@@ -21,6 +21,27 @@ test("auth screen submits login from Android keyboard Enter or Go", () => {
   assert.match(source, /enterKeyHint=\{isLogin \? "go"/);
 });
 
+test("auth login presents and sends a neutral email-or-username identifier", () => {
+  const authScreenSource = fs.readFileSync(
+    path.join(repoRoot, "frontend", "src", "features", "auth", "AuthScreen.jsx"),
+    "utf8"
+  );
+  const appSource = fs.readFileSync(
+    path.join(repoRoot, "frontend", "src", "App.jsx"),
+    "utf8"
+  );
+  const apiSource = fs.readFileSync(
+    path.join(repoRoot, "frontend", "src", "api", "authApi.js"),
+    "utf8"
+  );
+
+  assert.match(authScreenSource, /Email or Username/);
+  assert.doesNotMatch(authScreenSource, /Username or email/);
+  assert.match(appSource, /Enter your email or username/);
+  assert.match(apiSource, /identifier:\s*loginIdentifier/);
+  assert.match(apiSource, /username:\s*loginIdentifier/);
+});
+
 test("auth screen keeps the submit action reachable above the Android keyboard", () => {
   const css = fs.readFileSync(
     path.join(repoRoot, "frontend", "src", "styles", "auth-redesign.css"),

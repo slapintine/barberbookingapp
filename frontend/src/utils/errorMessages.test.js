@@ -38,7 +38,7 @@ test("other server error pages are caught", () => {
 
 test("legitimate plain-text messages pass through unchanged", () => {
   for (const msg of [
-    "Invalid login details. Please check your username/email and password.",
+    "The email, username, or password is incorrect.",
     "Passwords do not match.",
     "Too many attempts. Please wait a moment and try again.",
     "Your booking was created.",
@@ -62,7 +62,7 @@ test("a custom fallback can be supplied", () => {
 
 test("getFriendlyApiErrorMessage maps status codes to friendly copy", () => {
   assert.match(getFriendlyApiErrorMessage(0), /internet connection/i);
-  assert.match(getFriendlyApiErrorMessage(401), /invalid login/i);
+  assert.match(getFriendlyApiErrorMessage(401), /email, username, or password/i);
   assert.match(getFriendlyApiErrorMessage(429), /too many attempts/i);
   assert.equal(getFriendlyApiErrorMessage(502), SERVER_UNAVAILABLE_FALLBACK);
   assert.equal(getFriendlyApiErrorMessage(500), SERVER_UNAVAILABLE_FALLBACK);

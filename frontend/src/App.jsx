@@ -986,9 +986,9 @@ function readSessionExpiry(token) {
 }
 
 const LOGIN_ERROR_MESSAGES = {
-  USER_NOT_FOUND: "No account found with that username or email.",
-  INVALID_PASSWORD: "Incorrect username/email or password.",
-  INVALID_CREDENTIALS: "Incorrect username/email or password.",
+  USER_NOT_FOUND: "The email, username, or password is incorrect.",
+  INVALID_PASSWORD: "The email, username, or password is incorrect.",
+  INVALID_CREDENTIALS: "The email, username, or password is incorrect.",
   ACCOUNT_INACTIVE: "This account is not active. Please contact support or verify your account.",
   ACCOUNT_UNVERIFIED: "This account is not active. Please contact support or verify your account.",
   VALIDATION_ERROR: "",
@@ -2635,16 +2635,16 @@ const fetchBarbers = async () => {
   const handleLogin = async ({ rememberMe = true } = {}) => {
     if (loginRequestRef.current || authLoading) return;
     clearAuthMessages();
-    const username = usernameRef.current?.value?.trim() || "";
+    const identifier = usernameRef.current?.value?.trim() || "";
     const password = passwordRef.current?.value || "";
 
-    if (!username && !password) {
-      setAuthError("Please enter your username/email and password.");
+    if (!identifier && !password) {
+      setAuthError("Please enter your email or username and password.");
       return;
     }
 
-    if (!username) {
-      setAuthError("Please enter your username or email.");
+    if (!identifier) {
+      setAuthError("Enter your email or username.");
       return;
     }
 
@@ -2656,7 +2656,7 @@ const fetchBarbers = async () => {
     try {
       loginRequestRef.current = true;
       setAuthLoading(true);
-      const data = await loginUser({ username, password });
+      const data = await loginUser({ identifier, password });
       const nextToken = data.token || "";
       saveAuthSession(nextToken, data.user, { rememberMe, refreshToken: data.refreshToken });
       setSessionExpiresAt(readSessionExpiry(nextToken));

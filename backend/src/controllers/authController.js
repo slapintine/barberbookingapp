@@ -37,12 +37,31 @@ function normalizeUsername(value) {
   return String(value || "").trim();
 }
 
+function normalizeLoginIdentifier(value) {
+  return String(value || "").trim();
+}
+
+function normalizeIdentifierLookup(value) {
+  return normalizeLoginIdentifier(value).toLowerCase();
+}
+
 function isValidUsername(value) {
   return /^[a-zA-Z0-9._-]{3,32}$/.test(normalizeUsername(value));
 }
 
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+}
+
+function isEmailIdentifier(value) {
+  return normalizeLoginIdentifier(value).includes("@");
+}
+
+function isValidLoginIdentifier(value) {
+  const identifier = normalizeLoginIdentifier(value);
+  if (!identifier) return false;
+  if (isEmailIdentifier(identifier)) return isValidEmail(identifier);
+  return isValidUsername(identifier);
 }
 
 function validatePasswordLength(password) {
@@ -54,13 +73,13 @@ function validatePasswordLength(password) {
 }
 
 function findUserByUsernameOrEmail(identifier) {
-  const value = String(identifier || "").trim();
+  const value = normalizeLoginIdentifier(identifier);
   // Match usernames AND emails case-insensitively and whitespace-trimmed so a
   // user who signed up as "Timothy" can still log in typing "timothy" (this was
   // the live bug: the email path was already case-insensitive, the username path
   // was not, so a case/whitespace mismatch looked like a wrong password). An
   // exact-case username still wins when legacy rows differ only by case.
-  const normalized = value.toLowerCase();
+  const normalized = normalizeIdentifierLookup(value);
 
   return new Promise((resolve, reject) => {
     db.get(
@@ -338,43 +357,48 @@ export async function registerUser(req, res, next) {
 
 export async function loginUser(req, res, next) {
   try {
-    const username = String(req.body.username || "").trim();
+    const identifier = normalizeLoginIdentifier(req.body.identifier || req.body.username || req.body.email || "");
     const password = String(req.body.password || "");
 
-    if (!username && !password) {
-      return authError(res, 400, "VALIDATION_ERROR", "Please enter your username/email and password.");
+    if (!identifier && !password) {
+      return authError(res, 400, "VALIDATION_ERROR", "Please enter your email or username and password.");
     }
 
-    if (!username) {
-      return authError(res, 400, "VALIDATION_ERROR", "Please enter your username or email.");
+    if (!identifier) {
+      return authError(res, 400, "VALIDATION_ERROR", "Enter your email or username.");
     }
 
     if (!password) {
       return authError(res, 400, "VALIDATION_ERROR", "Please enter your password.");
     }
 
+    if (!isValidLoginIdentifier(identifier)) {
+      return authError(res, 400, "VALIDATION_ERROR", "Enter a valid email or username.");
+    }
+
     // Per-account temporary lockout (layered on top of the per-IP authRateLimiter)
     // so a distributed/IP-rotating attacker still can't brute-force one account.
     // Checked before the password comparison and keyed by the submitted identifier
     // so it behaves identically for real and non-existent accounts (anti-enumeration).
-    const existingLock = getLoginLock(username);
+    const loginKey = normalizeIdentifierLookup(identifier);
+    const existingLock = getLoginLock(loginKey);
     if (existingLock.locked) {
       res.setHeader("Retry-After", String(existingLock.retryAfterSeconds));
       return authError(res, 429, "TOO_MANY_ATTEMPTS", "Too many failed attempts. Please try again in a few minutes.");
     }
 
-    const user = await findUserByUsernameOrEmail(username);
+    const user = await findUserByUsernameOrEmail(identifier);
 
     const passwordMatches = user ? await bcrypt.compare(password, user.password_hash) : false;
     if (!user || !passwordMatches) {
       // Same message and code path whether the account is missing or the password
       // is wrong, so the response never reveals which accounts exist.
-      const lock = recordLoginFailure(username);
+      const lock = recordLoginFailure(loginKey);
       if (lock.locked) {
         res.setHeader("Retry-After", String(lock.retryAfterSeconds));
         return authError(res, 429, "TOO_MANY_ATTEMPTS", "Too many failed attempts. Please try again in a few minutes.");
       }
-      return authError(res, 401, "INVALID_CREDENTIALS", "Invalid email or password.");
+      return authError(res, 401, "INVALID_CREDENTIALS", "The email, username, or password is incorrect.");
     }
 
     const inactiveCode = getInactiveAccountCode(user);
@@ -383,7 +407,7 @@ export async function loginUser(req, res, next) {
     }
 
     // Successful login clears the account's failure counter.
-    clearLoginFailures(username);
+    clearLoginFailures(loginKey);
     const session = await createAuthSession(user, sessionRequest(req));
 
     return res.status(200).json({

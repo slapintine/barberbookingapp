@@ -37,7 +37,9 @@ export const schemas = {
   },
   login: {
     body: Joi.object({
-      username: Joi.string().trim().max(254).required(),
+      identifier: Joi.string().trim().max(254).optional().allow(""),
+      username: Joi.string().trim().max(254).optional().allow(""),
+      email: Joi.string().trim().max(254).optional().allow(""),
       password: Joi.string().max(200).required(),
     }).unknown(true),
   },

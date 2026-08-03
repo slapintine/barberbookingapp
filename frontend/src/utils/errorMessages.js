@@ -16,7 +16,7 @@ export function getFriendlyApiErrorMessage(status) {
     return "Unable to connect to the server. Please check your internet connection.";
   }
   if (code === 401) {
-    return "Invalid login details. Please check your username/email and password.";
+    return "The email, username, or password is incorrect.";
   }
   if (code === 403) {
     return "You do not have permission to perform this action.";

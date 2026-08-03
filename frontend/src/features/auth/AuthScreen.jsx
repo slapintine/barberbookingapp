@@ -203,12 +203,12 @@ export default function AuthScreen(props) {
           {(isLogin || isSignup) && (
             <label className="lineup-auth-field">
               <FiUser />
-              <span className="lineup-auth-label">{isLogin ? "Username or email" : "Username"}</span>
+              <span className="lineup-auth-label">{isLogin ? "Email or Username" : "Username"}</span>
               <input
                 ref={usernameRef}
                 autoComplete="username"
                 enterKeyHint={isLogin ? "next" : "done"}
-                placeholder={isLogin ? "Enter your username or email" : "Choose a username"}
+                placeholder={isLogin ? "Email or Username" : "Choose a username"}
                 onInput={handleAuthInput}
                 onKeyDown={handleUsernameKeyDown}
               />
