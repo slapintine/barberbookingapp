@@ -70,6 +70,7 @@ export default function AuthScreen(props) {
     emailRef,
     passwordRef,
     confirmPasswordRef,
+    resetConfirmPasswordRef,
     handleLogin,
     handleRegister,
     sendPasswordResetCode,
@@ -80,6 +81,7 @@ export default function AuthScreen(props) {
   const [resetCooldown, setResetCooldown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   const isReset = authMode === "reset";
@@ -128,7 +130,12 @@ export default function AuthScreen(props) {
     : "Create your Queless account to discover trusted providers wherever you are.";
 
   const startResetTimer = () => {
-    setResetCooldown(45);
+    setResetCooldown(60);
+  };
+
+  const requestResetCode = async () => {
+    const sent = await sendPasswordResetCode();
+    if (sent) startResetTimer();
   };
 
   const handleAuthInput = () => {
@@ -279,6 +286,30 @@ export default function AuthScreen(props) {
                 </button>
               </label>
 
+              {isReset && (
+                <label className="lineup-auth-field">
+                  <FiLock />
+                  <span className="lineup-auth-label">Confirm new password</span>
+                  <input
+                    ref={resetConfirmPasswordRef}
+                    type={showResetConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Confirm new password"
+                    onInput={handleAuthInput}
+                    onKeyDown={handlePasswordKeyDown}
+                  />
+
+                  <button
+                    type="button"
+                    className="lineup-auth-eye"
+                    aria-label={showResetConfirmPassword ? "Hide password confirmation" : "Show password confirmation"}
+                    onClick={() => setShowResetConfirmPassword((value) => !value)}
+                  >
+                    {showResetConfirmPassword ? <FiEyeOff /> : <FiEye />}
+                  </button>
+                </label>
+              )}
+
               <p className="lineup-auth-hint">
                 Passwords must be 8-64 characters and include at least one letter and one number.
               </p>
@@ -332,10 +363,7 @@ export default function AuthScreen(props) {
               type="button"
               className="lineup-auth-submit"
               disabled={authLoading || resetCooldown > 0}
-              onClick={async () => {
-                const sent = await sendPasswordResetCode();
-                if (sent) startResetTimer();
-              }}
+              onClick={requestResetCode}
             >
               <span>
                 {authLoading
@@ -347,26 +375,39 @@ export default function AuthScreen(props) {
             </button>
 
             <p className="lineup-auth-hint center">
-              Reset codes can be requested every 45 seconds.
+              Reset codes can be requested every 60 seconds.
             </p>
           </>
         ) : (
-          <button
-            type="button"
-            className="lineup-auth-submit"
-            disabled={authLoading}
-            onClick={submitAuthAction}
-          >
-            <span>
-              {authLoading
-                ? "Please wait..."
-                : isReset
-                ? "Reset Password"
-                : isLogin
-                ? "Log In"
-                : "Create Account"}
-            </span>
-          </button>
+          <>
+            <button
+              type="button"
+              className="lineup-auth-submit"
+              disabled={authLoading}
+              onClick={submitAuthAction}
+            >
+              <span>
+                {authLoading
+                  ? "Please wait..."
+                  : isReset
+                  ? "Reset Password"
+                  : isLogin
+                  ? "Log In"
+                  : "Create Account"}
+              </span>
+            </button>
+
+            {isReset && (
+              <button
+                type="button"
+                className="lineup-auth-secondary-action"
+                disabled={authLoading || resetCooldown > 0}
+                onClick={requestResetCode}
+              >
+                {resetCooldown > 0 ? `Resend code in ${resetCooldown}s` : "Resend Code"}
+              </button>
+            )}
+          </>
         )}
 
         {(isForgot || isReset) && (

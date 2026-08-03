@@ -195,8 +195,8 @@ if (!/applicationId\s+"org\.queless\.app"/.test(appBuildGradle) || !/application
   console.error("Android Gradle config must keep production and local-QA package IDs separate.");
   process.exit(1);
 }
-if (!/versionCode\s+8/.test(appBuildGradle) || !/versionName\s+"1\.0\.7"/.test(appBuildGradle)) {
-  console.error("Android Gradle config must keep the approved 1.0.7 / code 8 identity.");
+if (!/versionCode\s+9/.test(appBuildGradle) || !/versionName\s+"1\.0\.8"/.test(appBuildGradle)) {
+  console.error("Android Gradle config must keep the approved 1.0.8 / code 9 identity.");
   process.exit(1);
 }
 
@@ -300,8 +300,8 @@ const buildManifest = {
   buildType: buildMode,
   packageName: expectedPackageName,
   appName: "Queless Local QA",
-  appVersion: "1.0.7-localqa",
-  versionCode: 8,
+  appVersion: "1.0.8-localqa",
+  versionCode: 9,
   frontendOutputHash,
   androidSourcePath: "android",
   androidSourceHash: hashDirectory(androidFrontendDir),

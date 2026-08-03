@@ -18,7 +18,8 @@
     "verify:launch": "node scripts/launchVerification.cjs",
     "android:local-qa": "npm run android:local-qa:build",
     "android:local-qa:build": "node scripts/buildAndroidLocalQa.cjs",
-    "android:local-qa:install": "node scripts/installAndroidLocalQa.cjs"
+    "android:local-qa:install": "node scripts/installAndroidLocalQa.cjs",
+    "android:production:build": "node scripts/buildAndroidProduction.cjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -1280,6 +1280,7 @@ function App() {
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
   const confirmPasswordRef = useRef(null);
+  const resetConfirmPasswordRef = useRef(null);
   const loginRequestRef = useRef(false);
   const socketRef = useRef(null);
   const providerOpenRef = useRef({ id: null, at: 0 });
@@ -2712,12 +2713,12 @@ const fetchBarbers = async () => {
   const sendPasswordResetCode = async () => {
     const email = emailRef.current?.value?.trim() || "";
     if (!email) {
-      setAuthError("Email is required.");
+      setAuthError("Enter your registered email address.");
       return false;
     }
 
     if (!isValidEmail(email)) {
-      setAuthError("Please enter a valid email address.");
+      setAuthError("Enter a valid email address.");
       return false;
     }
 
@@ -2727,12 +2728,13 @@ const fetchBarbers = async () => {
         const data = await requestPasswordReset(email);
         if (passwordRef.current) passwordRef.current.value = "";
         if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
-        setAuthSuccess(data?.message || "If an account exists with this email, a reset code has been sent.");
+        if (resetConfirmPasswordRef.current) resetConfirmPasswordRef.current.value = "";
+        setAuthSuccess(data?.message || "If an account exists for that email, we have sent password-reset instructions.");
         setAuthMode("reset");
         showSystemToast("Reset code sent", "Check your email for the verification code.", "system");
         return true;
       } catch (error) {
-        setAuthError(error.message || "Could not send reset code.");
+        setAuthError(error.userMessage || error.message || "We could not send the reset email. Please try again shortly.");
         return false;
       } finally {
       setAuthLoading(false);
@@ -2743,14 +2745,20 @@ const fetchBarbers = async () => {
     const email = emailRef.current?.value?.trim() || "";
     const code = passwordRef.current?.value?.trim();
     const newPassword = confirmPasswordRef.current?.value || "";
+    const confirmPassword = resetConfirmPasswordRef.current?.value || "";
 
-    if (!email || !code || !newPassword) {
+    if (!email || !code || !newPassword || !confirmPassword) {
       setAuthError("Email, code, and new password are required.");
       return;
     }
 
     if (!isValidEmail(email)) {
-      setAuthError("Please enter a valid email address.");
+      setAuthError("Enter a valid email address.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setAuthError("The passwords do not match.");
       return;
     }
 
@@ -2767,14 +2775,15 @@ const fetchBarbers = async () => {
     try {
       setAuthLoading(true);
       setAuthError("");
-      await confirmPasswordReset({ email, code, newPassword });
+      await confirmPasswordReset({ email, code, newPassword, confirmPassword });
       if (passwordRef.current) passwordRef.current.value = "";
       if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
-      setAuthSuccess("Password reset complete. You can log in now.");
+      if (resetConfirmPasswordRef.current) resetConfirmPasswordRef.current.value = "";
+      setAuthSuccess("Your password has been changed. You can now sign in.");
       setAuthMode("login");
       showSystemToast("Password reset", "You can log in with your new password.", "system");
     } catch (error) {
-      setAuthError(error.message || "Could not reset password.");
+      setAuthError(error.userMessage || error.message || "This code is invalid or has expired. Request a new code.");
     } finally {
       setAuthLoading(false);
     }
@@ -5884,6 +5893,7 @@ const updateBarberStand = async (payload) => {
                 emailRef={emailRef}
                 passwordRef={passwordRef}
                 confirmPasswordRef={confirmPasswordRef}
+                resetConfirmPasswordRef={resetConfirmPasswordRef}
                 handleLogin={handleLogin}
                 handleRegister={handleRegister}
                 sendPasswordResetCode={sendPasswordResetCode}

@@ -233,6 +233,9 @@ button {
 .queless-service-list-card,
 .queless-service-list-card small,
 .queless-service-list-card em,
+.queless-result-card,
+.queless-result-card small,
+.queless-result-card em,
 .queless-empty-state,
 .queless-map-topbar strong,
 .queless-map-topbar span,
@@ -801,7 +804,7 @@ body[data-theme="light"] .queless-filter-chips button.active {
   gap: 12px;
 }
 
-.queless-result-card > img,
+.queless-result-media-protected,
 .queless-result-avatar {
   width: 88px;
   height: auto;
@@ -810,7 +813,15 @@ body[data-theme="light"] .queless-filter-chips button.active {
   flex-shrink: 0;
 }
 
-.queless-result-card > img {
+.queless-result-media-protected {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.queless-result-media-protected img {
+  width: 100%;
+  height: 100%;
   display: block;
   object-fit: cover;
   object-position: center;
@@ -920,7 +931,7 @@ body[data-theme="light"] .queless-result-actions button:first-child {
     grid-template-columns: 82px minmax(0, 1fr);
   }
 
-  .queless-result-card > img,
+  .queless-result-media-protected,
   .queless-result-avatar {
     width: 82px;
     border-radius: 18px;

@@ -333,6 +333,8 @@ export const schemas = {
       email: Joi.string().max(254).optional().allow(""),
       code: Joi.string().max(40).optional().allow(""),
       newPassword: Joi.string().min(8).max(64).optional().allow(""),
+      confirmPassword: Joi.string().min(8).max(64).optional().allow(""),
+      passwordConfirmation: Joi.string().min(8).max(64).optional().allow(""),
       password: Joi.string().min(8).max(64).optional().allow(""),
     }).unknown(true),
   },

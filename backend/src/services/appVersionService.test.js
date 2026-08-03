@@ -5,9 +5,9 @@ import { buildAppVersionResponse } from "./appVersionService.js";
 test("returns the public Android release contract", () => {
   assert.deepEqual(buildAppVersionResponse(), {
     platform: "android",
-    latestVersion: "1.0.1",
-    versionName: "1.0.1",
-    versionCode: 2,
+    latestVersion: "1.0.8",
+    versionName: "1.0.8",
+    versionCode: 9,
     apkUrl: "https://queless.org/downloads/queless-latest.apk",
     releaseNotes: "Initial Queless Android release",
     forceUpdate: false,

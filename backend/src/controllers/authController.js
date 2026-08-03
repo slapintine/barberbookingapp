@@ -21,6 +21,9 @@ const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 64;
 const EMAIL_OTP_COOLDOWN_SECONDS = 60;
 const EMAIL_OTP_MAX_SENDS_PER_HOUR = 5;
+const PASSWORD_RESET_SAFE_MESSAGE = "If an account exists for that email, we have sent password-reset instructions.";
+const PASSWORD_RESET_INVALID_CODE_MESSAGE = "This code is invalid or has expired. Request a new code.";
+const PASSWORD_RESET_EMAIL_FAILURE_MESSAGE = "We could not send the reset email. Please try again shortly.";
 
 function sessionRequest(req) {
   return {
@@ -68,6 +71,16 @@ function validatePasswordLength(password) {
   const value = String(password || "");
   if (value.length < MIN_PASSWORD_LENGTH || value.length > MAX_PASSWORD_LENGTH) {
     return `Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters.`;
+  }
+  return "";
+}
+
+function validatePasswordPolicy(password, label = "Password") {
+  const lengthMessage = validatePasswordLength(password);
+  if (lengthMessage) return lengthMessage.replace(/^Password/, label);
+  const value = String(password || "");
+  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) {
+    return `${label} must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters, with a letter and a number.`;
   }
   return "";
 }
@@ -255,6 +268,32 @@ async function getOtpSendCountLastHour({ userId, channel, destination, purpose }
     [userId, channel, destination, purpose, since]
   );
   return Number(row?.count || 0);
+}
+
+function timestampMs(value) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  const raw = String(value);
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)
+    ? raw
+    : `${raw.includes("T") ? raw : raw.replace(" ", "T")}Z`;
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function getLatestOtpCreatedAt({ userId, channel, destination, purpose }) {
+  const row = await get(
+    `SELECT created_at
+     FROM otp_codes
+     WHERE user_id = ?
+       AND channel = ?
+       AND destination = ?
+       AND purpose = ?
+     ORDER BY id DESC
+     LIMIT 1`,
+    [userId, channel, destination, purpose]
+  );
+  return row?.created_at || null;
 }
 
 async function verifyOtpCode(row, code) {
@@ -683,38 +722,76 @@ export function getMe(req, res) {
 
 export async function requestPasswordReset(req, res, next) {
   try {
-    const email = normalizeEmail(req.body.email);
-    const safeMessage = "If an account exists with this email, a reset code has been sent.";
+    const email = normalizeEmail(req.body.email || req.body.destination);
 
     if (!email) {
-      return res.status(400).json({ success: false, message: "Email is required." });
+      return res.status(400).json({ success: false, message: "Enter your registered email address." });
     }
 
     if (!isValidEmail(email)) {
-      return res.status(400).json({ success: false, message: "Please enter a valid email address." });
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
     }
 
     const row = await findUserByEmail(email);
 
-    if (!row?.email) {
+    if (!row?.email || getInactiveAccountCode(row)) {
       return res.status(200).json({
         success: true,
-        message: safeMessage,
+        message: PASSWORD_RESET_SAFE_MESSAGE,
+      });
+    }
+
+    const destination = normalizeEmail(row.email);
+    const resetScope = {
+      userId: row.id,
+      channel: "email",
+      destination,
+      purpose: "password_reset",
+    };
+    const latestCreatedAt = await getLatestOtpCreatedAt(resetScope);
+    const cooldownRemaining = Math.max(
+      0,
+      EMAIL_OTP_COOLDOWN_SECONDS - Math.floor((Date.now() - timestampMs(latestCreatedAt)) / 1000)
+    );
+    const sendsLastHour = await getOtpSendCountLastHour(resetScope);
+
+    if (cooldownRemaining > 0) {
+      return res.status(200).json({
+        success: true,
+        message: PASSWORD_RESET_SAFE_MESSAGE,
+        retryAfter: cooldownRemaining,
+      });
+    }
+
+    if (sendsLastHour >= EMAIL_OTP_MAX_SENDS_PER_HOUR) {
+      return res.status(200).json({
+        success: true,
+        message: PASSWORD_RESET_SAFE_MESSAGE,
+        retryAfter: 60 * 60,
       });
     }
 
     const code = await createOtp({
       userId: row.id,
       channel: "email",
-      destination: normalizeEmail(row.email),
+      destination,
       purpose: "password_reset",
     });
-    await sendEmail({
-      to: normalizeEmail(row.email),
-      ...passwordResetEmail({ code }),
-    });
+    try {
+      await sendEmail({
+        to: destination,
+        ...passwordResetEmail({ code }),
+      });
+    } catch (error) {
+      req.log?.warn?.({ err: error, userId: row.id, providerCode: error.providerCode || "" }, "password reset email delivery failed");
+      return res.status(503).json({
+        success: false,
+        code: "EMAIL_DELIVERY_UNAVAILABLE",
+        message: PASSWORD_RESET_EMAIL_FAILURE_MESSAGE,
+      });
+    }
 
-    return res.status(200).json({ success: true, message: safeMessage });
+    return res.status(200).json({ success: true, message: PASSWORD_RESET_SAFE_MESSAGE });
   } catch (error) {
     next(error);
   }
@@ -725,22 +802,26 @@ export async function confirmPasswordReset(req, res, next) {
     const email = normalizeEmail(req.body.email);
     const code = String(req.body.code || "").trim();
     const nextPassword = String(req.body.newPassword || req.body.password || "");
+    const confirmPassword = String(req.body.confirmPassword || req.body.passwordConfirmation || "");
 
     if (!email || !code || !nextPassword) {
       return res.status(400).json({ success: false, message: "Email, code, and new password are required." });
     }
     if (!isValidEmail(email)) {
-      return res.status(400).json({ success: false, message: "Please enter a valid email address." });
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
     }
-    const resetPasswordLengthMessage = validatePasswordLength(nextPassword);
-    if (resetPasswordLengthMessage) {
-      return res.status(400).json({ success: false, message: resetPasswordLengthMessage });
+    if (confirmPassword && confirmPassword !== nextPassword) {
+      return res.status(400).json({ success: false, message: "The passwords do not match." });
+    }
+    const resetPasswordPolicyMessage = validatePasswordPolicy(nextPassword, "New password");
+    if (resetPasswordPolicyMessage) {
+      return res.status(400).json({ success: false, message: resetPasswordPolicyMessage });
     }
 
     const row = await findUserByEmail(email);
 
-    if (!row?.email) {
-      return res.status(404).json({ success: false, message: "Reset request not found." });
+    if (!row?.email || getInactiveAccountCode(row)) {
+      return res.status(400).json({ success: false, message: PASSWORD_RESET_INVALID_CODE_MESSAGE });
     }
 
     const otpRow = await getLatestOtp({
@@ -748,7 +829,15 @@ export async function confirmPasswordReset(req, res, next) {
       destination: normalizeEmail(row.email),
       purpose: "password_reset",
     });
-    await verifyOtpCode(otpRow, code);
+    try {
+      await verifyOtpCode(otpRow, code);
+    } catch (error) {
+      const status = Number(error.statusCode || error.status || 400);
+      return res.status(status === 429 ? 429 : 400).json({
+        success: false,
+        message: status === 429 ? "Too many incorrect attempts. Request a new code." : PASSWORD_RESET_INVALID_CODE_MESSAGE,
+      });
+    }
 
     const passwordHash = await bcrypt.hash(nextPassword, 10);
     await run(`UPDATE users SET password_hash = ? WHERE id = ?`, [passwordHash, row.id]);
@@ -764,7 +853,7 @@ export async function confirmPasswordReset(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      message: "Password reset complete.",
+      message: "Your password has been changed. You can now sign in.",
       ...session,
     });
   } catch (error) {

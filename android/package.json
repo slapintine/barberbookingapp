@@ -1,7 +1,7 @@
 {
   "name": "queless-android-shell",
   "private": true,
-  "version": "1.0.7",
+  "version": "1.0.8",
   "type": "commonjs",
   "scripts": {
     "build:android:local-qa": "node scripts/sync-local-qa.cjs"

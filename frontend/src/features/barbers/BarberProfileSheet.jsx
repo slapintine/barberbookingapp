@@ -195,6 +195,7 @@ function ServiceCard({ service, barber, isOwner, onBook, onRequestQuote, onOpenC
             <SvcIcon size={28} />
           </div>
         )}
+        <span className="pps-svc-img-overlay" aria-hidden="true" />
         <div className="pps-svc-cat-badge">
           <SvcIcon size={14} />
         </div>

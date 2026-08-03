@@ -2149,6 +2149,27 @@ body[data-lineup-theme="dark"] .notification-card-v4 .tiny-meta-v4,
   cursor: not-allowed !important;
 }
 
+.lineup-auth-secondary-action,
+.screen-v4.screen-auth-v4 .lineup-auth-secondary-action {
+  width: 100% !important;
+  min-height: 44px !important;
+  margin-top: 10px !important;
+  border: 1px solid rgba(251,228,216,0.24) !important;
+  border-radius: 16px !important;
+  background: rgba(251,228,216,0.12) !important;
+  color: #fbe4d8 !important;
+  font: inherit !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+}
+
+.lineup-auth-secondary-action:disabled,
+.screen-v4.screen-auth-v4 .lineup-auth-secondary-action:disabled {
+  opacity: 0.62 !important;
+  cursor: not-allowed !important;
+}
+
 .lineup-auth-note,
 .lineup-auth-hint,
 .screen-v4.screen-auth-v4 .lineup-auth-note,

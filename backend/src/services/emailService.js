@@ -12,17 +12,26 @@ function escapeHtml(value) {
 export function otpEmail({ code, purpose = "account_verification" }) {
   const title = purpose === "password_reset" ? "Reset your Queless password" : "Verify your Queless account";
   const safeCode = escapeHtml(code);
+  const intro = purpose === "password_reset"
+    ? "We received a request to reset your Queless password. Use the verification code below to continue."
+    : "Use the verification code below to continue.";
+  const ignoreLine = purpose === "password_reset"
+    ? "<p>If you did not request this change, you can safely ignore this email.</p>"
+    : "";
   return {
     subject: title,
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.5;color:#1b1029">
         <h2>${title}</h2>
-        <p>Your verification code is:</p>
+        <p>${intro}</p>
         <p style="font-size:28px;font-weight:700;letter-spacing:4px">${safeCode}</p>
         <p>This code expires in 10 minutes.</p>
+        ${ignoreLine}
       </div>
     `,
-    text: `${title}. Your code is ${code}. It expires in 10 minutes.`,
+    text: purpose === "password_reset"
+      ? `${title}. We received a request to reset your Queless password. Use verification code ${code} to continue. This code expires in 10 minutes. If you did not request this change, you can safely ignore this email.`
+      : `${title}. Your code is ${code}. It expires in 10 minutes.`,
   };
 }
 

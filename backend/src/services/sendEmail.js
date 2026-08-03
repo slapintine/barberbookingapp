@@ -1,7 +1,32 @@
 import { Resend } from "resend";
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { env } from "../config/env.js";
 
 let resend = null;
+
+function captureEmailForTest(payload) {
+  const captureDir = process.env.NODE_ENV === "test" ? String(process.env.EMAIL_CAPTURE_DIR || "").trim() : "";
+  if (!captureDir) return null;
+
+  fs.mkdirSync(captureDir, { recursive: true });
+  const id = `captured-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  fs.writeFileSync(
+    path.join(captureDir, `${id}.json`),
+    JSON.stringify(
+      {
+        id,
+        createdAt: new Date().toISOString(),
+        from: env.emailFrom || "Queless <info@queless.org>",
+        ...payload,
+      },
+      null,
+      2
+    )
+  );
+  return { id, captured: true };
+}
 
 function getResendClient() {
   if (!env.resendApiKey) {
@@ -14,6 +39,9 @@ function getResendClient() {
 }
 
 export async function sendEmail({ to, subject, html, text }) {
+  const captured = captureEmailForTest({ to, subject, html, text });
+  if (captured) return captured;
+
   try {
     const result = await getResendClient().emails.send({
       from: env.emailFrom || "Queless <info@queless.org>",

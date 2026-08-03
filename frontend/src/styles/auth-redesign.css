@@ -469,6 +469,27 @@ body:has(.app-auth-v4) {
   cursor: not-allowed !important;
 }
 
+.lineup-auth-secondary-action,
+.screen-v4.screen-auth-v4 .lineup-auth-secondary-action {
+  width: 100% !important;
+  min-height: 44px !important;
+  margin-top: 10px !important;
+  border: 1px solid rgba(80, 43, 107, 0.18) !important;
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  color: var(--auth-primary) !important;
+  font: inherit !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+}
+
+.lineup-auth-secondary-action:disabled,
+.screen-v4.screen-auth-v4 .lineup-auth-secondary-action:disabled {
+  opacity: 0.62 !important;
+  cursor: not-allowed !important;
+}
+
 .lineup-auth-note,
 .lineup-auth-hint,
 .lineup-auth-switch,

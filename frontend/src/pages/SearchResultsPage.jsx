@@ -254,19 +254,22 @@ export default function SearchResultsPage({ query = "", location = "", providers
             const rating = Number(provider.rating || 0) ? Number(provider.rating).toFixed(1) : "New";
             return (
               <article className="queless-result-card" key={item.id}>
-                {image ? (
-                  <img
-                    src={image}
-                    alt={providerName}
-                    loading="lazy"
-                    decoding="async"
-                    onError={(event) => {
-                      event.currentTarget.src = buildInitialsAvatar(providerName);
-                    }}
-                  />
-                ) : (
-                  <span className="queless-result-avatar">{makeInitials(providerName)}</span>
-                )}
+                <span className="queless-result-media-protected" aria-hidden="true">
+                  {image ? (
+                    <img
+                      src={image}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => {
+                        event.currentTarget.src = buildInitialsAvatar(providerName);
+                      }}
+                    />
+                  ) : (
+                    <span className="queless-result-avatar">{makeInitials(providerName)}</span>
+                  )}
+                  <span className="queless-service-media-overlay" />
+                </span>
                 <div className="queless-result-body">
                   <div className="queless-result-title">
                     <strong>{providerName}</strong>

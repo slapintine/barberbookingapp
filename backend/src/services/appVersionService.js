@@ -1,4 +1,6 @@
 const OFFICIAL_APK_URL = "https://queless.org/downloads/queless-latest.apk";
+const DEFAULT_ANDROID_VERSION = "1.0.8";
+const DEFAULT_ANDROID_VERSION_CODE = 9;
 
 function isSafeDistributionUrl(value) {
   const rawValue = String(value || "").trim();
@@ -24,9 +26,9 @@ export function buildAppVersionResponse(config = {}) {
   const configuredUrl = String(config.androidApkUrl || "").trim();
   const response = {
     platform: "android",
-    latestVersion: String(config.androidAppVersion || "1.0.1"),
-    versionName: String(config.androidAppVersion || "1.0.1"),
-    versionCode: Number(config.androidVersionCode || 2),
+    latestVersion: String(config.androidAppVersion || DEFAULT_ANDROID_VERSION),
+    versionName: String(config.androidAppVersion || DEFAULT_ANDROID_VERSION),
+    versionCode: Number(config.androidVersionCode || DEFAULT_ANDROID_VERSION_CODE),
     apkUrl: isSafeDistributionUrl(configuredUrl) ? configuredUrl : OFFICIAL_APK_URL,
     buildId: String(config.androidBuildId || ""),
     releaseNotes: String(config.androidReleaseNotes || "Initial Queless Android release"),

@@ -50,10 +50,10 @@ export function requestPasswordReset(email) {
   });
 }
 
-export function confirmPasswordReset({ email, code, newPassword }) {
+export function confirmPasswordReset({ email, code, newPassword, confirmPassword }) {
   return apiFetch("/api/auth/password-reset/confirm", {
     method: "POST",
-    body: JSON.stringify({ email, code, newPassword }),
+    body: JSON.stringify({ email, code, newPassword, confirmPassword }),
   });
 }
 
