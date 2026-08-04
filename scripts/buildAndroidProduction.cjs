@@ -8,8 +8,8 @@ const repoRoot = path.resolve(__dirname, "..");
 const frontendDir = path.join(repoRoot, "frontend");
 const androidFrontendDir = path.join(repoRoot, "android");
 const expectedPackageName = "org.queless.app";
-const expectedVersionName = "1.0.8";
-const expectedVersionCode = 9;
+const expectedVersionName = "1.0.9";
+const expectedVersionCode = 10;
 const gradleBuildDir = path.resolve(
   process.env.QUELESS_GRADLE_BUILD_DIR || path.join(os.tmpdir(), "queless-android-gradle-release", commitSafeTimestamp())
 );

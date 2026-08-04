@@ -936,6 +936,28 @@ function readAuthUser() {
   );
 }
 
+function hasAuthenticatedUserIdentity(user) {
+  if (!user || typeof user !== "object") return false;
+  return Boolean(
+    user.id ||
+      String(user.username || "").trim() ||
+      String(user.email || "").trim()
+  );
+}
+
+function readStoredAuthUserForBoot() {
+  const authToken = getAuthToken();
+  if (!authToken) return null;
+  const user = readAuthUser();
+  return hasAuthenticatedUserIdentity(user) ? user : null;
+}
+
+function getAuthBootState({ sessionChecked, token, currentUser }) {
+  if (!sessionChecked) return "checking";
+  if (token && hasAuthenticatedUserIdentity(currentUser)) return "authenticated";
+  return "unauthenticated";
+}
+
 function readStoredQuelessLocation() {
   const saved = safeJsonParse(localStorage.getItem(LOCATION_STORAGE_KEY), null);
   if (saved?.label) return saved;
@@ -983,6 +1005,14 @@ function readSessionExpiry(token) {
   const payload = decodeJwtPayload(token);
   if (!payload?.exp) return null;
   return new Date(Number(payload.exp) * 1000).toISOString();
+}
+
+function hasPlausibleProductionAuthToken(token) {
+  const text = String(token || "");
+  if (!text || text.startsWith("local-")) return false;
+  const payload = decodeJwtPayload(text);
+  if (!payload?.userId || !payload?.sessionId || !payload?.exp) return false;
+  return Number(payload.exp) * 1000 > Date.now();
 }
 
 const LOGIN_ERROR_MESSAGES = {
@@ -1046,20 +1076,21 @@ function App() {
     syncNativeAndroidChromeClass();
   }, []);
 
-  const [screen, setScreen] = useState(() => getScreenFromPath(window.location.pathname, Boolean(getAuthToken())));
+  const [screen, setScreen] = useState(() => (getAuthToken() ? "app" : "login"));
   const [authMode, setAuthMode] = useState(() => getAuthModeFromPath(window.location.pathname));
   const [theme, setTheme] = useTheme();
   const [initialLoadingStage, setInitialLoadingStage] = useState("visible");
   const [token, setToken] = useState(getAuthToken());
-  const [currentUser, setCurrentUser] = useState(readAuthUser);
+  const [currentUser, setCurrentUser] = useState(readStoredAuthUserForBoot);
   const [sessionExpiresAt, setSessionExpiresAt] = useState(
     () => localStorage.getItem("lineup_token_expires_at") || sessionStorage.getItem("lineup_token_expires_at") || readSessionExpiry(getAuthToken())
   );
   // False until a stored token has been validated against /auth/me on boot.
   // With no token there is nothing to check, so guests are ready immediately.
   const [sessionChecked, setSessionChecked] = useState(() => !getAuthToken());
+  const authBootState = getAuthBootState({ sessionChecked, token, currentUser });
 
-  const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname, readAuthUser()));
+  const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname, readStoredAuthUserForBoot()));
   const initialSearchRoute = readSearchRouteParams();
   const [query, setQuery] = useState(initialSearchRoute.query || "");
   const [searchResultsQuery, setSearchResultsQuery] = useState(initialSearchRoute.query || "");
@@ -1391,8 +1422,9 @@ function App() {
   }, [screen, activeTab]);
 
   useEffect(() => {
-    if (token && currentUser) setScreen("app");
-  }, [token, currentUser]);
+    if (authBootState === "authenticated") setScreen("app");
+    if (authBootState === "unauthenticated" && screen !== "login") setScreen("login");
+  }, [authBootState, screen]);
 
   useEffect(() => {
     if (screen !== "login") return;
@@ -1403,7 +1435,7 @@ function App() {
   }, [screen]);
 
   useEffect(() => {
-    if (screen !== "app") return;
+    if (screen !== "app" || authBootState !== "authenticated") return;
     if (stripAppBasePath(window.location.pathname) === MAP_PATH) {
       setMapState((prev) => ({ ...prev, show: true, category: prev.category || "All", returnView: prev.returnView || "home" }));
       return;
@@ -1428,16 +1460,20 @@ function App() {
     if (nextTab !== activeTab) {
       setActiveTab(nextTab);
     }
-  }, [screen, currentUser?.role]);
+  }, [screen, currentUser?.role, authBootState]);
 
   useEffect(() => {
-    const expectedScreen = getScreenFromPath(window.location.pathname, Boolean(token));
+    if (authBootState === "checking") return;
+    const expectedScreen = authBootState === "authenticated"
+      ? getScreenFromPath(window.location.pathname, true)
+      : "login";
     if (expectedScreen !== screen) {
       setScreen(expectedScreen);
     }
-  }, [token, screen]);
+  }, [authBootState, screen]);
 
   useEffect(() => {
+    if (authBootState === "checking") return;
     const logicalTargetPath =
       screen === "app"
         ? mapState.show
@@ -1493,11 +1529,13 @@ function App() {
         targetIsAdminPath && !currentIsAdminPath;
       window.history[shouldPush ? "pushState" : "replaceState"]({}, "", targetPath);
     }
-  }, [activeConfirmationBooking?.id, activeTab, authMode, isAdmin, mapState.show, screen]);
+  }, [activeConfirmationBooking?.id, activeTab, authBootState, authMode, isAdmin, mapState.show, screen]);
 
   useEffect(() => {
     const handlePopState = () => {
-      const nextScreen = getScreenFromPath(window.location.pathname, Boolean(token));
+      const nextScreen = authBootState === "authenticated"
+        ? getScreenFromPath(window.location.pathname, true)
+        : "login";
       setScreen(nextScreen);
       if (nextScreen === "login") {
         setAuthMode(getAuthModeFromPath(window.location.pathname));
@@ -1523,7 +1561,7 @@ function App() {
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [currentUser?.role, token]);
+  }, [authBootState, currentUser?.role]);
 
   useEffect(() => {
     if (screen !== "app") return;
@@ -1743,17 +1781,25 @@ function App() {
       .then((data) => {
         if (cancelled) return;
         const freshUser = data?.user || data;
-        if (freshUser?.username) {
+        if (hasAuthenticatedUserIdentity(freshUser)) {
           setCurrentUser((prev) => ({ ...(prev || {}), ...freshUser }));
           const storage = localStorage.getItem("lineup_token") ? localStorage : sessionStorage;
           storage.setItem("lineup_user", JSON.stringify(freshUser));
+        } else {
+          dropToGuest();
         }
       })
       .catch((error) => {
         if (cancelled) return;
-        // Only clear on an explicit auth rejection. Tolerate offline/network
-        // failures so a flaky connection never logs the user out.
-        if (error?.status === 401 || error?.status === 403) {
+        // Only a previously confirmed account may ride through a temporary
+        // network outage. Fresh installs or placeholder profiles must never
+        // become authenticated because boot validation could not complete.
+        if (
+          error?.status === 401 ||
+          error?.status === 403 ||
+          !hasAuthenticatedUserIdentity(currentUser) ||
+          !hasPlausibleProductionAuthToken(authToken)
+        ) {
           dropToGuest();
         }
       })
@@ -5867,7 +5913,13 @@ const updateBarberStand = async (payload) => {
 
   const appContent = content;
 
-  const isAuthScreen = screen === "login";
+  const renderScreen =
+    authBootState === "checking"
+      ? "checking"
+      : authBootState === "authenticated"
+      ? screen
+      : "login";
+  const isAuthScreen = renderScreen === "login";
   const showInitialLoadingScreen = initialLoadingStage !== "hidden";
 
   return (
@@ -5882,7 +5934,12 @@ const updateBarberStand = async (payload) => {
               </div>
             }
           >
-            {screen === "login" ? (
+            {renderScreen === "checking" ? (
+              <div className="route-fallback-v4 auth-boot-fallback-v4" role="status" aria-label="Checking session">
+                <span className="route-fallback-spinner" aria-hidden="true" />
+                <span className="route-fallback-text">Checking your Queless session...</span>
+              </div>
+            ) : renderScreen === "login" ? (
               <AuthScreen
                 authMode={authMode}
                 setAuthMode={setAuthMode}

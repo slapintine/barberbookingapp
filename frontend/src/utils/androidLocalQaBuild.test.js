@@ -55,8 +55,8 @@ test("authoritative Android shell keeps production and local-QA identities separ
   assert.match(capacitorConfig, /"appName":\s*"Queless"/);
   assert.match(buildGradle, /applicationId\s+"org\.queless\.app"/);
   assert.match(buildGradle, /applicationIdSuffix\s+"\.localqa"/);
-  assert.match(buildGradle, /versionCode\s+9/);
-  assert.match(buildGradle, /versionName\s+"1\.0\.8"/);
+  assert.match(buildGradle, /versionCode\s+10/);
+  assert.match(buildGradle, /versionName\s+"1\.0\.9"/);
   assert.match(localQaStrings, /Queless Local QA/);
 });
 

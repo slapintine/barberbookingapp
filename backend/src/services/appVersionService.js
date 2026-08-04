@@ -1,6 +1,6 @@
 const OFFICIAL_APK_URL = "https://queless.org/downloads/queless-latest.apk";
-const DEFAULT_ANDROID_VERSION = "1.0.8";
-const DEFAULT_ANDROID_VERSION_CODE = 9;
+const DEFAULT_ANDROID_VERSION = "1.0.9";
+const DEFAULT_ANDROID_VERSION_CODE = 10;
 
 function isSafeDistributionUrl(value) {
   const rawValue = String(value || "").trim();
