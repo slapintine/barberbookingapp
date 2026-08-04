@@ -45,6 +45,10 @@ function publicUser(row = {}) {
   };
 }
 
+function activeProviderPlanPredicate(alias = "bs") {
+  return `${alias}.is_active IS TRUE`;
+}
+
 export async function createAuthSession(user, request = {}) {
   const sessionId = crypto.randomUUID();
   const refreshToken = makeRefreshToken();
@@ -85,7 +89,7 @@ export async function rotateAuthSession(refreshToken) {
                 SELECT bs.tier
                 FROM barber_subscriptions bs
                 WHERE bs.barber_id = b.id
-                  AND COALESCE(bs.is_active, 0) = 1
+                  AND ${activeProviderPlanPredicate("bs")}
                   AND LOWER(COALESCE(bs.status, '')) IN ('active', 'trialing')
                 ORDER BY bs.id DESC
                 LIMIT 1
@@ -173,7 +177,7 @@ export async function authenticateAccessToken(token) {
                 SELECT bs.tier
                 FROM barber_subscriptions bs
                 WHERE bs.barber_id = b.id
-                  AND COALESCE(bs.is_active, 0) = 1
+                  AND ${activeProviderPlanPredicate("bs")}
                   AND LOWER(COALESCE(bs.status, '')) IN ('active', 'trialing')
                 ORDER BY bs.id DESC
                 LIMIT 1

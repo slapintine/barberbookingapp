@@ -92,3 +92,25 @@ test("service details modal supports light, dark, mobile safe areas, and reduced
   assert.match(css, /user-select: text;/);
   assert.match(css, /:focus-visible/);
 });
+
+test("service imagery uses a protected overlay without blocking foreground actions", () => {
+  const profile = source("./features/barbers/BarberProfileSheet.jsx");
+  const serviceModal = source("./components/ui/ServiceDetailsModal.jsx");
+  const modalCss = source("./components/ui/ServiceDetailsModal.css");
+  const discovery = source("./pages/CategoryServicesPage.jsx");
+  const results = source("./pages/SearchResultsPage.jsx");
+  const discoveryCss = source("./styles/service-discovery.css");
+  const profileCss = source("./styles/provider-profile.css");
+
+  assert.match(profile, /pps-svc-img-overlay/);
+  assert.match(serviceModal, /ql-service-details__media-overlay/);
+  assert.match(discovery, /queless-service-media-protected/);
+  assert.match(results, /queless-result-media-protected/);
+  assert.match(modalCss, /\.ql-service-details__media-overlay\s*\{[\s\S]*pointer-events:\s*none;/);
+  assert.match(discoveryCss, /\.queless-service-media-overlay\s*\{[\s\S]*pointer-events:\s*none;/);
+  assert.match(profileCss, /\.pps-svc-img-overlay\s*\{[\s\S]*pointer-events:\s*none;/);
+  assert.match(modalCss, /linear-gradient\(to bottom, rgba\(20, 8, 18, 0\.08\)/);
+  assert.match(discoveryCss, /linear-gradient\(to bottom, rgba\(20, 8, 18, 0\.12\)/);
+  assert.match(profileCss, /linear-gradient\(to bottom, rgba\(20, 8, 18, 0\.12\)/);
+  assert.match(profileCss, /\.pps-svc-cat-badge\s*\{[\s\S]*z-index:\s*2;/);
+});

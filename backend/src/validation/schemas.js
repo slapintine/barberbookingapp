@@ -37,6 +37,7 @@ export const schemas = {
   },
   login: {
     body: Joi.object({
+      identifier: Joi.string().trim().max(254).optional().allow(""),
       email: Joi.string().trim().max(254).optional().allow(""),
       username: Joi.string().trim().max(254).optional().allow(""),
       password: Joi.string().max(200).required(),
@@ -326,6 +327,8 @@ export const schemas = {
       email: Joi.string().max(254).optional().allow(""),
       code: Joi.string().max(40).optional().allow(""),
       newPassword: Joi.string().min(8).max(64).optional().allow(""),
+      confirmPassword: Joi.string().min(8).max(64).optional().allow(""),
+      passwordConfirmation: Joi.string().min(8).max(64).optional().allow(""),
       password: Joi.string().min(8).max(64).optional().allow(""),
     }).unknown(true),
   },

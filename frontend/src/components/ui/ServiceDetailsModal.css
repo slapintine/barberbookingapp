@@ -56,6 +56,8 @@
 }
 
 .ql-service-details__media {
+  position: relative;
+  overflow: hidden;
   display: grid;
   place-items: center;
   min-height: 190px;
@@ -65,13 +67,27 @@
 }
 
 .ql-service-details__image {
+  position: relative;
+  z-index: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
   padding: 16px;
 }
 
+.ql-service-details__media-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(20, 8, 18, 0.08), rgba(20, 8, 18, 0.28), rgba(20, 8, 18, 0.54)),
+    linear-gradient(135deg, rgba(80, 43, 107, 0.12), rgba(254, 228, 216, 0.06));
+}
+
 .ql-service-details__fallback {
+  position: relative;
+  z-index: 0;
   display: grid;
   gap: 10px;
   justify-items: center;

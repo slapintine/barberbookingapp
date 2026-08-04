@@ -304,13 +304,15 @@ test("profile logout does not surface the click event as an auth error", () => {
   assert.match(profile, /onClick=\{\(\) => logout\(\)\}/);
 });
 
-test("account authentication UI is email-only and phone OTP is not presented", () => {
+test("account authentication UI accepts email or username and phone OTP is not presented", () => {
   const authScreen = fs.readFileSync(new URL("./features/auth/AuthScreen.jsx", import.meta.url), "utf8");
   const authApi = fs.readFileSync(new URL("./api/authApi.js", import.meta.url), "utf8");
   const profile = fs.readFileSync(new URL("./pages/ProfilePage.jsx", import.meta.url), "utf8");
 
+  assert.match(authScreen, /Email or Username/);
+  assert.match(authApi, /identifier:\s*loginIdentifier/);
+  assert.match(authApi, /username:\s*loginIdentifier/);
   assert.match(authScreen, /Email address/);
-  assert.doesNotMatch(authScreen, /Username or email|Choose a username/);
   assert.doesNotMatch(authApi, /sendPhoneOtp|send-phone-otp/);
   assert.doesNotMatch(profile, /sendPhoneOtp|Phone verification|Verify phone|SMS Coming Soon/);
   assert.match(profile, /Phone numbers are optional contact or payment details/);

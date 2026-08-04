@@ -947,6 +947,28 @@ function readAuthUser() {
   );
 }
 
+function hasAuthenticatedUserIdentity(user) {
+  if (!user || typeof user !== "object") return false;
+  return Boolean(
+    user.id ||
+      String(user.username || "").trim() ||
+      String(user.email || "").trim()
+  );
+}
+
+function readStoredAuthUserForBoot() {
+  const authToken = getAuthToken();
+  if (!authToken) return null;
+  const user = readAuthUser();
+  return hasAuthenticatedUserIdentity(user) ? user : null;
+}
+
+function getAuthBootState({ sessionChecked, token, currentUser }) {
+  if (!sessionChecked) return "checking";
+  if (token && hasAuthenticatedUserIdentity(currentUser)) return "authenticated";
+  return "unauthenticated";
+}
+
 function readStoredQuelessLocation() {
   const saved = safeJsonParse(localStorage.getItem(LOCATION_STORAGE_KEY), null);
   if (saved?.label) return saved;
@@ -994,6 +1016,14 @@ function readSessionExpiry(token) {
   const payload = decodeJwtPayload(token);
   if (!payload?.exp) return null;
   return new Date(Number(payload.exp) * 1000).toISOString();
+}
+
+function hasPlausibleProductionAuthToken(token) {
+  const text = String(token || "");
+  if (!text || text.startsWith("local-")) return false;
+  const payload = decodeJwtPayload(text);
+  if (!payload?.userId || !(payload?.sid || payload?.sessionId) || !payload?.exp) return false;
+  return Number(payload.exp) * 1000 > Date.now();
 }
 
 const LOGIN_ERROR_MESSAGES = {
@@ -1053,20 +1083,21 @@ function clearAuthSession() {
 }
 
 function App() {
-  const [screen, setScreen] = useState(() => getScreenFromPath(window.location.pathname, Boolean(getAuthToken())));
+  const [screen, setScreen] = useState(() => (getAuthToken() ? "app" : "login"));
   const [authMode, setAuthMode] = useState(() => getAuthModeFromPath(window.location.pathname));
   const [theme, setTheme] = useTheme();
   const [showInitialLoadingScreen, setShowInitialLoadingScreen] = useState(true);
   const [token, setToken] = useState(getAuthToken());
-  const [currentUser, setCurrentUser] = useState(readAuthUser);
+  const [currentUser, setCurrentUser] = useState(readStoredAuthUserForBoot);
   const [sessionExpiresAt, setSessionExpiresAt] = useState(
     () => localStorage.getItem("lineup_token_expires_at") || sessionStorage.getItem("lineup_token_expires_at") || readSessionExpiry(getAuthToken())
   );
   // False until a stored token has been validated against /auth/me on boot.
   // With no token there is nothing to check, so guests are ready immediately.
   const [sessionChecked, setSessionChecked] = useState(() => !getAuthToken());
+  const authBootState = getAuthBootState({ sessionChecked, token, currentUser });
 
-  const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname, readAuthUser()));
+  const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname, readStoredAuthUserForBoot()));
   const initialSearchRoute = readSearchRouteParams();
   const [query, setQuery] = useState(initialSearchRoute.query || "");
   const [searchResultsQuery, setSearchResultsQuery] = useState(initialSearchRoute.query || "");
@@ -1285,6 +1316,7 @@ function App() {
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
   const confirmPasswordRef = useRef(null);
+  const resetConfirmPasswordRef = useRef(null);
   const loginRequestRef = useRef(false);
   const socketRef = useRef(null);
   const providerOpenRef = useRef({ id: null, at: 0 });
@@ -1395,8 +1427,9 @@ function App() {
   }, [screen, activeTab]);
 
   useEffect(() => {
-    if (token && currentUser) setScreen("app");
-  }, [token, currentUser]);
+    if (authBootState === "authenticated") setScreen("app");
+    if (authBootState === "unauthenticated" && screen !== "login") setScreen("login");
+  }, [authBootState, screen]);
 
   useEffect(() => {
     if (screen !== "login") return;
@@ -1407,7 +1440,7 @@ function App() {
   }, [screen]);
 
   useEffect(() => {
-    if (screen !== "app") return;
+    if (screen !== "app" || authBootState !== "authenticated") return;
     if (stripAppBasePath(window.location.pathname) === MAP_PATH) {
       setMapState((prev) => ({ ...prev, show: true, category: prev.category || "All", returnView: prev.returnView || "home" }));
       return;
@@ -1432,16 +1465,20 @@ function App() {
     if (nextTab !== activeTab) {
       setActiveTab(nextTab);
     }
-  }, [screen, currentUser?.role]);
+  }, [screen, currentUser?.role, authBootState]);
 
   useEffect(() => {
-    const expectedScreen = getScreenFromPath(window.location.pathname, Boolean(token));
+    if (authBootState === "checking") return;
+    const expectedScreen = authBootState === "authenticated"
+      ? getScreenFromPath(window.location.pathname, true)
+      : "login";
     if (expectedScreen !== screen) {
       setScreen(expectedScreen);
     }
-  }, [token, screen]);
+  }, [authBootState, screen]);
 
   useEffect(() => {
+    if (authBootState === "checking") return;
     const logicalTargetPath =
       screen === "app"
         ? mapState.show
@@ -1495,11 +1532,13 @@ function App() {
         targetIsAdminPath && !currentIsAdminPath;
       window.history[shouldPush ? "pushState" : "replaceState"]({}, "", targetPath);
     }
-  }, [activeConfirmationBooking?.id, activeTab, authMode, isAdmin, mapState.show, screen]);
+  }, [activeConfirmationBooking?.id, activeTab, authBootState, authMode, isAdmin, mapState.show, screen]);
 
   useEffect(() => {
     const handlePopState = () => {
-      const nextScreen = getScreenFromPath(window.location.pathname, Boolean(token));
+      const nextScreen = authBootState === "authenticated"
+        ? getScreenFromPath(window.location.pathname, true)
+        : "login";
       setScreen(nextScreen);
       if (nextScreen === "login") {
         setAuthMode(getAuthModeFromPath(window.location.pathname));
@@ -1525,7 +1564,7 @@ function App() {
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [currentUser?.role, token]);
+  }, [authBootState, currentUser?.role]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !document.body?.dataset) return undefined;
@@ -1769,17 +1808,25 @@ function App() {
       .then((data) => {
         if (cancelled) return;
         const freshUser = data?.user || data;
-        if (freshUser?.username) {
+        if (hasAuthenticatedUserIdentity(freshUser)) {
           setCurrentUser((prev) => ({ ...(prev || {}), ...freshUser }));
           const storage = localStorage.getItem("lineup_token") ? localStorage : sessionStorage;
           storage.setItem("lineup_user", JSON.stringify(freshUser));
+        } else {
+          dropToGuest();
         }
       })
       .catch((error) => {
         if (cancelled) return;
-        // Only clear on an explicit auth rejection. Tolerate offline/network
-        // failures so a flaky connection never logs the user out.
-        if (error?.status === 401 || error?.status === 403) {
+        // Only a previously confirmed account may ride through a temporary
+        // network outage. Fresh installs or placeholder profiles must never
+        // become authenticated because boot validation could not complete.
+        if (
+          error?.status === 401 ||
+          error?.status === 403 ||
+          !hasAuthenticatedUserIdentity(currentUser) ||
+          !hasPlausibleProductionAuthToken(authToken)
+        ) {
           dropToGuest();
         }
       })
@@ -2635,9 +2682,15 @@ const fetchBarbers = async () => {
 
   const handleRegister = async () => {
     clearAuthMessages();
+    const username = usernameRef.current?.value?.trim() || "";
     const email = emailRef.current?.value?.trim() || "";
     const password = passwordRef.current?.value || "";
     const confirm = confirmPasswordRef.current?.value || "";
+
+    if (!username) {
+      setAuthError("Username is required.");
+      return;
+    }
 
     if (!email) {
       setAuthError("Email is required.");
@@ -2671,7 +2724,7 @@ const fetchBarbers = async () => {
 
     try {
       setAuthLoading(true);
-      const data = await registerUser({ email, password, role: "customer" });
+      const data = await registerUser({ username, email, password, role: "customer" });
       const nextToken = data.token || "";
       saveAuthSession(nextToken, data.user, { rememberMe: true, refreshToken: data.refreshToken });
       setSessionExpiresAt(readSessionExpiry(nextToken));
@@ -2691,21 +2744,16 @@ const fetchBarbers = async () => {
   const handleLogin = async ({ rememberMe = true } = {}) => {
     if (loginRequestRef.current || authLoading) return;
     clearAuthMessages();
-    const email = usernameRef.current?.value?.trim() || "";
+    const identifier = usernameRef.current?.value?.trim() || "";
     const password = passwordRef.current?.value || "";
 
-    if (!email && !password) {
-      setAuthError("Please enter your email and password.");
+    if (!identifier && !password) {
+      setAuthError("Please enter your email or username and password.");
       return;
     }
 
-    if (!email) {
-      setAuthError("Please enter your email address.");
-      return;
-    }
-
-    if (!isValidEmail(email)) {
-      setAuthError("Please enter a valid email address.");
+    if (!identifier) {
+      setAuthError("Enter your email or username.");
       return;
     }
 
@@ -2717,7 +2765,7 @@ const fetchBarbers = async () => {
     try {
       loginRequestRef.current = true;
       setAuthLoading(true);
-      const data = await loginUser({ username: email, password });
+      const data = await loginUser({ identifier, password });
       const nextToken = data.token || "";
       saveAuthSession(nextToken, data.user, { rememberMe, refreshToken: data.refreshToken });
       setSessionExpiresAt(readSessionExpiry(nextToken));
@@ -2773,29 +2821,30 @@ const fetchBarbers = async () => {
   const sendPasswordResetCode = async () => {
     const email = emailRef.current?.value?.trim() || "";
     if (!email) {
-      setAuthError("Email is required.");
+      setAuthError("Enter your registered email address.");
       return false;
     }
 
     if (!isValidEmail(email)) {
-      setAuthError("Please enter a valid email address.");
+      setAuthError("Enter a valid email address.");
       return false;
     }
 
-      try {
-        setAuthLoading(true);
-        setAuthError("");
-        const data = await requestPasswordReset(email);
-        if (passwordRef.current) passwordRef.current.value = "";
-        if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
-        setAuthSuccess(data?.message || "If an account exists with this email, a reset code has been sent.");
-        setAuthMode("reset");
-        showSystemToast("Reset code sent", "Check your email for the verification code.", "system");
-        return true;
-      } catch (error) {
-        setAuthError(error.message || "Could not send reset code.");
-        return false;
-      } finally {
+    try {
+      setAuthLoading(true);
+      setAuthError("");
+      const data = await requestPasswordReset(email);
+      if (passwordRef.current) passwordRef.current.value = "";
+      if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
+      if (resetConfirmPasswordRef.current) resetConfirmPasswordRef.current.value = "";
+      setAuthSuccess(data?.message || "If an account exists for that email, we have sent password-reset instructions.");
+      setAuthMode("reset");
+      showSystemToast("Reset code sent", "Check your email for the verification code.", "system");
+      return true;
+    } catch (error) {
+      setAuthError(error.userMessage || error.message || "We could not send the reset email. Please try again shortly.");
+      return false;
+    } finally {
       setAuthLoading(false);
     }
   };
@@ -2804,14 +2853,20 @@ const fetchBarbers = async () => {
     const email = emailRef.current?.value?.trim() || "";
     const code = passwordRef.current?.value?.trim();
     const newPassword = confirmPasswordRef.current?.value || "";
+    const confirmPassword = resetConfirmPasswordRef.current?.value || "";
 
-    if (!email || !code || !newPassword) {
+    if (!email || !code || !newPassword || !confirmPassword) {
       setAuthError("Email, code, and new password are required.");
       return;
     }
 
     if (!isValidEmail(email)) {
-      setAuthError("Please enter a valid email address.");
+      setAuthError("Enter a valid email address.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setAuthError("The passwords do not match.");
       return;
     }
 
@@ -2828,14 +2883,15 @@ const fetchBarbers = async () => {
     try {
       setAuthLoading(true);
       setAuthError("");
-      await confirmPasswordReset({ email, code, newPassword });
+      await confirmPasswordReset({ email, code, newPassword, confirmPassword });
       if (passwordRef.current) passwordRef.current.value = "";
       if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
-      setAuthSuccess("Password reset complete. You can log in now.");
+      if (resetConfirmPasswordRef.current) resetConfirmPasswordRef.current.value = "";
+      setAuthSuccess("Your password has been changed. You can now sign in.");
       setAuthMode("login");
       showSystemToast("Password reset", "You can log in with your new password.", "system");
     } catch (error) {
-      setAuthError(error.message || "Could not reset password.");
+      setAuthError(error.userMessage || error.message || "This code is invalid or has expired. Request a new code.");
     } finally {
       setAuthLoading(false);
     }
@@ -6001,7 +6057,13 @@ const registerBarber = async (payload) => {
 
   const appContent = content;
 
-  const isAuthScreen = screen === "login";
+  const renderScreen =
+    authBootState === "checking"
+      ? "checking"
+      : authBootState === "authenticated"
+      ? screen
+      : "login";
+  const isAuthScreen = renderScreen === "login";
   return (
     <div className={`app-wrap-v4 ${theme} ${isAuthScreen ? "app-auth-v4" : ""}`}>
       <div className={`phone-frame-v4 ${isAuthScreen ? "phone-frame-auth-v4" : ""}`}>
@@ -6014,7 +6076,12 @@ const registerBarber = async (payload) => {
               </div>
             }
           >
-            {screen === "login" ? (
+            {renderScreen === "checking" ? (
+              <div className="route-fallback-v4 auth-boot-fallback-v4" role="status" aria-label="Checking session">
+                <span className="route-fallback-spinner" aria-hidden="true" />
+                <span className="route-fallback-text">Checking your Queless session...</span>
+              </div>
+            ) : renderScreen === "login" ? (
               <AuthScreen
                 authMode={authMode}
                 setAuthMode={setAuthMode}
@@ -6025,6 +6092,7 @@ const registerBarber = async (payload) => {
                 emailRef={emailRef}
                 passwordRef={passwordRef}
                 confirmPasswordRef={confirmPasswordRef}
+                resetConfirmPasswordRef={resetConfirmPasswordRef}
                 handleLogin={handleLogin}
                 handleRegister={handleRegister}
                 sendPasswordResetCode={sendPasswordResetCode}

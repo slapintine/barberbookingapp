@@ -52,17 +52,20 @@ export default function CategoryServicesPage({
           <div className="queless-services-grid">
             {services.map((item) => (
               <article className="queless-service-list-card" key={item.id}>
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  loading="lazy"
-                  decoding="async"
-                  onError={(event) => {
-                    event.currentTarget.src = item.providerName
-                      ? buildInitialsAvatar(item.providerName)
-                      : NEUTRAL_PLACEHOLDER;
-                  }}
-                />
+                <span className="queless-service-media-protected">
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    loading="lazy"
+                    decoding="async"
+                    onError={(event) => {
+                      event.currentTarget.src = item.providerName
+                        ? buildInitialsAvatar(item.providerName)
+                        : NEUTRAL_PLACEHOLDER;
+                    }}
+                  />
+                  <span className="queless-service-media-overlay" aria-hidden="true" />
+                </span>
                 <div>
                   <strong>{item.title}</strong>
                   <small>{item.providerName}</small>

@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-// Email-only account authentication: usernames remain internal display handles,
-// but login and recovery use email only.
+// Account authentication accepts either email or username while keeping
+// password recovery email-based.
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "queless-auth-ci-"));
 process.env.NODE_ENV = "test";
@@ -59,11 +59,10 @@ test("login by email is case/whitespace-insensitive", async () => {
   assert.equal((await login("timothy@example.com", "Passw0rd!")).status, 200);
 });
 
-test("username-only login is no longer accepted for account authentication", async () => {
-  const res = await post("/api/auth/login", { email: "Timothy", password: "Passw0rd!" });
-  assert.equal(res.status, 400);
-  const body = await res.json();
-  assert.equal(body.code, "VALIDATION_ERROR");
+test("login by username is case/whitespace-insensitive and works for legacy email payloads", async () => {
+  assert.equal((await post("/api/auth/login", { identifier: "  timothy ", password: "Passw0rd!" })).status, 200);
+  assert.equal((await post("/api/auth/login", { username: "TIMOTHY", password: "Passw0rd!" })).status, 200);
+  assert.equal((await post("/api/auth/login", { email: "Timothy", password: "Passw0rd!" })).status, 200);
 });
 
 test("a genuinely wrong password is still rejected", async () => {
@@ -73,7 +72,7 @@ test("a genuinely wrong password is still rejected", async () => {
   assert.equal(body.code, "INVALID_CREDENTIALS");
 });
 
-test("password change persists: old rejected, new works by email", async () => {
+test("password change persists: old rejected, new works by email and username", async () => {
   const res = await fetch(`${baseUrl}/api/auth/me`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -85,4 +84,5 @@ test("password change persists: old rejected, new works by email", async () => {
 
   assert.equal((await login("timothy@example.com", "Passw0rd!")).status, 401, "old password must be rejected");
   assert.equal((await login("timothy@example.com", "NewPass99")).status, 200, "new password by email");
+  assert.equal((await post("/api/auth/login", { identifier: "timothy", password: "NewPass99" })).status, 200, "new password by username");
 });

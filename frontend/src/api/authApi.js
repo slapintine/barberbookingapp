@@ -7,10 +7,19 @@ export function registerUser({ username, email, password, role = "customer" }) {
   });
 }
 
-export function loginUser({ username, password }) {
+export function loginUser({ identifier, username, email, password }) {
+  const loginIdentifier = String(identifier ?? username ?? email ?? "").trim();
+  const payload = {
+    identifier: loginIdentifier,
+    username: loginIdentifier,
+    password,
+  };
+  if (loginIdentifier.includes("@")) {
+    payload.email = loginIdentifier;
+  }
   return apiFetch("/api/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email: username, password }),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -41,10 +50,10 @@ export function requestPasswordReset(email) {
   });
 }
 
-export function confirmPasswordReset({ email, code, newPassword }) {
+export function confirmPasswordReset({ email, code, newPassword, confirmPassword }) {
   return apiFetch("/api/auth/password-reset/confirm", {
     method: "POST",
-    body: JSON.stringify({ email, code, newPassword }),
+    body: JSON.stringify({ email, code, newPassword, confirmPassword }),
   });
 }
 

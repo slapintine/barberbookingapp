@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FiEye, FiEyeOff, FiLock, FiMail } from "react-icons/fi";
+import { FiEye, FiEyeOff, FiLock, FiMail, FiUser } from "react-icons/fi";
 import logo from "../../assets/queless-logo-full.png";
 import { sanitizeErrorMessage } from "../../utils/errorMessages.js";
 import { normalizeAppBasePath } from "../../utils/appBasePath.js";
@@ -66,6 +66,7 @@ export default function AuthScreen(props) {
     emailRef,
     passwordRef,
     confirmPasswordRef,
+    resetConfirmPasswordRef,
     handleLogin,
     handleRegister,
     sendPasswordResetCode,
@@ -76,6 +77,7 @@ export default function AuthScreen(props) {
   const [resetCooldown, setResetCooldown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   const isReset = authMode === "reset";
@@ -124,11 +126,43 @@ export default function AuthScreen(props) {
     : "Create your Queless account to discover trusted providers wherever you are.";
 
   const startResetTimer = () => {
-    setResetCooldown(45);
+    setResetCooldown(60);
+  };
+
+  const requestResetCode = async () => {
+    const sent = await sendPasswordResetCode();
+    if (sent) startResetTimer();
   };
 
   const handleAuthInput = () => {
     if (authError || authSuccess) clearAuthMessages();
+  };
+
+  const submitAuthAction = () => {
+    if (authLoading) return;
+    if (isReset) {
+      handlePasswordReset();
+      return;
+    }
+    if (isLogin) {
+      handleLogin({ rememberMe });
+      return;
+    }
+    handleRegister();
+  };
+
+  const handleUsernameKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    if (isLogin && passwordRef?.current) {
+      event.preventDefault();
+      passwordRef.current.focus();
+    }
+  };
+
+  const handlePasswordKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submitAuthAction();
   };
 
   return (
@@ -171,19 +205,20 @@ export default function AuthScreen(props) {
         <div className="lineup-auth-form">
           {(isLogin || isSignup) && (
             <label className="lineup-auth-field">
-              <FiMail />
-              <span className="lineup-auth-label">Email address</span>
+              <FiUser />
+              <span className="lineup-auth-label">{isLogin ? "Email or Username" : "Username"}</span>
               <input
-                ref={isLogin ? usernameRef : emailRef}
-                type="email"
-                autoComplete="email"
-                placeholder="Email address"
+                ref={usernameRef}
+                autoComplete="username"
+                enterKeyHint={isLogin ? "next" : "done"}
+                placeholder={isLogin ? "Email or Username" : "Choose a username"}
                 onInput={handleAuthInput}
+                onKeyDown={handleUsernameKeyDown}
               />
             </label>
           )}
 
-          {(isForgot || isReset) && (
+          {(isSignup || isForgot || isReset) && (
             <label className="lineup-auth-field">
               <FiMail />
               <span className="lineup-auth-label">Email address</span>
@@ -205,8 +240,10 @@ export default function AuthScreen(props) {
                 ref={passwordRef}
                 type={isReset ? "text" : showPassword ? "text" : "password"}
                 autoComplete={isLogin ? "current-password" : isReset ? "one-time-code" : "new-password"}
+                enterKeyHint={isLogin ? "go" : isSignup ? "next" : "done"}
                 placeholder={isReset ? "Verification code" : isLogin ? "Enter your password" : "Create a password"}
                 onInput={handleAuthInput}
+                onKeyDown={handlePasswordKeyDown}
               />
 
               {!isReset && (
@@ -244,6 +281,30 @@ export default function AuthScreen(props) {
                   {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
               </label>
+
+              {isReset && (
+                <label className="lineup-auth-field">
+                  <FiLock />
+                  <span className="lineup-auth-label">Confirm new password</span>
+                  <input
+                    ref={resetConfirmPasswordRef}
+                    type={showResetConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Confirm new password"
+                    onInput={handleAuthInput}
+                    onKeyDown={handlePasswordKeyDown}
+                  />
+
+                  <button
+                    type="button"
+                    className="lineup-auth-eye"
+                    aria-label={showResetConfirmPassword ? "Hide password confirmation" : "Show password confirmation"}
+                    onClick={() => setShowResetConfirmPassword((value) => !value)}
+                  >
+                    {showResetConfirmPassword ? <FiEyeOff /> : <FiEye />}
+                  </button>
+                </label>
+              )}
 
               <p className="lineup-auth-hint">
                 Passwords must be 8-64 characters and include at least one letter and one number.
@@ -298,10 +359,7 @@ export default function AuthScreen(props) {
               type="button"
               className="lineup-auth-submit"
               disabled={authLoading || resetCooldown > 0}
-              onClick={async () => {
-                const sent = await sendPasswordResetCode();
-                if (sent) startResetTimer();
-              }}
+              onClick={requestResetCode}
             >
               <span>
                 {authLoading
@@ -312,16 +370,14 @@ export default function AuthScreen(props) {
               </span>
             </button>
 
-            <p className="lineup-auth-hint center">
-              Reset codes can be requested every 45 seconds.
-            </p>
+            <p className="lineup-auth-hint center">Reset codes can be requested every 60 seconds.</p>
           </>
         ) : (
           <button
             type="button"
             className="lineup-auth-submit"
             disabled={authLoading}
-            onClick={isReset ? handlePasswordReset : isLogin ? () => handleLogin({ rememberMe }) : handleRegister}
+            onClick={submitAuthAction}
           >
             <span>
               {authLoading

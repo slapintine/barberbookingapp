@@ -213,6 +213,7 @@ export default function ServiceDetailsModal({
               <span>Service image unavailable</span>
             </div>
           )}
+          <span className="ql-service-details__media-overlay" aria-hidden="true" />
         </div>
 
         <div className="ql-service-details__body">
