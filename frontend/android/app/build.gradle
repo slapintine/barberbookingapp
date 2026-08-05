@@ -45,6 +45,8 @@ android {
         debug {
             applicationIdSuffix ".localqa"
             versionNameSuffix "-localqa"
+            resValue "string", "app_name", "Queless Local QA"
+            resValue "string", "title_activity_main", "Queless Local QA"
             debuggable true
         }
         release {
@@ -54,6 +56,14 @@ android {
             }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+android.applicationVariants.configureEach { variant ->
+    if (variant.buildType.name == "debug") {
+        variant.outputs.configureEach { output ->
+            output.versionCodeOverride = android.defaultConfig.versionCode * 1000 + 1
         }
     }
 }
