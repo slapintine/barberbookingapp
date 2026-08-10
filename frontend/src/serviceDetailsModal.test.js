@@ -114,3 +114,12 @@ test("service imagery uses a protected overlay without blocking foreground actio
   assert.match(profileCss, /linear-gradient\(to bottom, rgba\(20, 8, 18, 0\.12\)/);
   assert.match(profileCss, /\.pps-svc-cat-badge\s*\{[\s\S]*z-index:\s*2;/);
 });
+
+test("provider profile service and portfolio panels reserve mobile bottom safe area", () => {
+  const profileCss = source("./styles/provider-profile.css");
+
+  assert.match(profileCss, /\.pps-tab-panel\s*\{[\s\S]*padding-bottom:\s*calc\(112px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(profileCss, /\.pps-tab-panel\s*\{[\s\S]*scroll-padding-bottom:\s*calc\(112px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(profileCss, /\.pps-panel-services\s*\{[\s\S]*padding:\s*16px 16px max\(132px, calc\(116px \+ env\(safe-area-inset-bottom, 0px\)\)\);/);
+  assert.match(profileCss, /\.pps-panel-portfolio\s*\{[\s\S]*padding:\s*16px 16px max\(132px, calc\(116px \+ env\(safe-area-inset-bottom, 0px\)\)\);/);
+});

@@ -464,7 +464,8 @@ body[data-theme="light"] .pps-tabs {
 .pps-tab-panel {
   flex: 1;
   min-height: 0;
-  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ── Overview panel ───────────────────────────────────────── */
@@ -890,7 +891,7 @@ body[data-theme="light"] .pps-owner-action-btn:active {
 /* ── Services panel ───────────────────────────────────────── */
 
 .pps-panel-services {
-  padding: 16px 16px 24px;
+  padding: 16px 16px max(132px, calc(116px + env(safe-area-inset-bottom, 0px)));
   display: grid;
   gap: 14px;
 }
@@ -1370,7 +1371,7 @@ body[data-theme="light"] .pps-svc-tag {
 /* ── Portfolio panel ──────────────────────────────────────── */
 
 .pps-panel-portfolio {
-  padding: 16px 16px 24px;
+  padding: 16px 16px max(132px, calc(116px + env(safe-area-inset-bottom, 0px)));
   display: grid;
   gap: 14px;
 }
