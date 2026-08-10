@@ -351,6 +351,33 @@ export const schemas = {
   favouriteDelete: {
     params: Joi.object({ barberId: id.required() }).unknown(true),
   },
+  earlierSlotAlertCreate: {
+    body: Joi.object({
+      existingBookingId: optionalId,
+      existing_booking_id: optionalId,
+      providerId: optionalId,
+      provider_id: optionalId,
+      serviceId: optionalId,
+      service_id: optionalId,
+      desiredStartDate: isoDateOnly.optional(),
+      desired_start_date: isoDateOnly.optional(),
+      desiredEndDate: isoDateOnly.optional(),
+      desired_end_date: isoDateOnly.optional(),
+      preferredStartTime: clockTime.optional(),
+      preferred_time_start: clockTime.optional(),
+      preferredEndTime: clockTime.optional(),
+      preferred_time_end: clockTime.optional(),
+      currentBookingDate: isoDateOnly.optional().allow(""),
+      current_booking_date: isoDateOnly.optional().allow(""),
+      currentBookingTime: clockTime.optional().allow(""),
+      current_booking_time: clockTime.optional().allow(""),
+      notificationPreference: Joi.string().valid("in_app", "push").optional(),
+      notification_preference: Joi.string().valid("in_app", "push").optional(),
+    }).unknown(true),
+  },
+  earlierSlotAlertDelete: {
+    params: Joi.object({ id: id.required() }).unknown(true),
+  },
   scheduleUpdate: {
     body: Joi.object({
       schedule: Joi.array().max(31).optional(),

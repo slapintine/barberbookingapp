@@ -28,6 +28,7 @@ import {
   startCustomerSubscriptionUpgrade,
   verifyCustomerSubscriptionUpgrade,
 } from "./api/customerSubscriptionsApi.js";
+import { createEarlierSlotAlert } from "./api/customerPremiumApi.js";
 import { getSubscriptionSummary } from "./api/subscriptionSummaryApi.js";
 import { normalizeProviderData } from "./utils/providerData.js";
 import { buildStandDraftUpdatePayload } from "./utils/standDraftPayload.js";
@@ -730,6 +731,7 @@ function parseTeamMembers(value) {
 }
 
 function mapServerBooking(item) {
+  const bookingDetails = item.booking_details && typeof item.booking_details === "object" ? item.booking_details : {};
   return {
     id: item.id,
     barberId: item.barber_id,
@@ -745,6 +747,7 @@ function mapServerBooking(item) {
     bookingLocationType: item.booking_location_type || item.bookingLocationType || "provider_location",
     bookingAddress: item.booking_address || item.bookingAddress || item.location || "",
     service: item.service_name,
+    serviceId: item.service_id ?? item.serviceId ?? bookingDetails.service_id ?? bookingDetails.serviceId ?? null,
     date: item.booking_date,
     dateValue: item.booking_date,
     time: formatTo24Hour(item.booking_time),
@@ -765,6 +768,17 @@ function mapServerBooking(item) {
     cancelledBy: item.cancelled_by || null,
     cancellationReason: item.cancellation_reason || "",
   };
+}
+
+function getUgandaDateValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Kampala",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
 function mapServerNotification(item) {
@@ -3614,6 +3628,31 @@ const registerBarber = async (payload) => {
     }
   };
 
+  const createBookingEarlierSlotAlert = async (booking) => {
+    const providerId = Number(booking?.barberId || 0);
+    const serviceId = Number(booking?.serviceId || 0);
+    const bookingDate = String(booking?.dateValue || booking?.date || "").slice(0, 10);
+    const bookingTime = String(booking?.time || "").slice(0, 5);
+    if (!providerId || !serviceId || !bookingDate) {
+      throw new Error("This booking does not have enough service information for an earlier-slot alert.");
+    }
+
+    const today = getUgandaDateValue();
+    const desiredStartDate = today <= bookingDate ? today : bookingDate;
+    return createEarlierSlotAlert({
+      existingBookingId: booking.id,
+      providerId,
+      serviceId,
+      desiredStartDate,
+      desiredEndDate: bookingDate,
+      preferredStartTime: "08:00",
+      preferredEndTime: bookingTime && bookingTime > "08:00" ? bookingTime : "20:00",
+      currentBookingDate: bookingDate,
+      currentBookingTime: bookingTime,
+      notificationPreference: "in_app",
+    });
+  };
+
   const verifyCurrentBookingPayment = async (bookingId = pendingBookingPayment?.bookingId, silent = false) => {
     if (!bookingId || !currentUser?.username) return false;
     if (!PAYMENTS_ENABLED) {
@@ -5367,6 +5406,7 @@ const registerBarber = async (payload) => {
             }
             openProviderProfile(barber);
           }}
+          onCreateEarlierSlotAlert={createBookingEarlierSlotAlert}
         />
         </div>
       )}

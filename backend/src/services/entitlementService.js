@@ -23,6 +23,7 @@ import {
 const PAID_STATUSES = new Set(["paid", "successful"]);
 const ACTIVE_STATUSES = new Set(["active", "trialing"]);
 const PLATINUM_REVIEW_BLOCK_LIMIT = 10;
+const CUSTOMER_EARLIER_SLOT_ALERT_LIMIT = 10;
 
 function isFuture(value, now = new Date()) {
   if (!value) return false;
@@ -104,6 +105,13 @@ export async function getCustomerEntitlements(userId) {
     smartMatch: hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_STANDARD),
     conversationalSmartMatch: hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_CONVERSATIONAL),
     savedSmartMatchPreferences: hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_SAVED_PREFERENCES),
+    smartRebooking: hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_REBOOKING),
+    earlierSlotAlerts: hasCapability(capabilities, CAPABILITY.CUSTOMER_EARLIER_SLOT_ALERTS),
+    limits: {
+      earlierSlotAlerts: hasCapability(capabilities, CAPABILITY.CUSTOMER_EARLIER_SLOT_ALERTS)
+        ? CUSTOMER_EARLIER_SLOT_ALERT_LIMIT
+        : 0,
+    },
     rankedRecommendations: premium,
     budgetMatching: true,
     availabilityMatching: true,

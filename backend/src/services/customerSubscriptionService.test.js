@@ -1,7 +1,38 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getActiveCustomerPremiumSubscription, isActiveCustomerPremium, mapCustomerSubscription } from "./customerSubscriptionService.js";
-import { isActiveProviderPlatinum } from "./providerSubscriptionAccess.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "queless-customer-subscription-"));
+process.env.NODE_ENV = "test";
+process.env.DB_CLIENT = "sqlite";
+process.env.DB_PATH = path.join(tempDir, "customer-subscription.sqlite");
+process.env.IMAGE_STORAGE_DIR = path.join(tempDir, "uploads");
+process.env.JWT_SECRET = "customer-subscription-test-secret-32-characters";
+
+let db;
+let getActiveCustomerPremiumSubscription;
+let isActiveCustomerPremium;
+let mapCustomerSubscription;
+let isActiveProviderPlatinum;
+
+test.before(async () => {
+  ({ default: db } = await import("../config/db.js"));
+  const subscriptionService = await import("./customerSubscriptionService.js");
+  const providerSubscriptionAccess = await import("./providerSubscriptionAccess.js");
+  getActiveCustomerPremiumSubscription = subscriptionService.getActiveCustomerPremiumSubscription;
+  isActiveCustomerPremium = subscriptionService.isActiveCustomerPremium;
+  mapCustomerSubscription = subscriptionService.mapCustomerSubscription;
+  isActiveProviderPlatinum = providerSubscriptionAccess.isActiveProviderPlatinum;
+  const { initDb } = await import("../db/initDb.js");
+  await initDb();
+});
+
+test.after(async () => {
+  if (db?.close) await new Promise((resolve) => db.close(resolve));
+  try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore temp cleanup locks */ }
+});
 
 test("customer Premium requires active paid Premium subscription", () => {
   const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();

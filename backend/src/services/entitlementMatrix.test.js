@@ -18,13 +18,14 @@ test("Free Customer keeps regular Smart Match and booking capabilities", () => {
   assert.equal(hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_CONVERSATIONAL), false);
 });
 
-test("Premium Customer adds conversational Smart Match only", () => {
+test("Premium Customer adds conversational Smart Match, rebooking, and earlier-slot alerts", () => {
   const capabilities = getCustomerCapabilityList("PREMIUM");
 
   assert.equal(hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_STANDARD), true);
   assert.equal(hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_CONVERSATIONAL), true);
   assert.equal(hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_SAVED_PREFERENCES), false);
-  assert.equal(hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_REBOOKING), false);
+  assert.equal(hasCapability(capabilities, CAPABILITY.CUSTOMER_SMART_MATCH_REBOOKING), true);
+  assert.equal(hasCapability(capabilities, CAPABILITY.CUSTOMER_EARLIER_SLOT_ALERTS), true);
 });
 
 test("provider assistant capabilities deepen by provider plan", () => {

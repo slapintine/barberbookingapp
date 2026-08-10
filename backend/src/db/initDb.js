@@ -77,10 +77,21 @@ async function createIndexes() {
   await run(`CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)`);
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_sessions_refresh_hash ON auth_sessions(refresh_token_hash)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_barber_schedule_barber_day ON barber_schedule(barber_id, day_of_week)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_barber_services_barber_available ON barber_services(barber_id, is_available)`).catch(() => {});
-  await run(`CREATE INDEX IF NOT EXISTS idx_barber_team_members_barber_id ON barber_team_members(barber_id)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_booking_events_booking_id ON booking_events(booking_id)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_wallet_transactions_wallet_id ON wallet_transactions(wallet_id)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_barber_services_barber_available ON barber_services(barber_id, is_available)`).catch(() => {});
+    await run(`CREATE INDEX IF NOT EXISTS idx_barber_team_members_barber_id ON barber_team_members(barber_id)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_booking_events_booking_id ON booking_events(booking_id)`);
+    await run(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_customer_slot_alert ON customer_slot_alerts (
+      customer_user_id,
+      provider_id,
+      service_id,
+      desired_start_date,
+      desired_end_date,
+      preferred_time_start,
+      preferred_time_end
+    ) WHERE status = 'active'`).catch(() => {});
+    await run(`CREATE INDEX IF NOT EXISTS idx_customer_slot_alerts_user_status ON customer_slot_alerts(customer_user_id, status, desired_start_date)`).catch(() => {});
+    await run(`CREATE INDEX IF NOT EXISTS idx_customer_slot_alerts_provider_service ON customer_slot_alerts(provider_id, service_id, status, desired_start_date)`).catch(() => {});
+    await run(`CREATE INDEX IF NOT EXISTS idx_wallet_transactions_wallet_id ON wallet_transactions(wallet_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_wallet_transactions_booking_id ON wallet_transactions(booking_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_user_id ON withdrawal_requests(user_id)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_wallet_id ON withdrawal_requests(wallet_id)`);
@@ -1216,6 +1227,34 @@ export async function initDb() {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
         FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS customer_slot_alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_user_id INTEGER NOT NULL,
+        existing_booking_id INTEGER DEFAULT NULL,
+        provider_id INTEGER NOT NULL,
+        service_id INTEGER NOT NULL,
+        desired_start_date TEXT NOT NULL,
+        desired_end_date TEXT NOT NULL,
+        preferred_time_start TEXT NOT NULL,
+        preferred_time_end TEXT NOT NULL,
+        current_booking_date TEXT DEFAULT NULL,
+        current_booking_time TEXT DEFAULT NULL,
+        notification_preference TEXT NOT NULL DEFAULT 'in_app',
+        status TEXT NOT NULL DEFAULT 'active',
+        expires_at TEXT NOT NULL,
+        last_evaluated_at TEXT DEFAULT NULL,
+        matched_slot_id TEXT DEFAULT NULL,
+        candidate_time TEXT DEFAULT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (existing_booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+        FOREIGN KEY (provider_id) REFERENCES barbers(id) ON DELETE CASCADE,
+        FOREIGN KEY (service_id) REFERENCES barber_services(id) ON DELETE CASCADE
       )
     `);
 
