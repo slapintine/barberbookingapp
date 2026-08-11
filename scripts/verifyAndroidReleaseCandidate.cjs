@@ -39,15 +39,15 @@ const requiredBackendMarkers = [
   "provider_id = ? AND service_id = ?",
 ];
 const requiredBundleMarkers = [
-  "ServiceDetailsModal",
+  "ql-service-details",
   "PortfolioLightbox",
-  "ProviderCoachChatScreen",
+  "portfolio-lightbox",
+  "provider-coach",
   "Smart Match",
   "Request Quote",
   "Earlier slot alert",
   "/api/customer-premium/slot-alerts",
   "Email or Username",
-  "authBootState",
   "ql-service-details__media-overlay",
   "pps-svc-img-overlay",
   "queless-service-media-overlay",
