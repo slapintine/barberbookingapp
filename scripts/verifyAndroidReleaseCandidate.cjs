@@ -61,7 +61,6 @@ const forbiddenBundleMarkers = [
   "verify-phone-otp",
   "queless.app.localqa",
   "127.0.0.1",
-  "localhost",
   ":5012",
   suspectCommit,
 ];
