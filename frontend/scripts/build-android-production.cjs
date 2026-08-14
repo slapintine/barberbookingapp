@@ -5,8 +5,8 @@ const path = require("node:path");
 const repoRoot = path.resolve(__dirname, "..", "..");
 const frontendRoot = path.resolve(__dirname, "..");
 const expectedApiUrl = "https://queless.org/api";
-const versionName = "1.0.10";
-const versionCode = "11";
+const versionName = "1.0.11";
+const versionCode = "12";
 
 function fail(message) {
   console.error(message);
@@ -53,7 +53,7 @@ const env = {
 fs.rmSync(path.join(frontendRoot, "dist"), { recursive: true, force: true });
 fs.rmSync(path.join(frontendRoot, "android", "app", "src", "main", "assets", "public"), { recursive: true, force: true });
 
-run("npm", ["run", "build:web"], { cwd: frontendRoot, env });
+run("npx", ["vite", "build", "--mode", "production"], { cwd: frontendRoot, env });
 
 const manifest = {
   app: "Queless",

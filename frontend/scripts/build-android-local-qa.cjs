@@ -29,6 +29,7 @@ if (/(^|\.)queless\.org$/i.test(parsed.hostname)) {
 
 const env = {
   ...process.env,
+  QUELESS_BUILD_VERSION: process.env.QUELESS_BUILD_VERSION || process.env.VITE_BUILD_VERSION || "",
   VITE_BASE_PATH: "./",
   VITE_API_URL: apiUrl,
   VITE_ENABLE_PAYMENTS: "false",
@@ -53,22 +54,8 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status || 1);
 }
 
-const externalWebDir = String(process.env.QUELESS_ANDROID_WEB_DIR || "").trim();
-if (!externalWebDir) {
-  console.error("Set QUELESS_ANDROID_WEB_DIR to the built dist from the current Queless frontend. Local QA must not build this older Android-shell frontend source.");
-  process.exit(1);
-}
-
-const resolvedWebDir = path.resolve(externalWebDir);
-const sourceIndex = path.join(resolvedWebDir, "index.html");
-const sourceVersion = path.join(resolvedWebDir, "version.json");
-if (!fs.existsSync(sourceIndex) || !fs.existsSync(sourceVersion)) {
-  console.error(`QUELESS_ANDROID_WEB_DIR must point to a built web dist containing index.html and version.json: ${resolvedWebDir}`);
-  process.exit(1);
-}
-
 const localDist = path.resolve(process.cwd(), "dist");
 fs.rmSync(localDist, { recursive: true, force: true });
-fs.cpSync(resolvedWebDir, localDist, { recursive: true });
-console.log(`Copied authoritative Queless dist from ${resolvedWebDir}`);
+fs.rmSync(path.resolve(process.cwd(), "android", "app", "src", "main", "assets", "public"), { recursive: true, force: true });
+run("npx", ["vite", "build", "--mode", "production"]);
 run("npx", ["cap", "sync", "android"]);

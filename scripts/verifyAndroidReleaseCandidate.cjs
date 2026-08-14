@@ -104,6 +104,7 @@ function assertPublicAssets(publicDir, expectedHead, label) {
   if (!fs.existsSync(path.join(publicDir, "index.html"))) fail(`${label} is missing index.html`);
   const versionPath = path.join(publicDir, "version.json");
   if (!fs.existsSync(versionPath)) fail(`${label} is missing version.json`);
+  assertAndroidIndexReferences(publicDir, read(path.join(publicDir, "index.html")), label);
   const version = JSON.parse(read(versionPath));
   if (version.version !== expectedHead.slice(0, 12)) {
     fail(`${label} version marker ${version.version} does not match Git HEAD ${expectedHead.slice(0, 12)}`);
@@ -112,6 +113,42 @@ function assertPublicAssets(publicDir, expectedHead, label) {
   const bundleText = jsAndCss.map(read).join("\n");
   for (const marker of requiredBundleMarkers) assertContains(bundleText, marker, label);
   for (const marker of forbiddenBundleMarkers) assertNotContains(bundleText, marker, label);
+}
+
+function extractIndexReferences(indexHtml) {
+  const refs = [];
+  const scriptPattern = /<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+  const linkPattern = /<link\b[^>]*\b(?:rel=["'][^"']*stylesheet[^"']*["'][^>]*\bhref=["']([^"']+)["']|\bhref=["']([^"']+)["'][^>]*\brel=["'][^"']*stylesheet[^"']*["'])[^>]*>/gi;
+  let match;
+  while ((match = scriptPattern.exec(indexHtml))) refs.push({ kind: "script", ref: match[1] });
+  while ((match = linkPattern.exec(indexHtml))) refs.push({ kind: "stylesheet", ref: match[1] || match[2] });
+  return refs;
+}
+
+function assertAndroidIndexReferences(publicDir, indexHtml, label) {
+  const forbiddenRefs = [
+    "/app/assets/",
+    "https://queless.org/app/assets/",
+    "http://localhost",
+    "https://localhost",
+    "127.0.0.1",
+    ":5012",
+  ];
+  for (const marker of forbiddenRefs) assertNotContains(indexHtml, marker, `${label} index.html`);
+  const refs = extractIndexReferences(indexHtml);
+  if (!refs.some((item) => item.kind === "script" && /\.js(?:$|\?)/.test(item.ref))) {
+    fail(`${label} index.html is missing a JavaScript entry`);
+  }
+  if (!refs.some((item) => item.kind === "stylesheet" && /\.css(?:$|\?)/.test(item.ref))) {
+    fail(`${label} index.html is missing a CSS entry`);
+  }
+  for (const { kind, ref } of refs) {
+    if (/^(?:https?:)?\/\//i.test(ref)) fail(`${label} ${kind} uses remote asset URL: ${ref}`);
+    if (ref.startsWith("/")) fail(`${label} ${kind} uses absolute asset path: ${ref}`);
+    const cleanRef = ref.replace(/^[.]\//, "").split(/[?#]/, 1)[0];
+    const assetPath = path.join(publicDir, cleanRef);
+    if (!fs.existsSync(assetPath)) fail(`${label} ${kind} references missing packaged asset: ${ref}`);
+  }
 }
 
 function extractApk(apkPath) {
@@ -128,10 +165,10 @@ const apkIndex = args.indexOf("--apk");
 const apkPath = apkIndex >= 0 ? path.resolve(args[apkIndex + 1] || "") : "";
 const expectedVersionName = args.includes("--version-name")
   ? args[args.indexOf("--version-name") + 1]
-  : "1.0.10";
+  : "1.0.11";
 const expectedVersionCode = args.includes("--version-code")
   ? Number(args[args.indexOf("--version-code") + 1])
-  : 11;
+  : 12;
 const allowDirty = args.includes("--allow-dirty");
 
 const head = git(["rev-parse", "HEAD"]);
